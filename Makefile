@@ -26,7 +26,8 @@ include $(RACK_DIR)/plugin.mk
 # Regenerate panels: layout -> res-src/*.svg + src/*Layout.hpp -> Inkscape
 # text-to-path -> res/*.svg. Needs Inkscape; the results are committed so
 # plain builds (and CI) don't.
-INKSCAPE ?= inkscape
+# On macOS the Inkscape cask doesn't put the CLI on PATH.
+INKSCAPE ?= $(or $(shell command -v inkscape),$(wildcard /Applications/Inkscape.app/Contents/MacOS/inkscape),inkscape)
 .PHONY: panels
 panels:
 	python3 tools/gen_panels.py

@@ -3,14 +3,27 @@
 # screenshot of every module. Catches what unit tests can't: the plugin
 # failing to load, a widget crashing on construction, a broken panel SVG.
 #
-# Needs a Rack install (RACK_APP, default ~/ws/sdk/rack-app/Rack2Free) and,
-# without a display, xvfb-run. Usage: tools/rack_smoke.sh [dist/*.vcvplugin]
+# Finds Rack on Linux (~/ws/sdk/rack-app/Rack2Free) and macOS
+# (/Applications/VCV Rack 2*.app); set RACK_BIN to the Rack executable to
+# override. Linux without a display needs xvfb-run.
+# Usage: tools/rack_smoke.sh [dist/*.vcvplugin]
 set -euo pipefail
 
-RACK_APP="${RACK_APP:-$HOME/ws/sdk/rack-app/Rack2Free}"
 cd "$(dirname "$0")/.."
 slug=$(jq -r .slug plugin.json)
 pkg="${1:-$(ls -t dist/*.vcvplugin | head -1)}"
+
+if [ -z "${RACK_BIN:-}" ]; then
+	case "$(uname -s)" in
+	Darwin)
+		for app in "/Applications/VCV Rack 2 Free.app" "/Applications/VCV Rack 2 Pro.app"; do
+			[ -x "$app/Contents/MacOS/Rack" ] && RACK_BIN="$app/Contents/MacOS/Rack" && break
+		done ;;
+	*)
+		RACK_BIN="$HOME/ws/sdk/rack-app/Rack2Free/Rack" ;;
+	esac
+fi
+[ -x "${RACK_BIN:-}" ] || { echo "Rack not found; set RACK_BIN"; exit 1; }
 
 user=$(mktemp -d)
 trap 'rm -rf "$user"' EXIT
@@ -19,10 +32,16 @@ arch=$(basename "$pkg" .vcvplugin | sed -E 's/.*-([a-z]+-[a-z0-9]+)$/\1/')
 mkdir -p "$user/plugins-$arch"
 cp "$pkg" "$user/plugins-$arch/"
 
-run=(./Rack -u "$user" -t 2)
-[ -z "${DISPLAY:-}" ] && run=(xvfb-run -a -s "-screen 0 1280x720x24" "${run[@]}")
-# Rack's RPATH is ".", so it must be started from its own folder.
-(cd "$RACK_APP" && timeout 120 "${run[@]}" >/dev/null 2>&1) || true
+run=("$RACK_BIN" -u "$user" -t 2)
+# macOS has no `timeout` unless coreutils is installed (as gtimeout).
+for t in timeout gtimeout; do
+	command -v "$t" >/dev/null && run=("$t" 120 "${run[@]}") && break
+done
+if [ "$(uname -s)" = Linux ] && [ -z "${DISPLAY:-}" ]; then
+	run=(xvfb-run -a -s "-screen 0 1280x720x24" "${run[@]}")
+fi
+# The Linux build's RPATH is ".", so Rack must start from its own folder.
+(cd "$(dirname "$RACK_BIN")" && "${run[@]}" >/dev/null 2>&1) || true
 
 log="$user/log.txt"
 if ! grep -q "Loaded plugin $slug " "$log"; then

@@ -44,7 +44,12 @@ make install      # package and install into your Rack user folder
 make smoke        # load in a real headless Rack, screenshot each module
 make panels       # regenerate panels after editing tools/gen_panels.py
 tools/cross_build.sh   # Windows + Linux packages via Docker -> build/cross/
+tools/mac_dist.sh      # (on a Mac) arm64 + x64 packages -> build/mac/
 ```
+
+All of these work on Linux and macOS. On a Mac, Windows and Linux builds
+come from Docker, and both Mac CPUs build natively, so one laptop produces
+all four packages.
 
 `make smoke` writes `build/screenshots/<module>.png`. It catches what unit
 tests can't: a plugin that won't load, a widget that crashes, a broken panel.
@@ -99,9 +104,29 @@ must be started from its own folder). User folder: `~/.local/share/Rack2`.
 brew install git wget cmake autoconf automake libtool jq python zstd pkg-config
 ```
 
-Install Xcode command-line tools (`xcode-select --install`). Use the SDK for
-your CPU; for the other one, set `CROSS_COMPILE=x86_64-apple-darwin` or
-`arm64-apple-darwin` as CI does.
+Also:
+
+- Xcode command-line tools: `xcode-select --install`
+- [VCV Rack 2](https://vcvrack.com/Rack) in `/Applications`, where
+  `make smoke` finds it (or set `RACK_BIN` to the `Rack` executable inside
+  the `.app`)
+- `brew install --cask inkscape docker` for `make panels` and
+  `tools/cross_build.sh`. The Makefile finds Inkscape inside the app bundle.
+  On Apple Silicon, enable **Use Rosetta for x86_64/amd64 emulation** in
+  Docker Desktop settings, because the toolchain image is x86 only.
+
+For everyday `make`, unzip the SDK for your own CPU and set `RACK_DIR` in
+`~/.zshrc` (macOS uses zsh, not bash):
+
+```
+export RACK_DIR="$HOME/ws/sdk/Rack-SDK"
+```
+
+`tools/mac_dist.sh` builds release packages for both CPUs. Each CPU needs
+its own SDK, so the script downloads them on first use to
+`~/ws/sdk/Rack-SDK-<version>-mac-<arch>`, separate from `RACK_DIR`. Rack's
+user folder on macOS is `~/Library/Application Support/Rack2`;
+`make install` finds it by itself.
 
 ### Windows
 
@@ -119,7 +144,8 @@ Antivirus can slow the build badly; exclude the source folder.
 
 ### Without those machines
 
-- `tools/cross_build.sh` builds Windows and Linux on any Docker host.
+- `tools/cross_build.sh` builds Windows and Linux on any Docker host,
+  Apple Silicon included.
 - CI (`.github/workflows/build.yml`) runs the unit tests, then builds
   win-x64, lin-x64, mac-x64 and mac-arm64. Pushing a `v*` tag drafts a GitHub
   release with all four packages attached.

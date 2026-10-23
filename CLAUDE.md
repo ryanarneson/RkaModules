@@ -6,6 +6,10 @@ layout.
 
 - `RACK_DIR` is set in `~/.bashrc` (`~/ws/sdk/Rack-SDK`, 2.6.6). Non-login
   shells may not have it; pass `RACK_DIR=$HOME/ws/sdk/Rack-SDK` to make.
+- The repo is meant to work unchanged on Linux and macOS. Keep tools/
+  scripts portable: no GNU-only flags (`sed -i`, `timeout` without the
+  gtimeout fallback, `readlink -f`), and check `uname -s` before using a
+  platform path.
 - Before calling a change done: `make test`, `make`, `make smoke`, and look
   at `build/screenshots/*.png` for panel changes.
 - Panels come from `tools/gen_panels.py`; never hand-edit `res/`, `res-src/`

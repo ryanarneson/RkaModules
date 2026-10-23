@@ -7,7 +7,8 @@ cd "$(dirname "$0")/.."
 image="${TOOLCHAIN_IMAGE:-ghcr.io/bloodbat/rack-plugin-toolchain-win-linux}"
 platforms="${*:-win-x64 lin-x64}"
 targets=$(for p in $platforms; do printf 'plugin-build-%s ' "$p"; done)
-docker run --rm -v "$PWD":/plugin -e PLUGIN_DIR=/plugin --user root "$image" bash -c "
+# linux/amd64: the image is x86 only; on Apple Silicon this runs under Rosetta.
+docker run --rm --platform linux/amd64 -v "$PWD":/plugin -e PLUGIN_DIR=/plugin --user root "$image" bash -c "
 	set -e
 	cd /home/build/rack-plugin-toolchain
 	make $targets
