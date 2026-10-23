@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="30.48mm" height="128.5mm" viewBox="0 0 30.48 128.5">
+<rect width="30.48" height="128.5" fill="#202124"/>
+<text x="15.24" y="11.50" font-family="DejaVu Sans" font-size="5.0" font-weight="bold" text-anchor="middle" fill="#e6e2d8">LFO</text>
+<rect x="3" y="13.2" width="24.48" height="0.4" fill="#e0604f"/>
+<rect x="2.0" y="79.0" width="26.48" height="37.0" rx="1.5" fill="#e6e2d8"/>
+<text x="15.24" y="19.00" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#e6e2d8">RATE</text>
+<text x="8.00" y="43.00" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#e6e2d8">PW</text>
+<text x="22.48" y="43.00" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#e6e2d8">BI / UNI</text>
+<text x="8.00" y="61.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#e6e2d8">V/OCT</text>
+<text x="22.48" y="61.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#e6e2d8">RESET</text>
+<text x="8.00" y="82.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#202124">SIN</text>
+<text x="22.48" y="82.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#202124">TRI</text>
+<text x="8.00" y="100.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#202124">SAW</text>
+<text x="22.48" y="100.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#202124">SQR</text>
+<text x="15.24" y="125.50" font-family="DejaVu Sans" font-size="3.2" font-weight="bold" text-anchor="middle" fill="#e0604f">RKA</text>
+<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
+<circle id="PHASE" cx="24.6" cy="10.0" r="1" fill="#ff00ff"/>
+<circle id="FREQ" cx="15.24" cy="31.0" r="1" fill="#ff0000"/>
+<circle id="PW" cx="8.0" cy="50.0" r="1" fill="#ff0000"/>
+<circle id="OFFSET" cx="22.48" cy="50.0" r="1" fill="#ff0000"/>
+<circle id="FM" cx="8.0" cy="68.0" r="1" fill="#00ff00"/>
+<circle id="RESET" cx="22.48" cy="68.0" r="1" fill="#00ff00"/>
+<circle id="SIN" cx="8.0" cy="89.0" r="1" fill="#0000ff"/>
+<circle id="TRI" cx="22.48" cy="89.0" r="1" fill="#0000ff"/>
+<circle id="SAW" cx="8.0" cy="107.0" r="1" fill="#0000ff"/>
+<circle id="SQR" cx="22.48" cy="107.0" r="1" fill="#0000ff"/>
+</g>
+</svg>

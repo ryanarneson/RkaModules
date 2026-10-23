@@ -1,0 +1,21 @@
+{
+  "slug": "rka",
+  "name": "RKA",
+  "version": "2.0.0",
+  "license": "GPL-3.0-or-later",
+  "brand": "RKA",
+  "author": "Ryan Arneson",
+  "minRackVersion": "2.5.0",
+  "modules": [
+    {
+      "slug": "LFO",
+      "name": "LFO",
+      "description": "Polyphonic LFO with sine, triangle, saw and pulse-width square outputs",
+      "tags": [
+        "Low-frequency oscillator",
+        "Polyphonic"
+      ],
+      "keywords": "modulation"
+    }
+  ]
+}
