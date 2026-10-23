@@ -1,37 +1,75 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="30.48mm" height="128.5mm" viewBox="0 0 30.48 128.5">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="91.44mm" height="128.5mm" viewBox="0 0 91.44 128.5">
 <defs>
 <linearGradient id="bg" x1="0" y1="0" x2="0" y2="128.5" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0a101c"/><stop offset="1" stop-color="#030509"/></linearGradient>
-<linearGradient id="rule" x1="3" y1="0" x2="27.48" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22e6ef"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+<linearGradient id="rule" x1="3" y1="0" x2="88.44" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22e6ef"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
 </defs>
-<rect width="30.48" height="128.5" fill="url(#bg)"/>
-<text x="15.24" y="11.50" font-family="DejaVu Sans" font-size="4.5" font-weight="bold" text-anchor="middle" fill="#22e6ef" stroke="#22e6ef" stroke-width="0.99" stroke-linejoin="round" opacity="0.22">SWAY</text>
-<text x="15.24" y="11.50" font-family="DejaVu Sans" font-size="4.5" font-weight="bold" text-anchor="middle" fill="#b9c8d6">SWAY</text>
-<rect x="3" y="12.9" width="24.48" height="1.0" rx="0.5" fill="url(#rule)" opacity="0.22"/>
-<rect x="3" y="13.2" width="24.48" height="0.4" fill="url(#rule)" opacity="0.75"/>
-<rect x="2.0" y="16.0" width="26.48" height="60.0" rx="1.5" fill="#0a0f1a" stroke="#1c2738" stroke-width="0.3" stroke-opacity="1.0"/>
-<rect x="2.0" y="79.0" width="26.48" height="37.0" rx="1.5" fill="none" stroke="#22e6ef" stroke-width="1.2" opacity="0.13"/>
-<rect x="2.0" y="79.0" width="26.48" height="37.0" rx="1.5" fill="#0a0f1a" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="0.75"/>
-<text x="15.24" y="19.00" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#7d8ea0">RATE</text>
-<text x="8.00" y="43.00" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#7d8ea0">PW</text>
-<text x="22.48" y="43.00" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#7d8ea0">BI / UNI</text>
-<text x="8.00" y="61.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#7d8ea0">V/OCT</text>
-<text x="22.48" y="61.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#7d8ea0">RESET</text>
-<text x="8.00" y="82.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">SIN</text>
-<text x="22.48" y="82.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#4ade80" fill-opacity="0.75">TRI</text>
-<text x="8.00" y="100.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="0.75">SAW</text>
-<text x="22.48" y="100.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#f472b6" fill-opacity="0.75">SQR</text>
-<text x="15.24" y="125.50" font-family="DejaVu Sans" font-size="3.2" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="0.75">RKA</text>
+<rect width="91.44" height="128.5" fill="url(#bg)"/>
+<text x="45.72" y="11.50" font-family="DejaVu Sans" font-size="4.5" font-weight="bold" text-anchor="middle" fill="#22e6ef" stroke="#22e6ef" stroke-width="0.99" stroke-linejoin="round" opacity="0.22">SWAY</text>
+<text x="45.72" y="11.50" font-family="DejaVu Sans" font-size="4.5" font-weight="bold" text-anchor="middle" fill="#b9c8d6">SWAY</text>
+<rect x="3" y="12.9" width="85.44" height="1.0" rx="0.5" fill="url(#rule)" opacity="0.22"/>
+<rect x="3" y="13.2" width="85.44" height="0.4" fill="url(#rule)" opacity="0.75"/>
+<rect x="4.0" y="15.0" width="68.44" height="24.0" rx="1.5" fill="#0a0f1a" stroke="#1c2738" stroke-width="0.3" stroke-opacity="1.0"/>
+<rect x="4.0" y="41.0" width="68.44" height="18.0" rx="1.5" fill="#0a0f1a" stroke="#1c2738" stroke-width="0.3" stroke-opacity="1.0"/>
+<rect x="4.0" y="61.0" width="68.44" height="52.0" rx="1.5" fill="#0a0f1a" stroke="#1c2738" stroke-width="0.3" stroke-opacity="1.0"/>
+<rect x="74.44" y="15.0" width="13.0" height="98.0" rx="1.5" fill="none" stroke="#22e6ef" stroke-width="1.2" opacity="0.13"/>
+<rect x="74.44" y="15.0" width="13.0" height="98.0" rx="1.5" fill="#0a0f1a" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="0.75"/>
+<text x="13.50" y="18.80" font-family="DejaVu Sans" font-size="2.4" font-weight="bold" text-anchor="middle" fill="#7d8ea0">RATE</text>
+<text x="30.00" y="19.80" font-family="DejaVu Sans" font-size="2.1" font-weight="bold" text-anchor="middle" fill="#7d8ea0">SPREAD</text>
+<text x="44.00" y="19.80" font-family="DejaVu Sans" font-size="1.9" font-weight="bold" text-anchor="middle" fill="#7d8ea0">CHANNELS</text>
+<text x="57.00" y="19.80" font-family="DejaVu Sans" font-size="2.1" font-weight="bold" text-anchor="middle" fill="#7d8ea0">BI/UNI</text>
+<text x="67.50" y="19.80" font-family="DejaVu Sans" font-size="2.1" font-weight="bold" text-anchor="middle" fill="#7d8ea0">1-SHOT</text>
+<text x="15.41" y="46.30" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#7d8ea0">CLOCK</text>
+<text x="38.22" y="46.30" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#7d8ea0">RESET</text>
+<text x="61.03" y="46.30" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#7d8ea0">HOLD</text>
+<text x="80.94" y="18.50" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">SIN</text>
+<text x="80.94" y="32.40" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#4ade80" fill-opacity="0.75">TRI</text>
+<text x="80.94" y="46.30" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="0.75">SAW</text>
+<text x="80.94" y="60.20" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#f472b6" fill-opacity="0.75">SQR</text>
+<text x="80.94" y="74.10" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#a78bfa" fill-opacity="0.75">MORPH</text>
+<text x="80.94" y="88.00" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="0.75">STEP</text>
+<text x="80.94" y="101.90" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#4ade80" fill-opacity="0.75">RAND</text>
+<text x="9.70" y="66.00" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#b9c8d6">FM</text>
+<text x="21.11" y="66.00" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#b9c8d6">PW</text>
+<text x="32.52" y="66.00" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#b9c8d6">PHASE</text>
+<text x="43.92" y="66.00" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#b9c8d6">SKEW</text>
+<text x="55.33" y="66.00" font-family="DejaVu Sans" font-size="1.9" font-weight="bold" text-anchor="middle" fill="#b9c8d6">SMOOTH</text>
+<text x="66.74" y="66.00" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#b9c8d6">MORPH</text>
+<text x="9.70" y="75.60" font-family="DejaVu Sans" font-size="1.6" font-weight="bold" text-anchor="middle" fill="#46566a">(RATE)</text>
+<text x="38.22" y="110.50" font-family="DejaVu Sans" font-size="1.5" font-weight="bold" text-anchor="middle" fill="#46566a">ATTENUVERTER ▸ CV IN</text>
+<text x="45.72" y="125.50" font-family="DejaVu Sans" font-size="3.2" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="0.75">RKA</text>
 <g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
-<circle id="PHASE" cx="26.2" cy="10.0" r="1" fill="#ff00ff"/>
-<circle id="FREQ" cx="15.24" cy="31.0" r="1" fill="#ff0000"/>
-<circle id="PW" cx="8.0" cy="50.0" r="1" fill="#ff0000"/>
-<circle id="OFFSET" cx="22.48" cy="50.0" r="1" fill="#ff0000"/>
-<circle id="FM" cx="8.0" cy="68.0" r="1" fill="#00ff00"/>
-<circle id="RESET" cx="22.48" cy="68.0" r="1" fill="#00ff00"/>
-<circle id="SIN" cx="8.0" cy="89.0" r="1" fill="#0000ff"/>
-<circle id="TRI" cx="22.48" cy="89.0" r="1" fill="#0000ff"/>
-<circle id="SAW" cx="8.0" cy="107.0" r="1" fill="#0000ff"/>
-<circle id="SQR" cx="22.48" cy="107.0" r="1" fill="#0000ff"/>
+<circle id="param-RATE" cx="13.5" cy="28.5" r="1" fill="#ff0000"/>
+<circle id="param-SPREAD" cx="30.0" cy="29.0" r="1" fill="#ff0000"/>
+<circle id="param-CHANNELS" cx="44.0" cy="29.0" r="1" fill="#ff0000"/>
+<circle id="param-OFFSET" cx="57.0" cy="29.0" r="1" fill="#ff0000"/>
+<circle id="param-ONESHOT" cx="67.5" cy="29.0" r="1" fill="#ff0000"/>
+<circle id="input-CLOCK" cx="15.41" cy="52.5" r="1" fill="#00ff00"/>
+<circle id="input-RESET" cx="38.22" cy="52.5" r="1" fill="#00ff00"/>
+<circle id="input-HOLD" cx="61.03" cy="52.5" r="1" fill="#00ff00"/>
+<circle id="param-PW" cx="21.11" cy="75.0" r="1" fill="#ff0000"/>
+<circle id="param-PHASE" cx="32.52" cy="75.0" r="1" fill="#ff0000"/>
+<circle id="param-SKEW" cx="43.92" cy="75.0" r="1" fill="#ff0000"/>
+<circle id="param-SMOOTH" cx="55.33" cy="75.0" r="1" fill="#ff0000"/>
+<circle id="param-MORPH" cx="66.74" cy="75.0" r="1" fill="#ff0000"/>
+<circle id="param-FM_ATT" cx="9.7" cy="88.0" r="1" fill="#ff0000"/>
+<circle id="param-PW_ATT" cx="21.11" cy="88.0" r="1" fill="#ff0000"/>
+<circle id="param-PHASE_ATT" cx="32.52" cy="88.0" r="1" fill="#ff0000"/>
+<circle id="param-SKEW_ATT" cx="43.92" cy="88.0" r="1" fill="#ff0000"/>
+<circle id="param-SMOOTH_ATT" cx="55.33" cy="88.0" r="1" fill="#ff0000"/>
+<circle id="param-MORPH_ATT" cx="66.74" cy="88.0" r="1" fill="#ff0000"/>
+<circle id="input-FM" cx="9.7" cy="101.0" r="1" fill="#00ff00"/>
+<circle id="input-PW" cx="21.11" cy="101.0" r="1" fill="#00ff00"/>
+<circle id="input-PHASE" cx="32.52" cy="101.0" r="1" fill="#00ff00"/>
+<circle id="input-SKEW" cx="43.92" cy="101.0" r="1" fill="#00ff00"/>
+<circle id="input-SMOOTH" cx="55.33" cy="101.0" r="1" fill="#00ff00"/>
+<circle id="input-MORPH" cx="66.74" cy="101.0" r="1" fill="#00ff00"/>
+<circle id="output-SIN" cx="80.94" cy="23.5" r="1" fill="#0000ff"/>
+<circle id="output-TRI" cx="80.94" cy="37.4" r="1" fill="#0000ff"/>
+<circle id="output-SAW" cx="80.94" cy="51.3" r="1" fill="#0000ff"/>
+<circle id="output-SQR" cx="80.94" cy="65.2" r="1" fill="#0000ff"/>
+<circle id="output-MORPH" cx="80.94" cy="79.1" r="1" fill="#0000ff"/>
+<circle id="output-STEP" cx="80.94" cy="93.0" r="1" fill="#0000ff"/>
+<circle id="output-RAND" cx="80.94" cy="106.9" r="1" fill="#0000ff"/>
 </g>
 </svg>

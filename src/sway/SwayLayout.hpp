@@ -3,14 +3,36 @@
 #include <rack.hpp>
 
 namespace SwayLayout {
-static const rack::math::Vec LIGHT_PHASE(26.2f, 10.0f);
-static const rack::math::Vec PARAM_FREQ(15.24f, 31.0f);
-static const rack::math::Vec PARAM_PW(8.0f, 50.0f);
-static const rack::math::Vec PARAM_OFFSET(22.48f, 50.0f);
-static const rack::math::Vec INPUT_FM(8.0f, 68.0f);
-static const rack::math::Vec INPUT_RESET(22.48f, 68.0f);
-static const rack::math::Vec OUTPUT_SIN(8.0f, 89.0f);
-static const rack::math::Vec OUTPUT_TRI(22.48f, 89.0f);
-static const rack::math::Vec OUTPUT_SAW(8.0f, 107.0f);
-static const rack::math::Vec OUTPUT_SQR(22.48f, 107.0f);
+static const rack::math::Vec PARAM_RATE(13.5f, 28.5f);
+static const rack::math::Vec PARAM_SPREAD(30.0f, 29.0f);
+static const rack::math::Vec PARAM_CHANNELS(44.0f, 29.0f);
+static const rack::math::Vec PARAM_OFFSET(57.0f, 29.0f);
+static const rack::math::Vec PARAM_ONESHOT(67.5f, 29.0f);
+static const rack::math::Vec INPUT_CLOCK(15.41f, 52.5f);
+static const rack::math::Vec INPUT_RESET(38.22f, 52.5f);
+static const rack::math::Vec INPUT_HOLD(61.03f, 52.5f);
+static const rack::math::Vec PARAM_PW(21.11f, 75.0f);
+static const rack::math::Vec PARAM_PHASE(32.52f, 75.0f);
+static const rack::math::Vec PARAM_SKEW(43.92f, 75.0f);
+static const rack::math::Vec PARAM_SMOOTH(55.33f, 75.0f);
+static const rack::math::Vec PARAM_MORPH(66.74f, 75.0f);
+static const rack::math::Vec PARAM_FM_ATT(9.7f, 88.0f);
+static const rack::math::Vec PARAM_PW_ATT(21.11f, 88.0f);
+static const rack::math::Vec PARAM_PHASE_ATT(32.52f, 88.0f);
+static const rack::math::Vec PARAM_SKEW_ATT(43.92f, 88.0f);
+static const rack::math::Vec PARAM_SMOOTH_ATT(55.33f, 88.0f);
+static const rack::math::Vec PARAM_MORPH_ATT(66.74f, 88.0f);
+static const rack::math::Vec INPUT_FM(9.7f, 101.0f);
+static const rack::math::Vec INPUT_PW(21.11f, 101.0f);
+static const rack::math::Vec INPUT_PHASE(32.52f, 101.0f);
+static const rack::math::Vec INPUT_SKEW(43.92f, 101.0f);
+static const rack::math::Vec INPUT_SMOOTH(55.33f, 101.0f);
+static const rack::math::Vec INPUT_MORPH(66.74f, 101.0f);
+static const rack::math::Vec OUTPUT_SIN(80.94f, 23.5f);
+static const rack::math::Vec OUTPUT_TRI(80.94f, 37.4f);
+static const rack::math::Vec OUTPUT_SAW(80.94f, 51.3f);
+static const rack::math::Vec OUTPUT_SQR(80.94f, 65.2f);
+static const rack::math::Vec OUTPUT_MORPH(80.94f, 79.1f);
+static const rack::math::Vec OUTPUT_STEP(80.94f, 93.0f);
+static const rack::math::Vec OUTPUT_RAND(80.94f, 106.9f);
 }

@@ -39,47 +39,70 @@ ACCENTS = {
 # is the same look turned down for dim rooms: deeper ground, dimmer ink.
 THEMES = {
     "": dict(bg_top="#111c30", bg_bottom="#070b14", card="#0f1828", card_edge="#2a3a55",
-             ink="#e6f4ff", label="#9fb3c8", glow_opacity=0.35, accent_opacity=1.0),
+             ink="#e6f4ff", label="#9fb3c8", hint="#5f7187", glow_opacity=0.35, accent_opacity=1.0),
     "-dark": dict(bg_top="#0a101c", bg_bottom="#030509", card="#0a0f1a", card_edge="#1c2738",
-                  ink="#b9c8d6", label="#7d8ea0", glow_opacity=0.22, accent_opacity=0.75),
+                  ink="#b9c8d6", label="#7d8ea0", hint="#46566a", glow_opacity=0.22, accent_opacity=0.75),
 }
 
 # Placeholder colours from https://vcvrack.com/manual/Panel
 KIND_COLOUR = {"param": "#ff0000", "input": "#00ff00", "output": "#0000ff", "light": "#ff00ff"}
 
+# Sway column x positions (FM, PW, PHASE, SKEW, SMOOTH, MORPH): six equal
+# columns across the 68.44 mm control cards.
+_COL = [9.70, 21.11, 32.52, 43.92, 55.33, 66.74]
+_COLS = ["FM", "PW", "PHASE", "SKEW", "SMOOTH", "MORPH"]
+_OUTS = ["SIN", "TRI", "SAW", "SQR", "MORPH", "STEP", "RAND"]
+
 PANELS = {
     "Sway": dict(
         dir="sway",
-        hp=6,
+        hp=18,
         title="SWAY",
         components=[
             # (kind, name, x mm, y mm, label)
-            ("light", "PHASE", 26.2, 10.0, None),
-            ("param", "FREQ", 15.24, 31.0, "RATE"),
-            ("param", "PW", 8.0, 50.0, "PW"),
-            ("param", "OFFSET", 22.48, 50.0, "BI / UNI"),
-            ("input", "FM", 8.0, 68.0, "V/OCT"),
-            ("input", "RESET", 22.48, 68.0, "RESET"),
-            ("output", "SIN", 8.0, 89.0, "SIN"),
-            ("output", "TRI", 22.48, 89.0, "TRI"),
-            ("output", "SAW", 8.0, 107.0, "SAW"),
-            ("output", "SQR", 22.48, 107.0, "SQR"),
-        ],
+            ("param", "RATE", 13.5, 28.5, "RATE"),
+            ("param", "SPREAD", 30.0, 29.0, "SPREAD"),
+            ("param", "CHANNELS", 44.0, 29.0, "CHANNELS"),
+            ("param", "OFFSET", 57.0, 29.0, "BI/UNI"),
+            ("param", "ONESHOT", 67.5, 29.0, "1-SHOT"),
+            ("input", "CLOCK", 15.41, 52.5, "CLOCK"),
+            ("input", "RESET", 38.22, 52.5, "RESET"),
+            ("input", "HOLD", 61.03, 52.5, "HOLD"),
+        ]
+        # Modulation columns: knob (FM has none; RATE is its knob),
+        # attenuverter, CV input. Headers are notes.
+        + [("param", n, x, 75.0, None) for n, x in zip(_COLS[1:], _COL[1:])]
+        + [("param", n + "_ATT", x, 88.0, None) for n, x in zip(_COLS, _COL)]
+        + [("input", n, x, 101.0, None) for n, x in zip(_COLS, _COL)]
+        + [("output", n, 80.94, round(23.5 + 13.9 * i, 2), n) for i, n in enumerate(_OUTS)],
         # Cards behind groups of controls: x, y, w, h in mm, and the accent
         # for a glowing border (None: plain slate edge).
         cards=[
-            (2.0, 16.0, 26.48, 60.0, None),
-            (2.0, 79.0, 26.48, 37.0, "cyan"),
+            (4.0, 15.0, 68.44, 24.0, None),
+            (4.0, 41.0, 68.44, 18.0, None),
+            (4.0, 61.0, 68.44, 52.0, None),
+            (74.44, 15.0, 13.0, 98.0, "cyan"),
         ],
         # Label colour per component, by accent name; the rest use `label`.
-        label_accents={"SIN": "cyan", "TRI": "green", "SAW": "amber", "SQR": "magenta"},
+        # Keyed by name: only the labelled component of a name is affected.
+        label_accents={"SIN": "cyan", "TRI": "green", "SAW": "amber", "SQR": "magenta",
+                       "MORPH": "violet", "STEP": "amber", "RAND": "green"},
+        label_size={"RATE": 2.4, "SPREAD": 2.1, "CHANNELS": 1.9, "OFFSET": 2.1, "ONESHOT": 2.1,
+                    "CLOCK": 2.3, "RESET": 2.3, "HOLD": 2.3,
+                    **{n: 2.3 for n in _OUTS}, "MORPH": 2.0},
+        label_gap={"RATE": 9.7, "SPREAD": 9.2, "CHANNELS": 9.2, "OFFSET": 9.2, "ONESHOT": 9.2,
+                   **{n: 5.0 for n in _OUTS}},
+        # Free text: (x, y, text, size mm, theme colour key).
+        notes=[(x, 66.0, n, 1.9 if len(n) > 5 else 2.2, "ink") for n, x in zip(_COLS, _COL)]
+        + [(_COL[0], 75.6, "(RATE)", 1.6, "hint"),
+           (38.22, 110.5, "ATTENUVERTER \u25b8 CV IN", 1.5, "hint")],
     ),
 }
 
 LABEL_SIZE = 2.6   # mm
 TITLE_SIZE = 4.5   # mm
 LABEL_GAP = {"param": 7.0, "input": 6.2, "output": 6.2}
-BIG_KNOBS = {("Sway", "FREQ")}  # labels sit further above larger knobs
+BIG_KNOBS = {("Sway", "RATE")}  # labels sit further above larger knobs
 
 
 def text(x, y, s, size, fill, weight="normal", extra=""):
@@ -129,19 +152,24 @@ def panel_svg(name, spec, t):
     for x, y, cw, ch, accent in spec["cards"]:
         out += card(x, y, cw, ch, t, accent)
     accents = spec.get("label_accents", {})
+    sizes = spec.get("label_size", {})
+    gaps = spec.get("label_gap", {})
     for kind, cname, x, y, label in spec["components"]:
         if not label:
             continue
-        gap = 12.0 if (name, cname) in BIG_KNOBS else LABEL_GAP[kind]
+        gap = gaps.get(cname, 12.0 if (name, cname) in BIG_KNOBS else LABEL_GAP[kind])
         fill = ACCENTS[accents[cname]] if cname in accents else t["label"]
         extra = f' fill-opacity="{t["accent_opacity"]}"' if cname in accents else ""
-        out.append(text(x, y - gap, label, LABEL_SIZE, fill, "bold", extra))
+        out.append(text(x, y - gap, label, sizes.get(cname, LABEL_SIZE), fill, "bold", extra))
+    for x, y, s, size, colour in spec.get("notes", []):
+        out.append(text(x, y, s, size, t[colour], "bold"))
     out.append(text(w / 2, PANEL_H - 3.0, "RKA", 3.2, ACCENTS["amber"], "bold",
                     f' fill-opacity="{t["accent_opacity"]}"'))
     # Placeholders for helper.py createmodule; hidden so they never render.
     out.append('<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">')
     for kind, cname, x, y, _ in spec["components"]:
-        out.append(f'<circle id="{cname}" cx="{x}" cy="{y}" r="1" fill="{KIND_COLOUR[kind]}"/>')
+        # ids must be unique; names repeat across kinds (PW knob, PW input).
+        out.append(f'<circle id="{kind}-{cname}" cx="{x}" cy="{y}" r="1" fill="{KIND_COLOUR[kind]}"/>')
     out.append('</g>')
     out.append('</svg>')
     return "\n".join(out) + "\n"
