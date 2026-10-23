@@ -23,8 +23,9 @@ src/RkaTheme.hpp         palette accent colours for C++, generated
 src/testing.hpp          CHECK macro for the offline unit tests
 src/sway/                the Sway module
   Sway.cpp               module (params, ports, polyphony) and widget
-  LfoCore.hpp            DSP engine, no Rack dependency, unit-tested
-  test_lfo_core.cpp      offline unit tests for LfoCore
+  Rate.hpp, Phasor.hpp,  DSP units, no Rack dependency, unit-tested
+  Waves.hpp
+  test_*.cpp             offline unit tests, one per DSP unit
   SwayLayout.hpp         component positions, generated, do not edit
 res/sway/                final panels, text as paths (what Rack loads)
 res-src/sway/            generated SVGs with live text (input to Inkscape)

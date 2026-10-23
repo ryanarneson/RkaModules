@@ -1,5 +1,7 @@
 #include "plugin.hpp"
-#include "LfoCore.hpp"
+#include "Phasor.hpp"
+#include "Rate.hpp"
+#include "Waves.hpp"
 #include "SwayLayout.hpp"
 #include "widgets.hpp"
 
@@ -28,7 +30,7 @@ struct Sway : Module {
 		LIGHTS_LEN
 	};
 
-	rka::LfoCore cores[PORT_MAX_CHANNELS];
+	rka::Phasor phasors[PORT_MAX_CHANNELS];
 	dsp::SchmittTrigger resetTriggers[PORT_MAX_CHANNELS];
 	dsp::ClockDivider lightDivider;
 
@@ -50,7 +52,7 @@ struct Sway : Module {
 
 	void onReset() override {
 		for (int c = 0; c < PORT_MAX_CHANNELS; c++)
-			cores[c].reset();
+			phasors[c].reset();
 	}
 
 	void process(const ProcessArgs& args) override {
@@ -60,23 +62,25 @@ struct Sway : Module {
 		const bool unipolar = params[OFFSET_PARAM].getValue() > 0.5f;
 
 		for (int c = 0; c < channels; c++) {
-			rka::LfoCore& core = cores[c];
+			rka::Phasor& phasor = phasors[c];
 			// getPolyVoltage() lets a mono cable drive every channel.
 			if (resetTriggers[c].process(inputs[RESET_INPUT].getPolyVoltage(c), 0.1f, 1.f))
-				core.reset();
+				phasor.reset();
 
-			core.step(rka::lfoFrequency(rate, inputs[FM_INPUT].getPolyVoltage(c)), args.sampleTime);
+			const float exponent = rka::rateExponent(rate, inputs[FM_INPUT].getPolyVoltage(c), rka::RANGE_NORMAL);
+			phasor.step(rka::expToHz(exponent, args.sampleRate), args.sampleTime, false, false);
 
-			outputs[SIN_OUTPUT].setVoltage(rka::lfoVolts(core.sin(), unipolar), c);
-			outputs[TRI_OUTPUT].setVoltage(rka::lfoVolts(core.tri(), unipolar), c);
-			outputs[SAW_OUTPUT].setVoltage(rka::lfoVolts(core.saw(), unipolar), c);
-			outputs[SQR_OUTPUT].setVoltage(rka::lfoVolts(core.sqr(pw), unipolar), c);
+			const float p = float(phasor.phase);
+			outputs[SIN_OUTPUT].setVoltage(rka::lfoVolts(rka::waveSin(p), unipolar), c);
+			outputs[TRI_OUTPUT].setVoltage(rka::lfoVolts(rka::waveTri(p), unipolar), c);
+			outputs[SAW_OUTPUT].setVoltage(rka::lfoVolts(rka::waveSaw(p), unipolar), c);
+			outputs[SQR_OUTPUT].setVoltage(rka::lfoVolts(rka::waveSqr(p, pw), unipolar), c);
 		}
 		for (int o = 0; o < OUTPUTS_LEN; o++)
 			outputs[o].setChannels(channels);
 
 		if (lightDivider.process()) {
-			const float s = cores[0].sin();
+			const float s = rka::waveSin(float(phasors[0].phase));
 			const float dt = args.sampleTime * lightDivider.getDivision();
 			lights[PHASE_LIGHT + 0].setBrightnessSmooth(std::max(s, 0.f), dt);
 			lights[PHASE_LIGHT + 1].setBrightnessSmooth(std::max(-s, 0.f), dt);
