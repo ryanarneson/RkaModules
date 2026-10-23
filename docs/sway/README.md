@@ -2,7 +2,7 @@
 
 Polyphonic LFO, 6 HP.
 
-![Sway panel](doc/Sway.png)
+![Sway panel](Sway.png)
 
 - **RATE**: 0.008 Hz to 128 Hz, exponential. Default 2 Hz.
 - **PW**: pulse width of the square, 1% to 99%.

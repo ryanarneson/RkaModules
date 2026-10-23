@@ -89,7 +89,7 @@ struct SwayWidget : ModuleWidget {
 	SwayWidget(Sway* module) {
 		using namespace SwayLayout;
 		setModule(module);
-		setPanel(createPanel(asset::plugin(pluginInstance, "sway/res/Sway.svg"), asset::plugin(pluginInstance, "sway/res/Sway-dark.svg")));
+		setPanel(createPanel(asset::plugin(pluginInstance, "res/sway/Sway.svg"), asset::plugin(pluginInstance, "res/sway/Sway-dark.svg")));
 
 		addChild(createWidget<ThemedScrew>(Vec(RACK_GRID_WIDTH, 0)));
 		addChild(createWidget<ThemedScrew>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));

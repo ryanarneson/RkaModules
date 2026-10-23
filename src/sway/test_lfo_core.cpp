@@ -1,19 +1,8 @@
-// Unit tests for sway/LfoCore.hpp. Run with `make test`.
+// Unit tests for src/sway/LfoCore.hpp. Run with `make test`.
 #include "LfoCore.hpp"
-#include <cstdio>
+#include "testing.hpp"
 #include <cmath>
 #include <initializer_list>
-
-static int failures = 0;
-
-#define CHECK(cond, ...) do { \
-	if (!(cond)) { \
-		failures++; \
-		std::printf("FAIL %s:%d: %s: ", __FILE__, __LINE__, #cond); \
-		std::printf(__VA_ARGS__); \
-		std::printf("\n"); \
-	} \
-} while (0)
 
 using rka::LfoCore;
 
@@ -132,10 +121,5 @@ int main() {
 	testReset();
 	testHugeStep();
 	testVolts();
-	if (failures) {
-		std::printf("%d check(s) failed\n", failures);
-		return 1;
-	}
-	std::printf("test_lfo_core: all checks passed\n");
-	return 0;
+	return rkatest::finish("test_lfo_core");
 }

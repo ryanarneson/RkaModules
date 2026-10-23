@@ -4,7 +4,7 @@ VCV Rack 2 modules.
 
 | Module | HP | Description |
 |---|---|---|
-| [**Sway**](sway/README.md) | 6 | Polyphonic LFO: sine, triangle, saw and pulse-width square |
+| [**Sway**](docs/sway/README.md) | 6 | Polyphonic LFO: sine, triangle, saw and pulse-width square |
 
 Each module's manual is in its own folder.
 
@@ -12,30 +12,33 @@ Each module's manual is in its own folder.
 
 ### Layout
 
-One plugin (`rka`, one `.vcvplugin`), one folder per module:
+One plugin (`rka`, one `.vcvplugin`). All code is under `src/`, one
+folder per module; assets and docs sit at the top level, also per module:
 
 ```
 src/plugin.cpp           plugin entry point: registers every module
 src/plugin.hpp           shared includes, extern Model* per module
 src/widgets.hpp          shared knobs and lights, so modules match
 src/RkaTheme.hpp         palette accent colours for C++, generated
-sway/                    the Sway module
+src/testing.hpp          CHECK macro for the offline unit tests
+src/sway/                the Sway module
   Sway.cpp               module (params, ports, polyphony) and widget
   LfoCore.hpp            DSP engine, no Rack dependency, unit-tested
   test_lfo_core.cpp      offline unit tests for LfoCore
   SwayLayout.hpp         component positions, generated, do not edit
-  res-src/               generated SVGs with live text (input to Inkscape)
-  res/                   final panels, text as paths (what Rack loads)
-  README.md, doc/        the module's manual and panel image
+res/sway/                final panels, text as paths (what Rack loads)
+res-src/sway/            generated SVGs with live text (input to Inkscape)
+docs/sway/               the module's manual and panel image
+docs/specs/, docs/plans/ design docs and implementation plans
 tools/gen_panels.py      panel layouts for every module: the one source
                          for SVGs and positions
 packages/                release packages from tools/cross_build.sh and
                          tools/mac_dist.sh
 ```
 
-The Makefile's `MODULES` list names the module folders; it compiles their
-`*.cpp` (except `test_*.cpp`), ships their `res/`, and builds each
-`test_*.cpp` into `build/test/` for `make test`.
+The Makefile's `MODULES` list names the module folders; it compiles
+`src/<module>/*.cpp` (except `test_*.cpp`), ships `res/`, and builds each
+`src/<module>/test_*.cpp` into `build/test/` for `make test`.
 
 ### Everyday commands
 
@@ -70,9 +73,9 @@ widgets in `src/widgets.hpp` (`rka::BigKnob`, `rka::SmallKnob`,
 ### Changing a panel
 
 Edit the layout in `tools/gen_panels.py`, then `make panels`. That rewrites
-the light and dark SVGs and `<module>/<Module>Layout.hpp`, so positions in the
+the light and dark SVGs and `src/<module>/<Module>Layout.hpp`, so positions in the
 panel and the C++ can't drift apart. Rack can't draw `<text>`, so Inkscape
-converts text to paths on the way to `<module>/res/`. Commit `res/` so builds don't
+converts text to paths on the way to `res/<module>/`. Commit `res/` so builds don't
 need Inkscape.
 
 Each panel also carries a hidden `components` layer (red params, green
@@ -85,16 +88,17 @@ still works on it as the official tutorial describes.
    the Makefile.
 2. Add its layout to `PANELS` in `tools/gen_panels.py` with `dir=` set to
    that folder, then `make panels`.
-3. `<folder>/<Name>.cpp` with the module and widget; include
+3. `src/<folder>/<Name>.cpp` with the module and widget; include
    `<Name>Layout.hpp` and `widgets.hpp`, and load panels from
-   `"<folder>/res/<Name>.svg"`. Group controls into `cards` in the layout
+   `"res/<folder>/<Name>.svg"`. Group controls into `cards` in the layout
    and colour outputs with `label_accents`.
 4. Declare `extern Model* model<Name>;` in `src/plugin.hpp`, register it in
    `src/plugin.cpp`.
 5. Add the module to `plugin.json`, bump the minor version.
-6. Keep DSP in a Rack-free header in the folder, with tests in
-   `<folder>/test_*.cpp` (picked up by `make test` and CI automatically).
-7. Write `<folder>/README.md` and link it from the table at the top.
+6. Keep DSP in Rack-free headers in `src/<folder>/`, with tests in
+   `src/<folder>/test_*.cpp` using `testing.hpp` (picked up by `make test`
+   and CI automatically).
+7. Write `docs/<folder>/README.md` and link it from the table at the top.
 
 ## Setting up a build machine
 

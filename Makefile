@@ -1,9 +1,9 @@
 # If RACK_DIR is not defined when calling the Makefile, default to two directories above
 RACK_DIR ?= ../..
 
-# One directory per module, each holding <Name>.cpp, its Rack-free DSP
-# header(s), test_*.cpp unit tests, and res/ panels. src/ has the shared
-# plugin entry point.
+# One folder per module: code and test_*.cpp tests in src/<module>/,
+# panels in res/<module>/ (generated from res-src/<module>/). src/ itself
+# has the shared plugin entry point and widgets.
 MODULES = sway
 
 # FLAGS will be passed to both the C and C++ compiler
@@ -17,11 +17,11 @@ LDFLAGS +=
 
 # Add .cpp files to the build
 SOURCES += $(wildcard src/*.cpp)
-SOURCES += $(filter-out $(wildcard $(MODULES:%=%/test_*.cpp)),$(wildcard $(MODULES:%=%/*.cpp)))
+SOURCES += $(filter-out $(wildcard $(MODULES:%=src/%/test_*.cpp)),$(wildcard $(MODULES:%=src/%/*.cpp)))
 
 # Add files to the ZIP package when running `make dist`
 # The compiled plugin and "plugin.json" are automatically added.
-DISTRIBUTABLES += $(MODULES:%=%/res)
+DISTRIBUTABLES += res
 DISTRIBUTABLES += $(wildcard LICENSE*)
 DISTRIBUTABLES += $(wildcard presets)
 
@@ -29,27 +29,27 @@ DISTRIBUTABLES += $(wildcard presets)
 include $(RACK_DIR)/plugin.mk
 
 
-# Regenerate panels: layout -> <module>/res-src/*.svg + <module>/*Layout.hpp
-# -> Inkscape text-to-path -> <module>/res/*.svg. Needs Inkscape; the results are committed so
+# Regenerate panels: layout -> res-src/<module>/*.svg + src/<module>/*Layout.hpp
+# -> Inkscape text-to-path -> res/<module>/*.svg. Needs Inkscape; the results are committed so
 # plain builds (and CI) don't.
 # On macOS the Inkscape cask doesn't put the CLI on PATH.
 INKSCAPE ?= $(or $(shell command -v inkscape),$(wildcard /Applications/Inkscape.app/Contents/MacOS/inkscape),inkscape)
 .PHONY: panels
 panels:
 	python3 tools/gen_panels.py
-	for f in $(MODULES:%=%/res-src/*.svg); do \
-		out="$$(dirname $$(dirname $$f))/res"; mkdir -p "$$out"; \
+	for f in $(MODULES:%=res-src/%/*.svg); do \
+		out="res/$$(basename $$(dirname $$f))"; mkdir -p "$$out"; \
 		$(INKSCAPE) "$$f" --export-text-to-path --export-plain-svg --export-filename="$$out/$$(basename $$f)" || exit 1; \
 	done
 
 # Offline unit tests of the DSP core; no Rack or libRack needed.
-# Each <module>/test_*.cpp builds to build/test/<module>/test_*.
-TEST_BINS = $(patsubst %.cpp,build/test/%,$(wildcard $(MODULES:%=%/test_*.cpp)))
+# Each src/<module>/test_*.cpp builds to build/test/<module>/test_*.
+TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_*.cpp)))
 .PHONY: test
 test: $(TEST_BINS)
 	@for t in $(TEST_BINS); do ./$$t || exit 1; done
 
-build/test/%: %.cpp $(wildcard src/*.hpp $(MODULES:%=%/*.hpp))
+build/test/%: src/%.cpp $(wildcard src/*.hpp $(MODULES:%=src/%/*.hpp))
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O2 -Wall -Wextra -Isrc -I$(<D) $< -o $@
 

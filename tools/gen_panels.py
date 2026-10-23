@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Generate module panels and their C++ layout headers from one description.
 
-For each module in PANELS this writes, inside the module's directory:
-  res-src/<Name>.svg       light panel, live <text>, hidden `components` layer
-  res-src/<Name>-dark.svg  dark panel, same geometry
-  <Name>Layout.hpp         component centres in mm, read by the module widget
+For each module in PANELS (folder `dir`) this writes:
+  res-src/<dir>/<Name>.svg       light panel, live <text>, hidden `components` layer
+  res-src/<dir>/<Name>-dark.svg  dark panel, same geometry
+  src/<dir>/<Name>Layout.hpp     component centres in mm, read by the module widget
 and, once for the plugin:
   src/RkaTheme.hpp         the palette's accent colours for lights and widgets
 
 `make panels` then runs Inkscape to convert text to paths (Rack's SVG renderer
-cannot draw <text>) and writes the finished panels to <dir>/res/.
+cannot draw <text>) and writes the finished panels to res/<dir>/.
 
 The look ("Nightglow") is shared by every module: navy panel, slate cards
 with thin glowing borders, light labels, and neon accents. Rack's renderer
@@ -180,11 +180,11 @@ def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent)
     (root / "src" / "RkaTheme.hpp").write_text(theme_hpp())
     for name, spec in PANELS.items():
-        mod = root / spec["dir"]
-        (mod / "res-src").mkdir(parents=True, exist_ok=True)
+        svg_dir = root / "res-src" / spec["dir"]
+        svg_dir.mkdir(parents=True, exist_ok=True)
         for suffix, theme in THEMES.items():
-            (mod / "res-src" / f"{name}{suffix}.svg").write_text(panel_svg(name, spec, theme))
-        (mod / f"{name}Layout.hpp").write_text(layout_hpp(name, spec))
+            (svg_dir / f"{name}{suffix}.svg").write_text(panel_svg(name, spec, theme))
+        (root / "src" / spec["dir"] / f"{name}Layout.hpp").write_text(layout_hpp(name, spec))
         print(f"generated {name}")
 
 
