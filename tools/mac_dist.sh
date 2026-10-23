@@ -31,4 +31,7 @@ for arch in $archs; do
 	mkdir -p packages && cp dist/*.vcvplugin packages/
 done
 
+# Leave no other-CPU objects behind: a later plain `make install` would see
+# them as up to date and package e.g. an x86_64 dylib as mac-arm64.
+make clean RACK_DIR="$sdk" >/dev/null
 ls -la packages
