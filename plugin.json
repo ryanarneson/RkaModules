@@ -10,7 +10,7 @@
     {
       "slug": "Sway",
       "name": "Sway",
-      "description": "Polyphonic LFO with morphing shapes, random outputs, clock sync, phase spread and one-shot mode",
+      "description": "Polyphonic LFO with morphing shapes, random, end-of-cycle trigger, clock sync, phase spread and one-shot mode",
       "tags": [
         "Low-frequency oscillator",
         "Polyphonic",

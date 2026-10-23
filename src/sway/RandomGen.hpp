@@ -2,7 +2,7 @@
 #include <cmath>
 #include <cstdint>
 
-// Rack-independent random voltages for the STEP and RAND outputs. splitmix64
+// Rack-independent random voltages for the RAND output. splitmix64
 // rather than <random> so every platform produces the same sequence.
 namespace rka {
 
@@ -19,14 +19,14 @@ struct RandomGen {
 		next = uniform();
 	}
 
-	// Stepped: holds the new value for the whole cycle.
-	float step() const {
-		return next;
-	}
-
-	// Smooth: cosine glide from prev to next over the cycle (p in [0, 1]).
-	float smooth(float p) const {
-		return prev + (next - prev) * (1.f - std::cos(float(M_PI) * p)) * 0.5f;
+	// The output at cycle phase p in [0, 1]: a cosine glide from prev to
+	// next over the first `glide` of the cycle, then holds next. glide 0 is
+	// stepped; glide 1 glides over the whole cycle.
+	float value(float p, float glide) const {
+		if (p >= glide)
+			return next;
+		const float t = p / glide;
+		return prev + (next - prev) * (1.f - std::cos(float(M_PI) * t)) * 0.5f;
 	}
 
 private:

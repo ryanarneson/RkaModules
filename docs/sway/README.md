@@ -1,7 +1,7 @@
 # Sway
 
-Polyphonic LFO, 18 HP: four classic waves, a shapeable MORPH wave, stepped
-and smooth random, clock sync, phase spread across channels, and a one-shot
+Polyphonic LFO, 18 HP: four classic waves, a shapeable MORPH wave, a random
+output from stepped to gliding, an end-of-cycle trigger, clock sync, phase spread across channels, and a one-shot
 mode that turns it into an envelope.
 
 ![Sway panel](Sway.png)
@@ -33,13 +33,16 @@ mode that turns it into an envelope.
 
 - **PW**: pulse width of SQR and of MORPH's square, 1% to 99%.
 - **PHASE**: shifts every output by 0–360°.
-- **SKEW**, **SMOOTH**, **MORPH** shape only the MORPH output:
+- **SKEW**, **SMOOTH**, **MORPH** shape the MORPH output (SMOOTH also
+  sets the RAND output's curve):
   - **MORPH** sweeps sine → triangle → saw → square.
   - **SKEW** sets how much of the cycle the rise takes: 50% is
     symmetric; the ends turn the sine and triangle into falling (0%) and
     rising (100%) ramps.
   - **SMOOTH**: left of centre rounds the shape's corners; right of centre
-    wavefolds it, up to three folds.
+    wavefolds it, up to three folds. For RAND, centre and right are
+    stepped, and turning left makes each new value glide in, over the whole
+    cycle when fully left.
 - Each of FM, PW, PHASE, SKEW, SMOOTH and MORPH has a CV jack with an
   attenuverter; ±5 V at full sweeps the whole knob range.
 - **BI / UNI**: every output swings ±5 V (bipolar) or 0–10 V (unipolar).
@@ -62,5 +65,5 @@ mode that turns it into an envelope.
 | SAW | Rises over the cycle, drops at its end |
 | SQR | Square with pulse width PW |
 | MORPH | The shaped wave (MORPH, SKEW, SMOOTH, PW) |
-| STEP | A new random value at the start of each cycle |
-| RAND | Glides smoothly to the next random value over each cycle |
+| RAND | A new random value each cycle: stepped, or gliding in as SMOOTH turns left |
+| EOC | A 10 V, 1 ms trigger at the end of each cycle (including a finished one-shot and a clock restart; not RESET) |

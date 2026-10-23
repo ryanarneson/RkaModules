@@ -197,6 +197,15 @@ Offline (`make test`, CI):
 Then `make`, `make smoke` (panel screenshot reviewed), all four platform
 packages, and `make install`.
 
+## Amendment (2026-10-23): one RAND output, EOC
+
+STEP and RAND are merged into one RAND output; SMOOTH sets its curve:
+`glide = max(0, -SMOOTH)`, the new value glides in (cosine) over the first
+`glide` of the cycle, then holds (0 = stepped, 1 = whole-cycle glide). The
+freed slot is EOC: a 10 V, 1 ms trigger when a cycle ends (wrap, one-shot
+finishing, or a clock restart past mid-cycle; not RESET). Output column:
+SIN, TRI, SAW, SQR, MORPH, RAND (green), EOC (amber).
+
 ## Out of scope
 
-On-panel display, end-of-cycle output, SPREAD/ratio CV, an expander.
+On-panel display, SPREAD/ratio CV, an expander.

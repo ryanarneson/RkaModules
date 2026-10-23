@@ -5,7 +5,9 @@
 - New module: **Sway**, an 18 HP polyphonic LFO:
   - SIN, TRI, SAW, SQR (pulse width) plus a MORPH output with SKEW, SMOOTH
     (round or wavefold) and MORPH (sin → tri → saw → square).
-  - STEP and RAND random outputs, new values every cycle.
+  - RAND output, a new random value every cycle, from stepped to gliding
+    as SMOOTH turns left.
+  - EOC trigger at the end of every cycle (chain one-shot envelopes).
   - Slow (to 4.5 h per cycle), Normal and Audio ranges; FM with
     attenuverter, 1 V/oct at full.
   - CLOCK sync with ÷16…×16 ratios on the RATE knob; RESET; HOLD.

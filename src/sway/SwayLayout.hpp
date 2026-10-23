@@ -33,6 +33,6 @@ static const rack::math::Vec OUTPUT_TRI(80.94f, 37.4f);
 static const rack::math::Vec OUTPUT_SAW(80.94f, 51.3f);
 static const rack::math::Vec OUTPUT_SQR(80.94f, 65.2f);
 static const rack::math::Vec OUTPUT_MORPH(80.94f, 79.1f);
-static const rack::math::Vec OUTPUT_STEP(80.94f, 93.0f);
-static const rack::math::Vec OUTPUT_RAND(80.94f, 106.9f);
+static const rack::math::Vec OUTPUT_RAND(80.94f, 93.0f);
+static const rack::math::Vec OUTPUT_EOC(80.94f, 106.9f);
 }

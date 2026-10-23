@@ -51,7 +51,7 @@ KIND_COLOUR = {"param": "#ff0000", "input": "#00ff00", "output": "#0000ff", "lig
 # columns across the 68.44 mm control cards.
 _COL = [9.70, 21.11, 32.52, 43.92, 55.33, 66.74]
 _COLS = ["FM", "PW", "PHASE", "SKEW", "SMOOTH", "MORPH"]
-_OUTS = ["SIN", "TRI", "SAW", "SQR", "MORPH", "STEP", "RAND"]
+_OUTS = ["SIN", "TRI", "SAW", "SQR", "MORPH", "RAND", "EOC"]
 
 PANELS = {
     "Sway": dict(
@@ -86,7 +86,7 @@ PANELS = {
         # Label colour per component, by accent name; the rest use `label`.
         # Keyed by name: only the labelled component of a name is affected.
         label_accents={"SIN": "cyan", "TRI": "green", "SAW": "amber", "SQR": "magenta",
-                       "MORPH": "violet", "STEP": "amber", "RAND": "green"},
+                       "MORPH": "violet", "RAND": "green", "EOC": "amber"},
         label_size={"RATE": 2.4, "SPREAD": 2.1, "CHANNELS": 1.9, "OFFSET": 2.1, "ONESHOT": 2.1,
                     "CLOCK": 2.3, "RESET": 2.3, "HOLD": 2.3,
                     **{n: 2.3 for n in _OUTS}, "MORPH": 2.0},

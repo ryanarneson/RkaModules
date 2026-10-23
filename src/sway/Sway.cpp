@@ -45,8 +45,8 @@ struct Sway : Module {
 		SAW_OUTPUT,
 		SQR_OUTPUT,
 		MORPH_OUTPUT,
-		STEP_OUTPUT,
 		RAND_OUTPUT,
+		EOC_OUTPUT,
 		OUTPUTS_LEN
 	};
 	enum LightId {
@@ -65,6 +65,7 @@ struct Sway : Module {
 	dsp::SchmittTrigger resetTriggers[PORT_MAX_CHANNELS];
 	dsp::SchmittTrigger clockTriggers[PORT_MAX_CHANNELS];
 	dsp::SchmittTrigger holdTriggers[PORT_MAX_CHANNELS];
+	dsp::PulseGenerator eocPulses[PORT_MAX_CHANNELS];
 	bool wasOneShot = false;
 	bool wasClockConnected = false;
 
@@ -103,7 +104,7 @@ struct Sway : Module {
 		configParam(PW_PARAM, 0.01f, 0.99f, 0.5f, "Pulse width", "%", 0.f, 100.f);
 		configParam(PHASE_PARAM, 0.f, 1.f, 0.f, "Phase", "°", 0.f, 360.f);
 		configParam(SKEW_PARAM, 0.f, 1.f, 0.5f, "Skew (MORPH out)", "%", 0.f, 100.f);
-		configParam(SMOOTH_PARAM, -1.f, 1.f, 0.f, "Smooth: round ← → fold (MORPH out)", "%", 0.f, 100.f);
+		configParam(SMOOTH_PARAM, -1.f, 1.f, 0.f, "Smooth: round MORPH and glide RAND ← → fold MORPH", "%", 0.f, 100.f);
 		configParam(MORPH_PARAM, 0.f, 1.f, 0.f, "Morph: sin → tri → saw → square", "%", 0.f, 100.f);
 		configParam(SPREAD_PARAM, 0.f, 1.f, 0.f, "Phase spread across channels", "%", 0.f, 100.f);
 		configParam(CHANNELS_PARAM, 1.f, 16.f, 1.f, "Channels")->snapEnabled = true;
@@ -129,8 +130,8 @@ struct Sway : Module {
 		configOutput(SAW_OUTPUT, "Saw");
 		configOutput(SQR_OUTPUT, "Square");
 		configOutput(MORPH_OUTPUT, "Morph (shaped)");
-		configOutput(STEP_OUTPUT, "Stepped random");
-		configOutput(RAND_OUTPUT, "Smooth random");
+		configOutput(RAND_OUTPUT, "Random (stepped; SMOOTH left glides)");
+		configOutput(EOC_OUTPUT, "End of cycle trigger");
 		configLight(ONESHOT_LIGHT, "One-shot");
 	}
 
@@ -211,6 +212,11 @@ struct Sway : Module {
 			const float skew = clamp(modulated(SKEW_PARAM, SKEW_INPUT, SKEW_ATT_PARAM, c), 0.f, 1.f);
 			const float smooth = clamp(modulated(SMOOTH_PARAM, SMOOTH_INPUT, SMOOTH_ATT_PARAM, c), -1.f, 1.f);
 			const float morph = clamp(modulated(MORPH_PARAM, MORPH_INPUT, MORPH_ATT_PARAM, c), 0.f, 1.f);
+			// SMOOTH left of centre also glides RAND: 0 stepped, -1 glides the
+			// whole cycle.
+			const float glide = std::max(0.f, -smooth);
+			if (voice.wrapped)
+				eocPulses[c].trigger(1e-3f);
 			// Band-limit edges only where they can alias.
 			const float dt = r == rka::RANGE_AUDIO ? float(voice.freq * args.sampleTime) : 0.f;
 
@@ -219,8 +225,8 @@ struct Sway : Module {
 			outputs[SAW_OUTPUT].setVoltage(rka::lfoVolts(rka::sawBlep(p, dt), unipolar), c);
 			outputs[SQR_OUTPUT].setVoltage(rka::lfoVolts(rka::sqrBlep(p, pw, dt), unipolar), c);
 			outputs[MORPH_OUTPUT].setVoltage(rka::lfoVolts(rka::shape(p, skew, morph, smooth, pw, dt), unipolar), c);
-			outputs[STEP_OUTPUT].setVoltage(rka::lfoVolts(voice.random.step(), unipolar), c);
-			outputs[RAND_OUTPUT].setVoltage(rka::lfoVolts(voice.random.smooth(float(voice.phasor.phase)), unipolar), c);
+			outputs[RAND_OUTPUT].setVoltage(rka::lfoVolts(voice.random.value(float(voice.phasor.phase), glide), unipolar), c);
+			outputs[EOC_OUTPUT].setVoltage(eocPulses[c].process(args.sampleTime) ? 10.f : 0.f, c);
 		}
 		for (int o = 0; o < OUTPUTS_LEN; o++)
 			outputs[o].setChannels(channels);
@@ -271,8 +277,8 @@ struct SwayWidget : ModuleWidget {
 		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_SAW), module, Sway::SAW_OUTPUT));
 		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_SQR), module, Sway::SQR_OUTPUT));
 		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_MORPH), module, Sway::MORPH_OUTPUT));
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_STEP), module, Sway::STEP_OUTPUT));
 		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_RAND), module, Sway::RAND_OUTPUT));
+		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_EOC), module, Sway::EOC_OUTPUT));
 	}
 
 	void appendContextMenu(Menu* menu) override {

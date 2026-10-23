@@ -27,8 +27,8 @@
 <text x="80.94" y="46.30" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="1.0">SAW</text>
 <text x="80.94" y="60.20" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#f472b6" fill-opacity="1.0">SQR</text>
 <text x="80.94" y="74.10" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#a78bfa" fill-opacity="1.0">MORPH</text>
-<text x="80.94" y="88.00" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="1.0">STEP</text>
-<text x="80.94" y="101.90" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#4ade80" fill-opacity="1.0">RAND</text>
+<text x="80.94" y="88.00" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#4ade80" fill-opacity="1.0">RAND</text>
+<text x="80.94" y="101.90" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="1.0">EOC</text>
 <text x="9.70" y="66.00" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#e6f4ff">FM</text>
 <text x="21.11" y="66.00" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#e6f4ff">PW</text>
 <text x="32.52" y="66.00" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#e6f4ff">PHASE</text>
@@ -69,7 +69,7 @@
 <circle id="output-SAW" cx="80.94" cy="51.3" r="1" fill="#0000ff"/>
 <circle id="output-SQR" cx="80.94" cy="65.2" r="1" fill="#0000ff"/>
 <circle id="output-MORPH" cx="80.94" cy="79.1" r="1" fill="#0000ff"/>
-<circle id="output-STEP" cx="80.94" cy="93.0" r="1" fill="#0000ff"/>
-<circle id="output-RAND" cx="80.94" cy="106.9" r="1" fill="#0000ff"/>
+<circle id="output-RAND" cx="80.94" cy="93.0" r="1" fill="#0000ff"/>
+<circle id="output-EOC" cx="80.94" cy="106.9" r="1" fill="#0000ff"/>
 </g>
 </svg>

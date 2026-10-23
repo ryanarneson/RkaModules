@@ -4,7 +4,7 @@ VCV Rack 2 modules.
 
 | Module | HP | Description |
 |---|---|---|
-| [**Sway**](docs/sway/README.md) | 18 | Polyphonic LFO: classic and morphing waves, random, clock sync, phase spread, one-shot |
+| [**Sway**](docs/sway/README.md) | 18 | Polyphonic LFO: classic and morphing waves, random, EOC, clock sync, phase spread, one-shot |
 
 Each module's manual is in its own folder.
 

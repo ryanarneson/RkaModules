@@ -25,6 +25,9 @@ struct Voice {
 	RandomGen random;
 	// Frequency used this sample, Hz.
 	double freq = 0.0;
+	// A cycle ended this sample (EOC): a wrap, a one-shot finishing, or a
+	// clock restart past mid-cycle. RESET is not an end of cycle.
+	bool wrapped = false;
 
 	void tick(const VoiceInput& in, bool clockConnected, bool oneShot, double dt, float sampleRate) {
 		if (in.reset) {
@@ -33,16 +36,17 @@ struct Voice {
 		}
 		const bool sync = clock.process(in.edge, dt, in.ratio);
 		freq = clockConnected && clock.locked() ? clampHz(clock.frequency(in.ratio), sampleRate) : in.freeHz;
-		bool wrapped = phasor.step(freq, dt, in.hold, oneShot);
+		bool ended = phasor.step(freq, dt, in.hold, oneShot);
 		// Restart on the clock. A resync just before the wrap still starts a
 		// new cycle for the random outputs. Clock edges never restart a
 		// one-shot; only RESET does.
 		if (sync && !in.hold && !oneShot) {
-			wrapped = wrapped || phasor.phase > 0.5;
+			ended = ended || phasor.phase > 0.5;
 			phasor.reset();
 		}
-		if (wrapped)
+		if (ended)
 			random.advance();
+		wrapped = ended;
 	}
 };
 
