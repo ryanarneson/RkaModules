@@ -4,7 +4,7 @@ VCV Rack 2 modules.
 
 | Module | HP | Description |
 |---|---|---|
-| [**Sway**](docs/sway/README.md) | 6 | Polyphonic LFO: sine, triangle, saw and pulse-width square |
+| [**Sway**](docs/sway/README.md) | 18 | Polyphonic LFO: classic and morphing waves, random, clock sync, phase spread, one-shot |
 
 Each module's manual is in its own folder.
 
@@ -24,7 +24,9 @@ src/testing.hpp          CHECK macro for the offline unit tests
 src/sway/                the Sway module
   Sway.cpp               module (params, ports, polyphony) and widget
   Rate.hpp, Phasor.hpp,  DSP units, no Rack dependency, unit-tested
-  Waves.hpp
+  Waves.hpp, Shaper.hpp,
+  ClockSync.hpp,
+  RandomGen.hpp
   test_*.cpp             offline unit tests, one per DSP unit
   SwayLayout.hpp         component positions, generated, do not edit
 res/sway/                final panels, text as paths (what Rack loads)

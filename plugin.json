@@ -10,10 +10,11 @@
     {
       "slug": "Sway",
       "name": "Sway",
-      "description": "Polyphonic LFO with sine, triangle, saw and pulse-width square outputs",
+      "description": "Polyphonic LFO with morphing shapes, random outputs, clock sync, phase spread and one-shot mode",
       "tags": [
         "Low-frequency oscillator",
-        "Polyphonic"
+        "Polyphonic",
+        "Random"
       ],
       "keywords": "modulation"
     }
