@@ -2,7 +2,7 @@
 # Build macOS packages for both CPUs on a Mac. Each target needs the SDK for
 # that CPU (it carries libRack.dylib for one arch), so they are fetched on
 # first use into $SDK_ROOT/Rack-SDK-<version>-mac-<arch>.
-# Output: build/mac/*.vcvplugin. Usage: tools/mac_dist.sh [arm64] [x64]
+# Output: packages/*.vcvplugin. Usage: tools/mac_dist.sh [arm64] [x64]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [ "$(uname -s)" = Darwin ] || { echo "macOS only; Linux/Windows use tools/cross_build.sh"; exit 1; }
@@ -10,7 +10,6 @@ cd "$(dirname "$0")/.."
 version="${RACK_SDK_VERSION:-2.6.6}"
 sdk_root="${SDK_ROOT:-$HOME/ws/sdk}"
 archs="${*:-arm64 x64}"
-out=$(mktemp -d)
 
 for arch in $archs; do
 	sdk="$sdk_root/Rack-SDK-$version-mac-$arch"
@@ -29,9 +28,7 @@ for arch in $archs; do
 	# `make clean` between arches, or objects from the other CPU get linked.
 	make clean RACK_DIR="$sdk" >/dev/null
 	make -j"$(sysctl -n hw.ncpu)" dist RACK_DIR="$sdk" CROSS_COMPILE=$target
-	cp dist/*.vcvplugin "$out/"
+	mkdir -p packages && cp dist/*.vcvplugin packages/
 done
 
-# Copy out last: `make clean` deletes build/.
-mkdir -p build/mac && mv "$out"/*.vcvplugin build/mac/ && rm -rf "$out"
-ls -la build/mac
+ls -la packages

@@ -2,7 +2,7 @@
 #include <cmath>
 
 // Rack-independent LFO engine: one phase accumulator and its waveforms.
-// Kept free of rack.hpp so test/ can drive it without libRack.
+// Kept free of rack.hpp so test_lfo_core.cpp can drive it without libRack.
 namespace rka {
 
 struct LfoCore {

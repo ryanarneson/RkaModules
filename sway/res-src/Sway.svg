@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="30.48mm" height="128.5mm" viewBox="0 0 30.48 128.5">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="128.5" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#111c30"/><stop offset="1" stop-color="#070b14"/></linearGradient>
+<linearGradient id="rule" x1="3" y1="0" x2="27.48" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22e6ef"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+</defs>
+<rect width="30.48" height="128.5" fill="url(#bg)"/>
+<text x="15.24" y="11.50" font-family="DejaVu Sans" font-size="4.5" font-weight="bold" text-anchor="middle" fill="#22e6ef" stroke="#22e6ef" stroke-width="0.99" stroke-linejoin="round" opacity="0.35">SWAY</text>
+<text x="15.24" y="11.50" font-family="DejaVu Sans" font-size="4.5" font-weight="bold" text-anchor="middle" fill="#e6f4ff">SWAY</text>
+<rect x="3" y="12.9" width="24.48" height="1.0" rx="0.5" fill="url(#rule)" opacity="0.35"/>
+<rect x="3" y="13.2" width="24.48" height="0.4" fill="url(#rule)" opacity="1.0"/>
+<rect x="2.0" y="16.0" width="26.48" height="60.0" rx="1.5" fill="#0f1828" stroke="#2a3a55" stroke-width="0.3" stroke-opacity="1.0"/>
+<rect x="2.0" y="79.0" width="26.48" height="37.0" rx="1.5" fill="none" stroke="#22e6ef" stroke-width="1.2" opacity="0.21"/>
+<rect x="2.0" y="79.0" width="26.48" height="37.0" rx="1.5" fill="#0f1828" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="1.0"/>
+<text x="15.24" y="19.00" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#9fb3c8">RATE</text>
+<text x="8.00" y="43.00" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#9fb3c8">PW</text>
+<text x="22.48" y="43.00" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#9fb3c8">BI / UNI</text>
+<text x="8.00" y="61.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#9fb3c8">V/OCT</text>
+<text x="22.48" y="61.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#9fb3c8">RESET</text>
+<text x="8.00" y="82.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="1.0">SIN</text>
+<text x="22.48" y="82.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#4ade80" fill-opacity="1.0">TRI</text>
+<text x="8.00" y="100.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="1.0">SAW</text>
+<text x="22.48" y="100.80" font-family="DejaVu Sans" font-size="2.6" font-weight="bold" text-anchor="middle" fill="#f472b6" fill-opacity="1.0">SQR</text>
+<text x="15.24" y="125.50" font-family="DejaVu Sans" font-size="3.2" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="1.0">RKA</text>
+<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
+<circle id="PHASE" cx="26.2" cy="10.0" r="1" fill="#ff00ff"/>
+<circle id="FREQ" cx="15.24" cy="31.0" r="1" fill="#ff0000"/>
+<circle id="PW" cx="8.0" cy="50.0" r="1" fill="#ff0000"/>
+<circle id="OFFSET" cx="22.48" cy="50.0" r="1" fill="#ff0000"/>
+<circle id="FM" cx="8.0" cy="68.0" r="1" fill="#00ff00"/>
+<circle id="RESET" cx="22.48" cy="68.0" r="1" fill="#00ff00"/>
+<circle id="SIN" cx="8.0" cy="89.0" r="1" fill="#0000ff"/>
+<circle id="TRI" cx="22.48" cy="89.0" r="1" fill="#0000ff"/>
+<circle id="SAW" cx="8.0" cy="107.0" r="1" fill="#0000ff"/>
+<circle id="SQR" cx="22.48" cy="107.0" r="1" fill="#0000ff"/>
+</g>
+</svg>

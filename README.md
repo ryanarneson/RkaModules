@@ -4,47 +4,49 @@ VCV Rack 2 modules.
 
 | Module | HP | Description |
 |---|---|---|
-| **LFO** | 6 | Polyphonic LFO: sine, triangle, saw and pulse-width square |
+| [**Sway**](sway/README.md) | 6 | Polyphonic LFO: sine, triangle, saw and pulse-width square |
 
-## LFO
-
-![LFO panel](doc/LFO.png)
-
-- **RATE**: 0.008 Hz to 128 Hz, exponential. Default 2 Hz.
-- **PW**: pulse width of the square, 1% to 99%.
-- **BI / UNI**: outputs swing ±5 V (bipolar) or 0–10 V (unipolar).
-- **V/OCT**: added to RATE; +1 V doubles the rate.
-- **RESET**: a rising edge (above 1 V) restarts the cycle at phase 0.
-- **SIN, TRI, SAW, SQR**: sine and triangle start at 0 V rising and stay in
-  phase with each other. The saw rises and drops at the end of the cycle.
-- The LED shows the sine of channel 1: green positive, red negative.
-- Polyphonic: the channel count follows the widest of V/OCT and RESET. A mono
-  cable drives every channel.
+Each module's manual is in its own folder.
 
 ## Development
 
 ### Layout
 
+One plugin (`rka`, one `.vcvplugin`), one folder per module:
+
 ```
-src/LfoCore.hpp      DSP engine, no Rack dependency, unit-tested
-src/LFO.cpp          Module (params, ports, polyphony) and widget
-src/LFOLayout.hpp    component positions, generated, do not edit
-tools/gen_panels.py  panel layout: the one source for SVGs and positions
-res-src/             generated SVGs with live text (input to Inkscape)
-res/                 final panels, text as paths (what Rack loads)
-test/                offline unit tests
+src/plugin.cpp           plugin entry point: registers every module
+src/plugin.hpp           shared includes, extern Model* per module
+src/widgets.hpp          shared knobs and lights, so modules match
+src/RkaTheme.hpp         palette accent colours for C++, generated
+sway/                    the Sway module
+  Sway.cpp               module (params, ports, polyphony) and widget
+  LfoCore.hpp            DSP engine, no Rack dependency, unit-tested
+  test_lfo_core.cpp      offline unit tests for LfoCore
+  SwayLayout.hpp         component positions, generated, do not edit
+  res-src/               generated SVGs with live text (input to Inkscape)
+  res/                   final panels, text as paths (what Rack loads)
+  README.md, doc/        the module's manual and panel image
+tools/gen_panels.py      panel layouts for every module: the one source
+                         for SVGs and positions
+packages/                release packages from tools/cross_build.sh and
+                         tools/mac_dist.sh
 ```
+
+The Makefile's `MODULES` list names the module folders; it compiles their
+`*.cpp` (except `test_*.cpp`), ships their `res/`, and builds each
+`test_*.cpp` into `build/test/` for `make test`.
 
 ### Everyday commands
 
 ```
 make              # build plugin.so/.dll/.dylib
-make test         # unit-test the DSP core (no Rack needed)
+make test         # unit-test the DSP cores (no Rack needed)
 make install      # package and install into your Rack user folder
 make smoke        # load in a real headless Rack, screenshot each module
 make panels       # regenerate panels after editing tools/gen_panels.py
-tools/cross_build.sh   # Windows + Linux packages via Docker -> build/cross/
-tools/mac_dist.sh      # (on a Mac) arm64 + x64 packages -> build/mac/
+tools/cross_build.sh   # Windows + Linux packages via Docker -> packages/
+tools/mac_dist.sh      # (on a Mac) arm64 + x64 packages -> packages/
 ```
 
 All of these work on Linux and macOS. On a Mac, Windows and Linux builds
@@ -54,12 +56,23 @@ all four packages.
 `make smoke` writes `build/screenshots/<module>.png`. It catches what unit
 tests can't: a plugin that won't load, a widget that crashes, a broken panel.
 
+### Look and feel
+
+Every module shares one theme, "Nightglow": a navy panel, slate cards with
+thin borders, light labels, and neon accents (cyan, violet, magenta, amber,
+green). Outputs are colour-coded by accent. The palette lives in
+`ACCENTS`/`THEMES` in `tools/gen_panels.py`; the default panel and Rack's
+"dark panels" variant are the same design, the dark one dimmer. Rack can't
+blur, so glows are a faint wide stroke under a thin bright one. Use the
+widgets in `src/widgets.hpp` (`rka::BigKnob`, `rka::SmallKnob`,
+`rka::CyanMagentaLight`) rather than stock ones so modules match.
+
 ### Changing a panel
 
 Edit the layout in `tools/gen_panels.py`, then `make panels`. That rewrites
-the light and dark SVGs and `src/<Module>Layout.hpp`, so positions in the
+the light and dark SVGs and `<module>/<Module>Layout.hpp`, so positions in the
 panel and the C++ can't drift apart. Rack can't draw `<text>`, so Inkscape
-converts text to paths on the way to `res/`. Commit `res/` so builds don't
+converts text to paths on the way to `<module>/res/`. Commit `res/` so builds don't
 need Inkscape.
 
 Each panel also carries a hidden `components` layer (red params, green
@@ -68,13 +81,20 @@ still works on it as the official tutorial describes.
 
 ### Adding a module
 
-1. Add its layout to `PANELS` in `tools/gen_panels.py`, run `make panels`.
-2. `src/<Name>.cpp` with the module and widget; include `<Name>Layout.hpp`.
-3. Declare `extern Model* model<Name>;` in `src/plugin.hpp`, register it in
+1. Pick a folder name (lowercase, e.g. `sway`) and add it to `MODULES` in
+   the Makefile.
+2. Add its layout to `PANELS` in `tools/gen_panels.py` with `dir=` set to
+   that folder, then `make panels`.
+3. `<folder>/<Name>.cpp` with the module and widget; include
+   `<Name>Layout.hpp` and `widgets.hpp`, and load panels from
+   `"<folder>/res/<Name>.svg"`. Group controls into `cards` in the layout
+   and colour outputs with `label_accents`.
+4. Declare `extern Model* model<Name>;` in `src/plugin.hpp`, register it in
    `src/plugin.cpp`.
-4. Add the module to `plugin.json`, bump the minor version.
-5. Keep DSP in a Rack-free header and add a test in `test/` (and to
-   `TEST_BINS` in the Makefile).
+5. Add the module to `plugin.json`, bump the minor version.
+6. Keep DSP in a Rack-free header in the folder, with tests in
+   `<folder>/test_*.cpp` (picked up by `make test` and CI automatically).
+7. Write `<folder>/README.md` and link it from the table at the top.
 
 ## Setting up a build machine
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build Windows and Linux packages locally with the Docker cross toolchain
-# (the same image CI uses). Output: build/cross/*.vcvplugin
-# macOS packages need Apple's SDK and are built by CI on macOS runners.
+# (the same image CI uses). Output: packages/*.vcvplugin, kept outside build/
+# because `make clean` (run by the toolchain and mac_dist.sh) wipes build/.
+# macOS packages need Apple's SDK and come from tools/mac_dist.sh or CI.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 image="${TOOLCHAIN_IMAGE:-ghcr.io/bloodbat/rack-plugin-toolchain-win-linux}"
@@ -12,10 +13,10 @@ docker run --rm --platform linux/amd64 -v "$PWD":/plugin -e PLUGIN_DIR=/plugin -
 	set -e
 	cd /home/build/rack-plugin-toolchain
 	make $targets
-	mkdir -p /plugin/build/cross
-	cp plugin-build/*.vcvplugin /plugin/build/cross/
+	mkdir -p /plugin/packages
+	cp plugin-build/*.vcvplugin /plugin/packages/
 	# The toolchain runs as root; hand everything back to the caller.
 	rm -rf /plugin/dep /plugin/dist
-	chown -R $(id -u):$(id -g) /plugin/build
+	chown -R $(id -u):$(id -g) /plugin/packages
 "
-ls -la build/cross
+ls -la packages

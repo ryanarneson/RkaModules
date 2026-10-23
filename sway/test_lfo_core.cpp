@@ -1,4 +1,4 @@
-// Unit tests for src/LfoCore.hpp. Run with `make test`.
+// Unit tests for sway/LfoCore.hpp. Run with `make test`.
 #include "LfoCore.hpp"
 #include <cstdio>
 #include <cmath>

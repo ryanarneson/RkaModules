@@ -1,9 +1,10 @@
 #include "plugin.hpp"
 #include "LfoCore.hpp"
-#include "LFOLayout.hpp"
+#include "SwayLayout.hpp"
+#include "widgets.hpp"
 
 
-struct LFO : Module {
+struct Sway : Module {
 	enum ParamId {
 		FREQ_PARAM,
 		PW_PARAM,
@@ -31,7 +32,7 @@ struct LFO : Module {
 	dsp::SchmittTrigger resetTriggers[PORT_MAX_CHANNELS];
 	dsp::ClockDivider lightDivider;
 
-	LFO() {
+	Sway() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
 		// Knob value is log2(Hz): -7..7 is ~0.008 Hz to 128 Hz, default 2 Hz.
 		configParam(FREQ_PARAM, -7.f, 7.f, 1.f, "Rate", " Hz", 2.f, 1.f);
@@ -84,30 +85,30 @@ struct LFO : Module {
 };
 
 
-struct LFOWidget : ModuleWidget {
-	LFOWidget(LFO* module) {
-		using namespace LFOLayout;
+struct SwayWidget : ModuleWidget {
+	SwayWidget(Sway* module) {
+		using namespace SwayLayout;
 		setModule(module);
-		setPanel(createPanel(asset::plugin(pluginInstance, "res/LFO.svg"), asset::plugin(pluginInstance, "res/LFO-dark.svg")));
+		setPanel(createPanel(asset::plugin(pluginInstance, "sway/res/Sway.svg"), asset::plugin(pluginInstance, "sway/res/Sway-dark.svg")));
 
 		addChild(createWidget<ThemedScrew>(Vec(RACK_GRID_WIDTH, 0)));
 		addChild(createWidget<ThemedScrew>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
 
-		addParam(createParamCentered<RoundBigBlackKnob>(mm2px(PARAM_FREQ), module, LFO::FREQ_PARAM));
-		addParam(createParamCentered<RoundSmallBlackKnob>(mm2px(PARAM_PW), module, LFO::PW_PARAM));
-		addParam(createParamCentered<CKSS>(mm2px(PARAM_OFFSET), module, LFO::OFFSET_PARAM));
+		addParam(createParamCentered<rka::BigKnob>(mm2px(PARAM_FREQ), module, Sway::FREQ_PARAM));
+		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_PW), module, Sway::PW_PARAM));
+		addParam(createParamCentered<CKSS>(mm2px(PARAM_OFFSET), module, Sway::OFFSET_PARAM));
 
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_FM), module, LFO::FM_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_RESET), module, LFO::RESET_INPUT));
+		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_FM), module, Sway::FM_INPUT));
+		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_RESET), module, Sway::RESET_INPUT));
 
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_SIN), module, LFO::SIN_OUTPUT));
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_TRI), module, LFO::TRI_OUTPUT));
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_SAW), module, LFO::SAW_OUTPUT));
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_SQR), module, LFO::SQR_OUTPUT));
+		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_SIN), module, Sway::SIN_OUTPUT));
+		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_TRI), module, Sway::TRI_OUTPUT));
+		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_SAW), module, Sway::SAW_OUTPUT));
+		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_SQR), module, Sway::SQR_OUTPUT));
 
-		addChild(createLightCentered<MediumLight<GreenRedLight>>(mm2px(LIGHT_PHASE), module, LFO::PHASE_LIGHT));
+		addChild(createLightCentered<MediumLight<rka::CyanMagentaLight>>(mm2px(LIGHT_PHASE), module, Sway::PHASE_LIGHT));
 	}
 };
 
 
-Model* modelLFO = createModel<LFO, LFOWidget>("LFO");
+Model* modelSway = createModel<Sway, SwayWidget>("Sway");

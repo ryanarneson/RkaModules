@@ -10,7 +10,4 @@
 /build
 /dep
 /dist
-
-# Unit test binaries
-/test/*
-!/test/*.cpp
+/packages

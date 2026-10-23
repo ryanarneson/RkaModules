@@ -8,8 +8,8 @@
   "minRackVersion": "2.5.0",
   "modules": [
     {
-      "slug": "LFO",
-      "name": "LFO",
+      "slug": "Sway",
+      "name": "Sway",
       "description": "Polyphonic LFO with sine, triangle, saw and pulse-width square outputs",
       "tags": [
         "Low-frequency oscillator",

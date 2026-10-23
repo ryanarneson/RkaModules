@@ -25,8 +25,8 @@ jobs:
       # them directly rather than through the Makefile.
       - name: DSP unit tests
         run: |
-          for t in test/*.cpp; do
-            g++ -std=c++17 -O2 -Wall -Wextra -Werror -Isrc "$t" -o "${t%.cpp}"
+          for t in */test_*.cpp; do
+            g++ -std=c++17 -O2 -Wall -Wextra -Werror -Isrc -I"$(dirname "$t")" "$t" -o "${t%.cpp}"
             "./${t%.cpp}"
           done
 

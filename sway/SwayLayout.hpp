@@ -2,8 +2,8 @@
 #pragma once
 #include <rack.hpp>
 
-namespace LFOLayout {
-static const rack::math::Vec LIGHT_PHASE(24.6f, 10.0f);
+namespace SwayLayout {
+static const rack::math::Vec LIGHT_PHASE(26.2f, 10.0f);
 static const rack::math::Vec PARAM_FREQ(15.24f, 31.0f);
 static const rack::math::Vec PARAM_PW(8.0f, 50.0f);
 static const rack::math::Vec PARAM_OFFSET(22.48f, 50.0f);
