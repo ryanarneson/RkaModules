@@ -1,6 +1,7 @@
 // Unit tests for src/sway/Phasor.hpp and Rate.hpp. Run with `make test`.
 #include "Phasor.hpp"
 #include "Rate.hpp"
+#include "Waves.hpp"
 #include "testing.hpp"
 #include <cmath>
 #include <initializer_list>
@@ -104,6 +105,21 @@ static void testOneShotOffResumes() {
 	CHECK(!ph.parked && ph.phase > 0.0 && ph.phase < 0.05, "resumes when one-shot is off: phase %f", ph.phase);
 }
 
+// A parked one-shot must read as the end of the cycle once the phase is
+// turned into the float the waves use (1 - 1e-9 rounds to 1.0f).
+static void testParkedReadsEnd() {
+	const float p = rka::readPhase(rka::PARK_PHASE, 0.f);
+	CHECK(p > 0.999f && p < 1.f, "parked read phase %f", p);
+	CHECK(rka::waveSaw(p) > 0.99f, "parked SAW reads %f, expected ~+1", rka::waveSaw(p));
+	CHECK(rka::waveSqr(p, 0.5f) < 0.f, "parked SQR reads high");
+}
+
+static void testReadPhaseWraps() {
+	CHECK(std::fabs(rka::readPhase(0.75, 0.5f) - 0.25f) < 1e-6f, "0.75 + 0.5 wraps to 0.25");
+	const float p = rka::readPhase(0.0, -1e-9f);
+	CHECK(p >= 0.f && p < 1.f, "tiny negative offset stays in [0, 1): %f", p);
+}
+
 static void testRateExponent() {
 	using namespace rka;
 	CHECK(rateExponent(1.f, 0.f, RANGE_NORMAL) == 1.f, "normal default is 2 Hz");
@@ -138,6 +154,8 @@ int main() {
 	testHold();
 	testOneShotParks();
 	testOneShotOffResumes();
+	testParkedReadsEnd();
+	testReadPhaseWraps();
 	testRateExponent();
 	testClamps();
 	testVolts();

@@ -99,7 +99,13 @@ static void testFoldFolds() {
 	CHECK(maxima > 2, "folded tri has %d maxima per cycle", maxima);
 }
 
+static void testWrapStaysBelowOne() {
+	CHECK(wrap01(-1e-9f) < 1.f, "wrap01(-1e-9) = %f", wrap01(-1e-9f));
+	CHECK(wrap01(0.25f) == 0.25f && wrap01(1.25f) == 0.25f, "plain wraps");
+}
+
 int main() {
+	testWrapStaysBelowOne();
 	testPureShapes();
 	testMorphCrossfades();
 	testSkewIdentity();

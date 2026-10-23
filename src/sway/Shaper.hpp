@@ -8,8 +8,9 @@
 // wavefolds (> 0).
 namespace rka {
 
+// Wrap to [0, 1); a tiny negative x would otherwise round to exactly 1.
 inline float wrap01(float x) {
-	return x - std::floor(x);
+	return std::fmin(x - std::floor(x), 0.99999994f);
 }
 
 // Warp the phase so the rise (trough -> peak) takes `skew` of the cycle and

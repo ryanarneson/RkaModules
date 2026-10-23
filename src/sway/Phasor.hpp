@@ -48,4 +48,16 @@ struct Phasor {
 	}
 };
 
+// Largest float below 1.
+static const float BELOW_ONE = 0.99999994f;
+
+// The phase the waves read: phasor phase plus an offset, wrapped to [0, 1).
+// Wrapped in double, then kept below 1 as a float: PARK_PHASE (and phases
+// a hair under 1) would otherwise round to 1.0f and wrap to the start.
+inline float readPhase(double phase, float offset) {
+	double p = phase + offset;
+	p -= std::floor(p);
+	return std::fmin(float(p), BELOW_ONE);
+}
+
 } // namespace rka

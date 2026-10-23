@@ -1,9 +1,7 @@
 #include "plugin.hpp"
-#include "ClockSync.hpp"
-#include "Phasor.hpp"
-#include "RandomGen.hpp"
 #include "Rate.hpp"
 #include "Shaper.hpp"
+#include "Voice.hpp"
 #include "Waves.hpp"
 #include "SwayLayout.hpp"
 #include "widgets.hpp"
@@ -61,9 +59,9 @@ struct Sway : Module {
 	// Channel 1 is following a clock: RATE shows a ratio.
 	bool clocked = false;
 
-	rka::Phasor phasors[PORT_MAX_CHANNELS];
-	rka::ClockSync clocks[PORT_MAX_CHANNELS];
-	rka::RandomGen randoms[PORT_MAX_CHANNELS];
+	// Timing for all 16 channels, advanced every sample even when inactive.
+	rka::VoiceBank bank;
+	rka::VoiceInput voiceInputs[rka::VoiceBank::SIZE];
 	dsp::SchmittTrigger resetTriggers[PORT_MAX_CHANNELS];
 	dsp::SchmittTrigger clockTriggers[PORT_MAX_CHANNELS];
 	dsp::SchmittTrigger holdTriggers[PORT_MAX_CHANNELS];
@@ -134,15 +132,13 @@ struct Sway : Module {
 		configOutput(STEP_OUTPUT, "Stepped random");
 		configOutput(RAND_OUTPUT, "Smooth random");
 		configLight(ONESHOT_LIGHT, "One-shot");
-		for (int c = 0; c < PORT_MAX_CHANNELS; c++)
-			randoms[c] = rka::RandomGen(c + 1);
 	}
 
 	void onReset() override {
 		range = rka::RANGE_NORMAL;
-		for (int c = 0; c < PORT_MAX_CHANNELS; c++) {
-			phasors[c].reset();
-			clocks[c].clear();
+		for (rka::Voice& v : bank.voices) {
+			v.phasor.reset();
+			v.clock.clear();
 		}
 		wasOneShot = false;
 	}
@@ -181,64 +177,50 @@ struct Sway : Module {
 
 		// Switching one-shot on parks every channel until the next RESET.
 		if (oneShot && !wasOneShot)
-			for (int c = 0; c < PORT_MAX_CHANNELS; c++)
-				phasors[c].park();
+			for (rka::Voice& v : bank.voices)
+				v.phasor.park();
 		wasOneShot = oneShot;
 
 		// Unplugging the clock returns to free-running at once.
 		const bool clockConnected = inputs[CLOCK_INPUT].isConnected();
 		if (!clockConnected && wasClockConnected)
-			for (int c = 0; c < PORT_MAX_CHANNELS; c++)
-				clocks[c].clear();
+			for (rka::Voice& v : bank.voices)
+				v.clock.clear();
 		wasClockConnected = clockConnected;
-		clocked = clockConnected && clocks[0].locked();
+
+		// Timing inputs for every channel; getPolyVoltage() lets a mono
+		// cable drive them all.
+		for (int c = 0; c < rka::VoiceBank::SIZE; c++) {
+			rka::VoiceInput& in = voiceInputs[c];
+			in.reset = resetTriggers[c].process(inputs[RESET_INPUT].getPolyVoltage(c), 0.1f, 1.f);
+			holdTriggers[c].process(inputs[HOLD_INPUT].getPolyVoltage(c), 0.1f, 1.f);
+			in.hold = holdTriggers[c].isHigh();
+			in.edge = clockTriggers[c].process(inputs[CLOCK_INPUT].getPolyVoltage(c), 0.1f, 1.f);
+			const float fm = inputs[FM_INPUT].getPolyVoltage(c) * params[FM_ATT_PARAM].getValue();
+			in.ratio = rka::ratioIndex(rate, fm);
+			in.freeHz = rka::expToHz(rka::rateExponent(rate, fm, r), args.sampleRate);
+		}
+		bank.tick(voiceInputs, clockConnected, oneShot, args.sampleTime, args.sampleRate);
+		clocked = clockConnected && bank.voices[0].clock.locked();
 
 		for (int c = 0; c < channels; c++) {
-			rka::Phasor& phasor = phasors[c];
-			rka::ClockSync& clock = clocks[c];
-			// getPolyVoltage() lets a mono cable drive every channel.
-			if (resetTriggers[c].process(inputs[RESET_INPUT].getPolyVoltage(c), 0.1f, 1.f)) {
-				phasor.reset();
-				clock.resetCount();
-			}
-			holdTriggers[c].process(inputs[HOLD_INPUT].getPolyVoltage(c), 0.1f, 1.f);
-			const bool hold = holdTriggers[c].isHigh();
-			const bool edge = clockTriggers[c].process(inputs[CLOCK_INPUT].getPolyVoltage(c), 0.1f, 1.f);
-
-			const float fm = inputs[FM_INPUT].getPolyVoltage(c) * params[FM_ATT_PARAM].getValue();
-			const int ratio = rka::ratioIndex(rate, fm);
-			const bool sync = clock.process(edge, args.sampleTime, ratio);
-			const double freq = clockConnected && clock.locked()
-				? rka::clampHz(clock.frequency(ratio), args.sampleRate)
-				: rka::expToHz(rka::rateExponent(rate, fm, r), args.sampleRate);
-
-			bool wrapped = phasor.step(freq, args.sampleTime, hold, oneShot);
-			// Restart on the clock. A resync just before the wrap still
-			// starts a new cycle for the random outputs. Clock edges never
-			// restart a one-shot; only RESET does.
-			if (sync && !hold && !oneShot) {
-				wrapped = wrapped || phasor.phase > 0.5;
-				phasor.reset();
-			}
-			if (wrapped)
-				randoms[c].advance();
-
+			const rka::Voice& voice = bank.voices[c];
 			const float phaseOffset = modulated(PHASE_PARAM, PHASE_INPUT, PHASE_ATT_PARAM, c);
-			const float p = rka::wrap01(float(phasor.phase) + phaseOffset + spread * c / channels);
+			const float p = rka::readPhase(voice.phasor.phase, phaseOffset + spread * c / channels);
 			const float pw = clamp(modulated(PW_PARAM, PW_INPUT, PW_ATT_PARAM, c), 0.01f, 0.99f);
 			const float skew = clamp(modulated(SKEW_PARAM, SKEW_INPUT, SKEW_ATT_PARAM, c), 0.f, 1.f);
 			const float smooth = clamp(modulated(SMOOTH_PARAM, SMOOTH_INPUT, SMOOTH_ATT_PARAM, c), -1.f, 1.f);
 			const float morph = clamp(modulated(MORPH_PARAM, MORPH_INPUT, MORPH_ATT_PARAM, c), 0.f, 1.f);
 			// Band-limit edges only where they can alias.
-			const float dt = r == rka::RANGE_AUDIO ? float(freq * args.sampleTime) : 0.f;
+			const float dt = r == rka::RANGE_AUDIO ? float(voice.freq * args.sampleTime) : 0.f;
 
 			outputs[SIN_OUTPUT].setVoltage(rka::lfoVolts(rka::waveSin(p), unipolar), c);
 			outputs[TRI_OUTPUT].setVoltage(rka::lfoVolts(rka::waveTri(p), unipolar), c);
 			outputs[SAW_OUTPUT].setVoltage(rka::lfoVolts(rka::sawBlep(p, dt), unipolar), c);
 			outputs[SQR_OUTPUT].setVoltage(rka::lfoVolts(rka::sqrBlep(p, pw, dt), unipolar), c);
 			outputs[MORPH_OUTPUT].setVoltage(rka::lfoVolts(rka::shape(p, skew, morph, smooth, pw, dt), unipolar), c);
-			outputs[STEP_OUTPUT].setVoltage(rka::lfoVolts(randoms[c].step(), unipolar), c);
-			outputs[RAND_OUTPUT].setVoltage(rka::lfoVolts(randoms[c].smooth(float(phasor.phase)), unipolar), c);
+			outputs[STEP_OUTPUT].setVoltage(rka::lfoVolts(voice.random.step(), unipolar), c);
+			outputs[RAND_OUTPUT].setVoltage(rka::lfoVolts(voice.random.smooth(float(voice.phasor.phase)), unipolar), c);
 		}
 		for (int o = 0; o < OUTPUTS_LEN; o++)
 			outputs[o].setChannels(channels);

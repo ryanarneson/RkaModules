@@ -26,7 +26,7 @@ src/sway/                the Sway module
   Rate.hpp, Phasor.hpp,  DSP units, no Rack dependency, unit-tested
   Waves.hpp, Shaper.hpp,
   ClockSync.hpp,
-  RandomGen.hpp
+  RandomGen.hpp, Voice.hpp
   test_*.cpp             offline unit tests, one per DSP unit
   SwayLayout.hpp         component positions, generated, do not edit
 res/sway/                final panels, text as paths (what Rack loads)
