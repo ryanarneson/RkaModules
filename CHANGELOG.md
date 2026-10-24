@@ -15,5 +15,14 @@
   - CHANNELS (1–16) and SPREAD for phase-offset polyphony.
   - CV with attenuverters for PW, PHASE, SKEW, SMOOTH, MORPH.
   - The phase is kept in double precision, so slow rates stay accurate.
+- New module: **Fathom**, a 10 HP bass drone voice:
+  - A sine sub one or two octaves under the pitch, and a seven-saw
+    supersaw body with the JP-8000's detune and mix curves (after
+    Befaco Oneiroi / Szabo), high-passed at the fundamental.
+  - PITCH (snapped to semitones, C2 at centre; free in the menu), SUB,
+    DETUNE, SPREAD, DRIFT and CUTOFF (12 dB/oct low-pass).
+  - DRIFT walks each saw's pitch and level slowly so a held note moves.
+  - CV with attenuverters for DETUNE, DRIFT and CUTOFF (1 V/oct).
+  - Stereo out through a soft clipper, plus a separate SUB out.
 - "Nightglow" look shared by all modules: navy panels, glowing cards,
-  colour-coded outputs, white knobs.
+  colour-coded outputs, white knobs; panels can carry glowing rings.
