@@ -106,6 +106,14 @@ struct DcBlock {
 	}
 };
 
+// Drive into the soft clip: the low-pass takes the saws' harmonics with it,
+// so the voice's +/-1 arrives here nearer +/-0.5 at the default cutoff.
+// 2.2 lands the defaults near 4 V with mild saturation (test_voice
+// testModuleLevelAtDefaults).
+static const float CLIP_DRIVE = 2.2f;
+// One-pole on the cutoff, in octaves, so knob and CV steps don't zipper.
+static const float CUTOFF_SLEW_SEC = 0.02f;
+
 // Cutoff low-pass, tanh soft clip, DC block at ~2 Hz; in and out +/-1.
 struct OutputStage {
 	Svf lpLeft, lpRight;
@@ -115,20 +123,27 @@ struct OutputStage {
 	void process(float cutoffHz, float sampleRate, float& left, float& right) {
 		if (sampleRate != lastRate) {
 			dcCoef = std::exp(-2.f * float(M_PI) * 2.f / sampleRate);
+			// The cutoff is smoothed once per block.
+			cutoffCoef = 1.f - std::exp(-BLOCK / (sampleRate * CUTOFF_SLEW_SEC));
 			lastRate = sampleRate;
 			block = 0;
+			cutoffOct = std::log2(std::max(cutoffHz, 1.f));
 		}
 		if (block == 0) {
-			lpLeft.setCoefficients(cutoffHz, BUTTERWORTH_K, sampleRate);
-			lpRight.setCoefficients(cutoffHz, BUTTERWORTH_K, sampleRate);
+			cutoffOct += (std::log2(std::max(cutoffHz, 1.f)) - cutoffOct) * cutoffCoef;
+			const float fc = std::exp2(cutoffOct);
+			lpLeft.setCoefficients(fc, BUTTERWORTH_K, sampleRate);
+			lpRight.setCoefficients(fc, BUTTERWORTH_K, sampleRate);
 		}
 		block = (block + 1) % BLOCK;
-		left = dcLeft.process(std::tanh(lpLeft.process(left).lp), dcCoef);
-		right = dcRight.process(std::tanh(lpRight.process(right).lp), dcCoef);
+		left = dcLeft.process(std::tanh(CLIP_DRIVE * lpLeft.process(left).lp), dcCoef);
+		right = dcRight.process(std::tanh(CLIP_DRIVE * lpRight.process(right).lp), dcCoef);
 	}
 
 private:
 	float dcCoef = 0.f;
+	float cutoffCoef = 1.f;
+	float cutoffOct = 0.f;
 	float lastRate = 0.f;
 };
 

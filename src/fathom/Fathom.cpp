@@ -83,9 +83,13 @@ struct Fathom : Module {
 		voice.reset(C2_HZ);
 	}
 
+	// Snapping back on also rounds the knob, so the note the tooltip shows
+	// is the note that sounds.
 	void setFreePitch(bool free) {
 		freePitch = free;
 		paramQuantities[PITCH_PARAM]->snapEnabled = !free;
+		if (!free)
+			params[PITCH_PARAM].setValue(std::round(params[PITCH_PARAM].getValue()));
 	}
 
 	void onReset() override {

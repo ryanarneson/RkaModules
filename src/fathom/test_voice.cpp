@@ -193,7 +193,7 @@ static void testOutputStage() {
 		if (i > 4800)
 			peak = std::fmax(peak, std::fabs(l));
 	}
-	CHECK(std::fabs(peak - std::tanh(1.f)) < 0.05f, "open cutoff peak %f, want tanh(1)", peak);
+	CHECK(std::fabs(peak - std::tanh(CLIP_DRIVE)) < 0.05f, "open cutoff peak %f, want tanh(drive)", peak);
 
 	OutputStage closed;
 	double sumIn = 0.0, sumOut = 0.0;
@@ -219,7 +219,45 @@ static void testOutputStage() {
 	CHECK(std::fabs(last) < 0.01f, "DC not blocked: %f after 2 s", last);
 }
 
+// The whole chain as the module runs it: voice, output stage, x5 V. At the
+// default settings the output should sit near other +/-5 V voices.
+static void testModuleLevelAtDefaults() {
+	Settings s;
+	DroneVoice v;
+	OutputStage st;
+	v.reset(C2);
+	float peak = 0.f;
+	for (int i = 0; i < 2 * 48000; i++) {
+		const DroneVoice::Out o = run(v, C2, s);
+		float l = o.left, r = o.right;
+		st.process(1200.f, FS, l, r);
+		if (i > 4800)
+			peak = std::fmax(peak, std::fabs(5.f * l));
+	}
+	CHECK(peak >= 3.5f && peak <= 5.0f, "module peak at defaults %f V", peak);
+}
+
+// A cutoff step must not step the output: the stage smooths the cutoff.
+static void testCutoffIsSmoothed() {
+	OutputStage st;
+	float prev = 0.f, steady = 0.f, during = 0.f;
+	for (int i = 0; i < 2 * 48000; i++) {
+		float l = std::sin(2.f * float(M_PI) * 100.f * i / FS), r = l;
+		const float cutoff = i < 48000 ? 20.f : 20000.f;
+		st.process(cutoff, FS, l, r);
+		const float jump = std::fabs(l - prev);
+		prev = l;
+		if (i >= 48000 + 2400 && i < 2 * 48000)
+			steady = std::fmax(steady, jump);
+		if (i >= 48000 && i < 48000 + 2400)
+			during = std::fmax(during, jump);
+	}
+	CHECK(during < 1.5f * steady, "cutoff step jumped %f vs %f steady", during, steady);
+}
+
 int main() {
+	testModuleLevelAtDefaults();
+	testCutoffIsSmoothed();
 	testSubTracks();
 	testClampLow();
 	testClampHigh();

@@ -13,7 +13,8 @@ ambient, where one note is held for minutes.
   tooltip shows the note. **V/OCT** adds 1 V per octave on top.
 - The pitch is clamped to 8 Hz – 4 kHz. Steps on V/OCT are smoothed over
   5 ms so they do not click.
-- Right-click **Free pitch** turns the semitone snap off.
+- Right-click **Free pitch** turns the semitone snap off; turning it back
+  on rounds the knob to the nearest semitone.
 
 ## Voice
 
@@ -37,7 +38,8 @@ root itself is the sub.
 ## Cutoff
 
 - **CUTOFF**: a 12 dB/oct low-pass on the whole mix, 20 Hz – 20 kHz,
-  default 1.2 kHz. No resonance in this version.
+  default 1.2 kHz, smoothed over 20 ms so sweeps don't zipper. No
+  resonance in this version.
 
 ## CV
 
@@ -47,7 +49,8 @@ root itself is the sub.
 
 ## Outputs
 
-- **L / R**: the mix, ±5 V, through a soft clipper and a DC blocker.
+- **L / R**: the mix, ±5 V, through a soft clipper (mild saturation at
+  the defaults, more as SUB and DETUNE go up) and a DC blocker.
 - **SUB**: the sub sine alone, ±5 V, before the SUB knob, CUTOFF and the
   clipper, so it can feed a sub bus or a side-chain however the mix is
   set.
