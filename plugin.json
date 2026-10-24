@@ -17,6 +17,16 @@
         "Random"
       ],
       "keywords": "modulation"
+    },
+    {
+      "slug": "Fathom",
+      "name": "Fathom",
+      "description": "Deep bass drone voice: sub sine, 7-saw supersaw, drift, low-pass",
+      "tags": [
+        "Synth voice",
+        "Oscillator"
+      ],
+      "keywords": "drone bass ambient"
     }
   ]
 }
