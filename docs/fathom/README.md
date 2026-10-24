@@ -43,11 +43,17 @@ engine rate so driving it doesn't alias. Each stage saturates, so a hot
 signal compresses the filter against itself: that is the growl.
 
 - **CUTOFF**: the ladder's pole frequency, 20 Hz – 20 kHz, default
-  1.2 kHz. With resonance up, the peak sits here.
+  1.2 kHz. A quiet signal resonates here; a hot one pulls the peak below
+  CUTOFF as the stages saturate (up to about an octave at the module's
+  own levels), and it moves a little with DRIFT. That droop is the growl,
+  not a fault.
 - **RES**: resonance, from flat to self-oscillation at the very top. The
   low end is held steady as resonance rises in the low-pass types, so the
   drone keeps its weight while the peak moves. At the top the ladder
-  sings a quiet sine that tracks CUTOFF at 1 V/oct.
+  sings a quiet sine that tracks CUTOFF at 1 V/oct. Its level follows
+  DRIVE the other way round: loudest with DRIVE down, fading as DRIVE
+  rises, because the makeup that keeps the drone's loudness even also
+  scales the sine.
 - **DRIVE**: gain into the ladder's saturators, from half to eight times.
   Unity at 25 %. The level is made up as it rises, so DRIVE changes the
   tone far more than the loudness; push it with RES up for the growl.
