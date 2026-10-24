@@ -7,6 +7,7 @@ For each module in PANELS (folder `dir`) this writes:
   src/<dir>/<Name>Layout.hpp     component centres in mm, read by the module widget
 and, once for the plugin:
   src/RkaTheme.hpp         the palette's accent colours for lights and widgets
+  res/components/Trim*.svg the attenuverter knob, in the palette's colours
 
 `make panels` then runs Inkscape to convert text to paths (Rack's SVG renderer
 cannot draw <text>) and writes the finished panels to res/<dir>/.
@@ -48,6 +49,27 @@ THEMES = {
 
 # Placeholder colours from https://vcvrack.com/manual/Panel
 KIND_COLOUR = {"param": "#ff0000", "input": "#00ff00", "output": "#0000ff", "light": "#ff00ff"}
+
+# Widget radii in mm (src/widgets.hpp): Rogan 3PS, Rogan 1PS, Befaco tiny,
+# our 4.6 mm trim, PJ301M. Used to keep components clear of each other and
+# to draw ticks edge to edge.
+RADII = {"big": 8.8, "mid": 6.7, "small": 4.32, "trim": 2.3, "jack": 4.0}
+TRIM_D = 4.6
+# Clearance a layout must keep between any two components, mm.
+CLEARANCE = 0.3
+
+
+def component_size(spec, name, kind, cname):
+    """Which RADII entry a component uses: the panel's `sizes`, else a trim
+    for `*_ATT` params, a small knob for other params, a jack for ports."""
+    sizes = spec.get("sizes", {})
+    if cname in sizes:
+        return sizes[cname]
+    if (name, cname) in BIG_KNOBS:
+        return "big"
+    if kind == "param":
+        return "trim" if cname.endswith("_ATT") else "small"
+    return "jack"
 
 # Sway column x positions (FM, PW, PHASE, SKEW, SMOOTH, MORPH): six equal
 # columns across the 68.44 mm control cards.
@@ -99,10 +121,13 @@ PANELS = {
         + [(_COL[0], 75.6, "(RATE)", 1.6, "hint"),
            (38.22, 110.5, "ATTENUVERTER \u25b8 CV IN", 1.5, "hint")],
     ),
-    # Fathom, the drone voice: two "orbits". PITCH is a sun with the four
-    # voice knobs on a ring around it, V/OCT in on the ring's left and SUB
-    # out on its right; CUTOFF is a second sun with its attenuverter and CV
-    # on a smaller ring (half empty until the full filter arrives).
+    # Fathom, the drone voice. The voice is an "orbit": PITCH is a sun with
+    # the four voice knobs on a ring around it, V/OCT in on the ring's left
+    # and SUB out on its right. Under it the filter is flat: three columns,
+    # RES / CUTOFF / DRIVE, each dial over attenuverter over CV jack, with
+    # a line dropping from the orbit into CUTOFF (the voice into the
+    # filter). The band at the bottom holds the DETUNE and DRIFT CVs and
+    # the outputs.
     "Fathom": dict(
         dir="fathom",
         hp=10,
@@ -115,9 +140,15 @@ PANELS = {
             ("param", "SPREAD", 33.65, 25.7, "SPREAD"),
             ("param", "SUB", 17.15, 54.3, "SUB"),
             ("param", "DETUNE", 33.65, 54.3, "DETUNE"),
-            ("param", "CUTOFF", 25.4, 84.0, "CUTOFF"),
-            ("param", "CUTOFF_ATT", 12.4, 84.0, None),
-            ("input", "CUTOFF_CV", 38.4, 84.0, "CV"),
+            ("param", "RES", 9.5, 76.0, "RES"),
+            ("param", "CUTOFF", 25.4, 76.0, "CUTOFF"),
+            ("param", "DRIVE", 41.3, 76.0, "DRIVE"),
+            ("param", "RES_ATT", 9.5, 86.5, None),
+            ("param", "CUTOFF_ATT", 25.4, 86.5, None),
+            ("param", "DRIVE_ATT", 41.3, 86.5, None),
+            ("input", "RES_CV", 9.5, 94.0, "CV"),
+            ("input", "CUTOFF_CV", 25.4, 94.0, "CV"),
+            ("input", "DRIVE_CV", 41.3, 94.0, "CV"),
             ("param", "DETUNE_ATT", 8.0, 106.0, None),
             ("param", "DRIFT_ATT", 20.0, 106.0, None),
             ("input", "DETUNE_CV", 8.0, 115.0, "DETUNE"),
@@ -125,27 +156,36 @@ PANELS = {
             ("output", "LEFT", 34.0, 112.0, "L"),
             ("output", "RIGHT", 44.0, 112.0, "R"),
         ],
+        # Widget sizes that are not the defaults (see component_size).
+        sizes={"CUTOFF": "mid"},
         cards=[(28.5, 101.0, 20.0, 19.0, "cyan")],
         # Orbits: cx, cy, r, accent.
-        rings=[(25.4, 40.0, 16.5, "violet"), (25.4, 84.0, 13.0, "cyan")],
-        # x1, y1, x2, y2, accent, dotted. The solid line is the pitch path,
-        # V/OCT in to SUB out; the dotted ticks join attenuverters to jacks.
+        rings=[(25.4, 40.0, 16.5, "violet")],
+        # x1, y1, x2, y2, accent, dotted. The pitch path, V/OCT in to SUB
+        # out, across the ring; and the voice dropping into the filter.
         lines=[(8.9, 40.0, 41.9, 40.0, "cyan", False),
-               (8.0, 109.1, 8.0, 111.0, "violet", True),
-               (20.0, 109.1, 20.0, 111.0, "violet", True)],
+               (25.4, 56.9, 25.4, 68.9, "cyan", False)],
+        # Dotted ticks from one component's edge to another's: from, to,
+        # accent. Attenuverter to the dial it scales; in the band,
+        # attenuverter to its jack.
+        ticks=[("RES_ATT", "RES", "cyan"), ("CUTOFF_ATT", "CUTOFF", "cyan"), ("DRIVE_ATT", "DRIVE", "cyan"),
+               ("DETUNE_ATT", "DETUNE_CV", "violet"), ("DRIFT_ATT", "DRIFT_CV", "violet")],
         # Small stroked paths: x, y, path d (centred on 0,0), accent.
         glyphs=[(9.5, 58.2, "M-3 0 q1.5 -2.4 3 0 t3 0", "cyan"),
                 (41.6, 58.2, "M-3.4 1.2 l2.3 -2.4 v2.4 l2.3 -2.4 v2.4 l2.2 -2.4", "amber")],
         # Accent names colour a label; theme keys ("ink", "hint") also work.
         label_accents={"PITCH": "ink", "CUTOFF": "ink", "SUBOUT": "green",
                        "LEFT": "cyan", "RIGHT": "cyan",
-                       "CUTOFF_CV": "hint", "DETUNE_CV": "hint", "DRIFT_CV": "hint"},
+                       "RES_CV": "hint", "CUTOFF_CV": "hint", "DRIVE_CV": "hint",
+                       "DETUNE_CV": "hint", "DRIFT_CV": "hint"},
         label_size={"PITCH": 2.2, "CUTOFF": 2.2, "DRIFT": 2.0, "SPREAD": 2.0, "SUB": 2.0,
-                    "DETUNE": 2.0, "VOCT": 2.0, "SUBOUT": 2.0,
-                    "CUTOFF_CV": 1.7, "DETUNE_CV": 1.7, "DRIFT_CV": 1.7, "LEFT": 1.9, "RIGHT": 1.9},
+                    "DETUNE": 2.0, "VOCT": 2.0, "SUBOUT": 2.0, "RES": 1.8, "DRIVE": 1.8,
+                    "RES_CV": 1.5, "CUTOFF_CV": 1.5, "DRIVE_CV": 1.5,
+                    "DETUNE_CV": 1.7, "DRIFT_CV": 1.7, "LEFT": 1.9, "RIGHT": 1.9},
         # Negative gaps put the label below the component.
         label_gap={"DRIFT": 6.5, "SPREAD": 6.5, "SUB": -8.1, "DETUNE": -8.1, "PITCH": -14.2,
-                   "VOCT": -9.0, "SUBOUT": -9.0, "CUTOFF": -16.3, "CUTOFF_CV": -7.2,
+                   "VOCT": -9.0, "SUBOUT": -9.0, "RES": 6.5, "CUTOFF": 8.7, "DRIVE": 6.5,
+                   "RES_CV": -6.2, "CUTOFF_CV": -6.2, "DRIVE_CV": -6.2,
                    "DETUNE_CV": -6.6, "DRIFT_CV": -6.6, "LEFT": 5.7, "RIGHT": 5.7},
         # The two jacks on the pitch ring get their labels pushed outward so
         # the text clears the ring.
@@ -156,7 +196,7 @@ PANELS = {
 LABEL_SIZE = 2.6   # mm
 TITLE_SIZE = 4.5   # mm
 LABEL_GAP = {"param": 7.0, "input": 6.2, "output": 6.2}
-BIG_KNOBS = {("Sway", "RATE"), ("Fathom", "PITCH"), ("Fathom", "CUTOFF")}  # labels sit further above larger knobs
+BIG_KNOBS = {("Sway", "RATE"), ("Fathom", "PITCH")}  # labels sit further above larger knobs
 
 
 def text(x, y, s, size, fill, weight="normal", extra=""):
@@ -207,6 +247,40 @@ def glyph(x, y, d, t, accent):
             f'stroke-linecap="round" stroke-linejoin="round" stroke-opacity="{t["accent_opacity"]}"/>')
 
 
+def tick(name, spec, a, b, t, accent):
+    """A dotted line from component a's edge to component b's, along their
+    centre line, CLEARANCE clear of each."""
+    comps = {cname: (kind, x, y) for kind, cname, x, y, _ in spec["components"]}
+    ka, ax, ay = comps[a]
+    kb, bx, by = comps[b]
+    ra = RADII[component_size(spec, name, ka, a)] + CLEARANCE
+    rb = RADII[component_size(spec, name, kb, b)] + CLEARANCE
+    dx, dy = bx - ax, by - ay
+    d = (dx * dx + dy * dy) ** 0.5
+    ux, uy = dx / d, dy / d
+    return line(round(ax + ux * ra, 2), round(ay + uy * ra, 2), round(bx - ux * rb, 2), round(by - uy * rb, 2),
+                t, accent, True)
+
+
+def trim_svgs(root):
+    """The plugin's own attenuverter: a TRIM_D mm disc in the panel's card
+    colour with a thin rim (the background SVG) and a bright pointer (the
+    knob SVG that rotates). Written straight to res/components: no text, so
+    no Inkscape pass."""
+    t = THEMES[""]
+    c = TRIM_D / 2
+    head = (f'<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" '
+            f'width="{TRIM_D}mm" height="{TRIM_D}mm" viewBox="0 0 {TRIM_D} {TRIM_D}">\n')
+    bg = head + (f'<circle cx="{c}" cy="{c}" r="{c - 0.125:.3f}" fill="{t["card"]}" '
+                 f'stroke="{t["hint"]}" stroke-width="0.25"/>\n</svg>\n')
+    fg = head + (f'<line x1="{c}" y1="{c - 0.4:.2f}" x2="{c}" y2="0.35" stroke="{t["ink"]}" '
+                 f'stroke-width="0.5" stroke-linecap="round"/>\n</svg>\n')
+    out = root / "res" / "components"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "Trim_bg.svg").write_text(bg)
+    (out / "Trim.svg").write_text(fg)
+
+
 def panel_svg(name, spec, t):
     w = spec["hp"] * HP
     cyan, violet = ACCENTS["cyan"], ACCENTS["violet"]
@@ -233,6 +307,8 @@ def panel_svg(name, spec, t):
         out.append(line(x1, y1, x2, y2, t, accent, dotted))
     for x, y, d, accent in spec.get("glyphs", []):
         out.append(glyph(x, y, d, t, accent))
+    for a, b, accent in spec.get("ticks", []):
+        out.append(tick(name, spec, a, b, t, accent))
     accents = spec.get("label_accents", {})
     sizes = spec.get("label_size", {})
     gaps = spec.get("label_gap", {})
@@ -294,10 +370,22 @@ def theme_hpp():
     return "\n".join(lines)
 
 
+def check_clearance(name, spec):
+    """Fail if any two components of a panel overlap, by RADII."""
+    comps = [(cname, x, y, RADII[component_size(spec, name, kind, cname)]) for kind, cname, x, y, _ in spec["components"]]
+    for i, (a, ax, ay, ar) in enumerate(comps):
+        for b, bx, by, br in comps[i + 1:]:
+            gap = ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5 - ar - br
+            if gap < CLEARANCE:
+                sys.exit(f"{name}: {a} and {b} are {gap:.2f} mm apart (need {CLEARANCE})")
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent)
     (root / "src" / "RkaTheme.hpp").write_text(theme_hpp())
+    trim_svgs(root)
     for name, spec in PANELS.items():
+        check_clearance(name, spec)
         svg_dir = root / "res-src" / spec["dir"]
         svg_dir.mkdir(parents=True, exist_ok=True)
         for suffix, theme in THEMES.items():

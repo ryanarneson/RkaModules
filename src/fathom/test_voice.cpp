@@ -20,6 +20,17 @@ static DroneVoice::Out run(DroneVoice& v, float f0, const Settings& s, float fs 
 	return v.process(f0, s.detune, s.spread, s.drift, s.subLevel, s.subOctaves, fs);
 }
 
+// The module's default filter settings.
+static OutputStage::Params defaults() {
+	OutputStage::Params p;
+	p.cutoffHz = 1200.f;
+	p.resonance = 0.2f;
+	p.drive = 0.25f;
+	p.type = LadderType::LP24;
+	p.subThroughFilter = false;
+	return p;
+}
+
 // Frequency of the sub output from its rising zero crossings, after a
 // 0.1 s settle.
 static double measuredSubHz(DroneVoice& v, float f0, double seconds, const Settings& s, float fs = FS) {
@@ -88,16 +99,18 @@ static void testSubOctaves() {
 	CHECK(std::fabs(cents(hz, 27.5)) < 1.0, "two-octave sub is %f Hz, want 27.5", hz);
 }
 
+// which: 0 left, 1 right, 2 sub, 3 subMix
 static double rmsOf(DroneVoice& v, float f0, const Settings& s, int n, int which) {
 	double sum = 0.0;
 	for (int i = 0; i < n; i++) {
 		const DroneVoice::Out o = run(v, f0, s);
-		const float x = which == 0 ? o.left : which == 1 ? o.right : o.sub;
+		const float x = which == 0 ? o.left : which == 1 ? o.right : which == 2 ? o.sub : o.subMix;
 		sum += double(x) * x;
 	}
 	return std::sqrt(sum / n);
 }
 
+// SUB OUT ignores the SUB knob; the sub's share of the mix follows it.
 static void testSubOutIgnoresSubLevel() {
 	Settings off, on;
 	off.subLevel = 0.f;
@@ -110,9 +123,10 @@ static void testSubOutIgnoresSubLevel() {
 	DroneVoice c, d;
 	c.reset(110.f);
 	d.reset(110.f);
-	const double quiet = rmsOf(c, 110.f, off, 48000, 0);
-	const double loud = rmsOf(d, 110.f, on, 48000, 0);
-	CHECK(quiet < loud, "SUB knob has no effect on left: %f vs %f", quiet, loud);
+	const double quiet = rmsOf(c, 110.f, off, 48000, 3);
+	const double loud = rmsOf(d, 110.f, on, 48000, 3);
+	CHECK(quiet == 0.0, "sub mix %f with SUB at 0", quiet);
+	CHECK(std::fabs(loud - SUB_GAIN * M_SQRT1_2) < 0.01, "sub mix rms %f with SUB at 1", loud);
 }
 
 static void testSpreadZeroIsMono() {
@@ -138,8 +152,9 @@ static void testSpreadKeepsMonoSum() {
 	double sa = 0.0, sb = 0.0;
 	for (int i = 0; i < 2 * 48000; i++) {
 		const DroneVoice::Out oa = run(a, 110.f, narrow), ob = run(b, 110.f, wide);
-		sa += double(oa.left + oa.right) * (oa.left + oa.right);
-		sb += double(ob.left + ob.right) * (ob.left + ob.right);
+		const double ma = oa.left + oa.right + 2.0 * oa.subMix, mb = ob.left + ob.right + 2.0 * ob.subMix;
+		sa += ma * ma;
+		sb += mb * mb;
 	}
 	const double dB = 10.0 * std::log10(sb / sa);
 	CHECK(std::fabs(dB) < 1.5, "mono sum changes by %f dB with spread", dB);
@@ -169,8 +184,10 @@ static void testDefaultLevel() {
 	DroneVoice v;
 	v.reset(C2);
 	float peak = 0.f;
-	for (int i = 0; i < 2 * 48000; i++)
-		peak = std::fmax(peak, std::fabs(run(v, C2, s).left));
+	for (int i = 0; i < 2 * 48000; i++) {
+		const DroneVoice::Out o = run(v, C2, s);
+		peak = std::fmax(peak, std::fabs(o.left + o.subMix));
+	}
 	CHECK(peak >= 0.5f && peak <= 1.0f, "default peak %f", peak);
 }
 
@@ -184,42 +201,141 @@ static void testSampleRateIndependence() {
 	CHECK(std::fabs(cents(h48, h96)) < 0.1, "48k %f Hz vs 96k %f Hz", h48, h96);
 }
 
-static void testOutputStage() {
+// RMS of the stage's left output for a sine at `hz` with `subMix` zero,
+// over the second half of 2 s.
+static double stageRms(const OutputStage::Params& p, float hz, float amplitude = 1.f) {
 	OutputStage st;
-	float peak = 0.f;
-	for (int i = 0; i < 48000; i++) {
-		float l = std::sin(2.f * float(M_PI) * 100.f * i / FS), r = l;
-		st.process(1200.f, FS, l, r);
-		if (i > 4800)
-			peak = std::fmax(peak, std::fabs(l));
-	}
-	CHECK(std::fabs(peak - std::tanh(CLIP_DRIVE)) < 0.05f, "open cutoff peak %f, want tanh(drive)", peak);
-
-	OutputStage closed;
-	double sumIn = 0.0, sumOut = 0.0;
-	for (int i = 0; i < 48000; i++) {
-		float l = std::sin(2.f * float(M_PI) * 100.f * i / FS), r = l;
-		const float x = l;
-		closed.process(20.f, FS, l, r);
-		if (i > 4800) {
-			sumIn += double(x) * x;
-			sumOut += double(l) * l;
+	double sum = 0.0;
+	int n = 0;
+	for (int i = 0; i < 2 * 48000; i++) {
+		float l = amplitude * std::sin(2.f * float(M_PI) * hz * i / FS), r = l;
+		st.process(p, 0.f, FS, l, r);
+		if (i >= 48000) {
+			sum += double(l) * l;
+			n++;
 		}
 	}
-	const double dB = 10.0 * std::log10(sumOut / sumIn);
-	CHECK(dB < -20.0, "cutoff at 20 Hz passes 100 Hz at %f dB", dB);
+	return std::sqrt(sum / n);
+}
 
-	OutputStage dc;
+static void testStageClosedCutoffAttenuates() {
+	OutputStage::Params open = defaults(), closed = defaults();
+	open.cutoffHz = 20000.f;
+	closed.cutoffHz = 20.f;
+	const double dB = 20.0 * std::log10(stageRms(closed, 100.f) / stageRms(open, 100.f));
+	CHECK(dB < -20.0, "cutoff at 20 Hz passes 100 Hz at %f dB", dB);
+}
+
+static void testStageBlocksDc() {
+	OutputStage st;
+	OutputStage::Params p = defaults();
+	p.cutoffHz = 20000.f;
 	float last = 0.f;
 	for (int i = 0; i < 2 * 48000; i++) {
 		float l = 1.f, r = 1.f;
-		dc.process(20000.f, FS, l, r);
+		st.process(p, 0.f, FS, l, r);
 		last = l;
 	}
 	CHECK(std::fabs(last) < 0.01f, "DC not blocked: %f after 2 s", last);
 }
 
-// The whole chain as the module runs it: voice, output stage, x5 V. At the
+// DRIVE changes the tone far more than the level.
+static void testDriveMakeup() {
+	OutputStage::Params p = defaults();
+	p.cutoffHz = 20000.f;
+	p.resonance = 0.f;
+	const double ref = stageRms(p, 100.f, 0.5f);
+	p.drive = 1.f;
+	const double hot = 20.0 * std::log10(stageRms(p, 100.f, 0.5f) / ref);
+	p.drive = 0.f;
+	const double cold = 20.0 * std::log10(stageRms(p, 100.f, 0.5f) / ref);
+	CHECK(std::fabs(hot) < 2.0, "full drive is %f dB from the default", hot);
+	CHECK(std::fabs(cold) < 1.0, "zero drive is %f dB from the default", cold);
+}
+
+// RMS of the left output with only the sub mix feeding the stage.
+static double subOnlyRms(const OutputStage::Params& p) {
+	OutputStage st;
+	double sum = 0.0;
+	int n = 0;
+	for (int i = 0; i < 2 * 48000; i++) {
+		float l = 0.f, r = 0.f;
+		const float sub = 0.5f * std::sin(2.f * float(M_PI) * 65.f * i / FS);
+		st.process(p, sub, FS, l, r);
+		if (i >= 48000) {
+			sum += double(l) * l;
+			n++;
+		}
+	}
+	return std::sqrt(sum / n);
+}
+
+static void testSubRouting() {
+	OutputStage::Params open = defaults(), closed = defaults();
+	open.cutoffHz = 20000.f;
+	closed.cutoffHz = 20.f;
+	const double around = 20.0 * std::log10(subOnlyRms(closed) / subOnlyRms(open));
+	CHECK(std::fabs(around) < 1.0, "sub around the filter changes %f dB with the cutoff", around);
+	open.subThroughFilter = closed.subThroughFilter = true;
+	const double through = 20.0 * std::log10(subOnlyRms(closed) / subOnlyRms(open));
+	CHECK(through < -15.0, "sub through a closed filter is only %f dB down", through);
+}
+
+// A parameter step must not step the output: the stage smooths it.
+// `which`: 0 cutoff, 1 resonance, 2 drive.
+static void checkSmoothed(int which, const char* name) {
+	OutputStage st;
+	float prev = 0.f, steady = 0.f, during = 0.f;
+	for (int i = 0; i < 2 * 48000; i++) {
+		float l = std::sin(2.f * float(M_PI) * 100.f * i / FS), r = l;
+		OutputStage::Params p = defaults();
+		const bool after = i >= 48000;
+		if (which == 0)
+			p.cutoffHz = after ? 20000.f : 20.f;
+		else if (which == 1)
+			p.resonance = after ? 1.f : 0.f;
+		else
+			p.drive = after ? 1.f : 0.f;
+		st.process(p, 0.f, FS, l, r);
+		const float jump = std::fabs(l - prev);
+		prev = l;
+		if (i >= 48000 + 2400 && i < 2 * 48000)
+			steady = std::fmax(steady, jump);
+		if (i >= 48000 && i < 48000 + 2400)
+			during = std::fmax(during, jump);
+	}
+	CHECK(during < 1.5f * steady, "%s step jumped %f vs %f steady", name, during, steady);
+}
+
+static void testCutoffIsSmoothed() {
+	checkSmoothed(0, "cutoff");
+}
+
+static void testResAndDriveAreSmoothed() {
+	checkSmoothed(1, "resonance");
+	checkSmoothed(2, "drive");
+}
+
+// Changing the sample rate mid-stream recomputes everything without a burst.
+static void testSampleRateChangeNoBurst() {
+	OutputStage st;
+	OutputStage::Params p = defaults();
+	float steady = 0.f, after = 0.f;
+	for (int i = 0; i < 48000; i++) {
+		float l = std::sin(2.f * float(M_PI) * 100.f * i / 48000.f), r = l;
+		st.process(p, 0.f, 48000.f, l, r);
+		if (i >= 24000)
+			steady = std::fmax(steady, std::fabs(l));
+	}
+	for (int i = 0; i < 960; i++) {
+		float l = std::sin(2.f * float(M_PI) * 100.f * i / 96000.f), r = l;
+		st.process(p, 0.f, 96000.f, l, r);
+		after = std::fmax(after, std::fabs(l));
+	}
+	CHECK(after < 1.5f * steady, "sample-rate change burst %f vs %f steady", after, steady);
+}
+
+// The whole chain as the module runs it: voice, stage, x5 V. At the
 // default settings the output should sit near other +/-5 V voices.
 static void testModuleLevelAtDefaults() {
 	Settings s;
@@ -230,34 +346,22 @@ static void testModuleLevelAtDefaults() {
 	for (int i = 0; i < 2 * 48000; i++) {
 		const DroneVoice::Out o = run(v, C2, s);
 		float l = o.left, r = o.right;
-		st.process(1200.f, FS, l, r);
+		st.process(defaults(), o.subMix, FS, l, r);
 		if (i > 4800)
 			peak = std::fmax(peak, std::fabs(5.f * l));
 	}
 	CHECK(peak >= 3.5f && peak <= 5.0f, "module peak at defaults %f V", peak);
 }
 
-// A cutoff step must not step the output: the stage smooths the cutoff.
-static void testCutoffIsSmoothed() {
-	OutputStage st;
-	float prev = 0.f, steady = 0.f, during = 0.f;
-	for (int i = 0; i < 2 * 48000; i++) {
-		float l = std::sin(2.f * float(M_PI) * 100.f * i / FS), r = l;
-		const float cutoff = i < 48000 ? 20.f : 20000.f;
-		st.process(cutoff, FS, l, r);
-		const float jump = std::fabs(l - prev);
-		prev = l;
-		if (i >= 48000 + 2400 && i < 2 * 48000)
-			steady = std::fmax(steady, jump);
-		if (i >= 48000 && i < 48000 + 2400)
-			during = std::fmax(during, jump);
-	}
-	CHECK(during < 1.5f * steady, "cutoff step jumped %f vs %f steady", during, steady);
-}
-
 int main() {
 	testModuleLevelAtDefaults();
 	testCutoffIsSmoothed();
+	testResAndDriveAreSmoothed();
+	testSampleRateChangeNoBurst();
+	testStageClosedCutoffAttenuates();
+	testStageBlocksDc();
+	testDriveMakeup();
+	testSubRouting();
 	testSubTracks();
 	testClampLow();
 	testClampHigh();
@@ -268,6 +372,5 @@ int main() {
 	testNoClickOnPitchStep();
 	testDefaultLevel();
 	testSampleRateIndependence();
-	testOutputStage();
 	return rkatest::finish("test_voice");
 }
