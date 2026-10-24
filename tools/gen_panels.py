@@ -14,7 +14,9 @@ cannot draw <text>) and writes the finished panels to res/<dir>/.
 The look ("Nightglow") is shared by every module: navy panel, slate cards
 with thin glowing borders, light labels, and neon accents. Rack's renderer
 (nanosvg) has gradients and opacity but no blur, so glows are faked with a
-wide, faint stroke under a thin bright one.
+wide, faint stroke under a thin bright one. Besides `cards`, a panel may
+carry `rings` (glowing circles), `lines` (solid or dotted) and `glyphs`
+(small stroked paths); label gaps may be negative to sit below a control.
 
 Usage: python3 tools/gen_panels.py [repo dir]
 """
@@ -97,12 +99,64 @@ PANELS = {
         + [(_COL[0], 75.6, "(RATE)", 1.6, "hint"),
            (38.22, 110.5, "ATTENUVERTER \u25b8 CV IN", 1.5, "hint")],
     ),
+    # Fathom, the drone voice: two "orbits". PITCH is a sun with the four
+    # voice knobs on a ring around it, V/OCT in on the ring's left and SUB
+    # out on its right; CUTOFF is a second sun with its attenuverter and CV
+    # on a smaller ring (half empty until the full filter arrives).
+    "Fathom": dict(
+        dir="fathom",
+        hp=10,
+        title="FATHOM",
+        components=[
+            ("param", "PITCH", 25.4, 40.0, "PITCH"),
+            ("input", "VOCT", 8.9, 40.0, "V/OCT"),
+            ("output", "SUBOUT", 41.9, 40.0, "SUB"),
+            ("param", "DRIFT", 17.15, 25.7, "DRIFT"),
+            ("param", "SPREAD", 33.65, 25.7, "SPREAD"),
+            ("param", "SUB", 17.15, 54.3, "SUB"),
+            ("param", "DETUNE", 33.65, 54.3, "DETUNE"),
+            ("param", "CUTOFF", 25.4, 84.0, "CUTOFF"),
+            ("param", "CUTOFF_ATT", 12.4, 84.0, None),
+            ("input", "CUTOFF_CV", 38.4, 84.0, "CV"),
+            ("param", "DETUNE_ATT", 8.0, 106.0, None),
+            ("param", "DRIFT_ATT", 20.0, 106.0, None),
+            ("input", "DETUNE_CV", 8.0, 115.0, "DETUNE"),
+            ("input", "DRIFT_CV", 20.0, 115.0, "DRIFT"),
+            ("output", "LEFT", 34.0, 112.0, "L"),
+            ("output", "RIGHT", 44.0, 112.0, "R"),
+        ],
+        cards=[(28.5, 101.0, 20.0, 19.0, "cyan")],
+        # Orbits: cx, cy, r, accent.
+        rings=[(25.4, 40.0, 16.5, "violet"), (25.4, 84.0, 13.0, "cyan")],
+        # x1, y1, x2, y2, accent, dotted. The solid line is the pitch path,
+        # V/OCT in to SUB out; the dotted ticks join attenuverters to jacks.
+        lines=[(8.9, 40.0, 41.9, 40.0, "cyan", False),
+               (8.0, 109.1, 8.0, 111.0, "violet", True),
+               (20.0, 109.1, 20.0, 111.0, "violet", True)],
+        # Small stroked paths: x, y, path d (centred on 0,0), accent.
+        glyphs=[(9.5, 58.2, "M-3 0 q1.5 -2.4 3 0 t3 0", "cyan"),
+                (41.6, 58.2, "M-3.4 1.2 l2.3 -2.4 v2.4 l2.3 -2.4 v2.4 l2.2 -2.4", "amber")],
+        # Accent names colour a label; theme keys ("ink", "hint") also work.
+        label_accents={"PITCH": "ink", "CUTOFF": "ink", "SUBOUT": "green",
+                       "LEFT": "cyan", "RIGHT": "cyan",
+                       "CUTOFF_CV": "hint", "DETUNE_CV": "hint", "DRIFT_CV": "hint"},
+        label_size={"PITCH": 2.2, "CUTOFF": 2.2, "DRIFT": 2.0, "SPREAD": 2.0, "SUB": 2.0,
+                    "DETUNE": 2.0, "VOCT": 2.0, "SUBOUT": 2.0,
+                    "CUTOFF_CV": 1.7, "DETUNE_CV": 1.7, "DRIFT_CV": 1.7, "LEFT": 1.9, "RIGHT": 1.9},
+        # Negative gaps put the label below the component.
+        label_gap={"DRIFT": 6.5, "SPREAD": 6.5, "SUB": -8.1, "DETUNE": -8.1, "PITCH": -14.2,
+                   "VOCT": -9.0, "SUBOUT": -9.0, "CUTOFF": -16.3, "CUTOFF_CV": -7.2,
+                   "DETUNE_CV": -6.6, "DRIFT_CV": -6.6, "LEFT": 5.7, "RIGHT": 5.7},
+        # The two jacks on the pitch ring get their labels pushed outward so
+        # the text clears the ring.
+        label_dx={"VOCT": -1.5, "SUBOUT": 1.5},
+    ),
 }
 
 LABEL_SIZE = 2.6   # mm
 TITLE_SIZE = 4.5   # mm
 LABEL_GAP = {"param": 7.0, "input": 6.2, "output": 6.2}
-BIG_KNOBS = {("Sway", "RATE")}  # labels sit further above larger knobs
+BIG_KNOBS = {("Sway", "RATE"), ("Fathom", "PITCH"), ("Fathom", "CUTOFF")}  # labels sit further above larger knobs
 
 
 def text(x, y, s, size, fill, weight="normal", extra=""):
@@ -131,6 +185,28 @@ def card(x, y, w, h, t, accent):
     return out
 
 
+def ring(cx, cy, r, t, accent):
+    """A glowing circle: wide faint halo under a thin bright stroke."""
+    c = ACCENTS[accent]
+    return [f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{c}" stroke-width="1.2" '
+            f'opacity="{t["glow_opacity"] * 0.6:.2f}"/>',
+            f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{c}" stroke-width="0.35" '
+            f'stroke-opacity="{t["accent_opacity"]}"/>']
+
+
+def line(x1, y1, x2, y2, t, accent, dotted):
+    c = ACCENTS[accent]
+    dash = ' stroke-width="0.4" stroke-dasharray="0.5 1"' if dotted else ' stroke-width="0.5"'
+    return (f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{c}"{dash} '
+            f'stroke-linecap="round" stroke-opacity="{t["accent_opacity"]}"/>')
+
+
+def glyph(x, y, d, t, accent):
+    c = ACCENTS[accent]
+    return (f'<path d="{d}" transform="translate({x} {y})" fill="none" stroke="{c}" stroke-width="0.45" '
+            f'stroke-linecap="round" stroke-linejoin="round" stroke-opacity="{t["accent_opacity"]}"/>')
+
+
 def panel_svg(name, spec, t):
     w = spec["hp"] * HP
     cyan, violet = ACCENTS["cyan"], ACCENTS["violet"]
@@ -151,15 +227,29 @@ def panel_svg(name, spec, t):
     ]
     for x, y, cw, ch, accent in spec["cards"]:
         out += card(x, y, cw, ch, t, accent)
+    for cx, cy, r, accent in spec.get("rings", []):
+        out += ring(cx, cy, r, t, accent)
+    for x1, y1, x2, y2, accent, dotted in spec.get("lines", []):
+        out.append(line(x1, y1, x2, y2, t, accent, dotted))
+    for x, y, d, accent in spec.get("glyphs", []):
+        out.append(glyph(x, y, d, t, accent))
     accents = spec.get("label_accents", {})
     sizes = spec.get("label_size", {})
     gaps = spec.get("label_gap", {})
+    dxs = spec.get("label_dx", {})
     for kind, cname, x, y, label in spec["components"]:
         if not label:
             continue
+        # A negative gap puts the label below the component.
         gap = gaps.get(cname, 12.0 if (name, cname) in BIG_KNOBS else LABEL_GAP[kind])
-        fill = ACCENTS[accents[cname]] if cname in accents else t["label"]
-        extra = f' fill-opacity="{t["accent_opacity"]}"' if cname in accents else ""
+        x += dxs.get(cname, 0.0)
+        accent = accents.get(cname)
+        if accent in ACCENTS:
+            fill, extra = ACCENTS[accent], f' fill-opacity="{t["accent_opacity"]}"'
+        elif accent:
+            fill, extra = t[accent], ""
+        else:
+            fill, extra = t["label"], ""
         out.append(text(x, y - gap, label, sizes.get(cname, LABEL_SIZE), fill, "bold", extra))
     for x, y, s, size, colour in spec.get("notes", []):
         out.append(text(x, y, s, size, t[colour], "bold"))
