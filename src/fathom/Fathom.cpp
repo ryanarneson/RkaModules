@@ -15,6 +15,11 @@ struct Fathom : Module {
 		DETUNE_ATT_PARAM,
 		DRIFT_ATT_PARAM,
 		CUTOFF_ATT_PARAM,
+		// Phase 2, appended so phase 1 patches load.
+		RES_PARAM,
+		DRIVE_PARAM,
+		RES_ATT_PARAM,
+		DRIVE_ATT_PARAM,
 		PARAMS_LEN
 	};
 	enum InputId {
@@ -22,6 +27,8 @@ struct Fathom : Module {
 		DETUNE_INPUT,
 		DRIFT_INPUT,
 		CUTOFF_INPUT,
+		RES_INPUT,
+		DRIVE_INPUT,
 		INPUTS_LEN
 	};
 	enum OutputId {
@@ -43,6 +50,10 @@ struct Fathom : Module {
 	int subOctave = 0;
 	// Menu: PITCH snaps to semitones unless free.
 	bool freePitch = false;
+	// Menu: index into rka::LadderType (LP24, LP12, BP, HP).
+	int filterType = 0;
+	// Menu: the sub goes through the filter instead of around it.
+	bool subThroughFilter = false;
 
 	// PITCH shows the note name while snapped.
 	struct PitchQuantity : ParamQuantity {
@@ -72,10 +83,16 @@ struct Fathom : Module {
 		configParam(DETUNE_ATT_PARAM, -1.f, 1.f, 0.f, "Detune CV amount", "%", 0.f, 100.f);
 		configParam(DRIFT_ATT_PARAM, -1.f, 1.f, 0.f, "Drift CV amount", "%", 0.f, 100.f);
 		configParam(CUTOFF_ATT_PARAM, -1.f, 1.f, 0.f, "Cutoff CV amount (1 V/oct at 100%)", "%", 0.f, 100.f);
+		configParam(RES_PARAM, 0.f, 1.f, 0.2f, "Resonance", "%", 0.f, 100.f);
+		configParam(DRIVE_PARAM, 0.f, 1.f, 0.25f, "Drive", "%", 0.f, 100.f);
+		configParam(RES_ATT_PARAM, -1.f, 1.f, 0.f, "Resonance CV amount", "%", 0.f, 100.f);
+		configParam(DRIVE_ATT_PARAM, -1.f, 1.f, 0.f, "Drive CV amount", "%", 0.f, 100.f);
 		configInput(VOCT_INPUT, "1 V/oct pitch");
 		configInput(DETUNE_INPUT, "Detune CV");
 		configInput(DRIFT_INPUT, "Drift CV");
 		configInput(CUTOFF_INPUT, "Cutoff CV");
+		configInput(RES_INPUT, "Resonance CV");
+		configInput(DRIVE_INPUT, "Drive CV");
 		configOutput(LEFT_OUTPUT, "Left");
 		configOutput(RIGHT_OUTPUT, "Right");
 		configOutput(SUB_OUTPUT, "Sub (sine, before SUB and CUTOFF)");
@@ -94,14 +111,19 @@ struct Fathom : Module {
 
 	void onReset() override {
 		subOctave = 0;
+		filterType = 0;
+		subThroughFilter = false;
 		setFreePitch(false);
 		voice.reset(C2_HZ);
+		stage.reset();
 	}
 
 	json_t* dataToJson() override {
 		json_t* root = json_object();
 		json_object_set_new(root, "subOctave", json_integer(subOctave));
 		json_object_set_new(root, "freePitch", json_boolean(freePitch));
+		json_object_set_new(root, "filterType", json_integer(filterType));
+		json_object_set_new(root, "subThroughFilter", json_boolean(subThroughFilter));
 		return root;
 	}
 
@@ -112,6 +134,12 @@ struct Fathom : Module {
 		json_t* f = json_object_get(root, "freePitch");
 		if (f)
 			setFreePitch(json_boolean_value(f));
+		json_t* t = json_object_get(root, "filterType");
+		if (t)
+			filterType = clamp(int(json_integer_value(t)), 0, 3);
+		json_t* b = json_object_get(root, "subThroughFilter");
+		if (b)
+			subThroughFilter = json_boolean_value(b);
 	}
 
 	// Knob plus attenuated CV, where ±5 V at full attenuverter sweeps the
@@ -129,11 +157,17 @@ struct Fathom : Module {
 		const float drift = clamp(modulated(DRIFT_PARAM, DRIFT_INPUT, DRIFT_ATT_PARAM), 0.f, 1.f);
 		const float cutoffOct = clamp(params[CUTOFF_PARAM].getValue() + params[CUTOFF_ATT_PARAM].getValue() * inputs[CUTOFF_INPUT].getVoltage(), 0.f, 10.f);
 		const float cutoffHz = 20.f * std::exp2(cutoffOct);
+		rka::OutputStage::Params p;
+		p.cutoffHz = cutoffHz;
+		p.resonance = clamp(modulated(RES_PARAM, RES_INPUT, RES_ATT_PARAM), 0.f, 1.f);
+		p.drive = clamp(modulated(DRIVE_PARAM, DRIVE_INPUT, DRIVE_ATT_PARAM), 0.f, 1.f);
+		p.type = rka::LadderType(filterType);
+		p.subThroughFilter = subThroughFilter;
 
 		const rka::DroneVoice::Out o = voice.process(f0, detune, params[SPREAD_PARAM].getValue(), drift,
 		                                             params[SUB_PARAM].getValue(), subOctave + 1, args.sampleRate);
 		float l = o.left, r = o.right;
-		stage.process(cutoffHz, args.sampleRate, l, r);
+		stage.process(p, o.subMix, args.sampleRate, l, r);
 		outputs[LEFT_OUTPUT].setVoltage(5.f * l);
 		outputs[RIGHT_OUTPUT].setVoltage(5.f * r);
 		outputs[SUB_OUTPUT].setVoltage(5.f * o.sub);
@@ -155,13 +189,19 @@ struct FathomWidget : ModuleWidget {
 		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_SPREAD), module, Fathom::SPREAD_PARAM));
 		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_SUB), module, Fathom::SUB_PARAM));
 		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_DETUNE), module, Fathom::DETUNE_PARAM));
-		addParam(createParamCentered<rka::BigKnob>(mm2px(PARAM_CUTOFF), module, Fathom::CUTOFF_PARAM));
+		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_RES), module, Fathom::RES_PARAM));
+		addParam(createParamCentered<rka::MidKnob>(mm2px(PARAM_CUTOFF), module, Fathom::CUTOFF_PARAM));
+		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_DRIVE), module, Fathom::DRIVE_PARAM));
+		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_RES_ATT), module, Fathom::RES_ATT_PARAM));
 		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_CUTOFF_ATT), module, Fathom::CUTOFF_ATT_PARAM));
+		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_DRIVE_ATT), module, Fathom::DRIVE_ATT_PARAM));
 		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_DETUNE_ATT), module, Fathom::DETUNE_ATT_PARAM));
 		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_DRIFT_ATT), module, Fathom::DRIFT_ATT_PARAM));
 
 		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_VOCT), module, Fathom::VOCT_INPUT));
+		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_RES_CV), module, Fathom::RES_INPUT));
 		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_CUTOFF_CV), module, Fathom::CUTOFF_INPUT));
+		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_DRIVE_CV), module, Fathom::DRIVE_INPUT));
 		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_DETUNE_CV), module, Fathom::DETUNE_INPUT));
 		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_DRIFT_CV), module, Fathom::DRIFT_INPUT));
 
@@ -179,6 +219,11 @@ struct FathomWidget : ModuleWidget {
 		menu->addChild(createBoolMenuItem("Free pitch (no semitone snap)", "",
 			[=]() { return module->freePitch; },
 			[=](bool free) { module->setFreePitch(free); }));
+		menu->addChild(new MenuSeparator);
+		menu->addChild(createIndexPtrSubmenuItem("Filter type",
+			{"Low-pass 24 dB", "Low-pass 12 dB", "Band-pass", "High-pass"},
+			&module->filterType));
+		menu->addChild(createBoolPtrMenuItem("Sub through filter", "", &module->subThroughFilter));
 	}
 };
 
