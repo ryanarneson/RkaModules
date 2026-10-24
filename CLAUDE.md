@@ -8,6 +8,13 @@ layout.
   the Sway LFO), with panels in `res/<folder>/` and manuals in
   `docs/<folder>/`. Module folders are listed in `MODULES` in the Makefile.
   Panels load from `"res/<folder>/<Name>.svg"`.
+- Module names are the sea family: plain English words for calm water,
+  each also a verb (Sway = a boat at anchor, Fathom = depth). Decided
+  2026-10-24. Reserved for the ideas in `~/ws/plugins/IDEAS.md`: Swell
+  (slope/function generator), Undertow or Drift (chaos / smooth random),
+  Tide (clocked modulator), Eddy (random sampler), Loom (a darker voice).
+  Pick from this family before inventing a new name; never rename a
+  released module.
 - One shared look ("Nightglow", see README): palette in
   `tools/gen_panels.py`, shared knobs/lights in `src/widgets.hpp`. Don't use
   stock knobs or ad-hoc colours in a module. `src/RkaTheme.hpp` is

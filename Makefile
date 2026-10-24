@@ -4,7 +4,7 @@ RACK_DIR ?= ../..
 # One folder per module: code and test_*.cpp tests in src/<module>/,
 # panels in res/<module>/ (generated from res-src/<module>/). src/ itself
 # has the shared plugin entry point and widgets.
-MODULES = sway
+MODULES = sway fathom
 
 # FLAGS will be passed to both the C and C++ compiler
 FLAGS += -Isrc

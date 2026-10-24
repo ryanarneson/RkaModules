@@ -5,6 +5,7 @@ VCV Rack 2 modules.
 | Module | HP | Description |
 |---|---|---|
 | [**Sway**](docs/sway/README.md) | 18 | Polyphonic LFO: classic and morphing waves, random, EOC, clock sync, phase spread, one-shot |
+| [**Fathom**](docs/fathom/README.md) | 10 | Deep bass drone voice: sub sine, 7-saw supersaw, drift, low-pass |
 
 Each module's manual is in its own folder.
 
@@ -29,9 +30,12 @@ src/sway/                the Sway module
   RandomGen.hpp, Voice.hpp
   test_*.cpp             offline unit tests, one per DSP unit
   SwayLayout.hpp         component positions, generated, do not edit
-res/sway/                final panels, text as paths (what Rack loads)
-res-src/sway/            generated SVGs with live text (input to Inkscape)
-docs/sway/               the module's manual and panel image
+src/fathom/              the Fathom drone voice, same shape: Fathom.cpp,
+                         Svf.hpp, SuperSaw.hpp, Drift.hpp, DroneVoice.hpp,
+                         test_*.cpp, FathomLayout.hpp
+res/<module>/            final panels, text as paths (what Rack loads)
+res-src/<module>/        generated SVGs with live text (input to Inkscape)
+docs/<module>/           the module's manual and panel image
 docs/specs/, docs/plans/ design docs and implementation plans
 tools/gen_panels.py      panel layouts for every module: the one source
                          for SVGs and positions

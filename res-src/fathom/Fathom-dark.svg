@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="50.80mm" height="128.5mm" viewBox="0 0 50.80 128.5">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="128.5" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0a101c"/><stop offset="1" stop-color="#030509"/></linearGradient>
+<linearGradient id="rule" x1="3" y1="0" x2="47.80" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22e6ef"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+</defs>
+<rect width="50.80" height="128.5" fill="url(#bg)"/>
+<text x="25.40" y="11.50" font-family="DejaVu Sans" font-size="4.5" font-weight="bold" text-anchor="middle" fill="#22e6ef" stroke="#22e6ef" stroke-width="0.99" stroke-linejoin="round" opacity="0.22">FATHOM</text>
+<text x="25.40" y="11.50" font-family="DejaVu Sans" font-size="4.5" font-weight="bold" text-anchor="middle" fill="#b9c8d6">FATHOM</text>
+<rect x="3" y="12.9" width="44.80" height="1.0" rx="0.5" fill="url(#rule)" opacity="0.22"/>
+<rect x="3" y="13.2" width="44.80" height="0.4" fill="url(#rule)" opacity="0.75"/>
+<rect x="28.5" y="101.0" width="20.0" height="19.0" rx="1.5" fill="none" stroke="#22e6ef" stroke-width="1.2" opacity="0.13"/>
+<rect x="28.5" y="101.0" width="20.0" height="19.0" rx="1.5" fill="#0a0f1a" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="0.75"/>
+<circle cx="25.4" cy="40.0" r="16.5" fill="none" stroke="#a78bfa" stroke-width="1.2" opacity="0.13"/>
+<circle cx="25.4" cy="40.0" r="16.5" fill="none" stroke="#a78bfa" stroke-width="0.35" stroke-opacity="0.75"/>
+<circle cx="25.4" cy="84.0" r="13.0" fill="none" stroke="#22e6ef" stroke-width="1.2" opacity="0.13"/>
+<circle cx="25.4" cy="84.0" r="13.0" fill="none" stroke="#22e6ef" stroke-width="0.35" stroke-opacity="0.75"/>
+<line x1="8.9" y1="40.0" x2="41.9" y2="40.0" stroke="#22e6ef" stroke-width="0.5" stroke-linecap="round" stroke-opacity="0.75"/>
+<line x1="8.0" y1="109.1" x2="8.0" y2="111.0" stroke="#a78bfa" stroke-width="0.4" stroke-dasharray="0.5 1" stroke-linecap="round" stroke-opacity="0.75"/>
+<line x1="20.0" y1="109.1" x2="20.0" y2="111.0" stroke="#a78bfa" stroke-width="0.4" stroke-dasharray="0.5 1" stroke-linecap="round" stroke-opacity="0.75"/>
+<path d="M-3 0 q1.5 -2.4 3 0 t3 0" transform="translate(9.5 58.2)" fill="none" stroke="#22e6ef" stroke-width="0.45" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.75"/>
+<path d="M-3.4 1.2 l2.3 -2.4 v2.4 l2.3 -2.4 v2.4 l2.2 -2.4" transform="translate(41.6 58.2)" fill="none" stroke="#f5a623" stroke-width="0.45" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.75"/>
+<text x="25.40" y="54.20" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#b9c8d6">PITCH</text>
+<text x="7.40" y="49.00" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#7d8ea0">V/OCT</text>
+<text x="43.40" y="49.00" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#4ade80" fill-opacity="0.75">SUB</text>
+<text x="17.15" y="19.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#7d8ea0">DRIFT</text>
+<text x="33.65" y="19.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#7d8ea0">SPREAD</text>
+<text x="17.15" y="62.40" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#7d8ea0">SUB</text>
+<text x="33.65" y="62.40" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#7d8ea0">DETUNE</text>
+<text x="25.40" y="100.30" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#b9c8d6">CUTOFF</text>
+<text x="38.40" y="91.20" font-family="DejaVu Sans" font-size="1.7" font-weight="bold" text-anchor="middle" fill="#46566a">CV</text>
+<text x="8.00" y="121.60" font-family="DejaVu Sans" font-size="1.7" font-weight="bold" text-anchor="middle" fill="#46566a">DETUNE</text>
+<text x="20.00" y="121.60" font-family="DejaVu Sans" font-size="1.7" font-weight="bold" text-anchor="middle" fill="#46566a">DRIFT</text>
+<text x="34.00" y="106.30" font-family="DejaVu Sans" font-size="1.9" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">L</text>
+<text x="44.00" y="106.30" font-family="DejaVu Sans" font-size="1.9" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">R</text>
+<text x="25.40" y="125.50" font-family="DejaVu Sans" font-size="3.2" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="0.75">RKA</text>
+<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
+<circle id="param-PITCH" cx="25.4" cy="40.0" r="1" fill="#ff0000"/>
+<circle id="input-VOCT" cx="8.9" cy="40.0" r="1" fill="#00ff00"/>
+<circle id="output-SUBOUT" cx="41.9" cy="40.0" r="1" fill="#0000ff"/>
+<circle id="param-DRIFT" cx="17.15" cy="25.7" r="1" fill="#ff0000"/>
+<circle id="param-SPREAD" cx="33.65" cy="25.7" r="1" fill="#ff0000"/>
+<circle id="param-SUB" cx="17.15" cy="54.3" r="1" fill="#ff0000"/>
+<circle id="param-DETUNE" cx="33.65" cy="54.3" r="1" fill="#ff0000"/>
+<circle id="param-CUTOFF" cx="25.4" cy="84.0" r="1" fill="#ff0000"/>
+<circle id="param-CUTOFF_ATT" cx="12.4" cy="84.0" r="1" fill="#ff0000"/>
+<circle id="input-CUTOFF_CV" cx="38.4" cy="84.0" r="1" fill="#00ff00"/>
+<circle id="param-DETUNE_ATT" cx="8.0" cy="106.0" r="1" fill="#ff0000"/>
+<circle id="param-DRIFT_ATT" cx="20.0" cy="106.0" r="1" fill="#ff0000"/>
+<circle id="input-DETUNE_CV" cx="8.0" cy="115.0" r="1" fill="#00ff00"/>
+<circle id="input-DRIFT_CV" cx="20.0" cy="115.0" r="1" fill="#00ff00"/>
+<circle id="output-LEFT" cx="34.0" cy="112.0" r="1" fill="#0000ff"/>
+<circle id="output-RIGHT" cx="44.0" cy="112.0" r="1" fill="#0000ff"/>
+</g>
+</svg>
