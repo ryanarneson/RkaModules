@@ -6,25 +6,17 @@ For each module in PANELS (folder `dir`) this writes:
   res-src/<dir>/<Name>-dark.svg  dark panel, same geometry
   src/<dir>/<Name>Layout.hpp     component centres in mm, read by the module widget
 and, once for the plugin:
-  src/RkaTheme.hpp         the palettes' colours for widgets drawn in C++
-  res/components/*.svg     the plugin's own knobs, port, switch, button cap
-                           and light seat, in the palettes' colours
+  src/RkaTheme.hpp         the palette's colours for widgets drawn in C++
+  res/components/*.svg     the plugin's own knobs, port, switch, button cap,
+                           light seat and screw, in the palette's colours
 
 With `--inkscape <path>` (as `make panels` runs it) it then has Inkscape
 convert text to paths (Rack's SVG renderer cannot draw <text>) and writes
 the finished panels to res/<dir>/.
 
-A panel is drawn in one of two looks, chosen by its `look` key.
-
-"nightglow" (the default; being retired): navy panel, slate cards with thin
-glowing borders, light labels, and neon accents. Rack's renderer (nanosvg)
-has gradients and opacity but no blur, so glows are faked with a wide, faint
-stroke under a thin bright one. Besides `cards`, a panel may carry `rings`
-(glowing circles), `lines` (solid or dotted) and `glyphs` (small stroked
-paths); label gaps may be negative to sit below a control.
-
-"instrument": brass and ivory on near-black. See "The Instrument look"
-below for its keys, and SPECIMEN for a panel that uses every one of them
+Every panel is drawn in the plugin's one look, "Instrument": brass and
+ivory on near-black. See "The Instrument look" below for the keys of a
+panel's description, and SPECIMEN for a panel that uses every one of them
 (`make specimen` draws it, with the components in place, to build/specimen/).
 
 Usage: python3 tools/gen_panels.py [--inkscape PATH] [--specimen | --preview] [repo dir]
@@ -42,76 +34,34 @@ from xml.sax.saxutils import escape
 
 HP = 5.08
 PANEL_H = 128.5
-FONT = "DejaVu Sans"
-
-# Accents, shared by both themes and exported to C++. Each module picks from
-# these by name (e.g. one per output, like colour-coded modulation sources).
-ACCENTS = {
-    "cyan": "#22e6ef",
-    "violet": "#a78bfa",
-    "magenta": "#f472b6",
-    "amber": "#f5a623",
-    "green": "#4ade80",
-}
-
-# "" is the default panel; "-dark" is Rack's "dark panels" preference, so it
-# is the same look turned down for dim rooms: deeper ground, dimmer ink.
-THEMES = {
-    "": dict(bg_top="#111c30", bg_bottom="#070b14", card="#0f1828", card_edge="#2a3a55",
-             ink="#e6f4ff", label="#9fb3c8", hint="#5f7187", glow_opacity=0.35, accent_opacity=1.0, screen="#04070c"),
-    "-dark": dict(bg_top="#0a101c", bg_bottom="#030509", card="#0a0f1a", card_edge="#1c2738",
-                  ink="#b9c8d6", label="#7d8ea0", hint="#46566a", glow_opacity=0.22, accent_opacity=0.75, screen="#04070c"),
-}
-# Theme keys exported to C++ (RkaTheme::CARD, ...) for widgets drawn in code.
-WIDGET_COLOURS = ("card", "hint", "ink")
-
 # Placeholder colours from https://vcvrack.com/manual/Panel
 KIND_COLOUR = {"param": "#ff0000", "input": "#00ff00", "output": "#0000ff", "light": "#ff00ff",
                "widget": "#ffff00"}
 
-# Widget radii in mm (src/widgets.hpp): Rogan 3PS, Rogan 1PS, Befaco tiny,
-# our 4.6 mm trim, PJ301M. Used to keep components clear of each other and
-# to draw ticks edge to edge.
-RADII = {"big": 8.8, "mid": 6.7, "small": 4.32, "trim": 2.3, "jack": 4.0,
-         "encoder": 6.7, "button": 3.0, "light": 1.1}
-# The Instrument look's own components (src/widgets.hpp: HeroKnob, DialKnob,
-# FaceKnob, LimbKnob, Atten, KnurlEncoder, BrassPort, Toggle2, CapLatch / CapButton,
-# JewelLight). A knob's radius is to the outside of its knurl. The toggle is
-# a 3.6 x 6.4 mm rectangle; its radius is the circle round it.
-INSTRUMENT_SIZES = {"hero": 9.3, "dial": 7.0, "face": 4.8, "limb": 4.3, "atten": 2.8, "enc": 7.25,
-                    "port": 4.0, "toggle": 3.7, "cap": 3.2, "jewel": 1.0}
-RADII.update(INSTRUMENT_SIZES)
+# Component sizes: radius in mm of the plugin's own components (src/widgets.hpp:
+# HeroKnob, DialKnob, FaceKnob, LimbKnob, Atten, KnurlEncoder, BrassPort,
+# Toggle2, CapLatch / CapButton, JewelLight). A knob's radius is to the
+# outside of its knurl. The toggle is a 3.6 x 6.4 mm rectangle; its radius
+# is the circle round it. Used to keep components clear of each other.
+RADII = {"hero": 9.3, "dial": 7.0, "face": 4.8, "limb": 4.3, "atten": 2.8, "enc": 7.25,
+         "port": 4.0, "toggle": 3.7, "cap": 3.2, "jewel": 1.0}
 TOGGLE_W, TOGGLE_H = 3.6, 6.4
-TRIM_D = 4.6
 # Clearance a layout must keep between any two components, mm.
 CLEARANCE = 0.3
 
 
 def component_size(spec, name, kind, cname):
-    """Which RADII entry a component uses: the panel's `sizes`, else a trim
-    for `*_ATT` params, a small knob for other params, a jack for ports."""
-    if is_instrument(spec):
-        size = spec.get("sizes", {}).get(cid(kind, cname))
-        if size is None:
-            size = {"light": "jewel", "widget": "enc", "input": "port", "output": "port"}.get(kind)
-        if size is None:
-            size = "atten" if cname.endswith("_ATT") else "limb"
-        if size not in INSTRUMENT_SIZES:
-            sys.exit(f"{name}: {cid(kind, cname)} has size {size!r}; the Instrument sizes are "
-                     f"{', '.join(INSTRUMENT_SIZES)}")
-        return size
-    if kind == "light":
-        return "light"   # before `sizes`: a light may share its param's name
-    sizes = spec.get("sizes", {})
-    if cname in sizes:
-        return sizes[cname]
-    if kind == "widget":
-        return "encoder"
-    if (name, cname) in BIG_KNOBS:
-        return "big"
-    if kind == "param":
-        return "trim" if cname.endswith("_ATT") else "small"
-    return "jack"
+    """Which RADII entry a component uses: the panel's `sizes`, else an
+    attenuverter for `*_ATT` params, a limb knob for other params, a port,
+    a jewel for lights and an encoder for widgets."""
+    size = spec.get("sizes", {}).get(cid(kind, cname))
+    if size is None:
+        size = {"light": "jewel", "widget": "enc", "input": "port", "output": "port"}.get(kind)
+    if size is None:
+        size = "atten" if cname.endswith("_ATT") else "limb"
+    if size not in RADII:
+        sys.exit(f"{name}: {cid(kind, cname)} has size {size!r}; the sizes are {', '.join(RADII)}")
+    return size
 
 
 def arc_point(cx, cy, r, deg):
@@ -209,7 +159,6 @@ def _shoal_push(encoder, deg):
 
 PANELS = {
     "Sway": dict(
-        look="instrument",
         dir="sway",
         hp=12,
         title="SWAY",
@@ -265,7 +214,6 @@ PANELS = {
     # CV jacks in a row under them and the outputs on tiles below. A faint
     # sounding line runs down from the origin with its depths marked.
     "Fathom": dict(
-        look="instrument",
         dir="fathom",
         hp=10,
         title="FATHOM",
@@ -320,7 +268,6 @@ PANELS = {
     # the controls, the jack field: TRIG and CV columns, then the outputs,
     # each on a wide tile with its letter and light.
     "Shoal": dict(
-        look="instrument",
         dir="shoal",
         hp=28,
         title="SHOAL",
@@ -371,164 +318,6 @@ PANELS = {
     ),
 }
 
-LABEL_SIZE = 2.6   # mm
-TITLE_SIZE = 4.5   # mm
-LABEL_GAP = {"param": 7.0, "input": 6.2, "output": 6.2, "widget": 9.0, "light": 3.0}
-BIG_KNOBS = {("Sway", "RATE"), ("Fathom", "PITCH")}  # labels sit further above larger knobs
-
-
-def text(x, y, s, size, fill, weight="normal", extra=""):
-    return (f'<text x="{x:.2f}" y="{y:.2f}" font-family="{FONT}" font-size="{size}" '
-            f'font-weight="{weight}" text-anchor="middle" fill="{fill}"{extra}>{s}</text>')
-
-
-def glow_text(x, y, s, size, fill, glow, opacity):
-    """Bright text over a wide, faint stroke of the same glyphs."""
-    halo = f' stroke="{glow}" stroke-width="{size * 0.22:.2f}" stroke-linejoin="round" opacity="{opacity}"'
-    return text(x, y, s, size, glow, "bold", halo) + "\n" + text(x, y, s, size, fill, "bold")
-
-
-def card(x, y, w, h, t, accent):
-    out = []
-    if accent:
-        c = ACCENTS[accent]
-        # Halo first, then the card on top so only the outer half shows.
-        out.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="1.5" fill="none" '
-                   f'stroke="{c}" stroke-width="1.2" opacity="{t["glow_opacity"] * 0.6:.2f}"/>')
-        edge, edge_opacity = c, t["accent_opacity"]
-    else:
-        edge, edge_opacity = t["card_edge"], 1.0
-    out.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="1.5" fill="{t["card"]}" '
-               f'stroke="{edge}" stroke-width="0.3" stroke-opacity="{edge_opacity}"/>')
-    return out
-
-
-def screen(x, y, w, h, t):
-    """A display the module draws: a near-black rounded rectangle with a thin
-    accent edge. Dimmed with the theme like every other accent."""
-    return (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="1.0" fill="{t["screen"]}" '
-            f'stroke="{ACCENTS["cyan"]}" stroke-width="0.3" stroke-opacity="{t["accent_opacity"]}"/>')
-
-
-def ring(cx, cy, r, t, accent):
-    """A glowing circle: wide faint halo under a thin bright stroke."""
-    c = ACCENTS[accent]
-    return [f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{c}" stroke-width="1.2" '
-            f'opacity="{t["glow_opacity"] * 0.6:.2f}"/>',
-            f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{c}" stroke-width="0.35" '
-            f'stroke-opacity="{t["accent_opacity"]}"/>']
-
-
-def line(x1, y1, x2, y2, t, accent, dotted):
-    c = ACCENTS[accent]
-    dash = ' stroke-width="0.4" stroke-dasharray="0.5 1"' if dotted else ' stroke-width="0.5"'
-    return (f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{c}"{dash} '
-            f'stroke-linecap="round" stroke-opacity="{t["accent_opacity"]}"/>')
-
-
-def glyph(x, y, d, t, accent):
-    c = ACCENTS[accent]
-    return (f'<path d="{d}" transform="translate({x} {y})" fill="none" stroke="{c}" stroke-width="0.45" '
-            f'stroke-linecap="round" stroke-linejoin="round" stroke-opacity="{t["accent_opacity"]}"/>')
-
-
-def tick(name, spec, a, b, t, accent):
-    """A dotted line from component a's edge to component b's, along their
-    centre line, CLEARANCE clear of each."""
-    comps = {cname: (kind, x, y) for kind, cname, x, y, _ in spec["components"]}
-    ka, ax, ay = comps[a]
-    kb, bx, by = comps[b]
-    ra = RADII[component_size(spec, name, ka, a)] + CLEARANCE
-    rb = RADII[component_size(spec, name, kb, b)] + CLEARANCE
-    dx, dy = bx - ax, by - ay
-    d = (dx * dx + dy * dy) ** 0.5
-    ux, uy = dx / d, dy / d
-    return line(round(ax + ux * ra, 2), round(ay + uy * ra, 2), round(bx - ux * rb, 2), round(by - uy * rb, 2),
-                t, accent, True)
-
-
-def trim_svgs():
-    """The plugin's own attenuverter: a TRIM_D mm disc in the panel's card
-    colour with a thin rim (the background SVG) and a bright pointer (the
-    knob SVG that rotates). File name -> SVG; no text, so no Inkscape pass."""
-    t = THEMES[""]
-    c = TRIM_D / 2
-    head = (f'<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" '
-            f'width="{TRIM_D}mm" height="{TRIM_D}mm" viewBox="0 0 {TRIM_D} {TRIM_D}">\n')
-    bg = head + (f'<circle cx="{c}" cy="{c}" r="{c - 0.125:.3f}" fill="{t["card"]}" '
-                 f'stroke="{t["hint"]}" stroke-width="0.25"/>\n</svg>\n')
-    fg = head + (f'<line x1="{c}" y1="{c - 0.4:.2f}" x2="{c}" y2="0.35" stroke="{t["ink"]}" '
-                 f'stroke-width="0.5" stroke-linecap="round"/>\n</svg>\n')
-    return {"Trim_bg.svg": bg, "Trim.svg": fg}
-
-
-def panel_svg(name, spec, t):
-    if is_instrument(spec):
-        return instrument_svg(name, spec, t)
-    w = spec["hp"] * HP
-    cyan, violet = ACCENTS["cyan"], ACCENTS["violet"]
-    out = [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" '
-        f'width="{w:.2f}mm" height="{PANEL_H}mm" viewBox="0 0 {w:.2f} {PANEL_H}">',
-        '<defs>',
-        f'<linearGradient id="bg" x1="0" y1="0" x2="0" y2="{PANEL_H}" gradientUnits="userSpaceOnUse">'
-        f'<stop offset="0" stop-color="{t["bg_top"]}"/><stop offset="1" stop-color="{t["bg_bottom"]}"/></linearGradient>',
-        f'<linearGradient id="rule" x1="3" y1="0" x2="{w - 3:.2f}" y2="0" gradientUnits="userSpaceOnUse">'
-        f'<stop offset="0" stop-color="{cyan}"/><stop offset="1" stop-color="{violet}"/></linearGradient>',
-        '</defs>',
-        f'<rect width="{w:.2f}" height="{PANEL_H}" fill="url(#bg)"/>',
-        glow_text(w / 2, 11.5, spec["title"], TITLE_SIZE, t["ink"], cyan, t["glow_opacity"]),
-        f'<rect x="3" y="12.9" width="{w - 6:.2f}" height="1.0" rx="0.5" fill="url(#rule)" opacity="{t["glow_opacity"]}"/>',
-        f'<rect x="3" y="13.2" width="{w - 6:.2f}" height="0.4" fill="url(#rule)" opacity="{t["accent_opacity"]}"/>',
-    ]
-    for x, y, cw, ch, accent in spec["cards"]:
-        out += card(x, y, cw, ch, t, accent)
-    for _, sx, sy, sw, sh in spec.get("screens", []):
-        out.append(screen(sx, sy, sw, sh, t))
-    for cx, cy, r, accent in spec.get("rings", []):
-        out += ring(cx, cy, r, t, accent)
-    for x1, y1, x2, y2, accent, dotted in spec.get("lines", []):
-        out.append(line(x1, y1, x2, y2, t, accent, dotted))
-    for x, y, d, accent in spec.get("glyphs", []):
-        out.append(glyph(x, y, d, t, accent))
-    for a, b, accent in spec.get("ticks", []):
-        out.append(tick(name, spec, a, b, t, accent))
-    accents = spec.get("label_accents", {})
-    sizes = spec.get("label_size", {})
-    gaps = spec.get("label_gap", {})
-    dxs = spec.get("label_dx", {})
-    for kind, cname, x, y, label in spec["components"]:
-        if not label:
-            continue
-        # A negative gap puts the label below the component.
-        gap = gaps.get(cname, 12.0 if (name, cname) in BIG_KNOBS else LABEL_GAP[kind])
-        x += dxs.get(cname, 0.0)
-        accent = accents.get(cname)
-        if accent in ACCENTS:
-            fill, extra = ACCENTS[accent], f' fill-opacity="{t["accent_opacity"]}"'
-        elif accent:
-            fill, extra = t[accent], ""
-        else:
-            fill, extra = t["label"], ""
-        out.append(text(x, y - gap, label, sizes.get(cname, LABEL_SIZE), fill, "bold", extra))
-    for x, y, s, size, colour in spec.get("notes", []):
-        if colour in ACCENTS:
-            out.append(text(x, y, s, size, ACCENTS[colour], "bold", f' fill-opacity="{t["accent_opacity"]}"'))
-        else:
-            out.append(text(x, y, s, size, t[colour], "bold"))
-    out.append(text(w / 2, PANEL_H - 3.0, "RKA", 3.2, ACCENTS["amber"], "bold",
-                    f' fill-opacity="{t["accent_opacity"]}"'))
-    # Placeholders for helper.py createmodule; hidden so they never render.
-    out.append('<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">')
-    for kind, cname, x, y, _ in spec["components"]:
-        # ids must be unique; names repeat across kinds (PW knob, PW input).
-        out.append(f'<circle id="{kind}-{cname}" cx="{x}" cy="{y}" r="1" fill="{KIND_COLOUR[kind]}"/>')
-    out.append('</g>')
-    out.append('</svg>')
-    return "\n".join(out) + "\n"
-
-
 def layout_hpp(name, spec):
     lines = [
         "// Generated by tools/gen_panels.py. Do not edit; change the layout there.",
@@ -550,26 +339,16 @@ def layout_hpp(name, spec):
 
 
 def theme_hpp():
+    """The palette for widgets drawn in code. NAME is the default panel's
+    colour, NAME_DARK the one for Rack's "dark panels" preference."""
     lines = [
-        "// Generated by tools/gen_panels.py. Do not edit; change ACCENTS / THEMES there.",
+        "// Generated by tools/gen_panels.py. Do not edit; change INSTRUMENT there.",
         "#pragma once",
         "#include <rack.hpp>",
         "",
         "namespace RkaTheme {",
+        "// The Instrument look's palette; _DARK: Rack's dark panels.",
     ]
-    for cname, hexcol in ACCENTS.items():
-        r, g, b = (int(hexcol[i:i + 2], 16) for i in (1, 3, 5))
-        lines.append(f"static const NVGcolor {cname.upper()} = nvgRGB(0x{r:02x}, 0x{g:02x}, 0x{b:02x});")
-    # Widgets drawn in code (encoder, hold button) use the light theme's
-    # card, rim and pointer colours, as the trim's SVGs do.
-    lines.append("// Widget colours (light theme), as res/components/Trim*.svg.")
-    for key in WIDGET_COLOURS:
-        hexcol = THEMES[""][key]
-        r, g, b = (int(hexcol[i:i + 2], 16) for i in (1, 3, 5))
-        lines.append(f"static const NVGcolor {key.upper()} = nvgRGB(0x{r:02x}, 0x{g:02x}, 0x{b:02x});")
-    # The Instrument look, for widgets drawn in code. NAME is the default
-    # panel's colour, NAME_DARK the one for Rack's "dark panels" preference.
-    lines.append("// The Instrument look (INSTRUMENT in tools/gen_panels.py); _DARK: Rack's dark panels.")
     for const, key in INSTRUMENT_WIDGET_COLOURS:
         for suffix, tag in (("", ""), ("-dark", "_DARK")):
             hexcol = INSTRUMENT[suffix][key]
@@ -595,19 +374,16 @@ def check_screens(name, spec):
     of each other: side by side they would read as one heavy bar."""
     w = spec["hp"] * HP
     screens = spec.get("screens", [])
-    if is_instrument(spec):
-        for i, a in enumerate(screens):
-            for b in screens[i + 1:]:
-                if rect_distance(screen_keepout(spec, a), screen_keepout(spec, b)) < CLEARANCE:
-                    sys.exit(f"{name}: the bezels of SCREEN_{a[0]} and SCREEN_{b[0]} touch "
-                             f"(need {CLEARANCE} mm between them)")
+    for i, a in enumerate(screens):
+        for b in screens[i + 1:]:
+            if rect_distance(screen_keepout(spec, a), screen_keepout(spec, b)) < CLEARANCE:
+                sys.exit(f"{name}: the bezels of SCREEN_{a[0]} and SCREEN_{b[0]} touch "
+                         f"(need {CLEARANCE} mm between them)")
     for sname, sx, sy, sw, sh in screens:
         if sx < 0 or sy < 0 or sx + sw > w or sy + sh > PANEL_H:
             sys.exit(f"{name}: screen SCREEN_{sname} is outside the panel")
-        x0, y0, x1, y1 = sx, sy, sx + sw, sy + sh
-        if is_instrument(spec):
-            # The bezel and ruler are drawn outside the screen's rectangle.
-            x0, y0, x1, y1 = screen_keepout(spec, (sname, sx, sy, sw, sh))
+        # The bezel and ruler are drawn outside the screen's rectangle.
+        x0, y0, x1, y1 = screen_keepout(spec, (sname, sx, sy, sw, sh))
         for kind, cname, x, y, _ in spec["components"]:
             r = RADII[component_size(spec, name, kind, cname)] + CLEARANCE
             # Distance from the centre to the rectangle.
@@ -622,14 +398,15 @@ def check_screens(name, spec):
 #
 # Brass and ivory on near-black; see docs/specs/2026-11-15-instrument-look-
 # design.md. Every drawn line is a scale, a centre mark, a construction line,
-# a signal trace or a label. A panel with look="instrument" is described by:
+# a signal trace or a label. A panel is described by:
 #
 #   title, subtitle   the nameplate, top left; `nameplate` (x, y) moves it
 #   mark              the foot mark, if not "R K A . INSTRUMENTS"
-#   components        as Nightglow: (kind, name, x, y, label). Elsewhere a
+#   components        [(kind, name, x, y, label)]: kind is param, input,
+#                     output, light or widget; x, y the centre in mm. Elsewhere a
 #                     component is named by its id, KIND_NAME, as in the
 #                     layout header: "PARAM_RATE", "INPUT_PW", "LIGHT_A"
-#   sizes             id -> one of INSTRUMENT_SIZES, where the default is
+#   sizes             id -> one of RADII's sizes, where the default is
 #                     wrong (param: limb, or atten for *_ATT; input, output:
 #                     port; light: jewel; widget: enc)
 #   origins           [(x, y)]: a brass crosshair where arcs are struck from
@@ -647,8 +424,8 @@ def check_screens(name, spec):
 #   traces            [[id, ..., id]]: a signal trace from a jack through
 #                     the controls on its way to the one it moves; an (x, y)
 #                     among the ids is an elbow (at most one)
-#   screens           as Nightglow: (name, x, y, w, h), drawn as glass in a
-#                     brass bezel
+#   screens           [(name, x, y, w, h)]: a window the module draws in, in
+#                     mm, drawn as glass in a brass bezel outside it
 #   rulers            screen name -> dict(px=mm per pixel, sides="lb",
 #                     numerals=True): pixel rulers outside a screen
 #   screws            [(x, y)]: centres of the rack screws the module places
@@ -701,18 +478,6 @@ BEND_TOLERANCE = 0.05    # mm off the straight line before a trace counts as ben
 ORIGIN_ARM = 1.6         # mm: half the width of an origin's crosshair
 LABEL_CLEARANCE = 0.2    # mm between lettering and any component
 TILE = dict(left=4.4, right=4.4, top=7.2, bottom=4.6)   # mm from the port's centre
-
-
-def is_instrument(spec):
-    look = spec.get("look", "nightglow")
-    if look not in ("nightglow", "instrument"):
-        sys.exit(f'unknown look {look!r}: a panel is "nightglow" or "instrument"')
-    return look == "instrument"
-
-
-def themes_for(spec):
-    """Suffix -> palette for a panel's two variants."""
-    return INSTRUMENT if is_instrument(spec) else THEMES
 
 
 def cid(kind, cname):
@@ -1118,7 +883,7 @@ def instrument_texts(name, spec):
 
 # --- Checks. Each fails the build with a message naming the parts. ---
 
-INSTRUMENT_KEYS = {"look", "dir", "hp", "title", "subtitle", "nameplate", "mark", "components", "sizes",
+INSTRUMENT_KEYS = {"dir", "hp", "title", "subtitle", "nameplate", "mark", "components", "sizes",
                    "origins", "circles", "radii", "limbs", "faces", "tiles", "traces", "screens", "rulers",
                    "label_at", "label_colour", "label_size", "label_gap", "label_dx", "label_dy", "notes",
                    "preview", "screws"}
@@ -1369,17 +1134,15 @@ def check_screws(name, spec):
 
 
 def check_panel(name, spec):
-    """Every layout check for a panel, in either look."""
-    if is_instrument(spec):
-        check_references(name, spec)
+    """Every layout check for a panel."""
+    check_references(name, spec)
     check_clearance(name, spec)
     check_screens(name, spec)
-    if is_instrument(spec):
-        check_faces(name, spec)
-        check_tiles(name, spec)
-        check_traces(name, spec)
-        check_lettering(name, spec)
-        check_screws(name, spec)
+    check_faces(name, spec)
+    check_tiles(name, spec)
+    check_traces(name, spec)
+    check_lettering(name, spec)
+    check_screws(name, spec)
 
 
 # --- Drawing the panel ---
@@ -1445,7 +1208,7 @@ def screen_svg(sname, x, y, w, h, ruler, pal):
     return out
 
 
-def instrument_svg(name, spec, pal):
+def panel_svg(name, spec, pal):
     w = spec["hp"] * HP
     comps = comps_of(name, spec)
     by = {c.id: c for c in comps}
@@ -1594,7 +1357,7 @@ def art_svg(w, h, elements):
 
 def component_files():
     """File name -> SVG for everything in res/components/."""
-    files = dict(trim_svgs())
+    files = {}
     for suffix, pal in INSTRUMENT.items():
         for art_name, (w, h, elements) in component_art(pal).items():
             if suffix and art_name in UNTHEMED_ART:
@@ -1629,7 +1392,7 @@ def preview_svg(name, spec, suffix):
     for x, y in spec.get("screws", []):
         parts.append(f'<g transform="translate({num(x - w / 2)} {num(y - h / 2)})">' + "".join(elements) + "</g>")
     hidden = '<g inkscape:groupmode="layer" inkscape:label="components"'
-    svg = instrument_svg(name, spec, pal)
+    svg = panel_svg(name, spec, pal)
     return svg.replace(hidden, "\n".join(parts) + "\n" + hidden)
 
 
@@ -1647,7 +1410,6 @@ def _on(r, x):
 
 
 SPECIMEN = dict(
-    look="instrument",
     dir="specimen",
     hp=20,
     title="SPECIMEN",
@@ -1821,36 +1583,35 @@ def main():
         return
     if args.preview:
         for name, spec in PANELS.items():
-            if is_instrument(spec):
-                write_preview(root, name, spec, root / "build" / "preview", args.inkscape)
+            write_preview(root, name, spec, root / "build" / "preview", args.inkscape)
         return
 
     (root / "src" / "RkaTheme.hpp").write_text(theme_hpp())
     components = root / "res" / "components"
     components.mkdir(parents=True, exist_ok=True)
-    for fname, svg in component_files().items():
+    files = component_files()
+    for fname, svg in files.items():
         (components / fname).write_text(svg)
+    for old in components.glob("*.svg"):
+        if old.name not in files:
+            old.unlink()   # artwork no component draws any more
     for name, spec in PANELS.items():
         check_panel(name, spec)
         svg_dir = root / "res-src" / spec["dir"]
         svg_dir.mkdir(parents=True, exist_ok=True)
-        for suffix, theme in themes_for(spec).items():
-            (svg_dir / f"{name}{suffix}.svg").write_text(panel_svg(name, spec, theme))
+        for suffix, pal in INSTRUMENT.items():
+            (svg_dir / f"{name}{suffix}.svg").write_text(panel_svg(name, spec, pal))
         (root / "src" / spec["dir"] / f"{name}Layout.hpp").write_text(layout_hpp(name, spec))
         print(f"generated {name}")
 
     if args.inkscape:
-        # Nightglow panels go through Inkscape as they always have (its own
-        # fonts); Instrument panels see tools/fonts/ and nothing else.
-        env = None
+        # Inkscape sees tools/fonts/ and nothing else.
+        env = instrument_env(root)
+        check_inkscape_typeface(args.inkscape, env, root)
         for name, spec in PANELS.items():
-            if is_instrument(spec) and env is None:
-                env = instrument_env(root)
-                check_inkscape_typeface(args.inkscape, env, root)
-            for suffix in themes_for(spec):
+            for suffix in INSTRUMENT:
                 text_to_path(args.inkscape, root / "res-src" / spec["dir"] / f"{name}{suffix}.svg",
-                             root / "res" / spec["dir"] / f"{name}{suffix}.svg",
-                             env if is_instrument(spec) else None)
+                             root / "res" / spec["dir"] / f"{name}{suffix}.svg", env)
 
 
 if __name__ == "__main__":

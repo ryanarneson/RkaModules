@@ -20,9 +20,9 @@ folder per module; assets and docs sit at the top level, also per module:
 ```
 src/plugin.cpp           plugin entry point: registers every module
 src/plugin.hpp           shared includes, extern Model* per module
-src/widgets.hpp          shared knobs and lights, so modules match
+src/widgets.hpp          the plugin's own knobs, jacks, buttons, lights, screw
 src/Detents.hpp          mouse and scroll travel to encoder detents (rka::Encoder)
-src/RkaTheme.hpp         palette accent colours for C++, generated
+src/RkaTheme.hpp         the palette's colours for C++, generated
 src/testing.hpp          CHECK macro for the offline unit tests
 src/sway/                the Sway module
   Sway.cpp               module (params, ports, polyphony) and widget
@@ -57,8 +57,8 @@ src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   firmware/              vendored firmware; local changes in CHANGES.md
   shim/                  Arduino and Teensy stand-ins
   bench/bench_core.cpp   CPU cost per app (make shoal-bench)
-res/components/          the plugin's own knobs, port, switch, button cap and
-                         light seat as SVGs, generated
+res/components/          the plugin's own knobs, port, switch, button cap,
+                         light seat and screw as SVGs, generated
 res/<module>/            final panels, text as paths (what Rack loads)
 res-src/<module>/        generated SVGs with live text (input to Inkscape)
 docs/<module>/           the module's manual and panel image
@@ -66,7 +66,7 @@ docs/specs/, docs/plans/ design docs and implementation plans
 tools/gen_panels.py      panel layouts for every module: the one source
                          for SVGs and positions
 tools/test_gen_panels.py its tests (geometry, layout checks, stale outputs)
-tools/fonts/             D-DIN Condensed, the Instrument panels' typeface
+tools/fonts/             D-DIN Condensed, the panels' one typeface
 packages/                release packages from tools/cross_build.sh and
                          tools/mac_dist.sh
 ```
@@ -100,48 +100,40 @@ tests can't: a plugin that won't load, a widget that crashes, a broken panel.
 
 ### Look and feel
 
-Every module shares one theme, "Nightglow": a navy panel, slate cards with
-thin borders, light labels, and neon accents (cyan, violet, magenta, amber,
-green). Outputs are colour-coded by accent. The palette lives in
-`ACCENTS`/`THEMES` in `tools/gen_panels.py`; the default panel and Rack's
-"dark panels" variant are the same design, the dark one dimmer. Rack can't
-blur, so glows are a faint wide stroke under a thin bright one. Use the
-widgets in `src/widgets.hpp` (`rka::BigKnob`, `rka::MidKnob`,
-`rka::SmallKnob`, `rka::Trim`, `rka::CyanMagentaLight`, and for Shoal
-`rka::HoldButton`, a momentary button that shift-click latches,
-`rka::LatchButton`, a click-to-toggle switch in the same shape that
-lights itself cyan when on,
-`rka::Encoder`, an endless encoder turned by drag or scroll wheel, and
-`rka::PixelScreen`, a 128x64 1-bit frame drawn in one accent) rather than
-stock ones so modules match. `rka::Trim` is the plugin's own 4.6 mm
-attenuverter; `gen_panels.py` draws its SVGs into `res/components/` from
-the palette, and its `RADII` table keeps components clear of each other
-and draws ticks edge to edge.
+Every module shares one look, "Instrument": brass and ivory on near-black,
+enamel dial faces, knurled knobs, and a traced line from each CV jack
+through its attenuverter to the control it moves. Each panel is one
+instrument from a ship's set (Sway a pendulum, Fathom an echo sounder,
+Shoal ripples from two sources). `docs/DESIGN-THEME.md` is the one-page
+summary of the look and its rules; the full design is
+`docs/specs/2026-11-15-instrument-look-design.md`.
 
-Nightglow is being replaced by "Instrument" (brass and ivory on near-black;
-`docs/specs/2026-11-15-instrument-look-design.md`), one module at a time. A
-panel chooses with `look="instrument"` in its description; until every
-module has moved, both looks live in the generator and an unconverted module
-regenerates byte for byte. The Instrument language (limb, enamel faces,
-output tiles, signal traces, screen windows, the nameplate and foot mark) is
-documented at "The Instrument look" in `tools/gen_panels.py`, and its
+The palette (`INSTRUMENT`) and the language (limb, enamel faces, output
+tiles, signal traces, screen windows, the nameplate and foot mark) live in
+`tools/gen_panels.py`, documented at "The Instrument look" there; its
 `SPECIMEN` panel uses every part: `make specimen` draws it, components in
 place, to `build/specimen/` as SVG and as PNG at Rack's 100 % and 300 %
-zoom. Its components are `rka::HeroKnob`, `rka::DialKnob`, `rka::FaceKnob`,
-`rka::LimbKnob`, `rka::Atten`, `rka::KnurlEncoder`, `rka::BrassPort`,
-`rka::Toggle2`, `rka::CapButton`, `rka::CapLatch`, `rka::JewelLight` and
-`rka::Screw`, with artwork in
-`res/components/` in normal and dark-panel variants. Instrument panels are
-lettered in D-DIN Condensed only, from `tools/fonts/`: `make panels` shows
-Inkscape that folder and nothing else, and stops if Inkscape would set the
-text in any other face. Besides component clearance the generator fails a
-layout whose trace grazes a control or tile it does not belong to, runs
-under a screen or through lettering, or bends more than once; whose traces
-cross or touch; or whose lettering (the foot mark included) overlaps a
-component, other lettering, a screen, the limb, or a face or tile it does
-not sit on. The rack screws (`screws` in a description, placed by the module
-from its layout header's `SCREWS`) are kept clear of all of these as well. A
-misspelt key in a description fails too.
+zoom. Rack's "dark panels" variant is the same drawing turned down. Use the
+plugin's own components from `src/widgets.hpp`, never stock ones:
+`rka::HeroKnob`, `rka::DialKnob`, `rka::FaceKnob`, `rka::LimbKnob`,
+`rka::Atten`, `rka::KnurlEncoder` (an endless encoder turned by drag or
+scroll wheel), `rka::BrassPort`, `rka::Toggle2`, `rka::CapButton` (a
+momentary button that shift-click latches), `rka::CapLatch`,
+`rka::JewelLight`, `rka::Screw` and `rka::PixelScreen` (a 128x64 1-bit
+frame drawn in cyan), with artwork generated into `res/components/` in
+normal and dark-panel variants. Colours drawn in code come from the
+generated `src/RkaTheme.hpp`. Panels are lettered in D-DIN Condensed only,
+from `tools/fonts/`: `make panels` shows Inkscape that folder and nothing
+else, and stops if Inkscape would set the text in any other face.
+
+Besides component clearance the generator fails a layout whose trace
+grazes a control or tile it does not belong to, runs under a screen or
+through lettering, or bends more than once; whose traces cross or touch;
+whose screens' bezels touch; or whose lettering (the foot mark included)
+overlaps a component, other lettering, a screen, the limb, or a face or
+tile it does not sit on. The rack screws (`screws` in a description,
+placed by the module from its layout header's `SCREWS`) are kept clear of
+all of these as well. A misspelt key in a description fails too.
 
 ### Changing a panel
 
@@ -149,7 +141,10 @@ Edit the layout in `tools/gen_panels.py`, then `make panels`. That rewrites
 the light and dark SVGs and `src/<module>/<Module>Layout.hpp`, so positions in the
 panel and the C++ can't drift apart. Rack can't draw `<text>`, so Inkscape
 converts text to paths on the way to `res/<module>/`. Commit `res/` so builds don't
-need Inkscape.
+need Inkscape. `make test` fails if a committed generated file is not what
+the generator writes now (a hand edit, or `make panels` not run); without
+Inkscape it cannot check the lettering's outlines in `res/`, so after
+`make panels` also see that `git status` shows nothing you did not expect.
 
 Each panel also carries a hidden `components` layer (red params, green
 inputs, blue outputs, magenta lights), so `$RACK_DIR/helper.py createmodule`
@@ -163,8 +158,9 @@ still works on it as the official tutorial describes.
    that folder, then `make panels`.
 3. `src/<folder>/<Name>.cpp` with the module and widget; include
    `<Name>Layout.hpp` and `widgets.hpp`, and load panels from
-   `"res/<folder>/<Name>.svg"`. Group controls into `cards` in the layout
-   and colour outputs with `label_accents`.
+   `"res/<folder>/<Name>.svg"`. Draw it in the Instrument language
+   (`docs/DESIGN-THEME.md`): an origin and its arcs, faces under the main
+   controls, tiles under the outputs, traces for the CV paths.
 4. Declare `extern Model* model<Name>;` in `src/plugin.hpp`, register it in
    `src/plugin.cpp`.
 5. Add the module to `plugin.json`, bump the minor version.

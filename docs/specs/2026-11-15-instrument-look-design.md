@@ -1,7 +1,20 @@
 # Instrument: a new look for RKA panels
 
-Date: 2026-11-15. Status: direction approved in conversation from mockups,
-pending written review.
+Date: 2026-11-15. Status: built (plan
+`docs/plans/2026-11-15-instrument-look.md`, branch `instrument-look`).
+Sway, Fathom and Shoal are drawn in this look and Nightglow is gone from
+the plugin. Deferred:
+
+- The owner's checks in a live Rack, listed at the end of the plan
+  ("After the last task"): legibility at rack zoom, dark panels, knobs
+  turning, CV traces, Sway's rate light, an old Sway patch, Shoal's
+  widgets and lights, the smallest lettering at 100 %.
+- Shoal's encoder: one detent moves its 55-tick knurl 0.23 mm, hard to
+  see at 100 %. A coarser knurl (31 ticks) is proposed, not made.
+- Lights have no halo, so Rack's "light bloom" setting does nothing on
+  RKA's lights; giving the caps Rack's halo instead is the other choice.
+- Below, as written before the build, the text still speaks of Nightglow
+  as the current look and of Shoal as not yet designed.
 
 RKA's panels today share one look, "Nightglow": navy gradient, slate cards
 with faked neon glows, five neon accents. This document replaces it with
