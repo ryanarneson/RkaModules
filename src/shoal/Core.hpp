@@ -15,6 +15,25 @@ constexpr int kNumApps = 13, kNumChannels = 4;
 constexpr int kFrameW = 128, kFrameH = 64, kFrameBytes = 1024;
 constexpr int kStateBytes = 2048;
 constexpr double kTickHz = 1e6 / 60.0;
+constexpr uint32_t kZeroVoltCode = 24551;  // DAC code of 0 V
+
+// Converts engine samples into 60 us firmware ticks (kTickHz, 16,666.67 Hz).
+struct TickClock {
+	double ratio = kTickHz / 48000.0;
+	double phase = 0.0;
+
+	void setSampleRate(double hz) {
+		ratio = kTickHz / (hz > 0.0 ? hz : 48000.0);
+	}
+	// Ticks due for one sample. Fractional remainder carries over.
+	int advance() {
+		phase += ratio;
+		int n = (int) phase;
+		phase -= n;
+		return n;
+	}
+};
+
 enum Button : uint8_t { BUTTON_UP, BUTTON_DOWN, BUTTON_L, BUTTON_R };
 enum Encoder : uint8_t { ENCODER_L, ENCODER_R };
 enum class InputRange : uint8_t { Hardware, Bipolar5 };
@@ -29,11 +48,12 @@ public:
 	void setGate(int ch, float volts);
 	void setInputRange(InputRange r);
 	void tick();                       // one 60 µs firmware tick, plus UI poll and main-loop pass when due
-	float out(int ch) const;           // volts
+	float out(int ch) const;           // volts; 0 V on a new Core until the app writes
 	uint32_t outCode(int ch) const;    // raw 16-bit DAC code
 	// Controls, through the firmware's own debounce (a press registers after
 	// 7 ms, a long press is held 1 s) and encoder acceleration. Detents queue;
-	// each plays out over two 1 ms UI polls (capped near 256 queued per encoder).
+	// each plays out over two 1 ms UI polls (at most 256 queued per encoder;
+	// a turn past that is dropped).
 	void setButton(Button b, bool down);
 	void turnEncoder(Encoder e, int detents);  // > 0 clockwise
 	// As the app menu's UP button: both encoders; on at boot. Automatonnetz
@@ -62,9 +82,11 @@ public:
 	bool setSettingRaw(int channel, int index, int value);
 	// State.
 	void save(uint8_t* out);           // kStateBytes
-	// restore and resetToDefaults reboot the firmware as a new Core would;
-	// only the input range, the held inputs and buttons, the random state
-	// and the clocks carry over.
+	// restore and resetToDefaults reboot the firmware as a new Core would:
+	// the outputs return to 0 V (kZeroVoltCode) until the app writes them,
+	// and only the input range, the held inputs and buttons, the random
+	// state and the clocks carry over. restore accepts an image only if both
+	// its global settings page and its app data page load.
 	bool restore(const uint8_t* in);   // kStateBytes; false = rejected, a new Core's defaults
 	void resetToDefaults();
 	void seed(uint32_t s);             // all firmware random sources

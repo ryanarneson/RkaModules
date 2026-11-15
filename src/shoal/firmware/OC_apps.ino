@@ -107,6 +107,26 @@ struct AppData {
   size_t used;
 };
 
+// SHOAL: the saved image (a patch's state) holds these structs as raw bytes.
+// Their layout on this build is pinned, so a compiler or platform that lays
+// them out differently fails to build instead of writing incompatible
+// images. Checked on macOS arm64, Linux x86_64 and Windows x86_64 (MinGW).
+static_assert(sizeof(GlobalSettings) == 684, "GlobalSettings size"); // SHOAL
+static_assert(offsetof(GlobalSettings, encoders_enable_acceleration) == 0, "GlobalSettings layout"); // SHOAL
+static_assert(offsetof(GlobalSettings, reserved0) == 1, "GlobalSettings layout"); // SHOAL
+static_assert(offsetof(GlobalSettings, reserved1) == 2, "GlobalSettings layout"); // SHOAL
+static_assert(offsetof(GlobalSettings, DAC_scaling) == 4, "GlobalSettings layout"); // SHOAL
+static_assert(offsetof(GlobalSettings, current_app_id) == 8, "GlobalSettings layout"); // SHOAL
+static_assert(offsetof(GlobalSettings, user_scales) == 12, "GlobalSettings layout"); // SHOAL
+static_assert(offsetof(GlobalSettings, user_patterns) == 172, "GlobalSettings layout"); // SHOAL
+static_assert(offsetof(GlobalSettings, user_chords) == 428, "GlobalSettings layout"); // SHOAL
+static_assert(offsetof(GlobalSettings, auto_calibration_data) == 588, "GlobalSettings layout"); // SHOAL
+static_assert(sizeof(OC::Scale) == 40 && offsetof(OC::Scale, span) == 0 && offsetof(OC::Scale, num_notes) == 4 && offsetof(OC::Scale, notes) == 8, "Scale layout"); // SHOAL
+static_assert(sizeof(OC::Pattern) == 32 && sizeof(OC::Chord) == 5 && sizeof(OC::Autotune_data) == 24, "user data sizes"); // SHOAL
+static_assert(sizeof(AppData) == 1008, "AppData size"); // SHOAL
+static_assert(offsetof(AppData, data) == 0, "AppData layout"); // SHOAL
+static_assert(offsetof(AppData, used) == 1000, "AppData layout"); // SHOAL
+
 typedef PageStorage<EEPROMStorage, EEPROM_GLOBALSETTINGS_START, EEPROM_GLOBALSETTINGS_END, GlobalSettings> GlobalSettingsStorage;
 typedef PageStorage<EEPROMStorage, EEPROM_APPDATA_START, EEPROM_APPDATA_END, AppData> AppDataStorage;
 
@@ -299,10 +319,10 @@ int index_of(uint16_t id) {
   return i;
 }
 
-// SHOAL: returns whether the app data page loaded (Core::restore's result);
-// upstream's is void.
-bool Init(bool reset_settings) {
-  bool app_data_loaded = false; // SHOAL
+// SHOAL: returns whether the global settings page and the app data page
+// loaded (Core::restore needs both); upstream's is void.
+InitResult Init(bool reset_settings) {
+  InitResult loaded = { false, false }; // SHOAL
 
   Scales::Init();
   AUTOTUNE::Init();
@@ -341,6 +361,7 @@ bool Init(bool reset_settings) {
     if (!global_settings_storage.Load(global_settings)) {
       SERIAL_PRINTLN("Settings invalid, using defaults!");
     } else {
+      loaded.global_settings_loaded = true; // SHOAL
       SERIAL_PRINTLN("Loaded settings from page_index %d, current_app_id is %02x",
                     global_settings_storage.page_index(),global_settings.current_app_id);
       sanitize_global_settings(); // SHOAL
@@ -361,7 +382,7 @@ bool Init(bool reset_settings) {
     if (!app_data_storage.Load(app_settings)) {
       SERIAL_PRINTLN("Data not loaded, using defaults!");
     } else {
-      app_data_loaded = true; // SHOAL
+      loaded.app_data_loaded = true; // SHOAL
       restore_app_data();
     }
   }
@@ -380,7 +401,7 @@ bool Init(bool reset_settings) {
   current_app->HandleAppEvent(APP_EVENT_RESUME);
 
   delay(100);
-  return app_data_loaded; // SHOAL
+  return loaded; // SHOAL
 }
 
 }; // namespace apps

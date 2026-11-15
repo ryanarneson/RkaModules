@@ -6,6 +6,8 @@
 // deterministic regression test at the end of this file.
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -18,12 +20,14 @@ using shoal::CoreTest;
 
 namespace {
 
-// Base of every generator seed. Fixed, so a run is reproducible; build with
-// -DSHOAL_FAULT_SEED=n to sweep with other random input.
+// Base of every generator seed, SHOAL_FAULT_SEED * 100000. Fixed, so a run
+// is reproducible; build with -DSHOAL_FAULT_SEED=n to sweep with other random
+// input, or run `test_faults --sweep n` to run only the random-combination
+// sweep with seed n (`make shoal-fuzz` runs it for many seeds).
 #ifndef SHOAL_FAULT_SEED
 #define SHOAL_FAULT_SEED 0
 #endif
-constexpr uint32_t kSeed = SHOAL_FAULT_SEED * 100000u;
+uint32_t seedBase = SHOAL_FAULT_SEED * 100000u;
 
 const shoal::InputRange kRanges[] = { shoal::InputRange::Hardware, shoal::InputRange::Bipolar5 };
 const float kExtremes[] = { -3.33f, 0.f, 6.67f };
@@ -91,7 +95,7 @@ void testEveryAppRuns() {
 			const int r = (int) range;
 			silence(c);
 			CHECK(runChecked(c, ticksFor(3), [](long) {}), "%s, range %d: silent run finite", an, r);
-			RandomInputs in(kSeed + 1000u + (uint32_t) app);
+			RandomInputs in(seedBase + 1000u + (uint32_t) app);
 			CHECK(runChecked(c, ticksFor(3), [&](long) { in.step(c); }), "%s, range %d: random run finite", an, r);
 			// The fixed extremes, a third of a second each on every CV, gates
 			// still toggling.
@@ -136,7 +140,7 @@ void testEverySettingSwept() {
 			Core c;
 			c.selectApp(app);
 			c.setInputRange(range);
-			RandomInputs in(kSeed + 2000u + (uint32_t) app);
+			RandomInputs in(seedBase + 2000u + (uint32_t) app);
 			const char* an = Core::appName(app);
 			const int last = c.channels() - 1;
 			std::vector<int> channels = { 0 };
@@ -170,7 +174,7 @@ void testPairsAtExtremes() {
 	for (int app = 0; app < shoal::kNumApps; app++) {
 		Core c;
 		c.selectApp(app);
-		RandomInputs in(kSeed + 3000u + (uint32_t) app);
+		RandomInputs in(seedBase + 3000u + (uint32_t) app);
 		const char* an = Core::appName(app);
 		// 0: all min, 1: all max, 2: min/max by index parity, 3: max/min by parity.
 		for (int pattern = 0; pattern < 4; pattern++) {
@@ -194,9 +198,9 @@ void testControlsMash() {
 	for (int app = 0; app < shoal::kNumApps; app++) {
 		Core c;
 		c.selectApp(app);
-		RandomInputs in(kSeed + 4000u + (uint32_t) app);
+		RandomInputs in(seedBase + 4000u + (uint32_t) app);
 		Lcg rng;
-		rng.state = kSeed + 5000u + (uint32_t) app;
+		rng.state = seedBase + 5000u + (uint32_t) app;
 		const char* an = Core::appName(app);
 		const long total = ticksFor(seconds);
 		long t = 0;
@@ -250,7 +254,7 @@ void testControlsMash() {
 void testRandomSettingCombinations() {
 	uint8_t frame[shoal::kFrameBytes];
 	Lcg rng;
-	rng.state = kSeed + 6000u;
+	rng.state = seedBase + 6000u;
 	auto pick = [&](const shoal::SettingInfo& s, bool extremes) {
 		const uint32_t m = extremes ? rng.next() % 3 : 2;
 		return m == 0 ? s.min : m == 1 ? s.max : s.min + (int) (rng.next() % (uint32_t) (s.max - s.min + 1));
@@ -396,6 +400,28 @@ void testQuantizerFarPitch() {
 	CHECK(out[0] == 96 - 4 * 1536 + 3072, "100000: %d", (int) out[0]);
 	CHECK(out[1] == 480, "500 after it: %d, want note 5 (480)", (int) out[1]);
 	CHECK(out[2] == out[0], "100000 again: %d", (int) out[2]);
+
+	// The neighbours' values show only through the next call's cell test
+	// (previous_boundary_ <= pitch - 3072 <= next_boundary_). For a sorted
+	// scale the cell q = -1 leaves is empty whatever the neighbours hold
+	// (enabled_notes_[14] lies above codebook_[0]), so this scale moves note
+	// 14 below it: notes[14] = -12000. A pitch of 26000 then finds no
+	// codeword (q = -1) and leaves the cell [(9 * -12000 + 7 * 1440) >> 4,
+	// (9 * -6144 + 7 * 1440) >> 4] = [-6120, -2826], which holds 0 - 3072:
+	// pitch 0 returns the far pitch's codeword again. Read as 0, the
+	// neighbours give the empty cell [0, -3456] and pitch 0 quantizes afresh
+	// to 0, as it does on its own.
+	int16_t notes[16];
+	for (int i = 0; i < 16; i++)
+		notes[i] = (int16_t) (96 * i);
+	notes[14] = -12000;
+	const int32_t in2[] = { 26000, 0 };
+	int32_t out2[2], alone[1];
+	CoreTest::quantizerRun(notes, in2, 2, out2);
+	CoreTest::quantizerRun(notes, in2 + 1, 1, alone);
+	CHECK(out2[0] == 96 - 4 * 1536 + 3072, "26000: %d", (int) out2[0]);
+	CHECK(out2[1] == out2[0], "0 after 26000: %d, want 26000's codeword %d", (int) out2[1], (int) out2[0]);
+	CHECK(alone[0] == 0, "0 on its own: %d", (int) alone[0]);
 }
 
 // Per Nørgård's infinity series (IntSq sequence 4, Quantermain and
@@ -574,7 +600,20 @@ void testH1200LowNotes() {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+	if (argc == 3 && std::strcmp(argv[1], "--sweep") == 0) {
+		char* end = nullptr;
+		const unsigned long seed = std::strtoul(argv[2], &end, 10);
+		if (end == argv[2] || *end != '\0') {
+			std::fprintf(stderr, "test_faults: --sweep wants a number, got \"%s\"\n", argv[2]);
+			return 2;
+		}
+		seedBase = (uint32_t) seed * 100000u;
+		testRandomSettingCombinations();
+		char name[48];
+		std::snprintf(name, sizeof(name), "test_faults --sweep %lu", seed);
+		return rkatest::finish(name);
+	}
 	testPiquedEuclideanLengthZero();
 	testOffScaleMaskRotate();
 	testScopeAfterVectorscope();

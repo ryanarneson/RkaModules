@@ -1328,16 +1328,21 @@ const uint32_t bjorklund_patterns[] = {
 4294967295 ,
 };
 
-// SHOAL: the pattern table has rows for num_steps 1..31 and 33 beat columns
-// (0..32). H1200's length reaches 32 (past the end). Piqued tests only its
-// length setting for 0; a CV mapped to the length can still take the live
-// value to 0 (APP_ENVGEN.ino constrains it to 0..31), which read row -1,
-// before the table (outside the object: any value). Row 0 is used there: its
-// columns 0 and 1 (0 and 1) are also the right one-step patterns. Only the
-// table index is clamped;
-// the cycle length (num_steps + 1) and the rotation keep the caller's value,
-// and a position of 32 (the 33rd step of a length-32 cycle) shifts out, as the
-// Teensy's shift does.
+// SHOAL: the pattern table has rows for num_steps 1..31 (cycles of 2..32
+// steps) and 33 beat columns (0..32). H1200's length reaches 32 (its
+// "EuLeng" settings and CV are constrained to 2..32; no caller passes more),
+// which upstream read as row 31, past the end of the table. That is outside
+// the object: the Teensy read whatever the linker placed after the table in
+// flash, so it has no known value to reproduce. Shoal reads the last row (the
+// 32-step patterns) for every num_steps above 31: a deliberate choice, not the
+// Teensy's result (upstream at cfbffab4 is the same code: no clamp, no extra
+// row). Piqued tests only its length setting for 0; a CV mapped to the length
+// can still take the live value to 0 (APP_ENVGEN.ino constrains it to 0..31),
+// which read row -1, before the table (outside the object too). Row 0 is used
+// there: its columns 0 and 1 (0 and 1) are also the right one-step patterns.
+// Only the table index is clamped; the cycle length (num_steps + 1) and the
+// rotation keep the caller's value, and a position of 32 (the 33rd step of a
+// length-32 cycle) shifts out, as the Teensy's shift does.
 static uint32_t bjorklund_row(uint8_t num_steps, uint8_t num_beats) {
   const int row = num_steps < 1 ? 0 : (num_steps > 31 ? 30 : num_steps - 1);
   return bjorklund_patterns[row * 33 + (num_beats > 32 ? 32 : num_beats)];

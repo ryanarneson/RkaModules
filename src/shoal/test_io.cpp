@@ -218,6 +218,22 @@ void testOutputsHold() {
 	}
 }
 
+// A new core's outputs are 0 V before and after the first tick, and stay
+// there until the app writes. CopierMaschine (app 0) writes only when
+// clocked: still 0 V after a second of silence.
+void testOutputsStartAtZeroVolts() {
+	shoal::Core c;
+	for (int ch = 0; ch < 4; ch++)
+		CHECK(c.outCode(ch) == shoal::kZeroVoltCode, "new core: ch %d code %u", ch, c.outCode(ch));
+	c.tick();
+	for (int ch = 0; ch < 4; ch++)
+		CHECK(c.outCode(ch) == shoal::kZeroVoltCode, "first tick: ch %d code %u", ch, c.outCode(ch));
+	for (int i = 0; i < 16667; i++)
+		c.tick();
+	for (int ch = 0; ch < 4; ch++)
+		CHECK(std::fabs(c.out(ch)) < 0.001f, "after 1 s: ch %d %.4f V", ch, c.out(ch));
+}
+
 } // namespace
 
 int main() {
@@ -229,5 +245,6 @@ int main() {
 	testSchmittOnGate();
 	testTickCountExact();
 	testOutputsHold();
+	testOutputsStartAtZeroVolts();
 	return rkatest::finish("test_io");
 }

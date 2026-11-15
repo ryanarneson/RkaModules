@@ -33,4 +33,5 @@
 - "Nightglow" look shared by all modules: navy panels, glowing cards,
   colour-coded outputs, white knobs, and the plugin's own small
   attenuverter trim; panels can carry glowing rings.
-- Shoal: firmware core (no module yet).
+- New module: **Shoal**, 28 HP: the Ornament & Crime v1.3.6 firmware and
+  all 13 apps in hardware mode; its settings save with the patch.

@@ -9,6 +9,7 @@
 #include "CoreTest.hpp"
 #include "testing.hpp"
 #include "test_util.hpp"
+#include "testdata/GoldenStateV1.hpp"
 
 using shoal::Core;
 using shoal::CoreTest;
@@ -200,10 +201,10 @@ void clockCopier(Core& c, const float* volts, int n) {
 }
 
 // Sequence positions and shift-register contents are not in the image. The
-// CopierMaschine only writes its outputs when clocked (a fresh core's outputs
-// are the DAC's power-on code until then, and a restored core keeps what the
-// DAC held), so the reset shows on the first clock: a fresh core shifts the
-// sample in over an empty buffer, and so must the restored one.
+// CopierMaschine only writes its outputs when clocked (until then a fresh or
+// restored core's outputs are 0 V), so the reset shows on the first clock: a
+// fresh core shifts the sample in over an empty buffer, and so must the
+// restored one.
 void testRunningStateResets() {
 	Core fresh;
 	const float one[1] = { 5.f };
@@ -346,6 +347,65 @@ void testResetSavesAFreshImage() {
 	}
 }
 
+bool allAtZeroVolts(Core& c) {
+	for (int ch = 0; ch < shoal::kNumChannels; ch++)
+		if (c.outCode(ch) != shoal::kZeroVoltCode)
+			return false;
+	return true;
+}
+
+// Outputs return to 0 V on resetToDefaults and restore, before any tick and
+// after the first, as on a new core (CopierMaschine writes only when clocked).
+void testOutputsZeroAfterResetAndRestore() {
+	for (int how = 0; how < 2; how++) {
+		const char* what = how == 0 ? "reset" : "restore";
+		Core c;
+		const float volts[4] = { 1.f, 2.f, 3.f, 4.f };
+		clockCopier(c, volts, 4);
+		CHECK(std::fabs(c.out(0) - 4.f) < 0.01f && std::fabs(c.out(3) - 1.f) < 0.01f, "%s: the copier ran: A %.3f D %.3f",
+			what, c.out(0), c.out(3));
+		std::vector<uint8_t> img(kImage);
+		c.save(img.data());
+		if (how == 0)
+			c.resetToDefaults();
+		else
+			CHECK(c.restore(img.data()), "restore");
+		CHECK(allAtZeroVolts(c), "%s: before a tick, codes %u %u %u %u", what, c.outCode(0), c.outCode(1), c.outCode(2),
+			c.outCode(3));
+		c.tick();
+		CHECK(allAtZeroVolts(c), "%s: after a tick, codes %u %u %u %u", what, c.outCode(0), c.outCode(1), c.outCode(2),
+			c.outCode(3));
+	}
+}
+
+// restore succeeds only when both the global settings page and the app data
+// page load; with either page damaged the core is a new core's defaults.
+void testRestoreNeedsBothPages() {
+	Core fresh;
+	std::vector<uint8_t> want(kImage);
+	fresh.save(want.data());
+	Core a;
+	scramble(a, 7);
+	std::vector<uint8_t> valid(kImage);
+	a.save(valid.data());
+	Core c;
+	CHECK(c.restore(valid.data()), "a good image restores");
+	for (int page = 0; page < 2; page++) {
+		const bool appData = page == 1;
+		const char* what = appData ? "app data page" : "global settings page";
+		size_t pageOff, dataOff, dataSize;
+		CoreTest::pageLayout(appData, pageOff, dataOff, dataSize);
+		std::vector<uint8_t> img = valid;
+		img[dataOff + 4] ^= 0x5a;
+		Core d;
+		CHECK(!d.restore(img.data()), "%s damaged: rejected", what);
+		CHECK(d.app() == 0, "%s damaged: app %d", what, d.app());
+		std::vector<uint8_t> got(kImage);
+		d.save(got.data());
+		CHECK(got == want, "%s damaged: saves what a fresh core saves", what);
+	}
+}
+
 // restore re-runs the firmware's start-up, which reloads the calibration
 // defaults; the core's input range (not in the image) must survive it.
 void testInputRangeSurvives() {
@@ -434,6 +494,54 @@ void testUserDataRoundTrip() {
 	// And they differ from a fresh core's, so the check is not trivial.
 	Core fresh;
 	CHECK(CoreTest::userScaleNote(fresh, 1, 3) != CoreTest::userScaleNote(b, 1, 3), "edited scale differs from default");
+}
+
+// The checked-in image an earlier build saved (testdata/GoldenStateV1.hpp)
+// still loads, with every value it holds: patches users have saved keep
+// working. Every other test saves and restores with the same binary, so
+// only this one notices a change to the firmware, the settings tables or
+// the build flags that moves the stored layout.
+void testGoldenImageV1() {
+	static_assert(sizeof(kGoldenStateV1) == (size_t) shoal::kStateBytes, "golden image size");
+	struct Saved { int channel, index; const char* name; int value; };
+	const Saved saved[] = {
+		{ 0, 0, "Scale", 12 }, { 0, 1, "Root", 7 }, { 0, 8, "Transpose", 3 }, { 0, 9, "Octave", -2 },
+		{ 1, 6, "Clock div", 4 }, { 1, 10, "Fine", -250 },
+		{ 2, 11, "LFSR length", 24 },
+	};
+	const int16_t scale0[7] = { 0, 200, 350, 500, 700, 900, 1100 };
+
+	Core c;
+	CHECK(c.restore(kGoldenStateV1), "golden image restores");
+	CHECK(c.app() == 3, "app %d (%s), expected Quantermain", c.app(), Core::appName(c.app()));
+	CHECK(std::strcmp(Core::appName(c.app()), "Quantermain") == 0, "app name %s", Core::appName(c.app()));
+	Core fresh;
+	fresh.selectApp(3);
+	for (const Saved& s : saved) {
+		CHECK(std::strcmp(c.settingInfo(s.index).name, s.name) == 0, "setting %d is '%s', expected '%s'",
+			s.index, c.settingInfo(s.index).name, s.name);
+		CHECK(c.setting(s.channel, s.index) == s.value, "ch %d '%s': %d, saved %d",
+			s.channel, s.name, c.setting(s.channel, s.index), s.value);
+		CHECK(fresh.setting(s.channel, s.index) != s.value, "ch %d '%s': saved value is a default", s.channel, s.name);
+	}
+	// Everything else on the four channels is a fresh core's.
+	for (int ch = 0; ch < c.channels(); ch++)
+		for (int i = 0; i < c.settingCount(); i++) {
+			bool changed = false;
+			for (const Saved& s : saved)
+				changed = changed || (s.channel == ch && s.index == i);
+			if (!changed)
+				CHECK(c.setting(ch, i) == fresh.setting(ch, i), "ch %d '%s': %d, default %d",
+					ch, c.settingInfo(i).name, c.setting(ch, i), fresh.setting(ch, i));
+		}
+	CHECK(CoreTest::userScaleNumNotes(c, 0) == 7, "user scale 0: %u notes", (unsigned) CoreTest::userScaleNumNotes(c, 0));
+	for (int n = 0; n < 7; n++)
+		CHECK(CoreTest::userScaleNote(c, 0, n) == scale0[n], "user scale 0 note %d: %d, saved %d",
+			n, (int) CoreTest::userScaleNote(c, 0, n), (int) scale0[n]);
+	CHECK(CoreTest::userScaleNumNotes(fresh, 0) != 7, "user scale 0's saved count is the default");
+	// It runs.
+	run(c, 0.1);
+	CHECK(allFinite(c), "outputs finite");
 }
 
 // A patch file can carry any bytes, with a correct checksum. Edit bytes of
@@ -678,6 +786,7 @@ int main() {
 	testRunningStateResets();
 	testSequencerPositionResets();
 	testUserDataRoundTrip();
+	testGoldenImageV1();
 	testForgedImage();
 	testForgedUserScale();
 	testUserScaleMaskRotates();
@@ -687,5 +796,7 @@ int main() {
 	testResetSavesAFreshImage();
 	testInputRangeSurvives();
 	testRestoreClosesAppMenu();
+	testOutputsZeroAfterResetAndRestore();
+	testRestoreNeedsBothPages();
 	return rkatest::finish("test_state");
 }

@@ -4,9 +4,12 @@
 # Used on the Shoal firmware object (build/test/shoal/Firmware.o): every
 # mutable firmware global lives in a per-instance shoal::Context, so the
 # object must not hold any writable global state. Allowed: read-only data
-# (including relocated read-only data), thread-local data, sanitizer
-# bookkeeping, and assembler-local labels (section starts and the
-# sanitizers' unnamed descriptors, which no source object can produce).
+# (including relocated read-only data), sanitizer bookkeeping,
+# assembler-local labels (section starts and the sanitizers' unnamed
+# descriptors, which no source object can produce), and exactly one
+# thread-local: the current-context pointer behind shoal::current()
+# (FirmwareContext.inc). Any other thread-local fails: per-thread state
+# would leak between the cores that share a thread.
 #
 # Usage: tools/check_shoal_globals.sh path/to/object.o
 # The object format follows `uname -s` (Darwin: Mach-O, else ELF); set
@@ -48,6 +51,11 @@ fi
 #   by relocation at load time and only read by the unwinder.
 ALLOWED='13storage_size_E$|^DW[.]ref[.]'
 
+# The one allowed thread-local, by its mangled name: the function-local
+# static `context` in shoal::current() (Mach-O adds a $tlv$init symbol for
+# its storage beside the descriptor).
+ALLOWED_TLS='^_*ZZN5shoal7currentEvE7context([$]tlv[$]init)?$'
+
 FORMAT=${SHOAL_OBJ_FORMAT:-}
 if [ -z "$FORMAT" ]; then
 	case "$(uname -s)" in
@@ -61,6 +69,7 @@ macho)
 	# Mach-O: "addr flags... SEGMENT,section name". Assembler-local
 	# labels start with "l" or "L" (C and C++ names start with "_").
 	WRITABLE='^__DATA,__(data|bss|common)$'
+	TLS='^__DATA,__thread_(vars|bss|data)$'
 	LOCAL='^(ltmp[0-9]+|l_.*|L.*)$'
 	;;
 elf)
@@ -69,6 +78,7 @@ elf)
 	# read-only after relocation (skipped below). Assembler-local labels
 	# start with ".L".
 	WRITABLE='^([.]data([.].*)?|[.]bss([.].*)?|[*]COM[*]|COMMON)$'
+	TLS='^[.]t(data|bss)([.].*)?$'
 	LOCAL='^[.]L'
 	;;
 *)
@@ -77,17 +87,25 @@ elf)
 	;;
 esac
 
-found=$("$OBJDUMP" -t "$1" | awk -v writable="$WRITABLE" -v loc="$LOCAL" -v allowed="$ALLOWED" '
+found=$("$OBJDUMP" -t "$1" | awk -v writable="$WRITABLE" -v tls="$TLS" -v loc="$LOCAL" \
+	-v allowed="$ALLOWED" -v allowed_tls="$ALLOWED_TLS" '
 	{
-		sect = ""
-		for (i = 2; i < NF; i++)
+		sect = ""; thread = 0
+		for (i = 2; i < NF; i++) {
 			if ($i ~ writable) { sect = $i; break }
+			if ($i ~ tls) { sect = $i; thread = 1; break }
+		}
 		if (sect == "" || sect ~ /^\.data\.rel\.ro/)
 			next
 		name = $NF
 		if (name == sect)                              next # ELF section symbol
-		if (name ~ /^_*(odr_asan|asan|ubsan)/)         next # sanitizer bookkeeping
 		if (name ~ loc)                                next # assembler-local labels
+		if (thread) {
+			if (name ~ allowed_tls)                    next
+			print sect "\t" name "\t(thread-local)"
+			next
+		}
+		if (name ~ /^_*(odr_asan|asan|ubsan)/)         next # sanitizer bookkeeping
 		if (name ~ allowed)                            next
 		print sect "\t" name
 	}')

@@ -27,6 +27,21 @@
         "Oscillator"
       ],
       "keywords": "drone bass ambient"
+    },
+    {
+      "slug": "Shoal",
+      "name": "Shoal",
+      "description": "The Ornament & Crime v1.3.6 firmware (Patrick Dowling, Max Stadler, Tim Churches) running on emulated hardware",
+      "tags": [
+        "Quantizer",
+        "Sequencer",
+        "Envelope generator",
+        "Low-frequency oscillator",
+        "Random",
+        "Utility",
+        "Hardware clone"
+      ],
+      "keywords": "ornament crime o_c ornaments copiermaschine"
     }
   ]
 }

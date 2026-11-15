@@ -4,6 +4,7 @@
 // Each Core owns a shoal::Context (FirmwareContext.inc) holding all firmware
 // and shim state; every Core member function that reaches firmware code makes
 // that context current with a shoal::Scope first.
+#include <cassert>
 #include <cmath>
 #include <memory>
 
@@ -100,6 +101,18 @@ struct Core::Impl {
 	Impl() {
 		Scope scope(ctx.get());
 		shoal_boot();
+		zeroOutputs();
+	}
+
+	// Outputs start at 0 V after boot, reset and restore, by the user's
+	// decision of 2026-11-15 (the Teensy powers up at code 0xffff: DAC::Init
+	// sets every channel to it). Through the firmware's own setter, so the
+	// first tick sends 0 V too; the app's next write replaces it. Call with
+	// this core's context current.
+	void zeroOutputs() {
+		OC::DAC::set_all(kZeroVoltCode);
+		for (int ch = 0; ch < kNumChannels; ch++)
+			dac[ch] = kZeroVoltCode;
 	}
 
 	// The ADC offsets for the current input range (Core::setInputRange).
@@ -113,9 +126,11 @@ struct Core::Impl {
 	// old instance's firmware state survives. What the host owns carries over:
 	// the input range, the levels on the input pins and ADC, the random
 	// sources and the clocks. Queued encoder detents and latched gate edges
-	// are dropped. Returns whether app data loaded from the image. Call
-	// outside any Scope on this core: the old context is gone afterwards.
+	// are dropped; the outputs return to 0 V. Returns whether both the global
+	// settings page and the app data page loaded from the image. Call outside
+	// any Scope on this core: the old context is gone afterwards.
 	bool reboot(const uint8_t* image) {
+		assert(current() != ctx.get());  // meant to stay on in release builds too (nothing defines NDEBUG)
 		std::unique_ptr<Context> next(new Context());
 		const hw::State& was = ctx->hw;
 		hw::State& now = next->hw;
@@ -139,9 +154,10 @@ struct Core::Impl {
 			ctx = std::move(next);
 		}
 		Scope scope(ctx.get());
-		const bool loaded = shoal_boot();
+		const OC::apps::InitResult loaded = shoal_boot();
 		applyInputRange();  // shoal_boot loaded the calibration defaults
-		return loaded;
+		zeroOutputs();
+		return loaded.global_settings_loaded && loaded.app_data_loaded;
 	}
 
 	// Present the latched inputs to the firmware for the coming tick.
@@ -361,8 +377,9 @@ bool Core::restore(const uint8_t* in) {
 	static_assert(kStateBytes == EEPROMClass::kLength, "image is the whole EEPROM");
 	if (impl_->reboot(in))
 		return true;
-	// Rejected: a new core's defaults over an erased EEPROM, so that no stale
-	// page of the rejected image can outrank what the next save writes.
+	// Rejected (either page missing or damaged): a new core's defaults over
+	// an erased EEPROM, so that no stale page of the rejected image can
+	// outrank what the next save writes.
 	impl_->reboot(nullptr);
 	return false;
 }
@@ -407,9 +424,11 @@ uint32_t CoreTest::smoothedCode(Core& c, int ch) {
 
 int CoreTest::menuSetting(Core& c) {
 	Scope scope(c.impl_->ctx.get());
-	if (c.app() != 0)
-		return -1;
-	return asr.enabled_setting_at(asr_state.cursor_pos());
+	if (c.app() == 0)
+		return asr.enabled_setting_at(asr_state.cursor_pos());
+	if (c.app() == 3)
+		return quantizer_channels[qq_state.selected_channel].enabled_setting_at(qq_state.cursor_pos());
+	return -1;
 }
 
 } // namespace shoal
@@ -471,6 +490,13 @@ void CoreTest::inputMapRun(int numSlots, int range, const int32_t* inputs, int n
 }
 
 void CoreTest::quantizerRun(const int32_t* pitches, int n, int32_t* out) {
+	int16_t notes[16];
+	for (int i = 0; i < 16; i++)
+		notes[i] = (int16_t) (96 * i);
+	quantizerRun(notes, pitches, n, out);
+}
+
+void CoreTest::quantizerRun(const int16_t* notes, const int32_t* pitches, int n, int32_t* out) {
 	braids::Quantizer q;  // zeroed, then Init, as the firmware's
 	memset(static_cast<void*>(&q), 0, sizeof(q));
 	q.Init();
@@ -478,7 +504,7 @@ void CoreTest::quantizerRun(const int32_t* pitches, int n, int32_t* out) {
 	scale.span = 1536;
 	scale.num_notes = 16;
 	for (int i = 0; i < 16; i++)
-		scale.notes[i] = (int16_t) (96 * i);
+		scale.notes[i] = notes[i];
 	q.Configure(scale, 0xffff);
 	for (int i = 0; i < n; i++)
 		out[i] = q.Process(pitches[i], 0, 0);

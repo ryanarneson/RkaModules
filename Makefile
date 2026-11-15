@@ -48,7 +48,9 @@ include tests.mk
 
 # Firmware.cpp is C++17 inside a C++11 plugin. compile.mk puts -std=c++11 in
 # CXXFLAGS and then appends $(FLAGS), so FLAGS (not CXXFLAGS) lands last.
-build/src/shoal/Firmware.cpp.o: FLAGS += $(SHOAL_FW_FLAGS)
+# -fvisibility=hidden: the firmware's names stay inside plugin.dylib (the
+# plugin's own objects still link to shoal::Core); the tests build without it.
+build/src/shoal/Firmware.cpp.o: FLAGS += $(SHOAL_FW_FLAGS) -fvisibility=hidden
 
 .PHONY: shoal-bench
 shoal-bench:

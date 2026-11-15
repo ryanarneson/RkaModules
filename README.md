@@ -6,6 +6,7 @@ VCV Rack 2 modules.
 |---|---|---|
 | [**Sway**](docs/sway/README.md) | 18 | Polyphonic LFO: classic and morphing waves, random, EOC, clock sync, phase spread, one-shot |
 | [**Fathom**](docs/fathom/README.md) | 10 | Deep bass drone voice: sub sine, 7-saw supersaw, drift, ladder filter |
+| [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware |
 
 Each module's manual is in its own folder.
 
@@ -20,6 +21,7 @@ folder per module; assets and docs sit at the top level, also per module:
 src/plugin.cpp           plugin entry point: registers every module
 src/plugin.hpp           shared includes, extern Model* per module
 src/widgets.hpp          shared knobs and lights, so modules match
+src/Detents.hpp          mouse and scroll travel to encoder detents (rka::Encoder)
 src/RkaTheme.hpp         palette accent colours for C++, generated
 src/testing.hpp          CHECK macro for the offline unit tests
 src/sway/                the Sway module
@@ -34,8 +36,11 @@ src/fathom/              the Fathom drone voice, same shape: Fathom.cpp,
                          Svf.hpp, SuperSaw.hpp, Drift.hpp, Ladder.hpp,
                          Halfband.hpp, DroneVoice.hpp, test_*.cpp,
                          FathomLayout.hpp
-src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware, headless
-  Core.hpp               shoal::Core, the only header the plugin includes
+src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
+  Shoal.cpp              module and widget, mapped onto shoal::Host
+  Host.hpp               shoal::Host: one Core driven from the audio engine
+  Core.hpp               shoal::Core, the firmware's only public header
+  PatchState.hpp         the patch data's decode rules (version, length, range)
   Firmware.cpp           the firmware, shim and core as one C++17 unit
   FirmwareContext.inc    per-instance firmware state (shoal::Context)
   SettingsAccess.inc     raw settings table for every app
@@ -43,6 +48,7 @@ src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware, headless
   CoreTest.hpp           test-only hooks into the core
   test_util.hpp          helpers shared by the Shoal tests
   test_*.cpp             offline tests, under the sanitizers
+  testdata/              GoldenStateV1.hpp: a saved state image every build must load
   firmware/              vendored firmware; local changes in CHANGES.md
   shim/                  Arduino and Teensy stand-ins
   bench/bench_core.cpp   CPU cost per app (make shoal-bench)
@@ -91,8 +97,11 @@ green). Outputs are colour-coded by accent. The palette lives in
 "dark panels" variant are the same design, the dark one dimmer. Rack can't
 blur, so glows are a faint wide stroke under a thin bright one. Use the
 widgets in `src/widgets.hpp` (`rka::BigKnob`, `rka::MidKnob`,
-`rka::SmallKnob`, `rka::Trim`, `rka::CyanMagentaLight`) rather than stock
-ones so modules match. `rka::Trim` is the plugin's own 4.6 mm
+`rka::SmallKnob`, `rka::Trim`, `rka::CyanMagentaLight`, and for Shoal
+`rka::HoldButton`, a momentary button that shift-click latches,
+`rka::Encoder`, an endless encoder turned by drag or scroll wheel, and
+`rka::PixelScreen`, a 128x64 1-bit frame drawn in one accent) rather than
+stock ones so modules match. `rka::Trim` is the plugin's own 4.6 mm
 attenuverter; `gen_panels.py` draws its SVGs into `res/components/` from
 the palette, and its `RADII` table keeps components clear of each other
 and draws ticks edge to edge.

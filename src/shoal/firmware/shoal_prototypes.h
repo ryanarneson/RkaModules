@@ -78,7 +78,7 @@ void calibration_load();
 
 // o_c_REV.ino
 extern const bool DUMMY;
-bool shoal_boot();
+OC::apps::InitResult shoal_boot(); // which storage pages loaded
 void shoal_tick();
 void shoal_main_pass();
 
