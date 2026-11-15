@@ -43,7 +43,9 @@ src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   PatchState.hpp         the patch data's decode rules (version, length, range)
   Firmware.cpp           the firmware, shim and core as one C++17 unit
   FirmwareContext.inc    per-instance firmware state (shoal::Context)
+  Friendly.hpp           friendly mode's row model and edits (FriendlyModel, FriendlyEdit)
   SettingsAccess.inc     raw settings table for every app
+  FriendlyAdapters.inc   friendly mode: one adapter per app, edits through the app's handlers
   CoreImpl.inc           shoal::Core's implementation
   CoreTest.hpp           test-only hooks into the core
   test_util.hpp          helpers shared by the Shoal tests

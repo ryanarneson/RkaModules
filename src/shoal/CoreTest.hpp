@@ -24,9 +24,16 @@ struct CoreTest {
 	// OC::ADC::smoothed_raw_value(ch): the firmware's smoothed 12-bit code.
 	static uint32_t smoothedCode(Core& c, int ch);
 	// The setting index (as in Core::setting) under the menu cursor of
-	// CopierMaschine (app 0) or of Quantermain (app 3, its selected channel);
-	// -1 for any other app.
+	// CopierMaschine (app 0), Quantermain (app 3, its selected channel),
+	// Quadraturia (app 5) or Low-rents (app 6); -1 for any other app.
 	static int menuSetting(Core& c);
+	// Hand one event straight to the current app's handler, with no debounce
+	// and no acceleration (what OC::Ui::DispatchEvents would send it): an
+	// encoder event carrying `delta` (nothing for 0), or a short or long
+	// press. The friendly-mode tests use these as "what the encoders would
+	// do". Unlike the hardware, an R or UP long press reaches the app too.
+	static void encoderEvent(Core& c, Encoder e, int delta);
+	static void buttonEvent(Core& c, Button b, bool longPress);
 	// The firmware's storage pages inside a state image: the global settings
 	// page or the app data page (page 0 of each, where a first save puts it).
 	// pageOffset: the page header; dataOffset, dataSize: the stored data.

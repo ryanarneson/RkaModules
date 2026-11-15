@@ -364,6 +364,16 @@ bool Core::setSettingRaw(int channel, int index, int value) {
 	return a->set(channel, index, value);
 }
 
+void Core::friendlyModel(FriendlyModel& out) const {
+	Scope scope(impl_->ctx.get());
+	friendly::model(out);
+}
+
+bool Core::friendlyEdit(const FriendlyEdit& e) {
+	Scope scope(impl_->ctx.get());
+	return friendly::edit(e);
+}
+
 void Core::save(uint8_t* out) {
 	Scope scope(impl_->ctx.get());
 	// The firmware's own save: each rewrites its page only if the contents
@@ -428,7 +438,25 @@ int CoreTest::menuSetting(Core& c) {
 		return asr.enabled_setting_at(asr_state.cursor_pos());
 	if (c.app() == 3)
 		return quantizer_channels[qq_state.selected_channel].enabled_setting_at(qq_state.cursor_pos());
+	if (c.app() == 5)
+		return poly_lfo_state.cursor.cursor_pos();
+	if (c.app() == 6)
+		return lorenz_generator_state.cursor.cursor_pos();
 	return -1;
+}
+
+void CoreTest::encoderEvent(Core& c, Encoder e, int delta) {
+	Scope scope(c.impl_->ctx.get());
+	if (delta)
+		OC::apps::current_app->HandleEncoderEvent(UI::Event(UI::EVENT_ENCODER,
+			e == ENCODER_L ? OC::CONTROL_ENCODER_L : OC::CONTROL_ENCODER_R, (int16_t) delta, 0));
+}
+
+void CoreTest::buttonEvent(Core& c, Button b, bool longPress) {
+	static const uint16_t kControls[] = { OC::CONTROL_BUTTON_UP, OC::CONTROL_BUTTON_DOWN, OC::CONTROL_BUTTON_L, OC::CONTROL_BUTTON_R };
+	Scope scope(c.impl_->ctx.get());
+	OC::apps::current_app->HandleButtonEvent(UI::Event(
+		longPress ? UI::EVENT_BUTTON_LONG_PRESS : UI::EVENT_BUTTON_PRESS, kControls[b & 3], 0, 0));
 }
 
 } // namespace shoal

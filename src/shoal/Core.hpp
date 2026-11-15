@@ -10,6 +10,8 @@
 // from any thread.
 #include <cstdint>
 
+#include "Friendly.hpp"
+
 namespace shoal {
 constexpr int kNumApps = 13, kNumChannels = 4;
 constexpr int kFrameW = 128, kFrameH = 64, kFrameBytes = 1024;
@@ -80,6 +82,15 @@ public:
 	SettingInfo settingInfo(int index) const;
 	int setting(int channel, int index) const;
 	bool setSettingRaw(int channel, int index, int value);
+	// Friendly mode (Friendly.hpp): the current app's settings as a list, and
+	// edits on it, carried out through the app's own encoder and button
+	// handlers. Neither allocates or locks. An edit is dropped (false) when
+	// its app is not the current one, the app menu is open, its tab does not
+	// exist, its row is not in that tab's list now, or the row does not take
+	// that type of edit. True means it was handed to the app, which may
+	// still refuse or clamp it: the next model shows the result.
+	void friendlyModel(FriendlyModel& out) const;
+	bool friendlyEdit(const FriendlyEdit& e);
 	// State.
 	void save(uint8_t* out);           // kStateBytes
 	// restore and resetToDefaults reboot the firmware as a new Core would:
