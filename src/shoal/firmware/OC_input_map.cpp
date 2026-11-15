@@ -93,11 +93,15 @@ int8_t Input_Map::Process(int32_t input) {
     }
 
     // Enlarge the current voronoi cell a bit for hysteresis.
-    previous_boundary_ = (9 * codebook_[q - 1] + 7 * codebook_[q]) >> 4;
-    next_boundary_ = (9 * codebook_[q + 1] + 7 * codebook_[q]) >> 4;
-
+    // SHOAL: q is -1 when the input is 512 or more from every code word, and
+    // the neighbours q - 1 and q + 1 run off either end of the codebook at
+    // its first and last words; upstream read the memory around the array.
+    // Clamped, the read stays inside it.
     if (q < 0) q = 0;
-    else if (q > num_slots_) q = num_slots_;
+    previous_boundary_ = (9 * codebook_[q > 0 ? q - 1 : 0] + 7 * codebook_[q]) >> 4;
+    next_boundary_ = (9 * codebook_[q < 15 ? q + 1 : 15] + 7 * codebook_[q]) >> 4;
+
+    if (q > num_slots_) q = num_slots_;
     code_index_ = _slot = q;
     update_ = false;
   }

@@ -1329,6 +1329,11 @@ const uint32_t bjorklund_patterns[] = {
 };
 
 bool EuclideanFilter(uint8_t num_steps, uint8_t num_beats, uint8_t rotation, uint32_t clock) {
+  // SHOAL: the table has rows for num_steps 1..31, and H1200's length goes up
+  // to 32 (CONSTRAIN(..., 2, 32)), which read past the table (and 0 read
+  // before it). Clamped to the rows that exist.
+  if (num_steps < 1) num_steps = 1;
+  else if (num_steps > 31) num_steps = 31;
   if (num_beats > (num_steps + 1)) {
     num_beats = num_steps + 1;
   }
@@ -1342,10 +1347,12 @@ bool EuclideanFilter(uint8_t num_steps, uint8_t num_beats, uint8_t rotation, uin
     // Serial.print("\n------\n");
   }
   uint8_t position = clock % (num_steps + 1) ;
-  return static_cast<bool>(pattern & (0x01 << position)) ;
+  return static_cast<bool>(pattern & (0x01u << (position & 31))) ; // SHOAL: position <= 31 after the clamp; unsigned shift
 }
 
 uint32_t EuclideanPattern(uint8_t num_steps, uint8_t num_beats, uint8_t rotation) {
+  if (num_steps < 1) num_steps = 1; // SHOAL: the table's rows, as in EuclideanFilter
+  else if (num_steps > 31) num_steps = 31;
   if (num_beats > (num_steps + 1)) {
     num_beats = num_steps + 1;
   }

@@ -16,7 +16,10 @@ enum DigitalInput {
   DIGITAL_INPUT_LAST
 };
 
-#define DIGITAL_INPUT_MASK(x) (0x1 << (x))
+// SHOAL: an index outside 0..31 (-1: "no input", from a trigger source of 0
+// minus one) gives an empty mask; upstream shifted by it, which the Teensy's
+// shift turns into 0.
+#define DIGITAL_INPUT_MASK(x) (static_cast<unsigned>(x) < 32u ? (0x1 << static_cast<unsigned>(x)) : 0)
 
 static constexpr uint32_t DIGITAL_INPUT_1_MASK = DIGITAL_INPUT_MASK(DIGITAL_INPUT_1);
 static constexpr uint32_t DIGITAL_INPUT_2_MASK = DIGITAL_INPUT_MASK(DIGITAL_INPUT_2);

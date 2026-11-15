@@ -33,6 +33,7 @@
 #include "peaks_bytebeat.h"
 
 #include "extern/stmlib_utils_dsp.h"
+#include <type_traits> // SHOAL: bb_div and friends
 // #include "util/stmlib_random.h"
 
 namespace peaks {
@@ -57,6 +58,36 @@ void ByteBeat::Init() {
   stepmode_ = false ;
   last_sample_ = 13 ;
 
+}
+
+// SHOAL: the equations divide and shift by values the parameters control, so
+// division by zero, INT_MIN / -1 and shifts by 32 or more are all reachable.
+// Undefined in C++ (and a crash on x86), the Teensy's results are: x / 0 = 0,
+// x % 0 = x (the remainder is x - (x / 0) * 0), and a shift by 32 or more
+// empties the register (an arithmetic right shift fills with the sign).
+// The helpers give those results; the result types are those of the
+// operators they replace.
+template <typename A, typename B>
+static inline auto bb_div(A a, B b) -> decltype(a / b) {
+  typedef decltype(a / b) R;
+  if (b == 0) return R(0);
+  if (std::is_signed<R>::value && b == -1) return R(0u - static_cast<uint32_t>(a));
+  return a / b;
+}
+
+template <typename A, typename B>
+static inline auto bb_mod(A a, B b) -> decltype(a % b) {
+  typedef decltype(a % b) R;
+  if (b == 0) return R(a);
+  if (std::is_signed<R>::value && b == -1) return R(0);
+  return a % b;
+}
+
+template <typename A, typename N>
+static inline auto bb_shr(A a, N n) -> decltype(a >> n) {
+  typedef decltype(a >> n) R;
+  if (n < 0 || n >= 32) return a < 0 ? R(-1) : R(0);
+  return a >> n;
 }
 
 uint16_t ByteBeat::ProcessSingleSample(uint8_t control) {
@@ -107,11 +138,11 @@ uint16_t ByteBeat::ProcessSingleSample(uint8_t control) {
           break;
         case 2: // life - pitch OK
           // This one is the second one listed at from http://xifeng.weebly.com/bytebeats.html
-          sample = ((( ((((((t_*pitch) >> p0) | (t_*pitch)) | ((t_*pitch) >> p0)) * p2) & ((5 * (t_*pitch)) | ((t_*pitch) >> p2)) ) | ((t_*pitch) ^ (t_ % p1)) ) & 0xFF));
+          sample = ((( ((((bb_shr(t_*pitch, p0) | (t_*pitch)) | bb_shr(t_*pitch, p0)) * p2) & ((5 * (t_*pitch)) | bb_shr(t_*pitch, p2)) ) | ((t_*pitch) ^ bb_mod(t_, p1)) ) & 0xFF));
           break;
        case 3:// age - pitch disabled
           // Arp rotator (equation 9 from Equation Composer Ptah bank)
-          sample = (((t_)>>(p2>>4))&((t_)<<3)/((t_)*p1*((t_)>>11)%(3+(((t_)>>(16-(p0>>4)))%22))));
+          sample = (((t_)>>(p2>>4))&bb_div((t_)<<3, ((t_)*p1*((t_)>>11)%(3+(((t_)>>(16-(p0>>4)))%22)))));
           break ;
         case 4: // clysm - pitch almost no effect
           //  BitWiz Transplant via Equation Composer Ptah bank 
@@ -119,11 +150,11 @@ uint16_t ByteBeat::ProcessSingleSample(uint8_t control) {
           break ;
         case 5: // monk - pitch OK
           // Vocaliser from Equation Composer Khepri bank         
-          sample = (((t_*pitch)%p0>>2)&p1)*(t_>>(p2>>5));
+          sample = ((bb_mod(t_*pitch, p0)>>2)&p1)*(t_>>(p2>>5));
           break;
         case 6: // NERV - horrible!
           // Chewie from Equation Composer Khepri bank         
-          sample = (p0-(((p2+1)/(t_*pitch))^p0|(t_*pitch)^922+p0))*(p2+1)/p0*(((t_*pitch)+p1)>>p1%19);
+          sample = bb_div((p0-((bb_div(p2+1, t_*pitch))^p0|(t_*pitch)^922+p0))*(p2+1), p0)*(((t_*pitch)+p1)>>p1%19);
           break;
         case 7: // Trurl - pitch OK
           // Tinbot from Equation Composer Sobek bank   
@@ -131,21 +162,21 @@ uint16_t ByteBeat::ProcessSingleSample(uint8_t control) {
           break;
         case 8: // Pirx  - pitch OK
           // My Loud Friend from Equation Composer Ptah bank   
-          sample = ((((t_*pitch)>>((p0>>12)%12))%(t_>>((p1%12)+1))-(t_>>((t_>>(p2%10))%12)))/((t_>>((p0>>2)%15))%15))<<4;
+          sample = (bb_div(bb_mod((t_*pitch)>>((p0>>12)%12), t_>>((p1%12)+1))-(t_>>((t_>>(p2%10))%12)), (t_>>((p0>>2)%15))%15))<<4;
           break;
         case 9: //Snaut
           // GGT2 from Equation Composer Ptah bank
           // sample = ((p0|(t_>>(t_>>13)%14))*((t_>>(p0%12))-p1&249))>>((t_>>13)%6)>>((p2>>4)%12);
           // "A bit high-frequency, but keeper anyhow" from Equation Composer Khepri bank.
-          sample = ((t_*pitch)+last_sample_+p1/p0)%(p0|(t_*pitch)+p2);
+          sample = bb_mod((t_*pitch)+last_sample_+bb_div(p1, p0), p0|(t_*pitch)+p2);
            break;
         case 10: // Hari
           // The Signs, from Equation Composer Ptah bank
-          sample = ((0&(251&((t_*pitch)/(100+p0))))|((last_sample_/(t_*pitch)|((t_*pitch)/(100*(p1+1))))*((t_*pitch)|p2)));
+          sample = ((0&(251&((t_*pitch)/(100+p0))))|((bb_div(last_sample_, t_*pitch)|((t_*pitch)/(100*(p1+1))))*((t_*pitch)|p2)));
           break;
         case 11: // Kris - pitch OK
          // Light Reactor from Equation Composer Ptah bank
-          sample = (((t_*pitch)>>3)*(p0-643|(325%t_|p1)&t_)-((t_>>6)*35/p2%t_))>>6;
+          sample = (((t_*pitch)>>3)*(p0-643|(bb_mod(325, t_)|p1)&t_)-(bb_mod(bb_div((t_>>6)*35, p2), t_)))>>6;
           break;
         case 12: // Tichy
           sample = (t_*pitch_)>>7 & t_>>7 | t_>>8;
@@ -154,11 +185,11 @@ uint16_t ByteBeat::ProcessSingleSample(uint8_t control) {
           break;
         case 13: // Bregg - pitch OK
           // Hooks, from Equation Composer Khepri bank.
-          sample = ((t_*pitch)&(p0+2))-(t_/p1)/last_sample_/p2;
+          sample = ((t_*pitch)&(p0+2))-bb_div(bb_div(bb_div(t_, p1), last_sample_), p2);
           break;            
         case 14: // Avon - pitch OK
           // Widerange from Equation Composer Khepri bank
-          sample = (((p0^((t_*pitch)>>(p1>>3)))-(t_>>(p2>>2))-t_%(t_&p1)));
+          sample = (((p0^((t_*pitch)>>(p1>>3)))-bb_shr(t_, p2>>2)-bb_mod(t_, t_&p1)));
           break;        
         case 15: // Orac
           // Abducted, from Equation Composer Ptah bank

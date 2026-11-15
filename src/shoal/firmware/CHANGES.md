@@ -179,3 +179,43 @@ is marked `// SHOAL:`.
   aligns the data to 8, padding follows the 12-byte header, and the upstream
   length read the checksum four bytes past the page (an out-of-bounds read of
   whatever follows, which made `Load` reject valid pages at random).
+
+- `OC_input_map.cpp` (`Input_Map::Process`): `q` is -1 when the input is 512
+  or more from every code word, and `codebook_[q - 1]` / `codebook_[q + 1]`
+  ran off either end of the 16-entry array (index -2, -1 and 16; reachable
+  from in-range settings, e.g. Sequins or Acid Curds on a CV input). The
+  neighbour indices are clamped to 0..15.
+- `OC_apps.ino` (`sanitize_global_settings`, new, called after a good global
+  settings load): user scales, patterns and chords, the DAC scaling bytes
+  are brought into the ranges their editors allow, since a patch file can
+  carry any bytes with a valid checksum.
+- `OC_apps.ino` (`restore_app_data`): `used` is clamped to the data size; the
+  walk stops when less than a chunk header remains or a chunk is shorter than
+  its header (a zero length looped forever); the "app not found" message no
+  longer dereferences the null app.
+- `util/util_turing.h` (`TuringShiftRegister::Clock`): `0xffffffff << length_`
+  with `length_` 32 (in range for every app that uses it) shifts by the type's
+  width, which is undefined; it now returns the whole register, as the
+  Teensy's shift does.
+- `bjorklund.cpp` (`EuclideanFilter`): `num_steps` is clamped to 1..31, the
+  rows the pattern table has; H1200's Euclidean length reaches 32 (in range),
+  which read past the 1023-entry table.
+- `OC_input_maps.h` (`InputMaps::GetInputMap`): the index is clamped to the
+  18 rows of the table; Sequins passes its sequence length (up to 32), which
+  read past the table. Row 17 is the empty map.
+- `OC_menus.h` (`menu::DrawChord`), `APP_CHORDS.ino` (the chord lookup in
+  `Chords::Update`): the chord slot is clamped to the 32-entry user chord
+  table, as `OC::Chords::GetChord` already does; the screensaver and the
+  update counted slots past it.
+- `peaks_bytebeat.cpp` (`ByteBeat::ProcessSingleSample`, equations 2, 3, 5, 6,
+  8, 9, 10, 11, 13, 14): divisions, remainders and variable shifts go through
+  `bb_div`, `bb_mod`, `bb_shr`, which give the Teensy's results where C++ is
+  undefined (division by zero is a crash on x86; x/0 = 0, x%0 = x, a shift by
+  32 or more empties the register). All are reachable from in-range
+  parameters (p0..p2, the pitch, the last sample).
+- `OC_digital_inputs.h` (`DIGITAL_INPUT_MASK`): an index outside 0..31 gives an
+  empty mask (Acid Curds, Sequins etc. compute `trigger_source - 1` with
+  source 0 = "none", i.e. a shift by -1).
+- `bjorklund.h` (`rotl32`), `bjorklund.cpp` (`EuclideanPattern`): shifts by 32
+  or more guarded (a length of 31 with no rotation shifted by 32); the
+  `num_steps` clamp of `EuclideanFilter` applies here too.

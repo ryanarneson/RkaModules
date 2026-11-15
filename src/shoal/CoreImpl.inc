@@ -403,6 +403,73 @@ int CoreTest::menuSetting(Core& c) {
 
 } // namespace shoal
 
+namespace {
+// Reaches the page layout and checksum that PageStorage keeps protected.
+template <typename Storage, typename Data>
+struct PageProbe : Storage {
+	using Page = typename Storage::page_data;
+	static size_t dataOffset() { return offsetof(Page, data); }
+	static size_t dataSize() { return sizeof(Data); }
+	static void fix(uint8_t* page) {
+		Page p;
+		memcpy(&p, page, sizeof(p));
+		p.header.checksum = Storage::checksum(p);
+		memcpy(page, &p, sizeof(p));
+	}
+};
+} // namespace
+
+namespace shoal {
+
+void CoreTest::pageLayout(bool appData, size_t& pageOffset, size_t& dataOffset, size_t& dataSize) {
+	if (appData) {
+		using P = PageProbe<OC::AppDataStorage, OC::AppData>;
+		pageOffset = EEPROM_APPDATA_START;
+		dataOffset = pageOffset + P::dataOffset();
+		dataSize = P::dataSize();
+	} else {
+		using P = PageProbe<OC::GlobalSettingsStorage, OC::GlobalSettings>;
+		pageOffset = EEPROM_GLOBALSETTINGS_START;
+		dataOffset = pageOffset + P::dataOffset();
+		dataSize = P::dataSize();
+	}
+}
+
+void CoreTest::fixChecksum(uint8_t* image, bool appData) {
+	if (appData)
+		PageProbe<OC::AppDataStorage, OC::AppData>::fix(image + EEPROM_APPDATA_START);
+	else
+		PageProbe<OC::GlobalSettingsStorage, OC::GlobalSettings>::fix(image + EEPROM_GLOBALSETTINGS_START);
+}
+
+int CoreTest::userScaleSlots() { return OC::Scales::SCALE_USER_LAST; }
+int CoreTest::userPatternSlots() { return OC::Patterns::PATTERN_USER_ALL; }
+int CoreTest::userChordSlots() { return OC::Chords::CHORDS_USER_LAST; }
+
+int16_t& CoreTest::userScaleNote(Core& c, int slot, int note) {
+	Scope scope(c.impl_->ctx.get());
+	return OC::g_user_scales[slot].notes[note];
+}
+
+uint32_t& CoreTest::userScaleNumNotes(Core& c, int slot) {
+	Scope scope(c.impl_->ctx.get());
+	return OC::g_user_scales[slot].num_notes;
+}
+
+int16_t& CoreTest::userPatternNote(Core& c, int slot, int note) {
+	Scope scope(c.impl_->ctx.get());
+	return OC::g_user_patterns[slot].notes[note];
+}
+
+int8_t& CoreTest::userChordField(Core& c, int slot, int field) {
+	Scope scope(c.impl_->ctx.get());
+	OC::Chord& ch = OC::g_user_chords[slot];
+	int8_t* fields[5] = { &ch.quality, &ch.inversion, &ch.voicing, &ch.base_note, &ch.octave };
+	return *fields[field];
+}
+
+} // namespace shoal
+
 bool shoal_test_current_is_null() {
 	return shoal::current() == nullptr;
 }

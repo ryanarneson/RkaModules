@@ -44,8 +44,10 @@
 
 inline uint32_t rotl32(uint32_t input, unsigned int length, unsigned int count) __attribute__((always_inline));
 inline uint32_t rotl32(uint32_t input, unsigned int length, unsigned int count) {
-  input &= ~(0xffffffff << length);
-  return (input << count) | (input >> (length - count + 1)); // off-by-ones or parenthesis mismatch likely
+  // SHOAL: shifts by 32 or more are undefined; the Teensy's give 0.
+  if (length < 32) input &= ~(0xffffffff << length);
+  const unsigned int right = length - count + 1;
+  return (count < 32 ? input << count : 0) | (right < 32 ? input >> right : 0); // off-by-ones or parenthesis mismatch likely
 }
 
 bool EuclideanFilter(uint8_t num_steps, uint8_t num_beats, uint8_t rotation, uint32_t clock);

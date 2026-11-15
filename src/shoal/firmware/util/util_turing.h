@@ -60,7 +60,9 @@ public:
 
     shift_register_ = shift_register;
 
-    return shift_register & ~(0xffffffff << length_);
+    // SHOAL: a length of 32 (in range) shifted by the full width: undefined in
+    // C++; the Teensy's shift gives 0, so the whole register.
+    return length_ >= 32 ? shift_register : shift_register & ~(0xffffffff << length_);
   }
 
   void set_length(uint8_t length) {

@@ -167,7 +167,12 @@ inline void DrawEditIcon(weegfx::coord_t x, weegfx::coord_t y, int value, const 
 
 inline void DrawChord(weegfx::coord_t x, weegfx::coord_t y, int width, int value, int mem_offset) {
   
-   OC::Chord *active_chord = &OC::g_user_chords[value + mem_offset * OC::Chords::NUM_CHORDS]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
+   // SHOAL: g_ prefix (name clashes with GlobalSettings members). The slot is
+   // clamped to the table: the screensaver counts slots up to the displayed
+   // chord count, which upstream trusted (as OC::Chords::GetChord does not).
+   int chord_slot = value + mem_offset * OC::Chords::NUM_CHORDS;
+   if (chord_slot < 0 || chord_slot >= OC::Chords::CHORDS_USER_LAST) chord_slot = 0;
+   OC::Chord *active_chord = &OC::g_user_chords[chord_slot];
    int8_t _quality = active_chord->quality;
    int8_t _voicing = active_chord->voicing;
    int y_pos;

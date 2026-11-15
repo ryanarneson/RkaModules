@@ -54,7 +54,9 @@ namespace OC {
   class InputMaps {
   public:
     static const Map &GetInputMap(int index) { 
-      return input_maps[index]; 
+      // SHOAL: Sequins passes its sequence length (up to 32) and the table
+      // has 18 rows (17 is the empty one); upstream read past the table.
+      return input_maps[index < 0 ? 0 : (index > 17 ? 17 : index)];
     }
   };
 }

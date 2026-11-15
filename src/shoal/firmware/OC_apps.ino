@@ -123,6 +123,48 @@ SHOAL_STATE(AppDataStorage, app_data_storage) // SHOAL: per-instance state (shoa
 static constexpr int DEFAULT_APP_INDEX = 0;
 static const uint16_t DEFAULT_APP_ID = available_apps[DEFAULT_APP_INDEX].id;
 
+// SHOAL: the loaded global settings come from a patch file, so any bytes with
+// a valid checksum can arrive; the firmware trusted them (it wrote them
+// itself). Every field is brought into the range its editor allows, so no
+// later index or loop can leave its array. Valid data is unchanged.
+static int clamp_int(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+static void sanitize_global_settings() {
+  // The bool fields read as 0 or 1 only (any other byte is undefined to read).
+  for (bool *flag : { &global_settings.encoders_enable_acceleration, &global_settings.reserved0, &global_settings.reserved1 }) {
+    unsigned char *byte = reinterpret_cast<unsigned char *>(flag);
+    *byte = *byte != 0;
+  }
+  for (auto &scale : global_settings.user_scales) {
+    if (scale.span < 1)
+      scale.span = 1;
+    if (scale.num_notes > (uint32_t) kMaxScaleLength)
+      scale.num_notes = kMaxScaleLength;
+    for (auto &note : scale.notes) // the scale editor keeps 0 <= note <= span
+      note = note < 0 ? 0 : (note > scale.span ? scale.span : note);
+  }
+  for (auto &pattern : global_settings.user_patterns) // OC_sequence_edit.h:303,305
+    for (auto &note : pattern.notes)
+      note = note < -3 * (12 << 7) ? -3 * (12 << 7) : (note > 8 * (12 << 7) ? 8 * (12 << 7) : note);
+  for (auto &chord : global_settings.user_chords) { // OC_chords_edit.h:296-326
+    chord.quality = (int8_t) clamp_int(chord.quality, 0, Chords::CHORDS_QUALITY_LAST - 1);
+    chord.inversion = (int8_t) clamp_int(chord.inversion, 0, Chords::CHORDS_INVERSION_LAST - 1);
+    chord.voicing = (int8_t) clamp_int(chord.voicing, 0, Chords::CHORDS_VOICING_LAST - 1);
+    chord.base_note = (int8_t) clamp_int(chord.base_note, 0, kMaxScaleLength);
+    chord.octave = (int8_t) clamp_int(chord.octave, -4, 4);
+  }
+  uint32_t scaling = 0; // OC_scale_edit.h:451
+  for (int i = 0; i < DAC_CHANNEL_LAST; i++) {
+    uint32_t v = (global_settings.DAC_scaling >> (i * 8)) & 0xff;
+    scaling |= (v < VOLTAGE_SCALING_LAST ? v : 0) << (i * 8);
+  }
+  global_settings.DAC_scaling = scaling;
+  // current_app_id: apps::Init falls back to the default for an unknown id.
+  // auto_calibration_data: any use flag but 0 and 0xFF means "default
+  // calibration" (DAC::choose_calibration_data), and the octave values are
+  // plain DAC codes that every use clamps.
+}
+
 void save_global_settings() {
   SERIAL_PRINTLN("Save global settings");
 
@@ -179,12 +221,18 @@ void save_app_data() {
 void restore_app_data() {
   SERIAL_PRINTLN("Restoring app data from page_index %d, used=%u", app_data_storage.page_index(), app_settings.used);
 
+  // SHOAL: `used` and the chunk lengths come from a patch file: keep the walk
+  // inside the data, and always advance.
+  if (app_settings.used > AppData::kAppDataSize)
+    app_settings.used = AppData::kAppDataSize;
   const char *data = app_settings.data;
   const char *data_end = data + app_settings.used;
   size_t restored_bytes = 0;
 
-  while (data < data_end) {
+  while (data + sizeof(AppChunkHeader) <= data_end) { // SHOAL: was data < data_end
     const AppChunkHeader *chunk = reinterpret_cast<const AppChunkHeader *>(data);
+    if (chunk->length < sizeof(AppChunkHeader)) // SHOAL: a zero length never advanced
+      break;
     if (data + chunk->length > data_end) {
       SERIAL_PRINTLN("App chunk length %u exceeds available space (%u)", chunk->length, data_end - data);
       break;
@@ -192,9 +240,7 @@ void restore_app_data() {
 
     const App *app = apps::find(chunk->id); // SHOAL: const (available_apps is a read-only table)
     if (!app) {
-      SERIAL_PRINTLN("App %02x not found, ignoring chunk...", app->id);
-      if (!chunk->length)
-        break;
+      SERIAL_PRINTLN("App %02x not found, ignoring chunk...", chunk->id); // SHOAL: app is null here
       data += chunk->length;
       continue;
     }
@@ -293,6 +339,7 @@ bool Init(bool reset_settings) {
     } else {
       SERIAL_PRINTLN("Loaded settings from page_index %d, current_app_id is %02x",
                     global_settings_storage.page_index(),global_settings.current_app_id);
+      sanitize_global_settings(); // SHOAL
       memcpy(g_user_scales, global_settings.user_scales, sizeof(g_user_scales)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
       memcpy(g_user_patterns, global_settings.user_patterns, sizeof(g_user_patterns)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
       memcpy(g_user_chords, global_settings.user_chords, sizeof(g_user_chords)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)

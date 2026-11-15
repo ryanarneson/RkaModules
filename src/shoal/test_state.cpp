@@ -153,11 +153,15 @@ void testCorruptImage() {
 
 	Core c;
 	std::vector<uint8_t> img(kImage);
+	const std::vector<int> validSettings = snapshot(a);
 	auto attempt = [&](const char* what, int n) {
 		const bool ok = c.restore(img.data());
 		run(c, 0.5);
 		CHECK(allFinite(c), "%s %d: outputs finite", what, n);
 		checkDefaultsOrRestored(c, ok, freshSettings, what, n);
+		// A flip the checksum does not cover leaves the saved settings intact.
+		if (ok && img != valid)
+			CHECK(snapshot(c) == validSettings, "%s %d: accepted, but the settings differ from the valid image's", what, n);
 		return ok;
 	};
 	std::fill(img.begin(), img.end(), 0);
@@ -219,6 +223,45 @@ void testRunningStateResets() {
 	clockCopier(c, one, 1);
 	for (int ch = 0; ch < 4; ch++)
 		CHECK(std::fabs(c.out(ch) - want[ch]) < 1e-3f, "out %d: %.4f, fresh core %.4f", ch, c.out(ch), want[ch]);
+}
+
+// Sequins (app 8): the step position is running state too. After several
+// clocks, save and restore, one clock plays what a fresh core given the same
+// image plays on its first clock.
+void testSequencerPositionResets() {
+	Core a;
+	a.selectApp(8);
+	// Distinct notes, so every step plays something else.
+	for (int slot = 0; slot < CoreTest::userPatternSlots(); slot++)
+		for (int n = 0; n < 16; n++)
+			CoreTest::userPatternNote(a, slot, n) = (int16_t) (n * 128);
+	std::vector<uint8_t> img(kImage);
+	a.save(img.data());
+
+	auto clockOnce = [](Core& c) {
+		c.setCv(0, 0.f);
+		run(c, 0.05);
+		pulse(c, 0);
+		run(c, 0.01);
+	};
+	Core ref;
+	CHECK(ref.restore(img.data()) && ref.app() == 8, "reference restore");
+	clockOnce(ref);
+
+	Core c;
+	CHECK(c.restore(img.data()), "restore");
+	bool differed = false;
+	for (int k = 1; k <= 6; k++) {
+		clockOnce(c);
+		for (int ch = 0; ch < 4; ch++)
+			differed = differed || std::fabs(c.out(ch) - ref.out(ch)) > 1e-3f;
+	}
+	CHECK(differed, "the sequence moved (so the comparison can tell)");
+	c.save(img.data());
+	CHECK(c.restore(img.data()), "restore after running");
+	clockOnce(c);
+	for (int ch = 0; ch < 4; ch++)
+		CHECK(std::fabs(c.out(ch) - ref.out(ch)) < 1e-3f, "out %d: %.4f, fresh core %.4f", ch, c.out(ch), ref.out(ch));
 }
 
 void testResetToDefaults() {
@@ -290,6 +333,98 @@ void testRestoreClosesAppMenu() {
 	}
 }
 
+// User scales, patterns and chords live outside the apps' settings (in the
+// global settings page); each survives a save and restore.
+void testUserDataRoundTrip() {
+	Core a;
+	const int ns = CoreTest::userScaleSlots(), np = CoreTest::userPatternSlots(), nc = CoreTest::userChordSlots();
+	for (int slot = 0; slot < ns; slot++) {
+		CoreTest::userScaleNumNotes(a, slot) = 5 + slot;
+		for (int n = 0; n < 16; n++)
+			CoreTest::userScaleNote(a, slot, n) = (int16_t) (100 * slot + 7 * n);
+	}
+	for (int slot = 0; slot < np; slot++)
+		for (int n = 0; n < 16; n++)
+			CoreTest::userPatternNote(a, slot, n) = (int16_t) (-300 + 50 * slot + 13 * n);
+	for (int slot = 0; slot < nc; slot++) {
+		const int8_t v[5] = { (int8_t) (slot % 9), (int8_t) (slot % 4), (int8_t) (slot % 5), (int8_t) (slot % 8), (int8_t) (slot % 9 - 4) };
+		for (int f = 0; f < 5; f++)
+			CoreTest::userChordField(a, slot, f) = v[f];
+	}
+	std::vector<uint8_t> img(kImage);
+	a.save(img.data());
+	Core b;
+	CHECK(b.restore(img.data()), "restore");
+	for (int slot = 0; slot < ns; slot++) {
+		CHECK(CoreTest::userScaleNumNotes(b, slot) == (uint32_t) (5 + slot), "scale %d: %u notes", slot, (unsigned) CoreTest::userScaleNumNotes(b, slot));
+		for (int n = 0; n < 16; n++)
+			CHECK(CoreTest::userScaleNote(b, slot, n) == CoreTest::userScaleNote(a, slot, n), "scale %d note %d", slot, n);
+	}
+	for (int slot = 0; slot < np; slot++)
+		for (int n = 0; n < 16; n++)
+			CHECK(CoreTest::userPatternNote(b, slot, n) == CoreTest::userPatternNote(a, slot, n), "pattern %d note %d", slot, n);
+	for (int slot = 0; slot < nc; slot++)
+		for (int f = 0; f < 5; f++)
+			CHECK(CoreTest::userChordField(b, slot, f) == CoreTest::userChordField(a, slot, f), "chord %d field %d", slot, f);
+	// And they differ from a fresh core's, so the check is not trivial.
+	Core fresh;
+	CHECK(CoreTest::userScaleNote(fresh, 1, 3) != CoreTest::userScaleNote(b, 1, 3), "edited scale differs from default");
+}
+
+// A patch file can carry any bytes, with a correct checksum. Edit bytes of
+// the app data page, and (separately) of the global settings page, fix the
+// checksum with the firmware's own, restore, and run every app on random
+// inputs; every setting must stay inside its table range and nothing may
+// fault (the sanitizers watch).
+void testForgedImage() {
+	Core a;
+	scramble(a, 7);
+	std::vector<uint8_t> valid(kImage);
+	a.save(valid.data());
+	const int kPerPage = 500;
+	Lcg g;
+	g.state = 4242;
+	Core c;
+	int accepted[2] = {};
+	for (int page = 0; page < 2; page++) {
+		const bool appData = page == 0;
+		size_t pageOff, dataOff, dataSize;
+		CoreTest::pageLayout(appData, pageOff, dataOff, dataSize);
+		for (int n = 0; n < kPerPage; n++) {
+			std::vector<uint8_t> img = valid;
+			// 1..30 edits; every third image gets 300 (mostly garbage).
+			const int edits = n % 3 == 2 ? 300 : 1 + (int) (g.next() >> 8) % 30;
+			for (int j = 0; j < edits; j++)
+				img[dataOff + (g.next() >> 8) % dataSize] = (uint8_t) (g.next() >> 24);
+			CoreTest::fixChecksum(img.data(), appData);
+			if (c.restore(img.data()))
+				accepted[page]++;
+			for (int app = 0; app < shoal::kNumApps; app++) {
+				c.selectApp(app);
+				for (int ch = 0; ch < 4; ch++) {
+					c.setCv(ch, g.volts(-4.f, 7.f));
+					c.setGate(ch, (g.next() >> 8) & 1 ? 10.f : 0.f);
+				}
+				run(c, 0.05);
+				uint8_t frame[shoal::kFrameBytes];
+				c.drawMenu(frame);
+				c.drawScope(frame);
+				CHECK(allFinite(c), "%s forged %d, app %d: outputs finite", appData ? "app data" : "global", n, app);
+				for (int ch = 0; ch < c.channels(); ch++)
+					for (int i = 0; i < c.settingCount(); i++) {
+						const shoal::SettingInfo si = c.settingInfo(i);
+						const int v = c.setting(ch, i);
+						CHECK(v >= si.min && v <= si.max, "%s forged %d, app %d ch %d '%s': %d outside [%d, %d]",
+							appData ? "app data" : "global", n, app, ch, si.name, v, si.min, si.max);
+					}
+			}
+		}
+	}
+	// The forged pages must mostly load, or the test proves nothing.
+	CHECK(accepted[0] == kPerPage && accepted[1] == kPerPage, "forged images accepted: app data %d, global %d of %d",
+		accepted[0], accepted[1], kPerPage);
+}
+
 } // namespace
 
 int main() {
@@ -298,6 +433,9 @@ int main() {
 	testFreshCoreSaves();
 	testCorruptImage();
 	testRunningStateResets();
+	testSequencerPositionResets();
+	testUserDataRoundTrip();
+	testForgedImage();
 	testResetToDefaults();
 	testInputRangeSurvives();
 	testRestoreClosesAppMenu();

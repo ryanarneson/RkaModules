@@ -732,7 +732,11 @@ public:
 
       display_num_chords_ = num_chords;
       // active chord:
-      OC::Chord *active_chord = &OC::g_user_chords[active_chord_ + num_progression * OC::Chords::NUM_CHORDS]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
+      // SHOAL: g_ prefix (name clashes with GlobalSettings members); the slot
+      // is clamped to the table, as OC::Chords::GetChord does.
+      int chord_slot = active_chord_ + num_progression * OC::Chords::NUM_CHORDS;
+      if (chord_slot < 0 || chord_slot >= OC::Chords::CHORDS_USER_LAST) chord_slot = 0;
+      OC::Chord *active_chord = &OC::g_user_chords[chord_slot];
       
       int8_t _base_note = active_chord->base_note;
       int8_t _octave = active_chord->octave;

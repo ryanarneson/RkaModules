@@ -1,6 +1,7 @@
 #pragma once
 // Test-only hooks into shoal::Core, defined in Firmware.cpp (CoreImpl.inc).
 // Only the tests include this header.
+#include <cstddef>
 #include <cstdint>
 
 #include "Core.hpp"
@@ -25,5 +26,21 @@ struct CoreTest {
 	// The setting index (as in Core::setting) under the menu cursor of
 	// CopierMaschine (app 0); -1 for any other app.
 	static int menuSetting(Core& c);
+	// The firmware's storage pages inside a state image: the global settings
+	// page or the app data page (page 0 of each, where a first save puts it).
+	// pageOffset: the page header; dataOffset, dataSize: the stored data.
+	static void pageLayout(bool appData, size_t& pageOffset, size_t& dataOffset, size_t& dataSize);
+	// Recompute, with the firmware's own checksum, the checksum in the
+	// header of that page of `image` (so edited data still loads).
+	static void fixChecksum(uint8_t* image, bool appData);
+	// User data the firmware keeps outside the apps' settings (slot indices
+	// as the firmware's: 4 user scales, 4 patterns, 8 x 4 chords).
+	static int userScaleSlots();
+	static int userPatternSlots();
+	static int userChordSlots();
+	static int16_t& userScaleNote(Core& c, int slot, int note);   // 16 notes
+	static uint32_t& userScaleNumNotes(Core& c, int slot);
+	static int16_t& userPatternNote(Core& c, int slot, int note); // 16 notes
+	static int8_t& userChordField(Core& c, int slot, int field);  // 0..4: quality, inversion, voicing, base note, octave
 };
 }
