@@ -1,5 +1,6 @@
 #include "plugin.hpp"
 #include "Rate.hpp"
+#include "RateLight.hpp"
 #include "Shaper.hpp"
 #include "Voice.hpp"
 #include "Waves.hpp"
@@ -51,6 +52,7 @@ struct Sway : Module {
 	};
 	enum LightId {
 		ONESHOT_LIGHT,
+		RATE_LIGHT,
 		LIGHTS_LEN
 	};
 
@@ -68,6 +70,7 @@ struct Sway : Module {
 	dsp::PulseGenerator eocPulses[PORT_MAX_CHANNELS];
 	bool wasOneShot = false;
 	bool wasClockConnected = false;
+	rka::RateLight rateLight;
 
 	// RATE's tooltip follows the range and the clock.
 	struct RateQuantity : ParamQuantity {
@@ -133,6 +136,7 @@ struct Sway : Module {
 		configOutput(RAND_OUTPUT, "Random (stepped; SMOOTH left glides)");
 		configOutput(EOC_OUTPUT, "End of cycle trigger");
 		configLight(ONESHOT_LIGHT, "One-shot");
+		configLight(RATE_LIGHT, "Rate (channel 1)");
 	}
 
 	void onReset() override {
@@ -204,6 +208,13 @@ struct Sway : Module {
 		bank.tick(voiceInputs, clockConnected, oneShot, args.sampleTime, args.sampleRate);
 		clocked = clockConnected && bank.voices[0].clock.locked();
 
+		// The rate light follows channel 1 at the rate it really runs, free
+		// or clocked; held, or a finished one-shot, it has stopped.
+		const rka::Voice& first = bank.voices[0];
+		const bool stopped = voiceInputs[0].hold || first.phasor.parked;
+		lights[RATE_LIGHT].setBrightnessSmooth(rateLight.process(first.phasor.phase, stopped ? 0.0 : first.freq),
+			args.sampleTime);
+
 		for (int c = 0; c < channels; c++) {
 			const rka::Voice& voice = bank.voices[c];
 			const float phaseOffset = modulated(PHASE_PARAM, PHASE_INPUT, PHASE_ATT_PARAM, c);
@@ -243,42 +254,45 @@ struct SwayWidget : ModuleWidget {
 		addChild(createWidget<ThemedScrew>(Vec(RACK_GRID_WIDTH, 0)));
 		addChild(createWidget<ThemedScrew>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
 
-		addParam(createParamCentered<rka::BigKnob>(mm2px(PARAM_RATE), module, Sway::RATE_PARAM));
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_SPREAD), module, Sway::SPREAD_PARAM));
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_CHANNELS), module, Sway::CHANNELS_PARAM));
-		addParam(createParamCentered<CKSS>(mm2px(PARAM_OFFSET), module, Sway::OFFSET_PARAM));
-		addParam(createLightParamCentered<rka::AmberLatch>(mm2px(PARAM_ONESHOT), module, Sway::ONESHOT_PARAM, Sway::ONESHOT_LIGHT));
+		addParam(createParamCentered<rka::HeroKnob>(mm2px(PARAM_RATE), module, Sway::RATE_PARAM));
+		addChild(createLightCentered<rka::JewelLight>(mm2px(LIGHT_RATE), module, Sway::RATE_LIGHT));
+		addParam(createParamCentered<rka::FaceKnob>(mm2px(PARAM_SPREAD), module, Sway::SPREAD_PARAM));
+		addParam(createParamCentered<rka::FaceKnob>(mm2px(PARAM_CHANNELS), module, Sway::CHANNELS_PARAM));
 
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_CLOCK), module, Sway::CLOCK_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_RESET), module, Sway::RESET_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_HOLD), module, Sway::HOLD_INPUT));
+		// Modulation columns: knob on the limb, attenuverter, CV input. FM's
+		// knob is RATE.
+		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_PW), module, Sway::PW_PARAM));
+		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_PHASE), module, Sway::PHASE_PARAM));
+		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_SKEW), module, Sway::SKEW_PARAM));
+		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_SMOOTH), module, Sway::SMOOTH_PARAM));
+		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_MORPH), module, Sway::MORPH_PARAM));
+		addParam(createParamCentered<rka::Atten>(mm2px(PARAM_FM_ATT), module, Sway::FM_ATT_PARAM));
+		addParam(createParamCentered<rka::Atten>(mm2px(PARAM_PW_ATT), module, Sway::PW_ATT_PARAM));
+		addParam(createParamCentered<rka::Atten>(mm2px(PARAM_PHASE_ATT), module, Sway::PHASE_ATT_PARAM));
+		addParam(createParamCentered<rka::Atten>(mm2px(PARAM_SKEW_ATT), module, Sway::SKEW_ATT_PARAM));
+		addParam(createParamCentered<rka::Atten>(mm2px(PARAM_SMOOTH_ATT), module, Sway::SMOOTH_ATT_PARAM));
+		addParam(createParamCentered<rka::Atten>(mm2px(PARAM_MORPH_ATT), module, Sway::MORPH_ATT_PARAM));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_FM), module, Sway::FM_INPUT));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_PW), module, Sway::PW_INPUT));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_PHASE), module, Sway::PHASE_INPUT));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_SKEW), module, Sway::SKEW_INPUT));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_SMOOTH), module, Sway::SMOOTH_INPUT));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_MORPH), module, Sway::MORPH_INPUT));
 
-		// Modulation columns: knob, attenuverter, CV input. FM's knob is RATE.
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_PW), module, Sway::PW_PARAM));
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_PHASE), module, Sway::PHASE_PARAM));
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_SKEW), module, Sway::SKEW_PARAM));
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_SMOOTH), module, Sway::SMOOTH_PARAM));
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_MORPH), module, Sway::MORPH_PARAM));
-		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_FM_ATT), module, Sway::FM_ATT_PARAM));
-		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_PW_ATT), module, Sway::PW_ATT_PARAM));
-		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_PHASE_ATT), module, Sway::PHASE_ATT_PARAM));
-		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_SKEW_ATT), module, Sway::SKEW_ATT_PARAM));
-		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_SMOOTH_ATT), module, Sway::SMOOTH_ATT_PARAM));
-		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_MORPH_ATT), module, Sway::MORPH_ATT_PARAM));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_FM), module, Sway::FM_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_PW), module, Sway::PW_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_PHASE), module, Sway::PHASE_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_SKEW), module, Sway::SKEW_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_SMOOTH), module, Sway::SMOOTH_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_MORPH), module, Sway::MORPH_INPUT));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_CLOCK), module, Sway::CLOCK_INPUT));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_RESET), module, Sway::RESET_INPUT));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_HOLD), module, Sway::HOLD_INPUT));
+		addParam(createParamCentered<rka::Toggle2>(mm2px(PARAM_OFFSET), module, Sway::OFFSET_PARAM));
+		addParam(createLightParamCentered<rka::CapLatch>(mm2px(PARAM_ONESHOT), module, Sway::ONESHOT_PARAM, Sway::ONESHOT_LIGHT));
 
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_SIN), module, Sway::SIN_OUTPUT));
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_TRI), module, Sway::TRI_OUTPUT));
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_SAW), module, Sway::SAW_OUTPUT));
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_SQR), module, Sway::SQR_OUTPUT));
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_MORPH), module, Sway::MORPH_OUTPUT));
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_RAND), module, Sway::RAND_OUTPUT));
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_EOC), module, Sway::EOC_OUTPUT));
+		// Outputs, each on its own ivory tile.
+		addOutput(createOutputCentered<rka::BrassPort>(mm2px(OUTPUT_SIN), module, Sway::SIN_OUTPUT));
+		addOutput(createOutputCentered<rka::BrassPort>(mm2px(OUTPUT_TRI), module, Sway::TRI_OUTPUT));
+		addOutput(createOutputCentered<rka::BrassPort>(mm2px(OUTPUT_SAW), module, Sway::SAW_OUTPUT));
+		addOutput(createOutputCentered<rka::BrassPort>(mm2px(OUTPUT_SQR), module, Sway::SQR_OUTPUT));
+		addOutput(createOutputCentered<rka::BrassPort>(mm2px(OUTPUT_MORPH), module, Sway::MORPH_OUTPUT));
+		addOutput(createOutputCentered<rka::BrassPort>(mm2px(OUTPUT_RAND), module, Sway::RAND_OUTPUT));
+		addOutput(createOutputCentered<rka::BrassPort>(mm2px(OUTPUT_EOC), module, Sway::EOC_OUTPUT));
 	}
 
 	void appendContextMenu(Menu* menu) override {

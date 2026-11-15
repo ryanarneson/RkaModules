@@ -113,55 +113,78 @@ def component_size(spec, name, kind, cname):
         return "trim" if cname.endswith("_ATT") else "small"
     return "jack"
 
-# Sway column x positions (FM, PW, PHASE, SKEW, SMOOTH, MORPH): six equal
-# columns across the 68.44 mm control cards.
-_COL = [9.70, 21.11, 32.52, 43.92, 55.33, 66.74]
-_COLS = ["FM", "PW", "PHASE", "SKEW", "SMOOTH", "MORPH"]
-_OUTS = ["SIN", "TRI", "SAW", "SQR", "MORPH", "RAND", "EOC"]
+# Placing a column's control on an arc; module descriptions below use it.
+def column_on_arc(cx, cy, r, x):
+    """The y at which the vertical line at x meets the circle of radius r
+    about (cx, cy), below the centre. ValueError if the column misses it."""
+    dx = x - cx
+    if abs(dx) > r:
+        raise ValueError(f"the column at x = {x} misses the arc of radius {r} about ({cx}, {cy})")
+    return cy + math.sqrt(r * r - dx * dx)
+
+
+# Sway, a pendulum: the pivot top right, the limb (radius 58) carrying the
+# five shape knobs, the six attenuverters on the next arc out (radius 68),
+# the CV jacks in a row under them. Six columns; FM is column 0 and has no
+# knob of its own: its trace runs up to an elbow and on to the Rate dial.
+_SW_PIVOT = (44.0, 8.0)
+_SW_X = [round(6.98 + 9.4 * i, 2) for i in range(6)]
+_SW_COLS = ["FM", "PW", "PHASE", "SKEW", "SMOOTH", "MORPH"]
+_SW_LIMB, _SW_ATT = 58, 68
+
+
+def _sway_on(r, x):
+    return round(column_on_arc(*_SW_PIVOT, r, x), 2)
+
 
 PANELS = {
     "Sway": dict(
+        look="instrument",
         dir="sway",
-        hp=18,
+        hp=12,
         title="SWAY",
+        subtitle="POLYPHONIC L.F.O.",
         components=[
             # (kind, name, x mm, y mm, label)
-            ("param", "RATE", 13.5, 28.5, "RATE"),
-            ("param", "SPREAD", 30.0, 29.0, "SPREAD"),
-            ("param", "CHANNELS", 44.0, 29.0, "CHANNELS"),
-            ("param", "OFFSET", 57.0, 29.0, "BI/UNI"),
-            ("param", "ONESHOT", 67.5, 29.0, "1-SHOT"),
-            ("input", "CLOCK", 15.41, 52.5, "CLOCK"),
-            ("input", "RESET", 38.22, 52.5, "RESET"),
-            ("input", "HOLD", 61.03, 52.5, "HOLD"),
+            ("param", "RATE", 21.0, 34.0, "RATE"),
+            ("light", "RATE", 21.0, 45.2, None),
+            ("param", "SPREAD", 46.5, 23.0, "SPREAD"),
+            ("param", "CHANNELS", 52.0, 41.0, "CHANNELS"),
         ]
-        # Modulation columns: knob (FM has none; RATE is its knob),
-        # attenuverter, CV input. Headers are notes.
-        + [("param", n, x, 75.0, None) for n, x in zip(_COLS[1:], _COL[1:])]
-        + [("param", n + "_ATT", x, 88.0, None) for n, x in zip(_COLS, _COL)]
-        + [("input", n, x, 101.0, None) for n, x in zip(_COLS, _COL)]
-        + [("output", n, 80.94, round(23.5 + 13.9 * i, 2), n) for i, n in enumerate(_OUTS)],
-        # Cards behind groups of controls: x, y, w, h in mm, and the accent
-        # for a glowing border (None: plain slate edge).
-        cards=[
-            (4.0, 15.0, 68.44, 24.0, None),
-            (4.0, 41.0, 68.44, 18.0, None),
-            (4.0, 61.0, 68.44, 52.0, None),
-            (74.44, 15.0, 13.0, 98.0, "cyan"),
-        ],
-        # Label colour per component, by accent name; the rest use `label`.
-        # Keyed by name: only the labelled component of a name is affected.
-        label_accents={"SIN": "cyan", "TRI": "green", "SAW": "amber", "SQR": "magenta",
-                       "MORPH": "violet", "RAND": "green", "EOC": "amber"},
-        label_size={"RATE": 2.4, "SPREAD": 2.1, "CHANNELS": 1.9, "OFFSET": 2.1, "ONESHOT": 2.1,
-                    "CLOCK": 2.3, "RESET": 2.3, "HOLD": 2.3,
-                    **{n: 2.3 for n in _OUTS}, "MORPH": 2.0},
-        label_gap={"RATE": 9.7, "SPREAD": 9.2, "CHANNELS": 9.2, "OFFSET": 9.2, "ONESHOT": 9.2,
-                   **{n: 5.0 for n in _OUTS}},
-        # Free text: (x, y, text, size mm, theme colour key).
-        notes=[(x, 66.0, n, 1.9 if len(n) > 5 else 2.2, "ink") for n, x in zip(_COLS, _COL)]
-        + [(_COL[0], 75.6, "(RATE)", 1.6, "hint"),
-           (38.22, 110.5, "ATTENUVERTER \u25b8 CV IN", 1.5, "hint")],
+        + [("param", n, x, _sway_on(_SW_LIMB, x), n) for n, x in zip(_SW_COLS[1:], _SW_X[1:])]
+        + [("param", n + "_ATT", x, _sway_on(_SW_ATT, x), None) for n, x in zip(_SW_COLS, _SW_X)]
+        + [("input", n, x, 88.0, None) for n, x in zip(_SW_COLS, _SW_X)]
+        + [("input", n, x, 102.0, n) for n, x in zip(["CLOCK", "RESET", "HOLD"], _SW_X[:3])]
+        + [("output", n, x, 102.0, n) for n, x in zip(["SIN", "TRI", "SAW"], _SW_X[3:])]
+        + [("param", "OFFSET", _SW_X[0], 116.0, "BI/UNI"),
+           ("param", "ONESHOT", _SW_X[1], 116.0, "1-SHOT")]
+        + [("output", n, x, 116.0, n) for n, x in zip(["SQR", "MORPH", "RAND", "EOC"], _SW_X[2:])],
+        sizes={"PARAM_RATE": "hero", "PARAM_SPREAD": "face", "PARAM_CHANNELS": "face",
+               "PARAM_OFFSET": "toggle", "PARAM_ONESHOT": "cap"},
+        origins=[_SW_PIVOT],
+        circles=[(*_SW_PIVOT, r) for r in (68, 80, 92, 104, 116)],
+        # Faint radii to the first and last knob on the limb.
+        radii=[(*_SW_PIVOT, _SW_X[1], _sway_on(_SW_LIMB, _SW_X[1])),
+               (*_SW_PIVOT, _SW_X[5], _sway_on(_SW_LIMB, _SW_X[5]))],
+        # From off the left edge to MORPH, the last knob on it.
+        limbs=[dict(c=_SW_PIVOT, r=_SW_LIMB, a0=-56, a1=10, step=1, major=5)],
+        faces={
+            "PARAM_RATE": dict(r=16.4, ticks=50, major=5, numerals=list(range(11))),
+            "PARAM_SPREAD": dict(r=7.3, ticks=20, major=5),
+            # One tick per channel, 1 to 16; long at 1, 6, 11 and 16.
+            "PARAM_CHANNELS": dict(r=7.3, ticks=15, major=5),
+        },
+        tiles=[dict(port=f"OUTPUT_{n}") for n in ["SIN", "TRI", "SAW", "SQR", "MORPH", "RAND", "EOC"]],
+        traces=[["INPUT_FM", "PARAM_FM_ATT", (_SW_X[0], 56.0), "PARAM_RATE"]]
+        + [[f"INPUT_{n}", f"PARAM_{n}_ATT", f"PARAM_{n}"] for n in _SW_COLS[1:]],
+        label_at={"PARAM_RATE": "face", "PARAM_SPREAD": "below", "PARAM_CHANNELS": "below"},
+        label_colour={"PARAM_SPREAD": "dim", "PARAM_CHANNELS": "dim", "PARAM_OFFSET": "dim",
+                      "PARAM_ONESHOT": "dim"},
+        # 1-SHOT's cap is smaller than BI/UNI's switch: one line for both names.
+        label_dy={"PARAM_ONESHOT": -0.5},
+        # FM has no knob: its name sits just right of its trace.
+        notes=[(_SW_X[0] + 1.6, 61.6, "FM", 2.0, "ivory", "start")],
+        preview={"LIGHT_RATE": dict(lit=True)},
     ),
     # Fathom, the drone voice. The voice is an "orbit": PITCH is a sun with
     # the four voice knobs on a ring around it, V/OCT in on the ring's left
@@ -623,16 +646,8 @@ def num(v):
     return "0" if s in ("-0", "") else s
 
 
-# --- Geometry helpers (pure; tools/test_gen_panels.py) ---
-
-def column_on_arc(cx, cy, r, x):
-    """The y at which the vertical line at x meets the circle of radius r
-    about (cx, cy), below the centre. ValueError if the column misses it."""
-    dx = x - cx
-    if abs(dx) > r:
-        raise ValueError(f"the column at x = {x} misses the arc of radius {r} about ({cx}, {cy})")
-    return cy + math.sqrt(r * r - dx * dx)
-
+# --- Geometry helpers (pure; tools/test_gen_panels.py). column_on_arc is
+# above PANELS, whose descriptions use it. ---
 
 def arc_point(cx, cy, r, deg):
     """The point on the circle of radius r about (cx, cy) at `deg` degrees

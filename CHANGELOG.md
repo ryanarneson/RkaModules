@@ -2,7 +2,7 @@
 
 ## 2.0.0 (unreleased)
 
-- New module: **Sway**, an 18 HP polyphonic LFO:
+- New module: **Sway**, a 12 HP polyphonic LFO:
   - SIN, TRI, SAW, SQR (pulse width) plus a MORPH output with SKEW, SMOOTH
     (round or wavefold) and MORPH (sin → tri → saw → square).
   - RAND output, a new random value every cycle, from stepped to gliding
@@ -15,6 +15,13 @@
   - CHANNELS (1–16) and SPREAD for phase-offset polyphony.
   - CV with attenuverters for PW, PHASE, SKEW, SMOOTH, MORPH.
   - The phase is kept in double precision, so slow rates stay accurate.
+  - A rate light on the RATE dial, following channel 1: it blinks once
+    per cycle up to 10 Hz and glows steadily at half brightness above.
+  - Drawn in the "Instrument" look, as a pendulum, and narrowed from
+    18 HP to 12 HP. Its parameter, input, output and light ids are
+    unchanged (the rate light is new, after them), so a patch saved with
+    the 18 HP Sway loads; a module placed against Sway's right side is
+    left with a 6 HP gap.
 - New module: **Fathom**, a 10 HP bass drone voice:
   - A sine sub one or two octaves under the pitch, and a seven-saw
     supersaw body with the JP-8000's detune and mix curves (after

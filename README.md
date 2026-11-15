@@ -4,7 +4,7 @@ VCV Rack 2 modules.
 
 | Module | HP | Description |
 |---|---|---|
-| [**Sway**](docs/sway/README.md) | 18 | Polyphonic LFO: classic and morphing waves, random, EOC, clock sync, phase spread, one-shot |
+| [**Sway**](docs/sway/README.md) | 12 | Polyphonic LFO: classic and morphing waves, random, EOC, clock sync, phase spread, one-shot |
 | [**Fathom**](docs/fathom/README.md) | 10 | Deep bass drone voice: sub sine, 7-saw supersaw, drift, ladder filter |
 | [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware, with a mouse-driven settings list |
 

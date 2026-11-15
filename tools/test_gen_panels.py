@@ -26,8 +26,6 @@ NIGHTGLOW_SHA256 = {
     "fathom/Fathom.svg": "fdb64725a3f165fd770ea114845adfd55d87d53fc5c1efff11b954d3bf8c30f5",
     "shoal/Shoal-dark.svg": "ac81d3ef7eb4cf2f185855456269fbd38219cbf6e526b3850144c65e07764f69",
     "shoal/Shoal.svg": "6f0f8dafb53b168f535263cdd5deee7faa4791b8d5ac35eb25704df1794dade2",
-    "sway/Sway-dark.svg": "98ace994300f75ebba26588599005e5e4573c9fdf1aaf92bdfc8c083c0f5b3a1",
-    "sway/Sway.svg": "476409b0bc0b69bcd2bc5094863438c84298a8d77f43106a9f6c2848f4d33ee3",
 }
 
 # src/RkaTheme.hpp as it was before the Instrument block was added: these
