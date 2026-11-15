@@ -507,6 +507,22 @@ void testEditAfterRestore() {
 	h.model(m);
 	CHECK(findRow(m, id)->value == target, "row %d is %d, want %d", id, findRow(m, id)->value, target);
 
+	// An edit for the app the image holds, posted before the restore, is
+	// applied to the restored core (events posted before a restore are
+	// applied after it).
+	{
+		Host same(1);
+		same.post(selectApp(kQuantermain));
+		run(same, 0.1);
+		CHECK(same.postEdit(makeEdit(FriendlyEdit::SetValue, kLowRents, 0, id, target)), "same-app edit accepted");
+		same.requestRestore(img.bytes, InputRange::Hardware);
+		run(same, 0.1);
+		same.model(m);
+		CHECK(m.app == kLowRents, "model for app %d after the restore", m.app);
+		CHECK(findRow(m, id) && findRow(m, id)->value == target, "row %d is %d, want %d (the edit applied to the restored core)",
+			id, findRow(m, id) ? findRow(m, id)->value : -1, target);
+	}
+
 	// The next model published after the swap is the new core's, at its
 	// first tick, wherever the frame schedule was (two phases half a frame
 	// apart).

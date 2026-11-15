@@ -34,4 +34,29 @@ struct DetentCounter {
 	}
 };
 
+// Detents whose receiver refused them (a full event queue), kept so that the
+// turn is offered again instead of lost. Turns add up; the sum is held to
+// +-TURN_BACKLOG_MAX.
+constexpr int TURN_BACKLOG_MAX = 256;
+
+struct TurnBacklog {
+	int unsent = 0;
+
+	// Adds a turn and returns everything now waiting, to offer in one go.
+	int add(int detents) {
+		long total = (long) unsent + detents;
+		if (total > TURN_BACKLOG_MAX)
+			total = TURN_BACKLOG_MAX;
+		if (total < -TURN_BACKLOG_MAX)
+			total = -TURN_BACKLOG_MAX;
+		unsent = (int) total;
+		return unsent;
+	}
+
+	// The receiver took what add() returned.
+	void clear() {
+		unsent = 0;
+	}
+};
+
 }

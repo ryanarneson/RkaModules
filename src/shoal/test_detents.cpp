@@ -44,8 +44,23 @@ static void testScroll(bool mac) {
 	CHECK(s.add(notch / 2, notch) == 0, "%s: a cleared remainder does not complete a detent", os);
 }
 
+// rka::TurnBacklog: refused detents wait and add up.
+static void testBacklog() {
+	rka::TurnBacklog b;
+	CHECK(b.add(3) == 3, "a turn is offered whole");
+	b.clear();
+	CHECK(b.unsent == 0 && b.add(0) == 0, "taken: nothing waits");
+	// Refused twice, then one back: the sum is offered.
+	CHECK(b.add(2) == 2 && b.add(4) == 6 && b.add(-1) == 5, "refused turns add up, got %d", b.unsent);
+	CHECK(b.add(-5) == 0, "turning back cancels what waits");
+	CHECK(b.add(1000) == rka::TURN_BACKLOG_MAX, "held to the maximum, got %d", b.unsent);
+	CHECK(b.add(-5000) == -rka::TURN_BACKLOG_MAX, "and to the minimum, got %d", b.unsent);
+	CHECK(b.add(-2147483647 - 1) == -rka::TURN_BACKLOG_MAX, "no overflow");
+}
+
 int main() {
 	testDrag();
+	testBacklog();
 	CHECK(rka::scrollUnitsPerNotch(true) == 10.f, "macOS: Rack scales a notch to 10");
 	CHECK(rka::scrollUnitsPerNotch(false) == 50.f, "elsewhere: Rack scales a notch to 50");
 	testScroll(true);

@@ -134,21 +134,38 @@ struct HoldButton : app::ParamWidget {
 // clockwise (Ctrl/Cmd: 32 px). Scroll wheel over it: one detent per notch,
 // only when Rack's "scroll wheel knob control" setting is on (as Rack's
 // knobs); otherwise the rack scrolls. The pointer turns 1/24 turn per detent
-// that onTurn takes.
+// that onTurn takes; detents it refuses are kept and offered again.
 struct Encoder : widget::OpaqueWidget {
-	// > 0 clockwise. Returns false if the turn was dropped (the pointer stays).
+	// > 0 clockwise. Returns false if the turn was not taken: the pointer
+	// stays and the detents are offered again (TurnBacklog).
 	std::function<bool(int detents)> onTurn;
 
 	int position = 0;   // detents taken since creation, for the pointer
 	DetentCounter drag, scroll;
+	TurnBacklog backlog;
 
 	Encoder() {
 		box.size = mm2px(Vec(13.4f, 13.4f));
 	}
 
+	// A turn onTurn refuses waits in the backlog, added to by later turns,
+	// and is offered again with them and every frame (step) until taken.
 	void turn(int detents) {
-		if (detents != 0 && onTurn && onTurn(detents))
-			position += detents;
+		backlog.add(detents);
+		offer();
+	}
+
+	void offer() {
+		const int n = backlog.unsent;
+		if (n != 0 && onTurn && onTurn(n)) {
+			position += n;
+			backlog.clear();
+		}
+	}
+
+	void step() override {
+		offer();
+		OpaqueWidget::step();
 	}
 
 	void onDragStart(const DragStartEvent& e) override {

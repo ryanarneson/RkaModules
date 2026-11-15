@@ -112,7 +112,7 @@ public:
 			requestReset();
 			return true;
 		}
-		Queued q;
+		Queued q = {};  // no indeterminate bytes are copied into the ring
 		q.isEdit = false;
 		q.control = e;
 		return push(q);
@@ -127,7 +127,7 @@ public:
 	// otherwise its result is in the next model published, normally within
 	// one frame period (kFrameTicks).
 	bool postEdit(const FriendlyEdit& e) {
-		Queued q;
+		Queued q = {};  // no indeterminate bytes are copied into the ring
 		q.isEdit = true;
 		q.edit = e;
 		return push(q);

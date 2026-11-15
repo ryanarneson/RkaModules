@@ -276,12 +276,12 @@ struct ShoalWidget : ModuleWidget {
 		e->onTurn = [=](int detents) {
 			Shoal* m = getModule<Shoal>();
 			if (!m)
-				return false;
+				return true;   // no module (browser): nothing to turn, nothing to keep
 			shoal::ControlEvent ev;
 			ev.type = shoal::ControlEvent::Turn;
 			ev.index = (int8_t) which;
 			ev.value = (int16_t) clamp(detents, -32768, 32767);
-			return m->host.post(ev);   // false: the queue was full, the turn is dropped
+			return m->host.post(ev);   // false: the queue was full; the encoder offers the turn again
 		};
 		addChild(e);
 	}

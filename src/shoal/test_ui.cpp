@@ -369,6 +369,40 @@ void testAppMenuTimeout() {
 	CHECK(!c.appMenuOpen() && c.app() == kCopierMaschine, "closed unchanged, app %d", c.app());
 }
 
+// The R long press that opens the app menu ends that main pass's dispatch
+// (Ui::DispatchEvents returns), so a turn queued behind it reaches the app
+// menu one main pass later: it is pending until then.
+void testTurnBehindAppMenuOpen() {
+	Core c;
+	c.setEncoderAcceleration(false);
+	run(c, 0.1);
+	// The long press (queued when the button is released) and then a detent,
+	// both queued before the next main pass (UI polls only).
+	c.setButton(shoal::BUTTON_R, true);
+	run(c, 1.1);
+	CHECK(!c.appMenuOpen(), "still held");
+	c.setButton(shoal::BUTTON_R, false);
+	for (int i = 0; i < 12; i++)
+		CoreTest::pollUi(c);
+	c.turnEncoder(shoal::ENCODER_R, 1);
+	for (int i = 0; i < 4; i++)
+		CoreTest::pollUi(c);
+	CHECK(!c.appMenuOpen(), "no main pass yet");
+	int ticks = 0;
+	while (!c.appMenuOpen() && ticks < 17) {
+		c.tick();
+		ticks++;
+	}
+	CHECK(c.appMenuOpen(), "the long press opened the app menu");
+	CHECK(c.encodersPending(), "the turn queued behind the long press is pending");
+	run(c, 0.003);
+	CHECK(!c.encodersPending(), "nothing pending once the app menu has taken it");
+	// It scrolled the app menu by one: an R push selects the next app.
+	run(c, 0.05);
+	press(c, shoal::BUTTON_R, 0.05);
+	CHECK(!c.appMenuOpen() && c.app() == kCopierMaschine + 1, "app %d, want %d", c.app(), kCopierMaschine + 1);
+}
+
 void testSelectAppClosesMenu() {
 	Core c;
 	run(c, 0.1);
@@ -498,6 +532,7 @@ int main() {
 	testAcceleration();
 	testLongPressOpensAppMenu();
 	testAppMenuTimeout();
+	testTurnBehindAppMenuOpen();
 	testSelectAppClosesMenu();
 	testNoScreensaver();
 	testHeldButtonChord();

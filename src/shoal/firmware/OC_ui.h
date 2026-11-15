@@ -98,6 +98,10 @@ public:
     return event_queue_.idle_time();
   }
 
+  inline bool events_queued() const { // SHOAL: events waiting for DispatchEvents (Core::encodersPending)
+    return event_queue_.available();
+  }
+
   inline uint32_t ticks() const {
     return ticks_;
   }
