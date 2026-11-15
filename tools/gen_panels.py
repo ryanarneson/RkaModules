@@ -42,9 +42,9 @@ ACCENTS = {
 # is the same look turned down for dim rooms: deeper ground, dimmer ink.
 THEMES = {
     "": dict(bg_top="#111c30", bg_bottom="#070b14", card="#0f1828", card_edge="#2a3a55",
-             ink="#e6f4ff", label="#9fb3c8", hint="#5f7187", glow_opacity=0.35, accent_opacity=1.0),
+             ink="#e6f4ff", label="#9fb3c8", hint="#5f7187", glow_opacity=0.35, accent_opacity=1.0, screen="#04070c"),
     "-dark": dict(bg_top="#0a101c", bg_bottom="#030509", card="#0a0f1a", card_edge="#1c2738",
-                  ink="#b9c8d6", label="#7d8ea0", hint="#46566a", glow_opacity=0.22, accent_opacity=0.75),
+                  ink="#b9c8d6", label="#7d8ea0", hint="#46566a", glow_opacity=0.22, accent_opacity=0.75, screen="#04070c"),
 }
 
 # Placeholder colours from https://vcvrack.com/manual/Panel
@@ -234,7 +234,7 @@ PANELS = {
         label_size={"ENC_L": 2.3, "ENC_R": 2.3, "UP": 2.0, "DOWN": 2.0},
         label_gap={"ENC_L": 9.6, "ENC_R": 9.6, "UP": 5.4, "DOWN": 5.4},
         notes=[(99.8, 72.2, "TRIG", 2.0, "ink"), (112.0, 72.2, "CV", 2.0, "ink"),
-               (128.0, 72.2, "OUT", 2.0, "cyan")]
+               (131.6, 72.2, "OUT", 2.0, "cyan")]
         + [(93.6, 79.4 + 10.0 * i, str(i + 1), 2.2, "label") for i in range(4)]
         + [(121.4, 79.4 + 10.0 * i, n, 2.2, "cyan") for i, n in enumerate("ABCD")],
     ),
@@ -275,7 +275,7 @@ def card(x, y, w, h, t, accent):
 def screen(x, y, w, h, t):
     """A display the module draws: a near-black rounded rectangle with a thin
     accent edge. Dimmed with the theme like every other accent."""
-    return (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="1.0" fill="#04070c" '
+    return (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="1.0" fill="{t["screen"]}" '
             f'stroke="{ACCENTS["cyan"]}" stroke-width="0.3" stroke-opacity="{t["accent_opacity"]}"/>')
 
 
@@ -355,8 +355,8 @@ def panel_svg(name, spec, t):
     ]
     for x, y, cw, ch, accent in spec["cards"]:
         out += card(x, y, cw, ch, t, accent)
-    for _, x, y, w, h in spec.get("screens", []):
-        out.append(screen(x, y, w, h, t))
+    for _, sx, sy, sw, sh in spec.get("screens", []):
+        out.append(screen(sx, sy, sw, sh, t))
     for cx, cy, r, accent in spec.get("rings", []):
         out += ring(cx, cy, r, t, accent)
     for x1, y1, x2, y2, accent, dotted in spec.get("lines", []):

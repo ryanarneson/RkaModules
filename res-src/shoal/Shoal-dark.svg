@@ -22,7 +22,7 @@
 <text x="114.60" y="49.60" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#7d8ea0">DOWN</text>
 <text x="99.80" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#b9c8d6">TRIG</text>
 <text x="112.00" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#b9c8d6">CV</text>
-<text x="128.00" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">OUT</text>
+<text x="131.60" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">OUT</text>
 <text x="93.60" y="79.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#7d8ea0">1</text>
 <text x="93.60" y="89.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#7d8ea0">2</text>
 <text x="93.60" y="99.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#7d8ea0">3</text>
@@ -31,7 +31,7 @@
 <text x="121.40" y="89.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">B</text>
 <text x="121.40" y="99.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">C</text>
 <text x="121.40" y="109.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">D</text>
-<text x="41.60" y="125.50" font-family="DejaVu Sans" font-size="3.2" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="0.75">RKA</text>
+<text x="71.12" y="125.50" font-family="DejaVu Sans" font-size="3.2" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="0.75">RKA</text>
 <g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
 <circle id="widget-ENC_L" cx="102.8" cy="29.0" r="1" fill="#ffff00"/>
 <circle id="widget-ENC_R" cx="126.4" cy="29.0" r="1" fill="#ffff00"/>
