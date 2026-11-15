@@ -27,6 +27,24 @@ takes one more instrument and builds its panel geometry from it.
 | [Tackle](tackle.md) | Four attenuverters with offset | Block and tackle | 8 HP |
 | [Spindrift](spindrift.md) | Granular cloud, with a grain window | An anemometer | 10 HP |
 
+## Where the nautical thing is the function
+
+A second set, chosen because in each the sea-going thing is not just a
+name: it is what the module does.
+
+| Module | What it does | The instrument | Width |
+|--------|--------------|----------------|-------|
+| [Ping](ping.md) | Sonar voice: a tone and its echo | Active sonar | 8 HP |
+| [Buoy](buoy.md) | Bell voice struck by simulated waves | A bell buoy | 10 HP |
+| [Foghorn](foghorn.md) | Low two-tone drone voice | A diaphone foghorn | 10 HP |
+| [Plimsoll](plimsoll.md) | Limiter | The Plimsoll load-line mark | 8 HP |
+| [Thermocline](thermocline.md) | Crossover | The layer between warm and cold water | 8 HP |
+| [Seastate](seastate.md) | Wavefolder | The sea-state scale | 8 HP |
+| [Reckoner](reckoner.md) | Wandering X/Y position from heading and speed | Dead reckoning | 10 HP |
+| [Signal](signal.md) | Morse rhythm from a word | A signalling lamp | 12 HP |
+| [Watch](watch.md) | Long-form timer in eight bells | The ship's watch | 10 HP |
+| [Log](log.md) | CV recorder | A barograph | 12 HP |
+
 ## Small utilities, 2 HP
 
 A standard jack is 8 mm across, so anything with a jack needs 2 HP. At
