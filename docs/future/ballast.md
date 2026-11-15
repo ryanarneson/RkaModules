@@ -13,7 +13,9 @@ starboard. Each channel's Pan sits beneath its level on the next arc,
 with a trace running from the level through the pan to the input jack.
 
 **Sketched controls.** Master (the hero), four Level knobs, four Pan
-attenuverter-size knobs, four inputs in a row. Signal and Clip lights at
+attenuverter-size knobs, four inputs in a row, each labelled beneath
+(IN 1 to IN 4) at the user's request: the trace alone was not enough to
+say what the jacks are. Signal and Clip lights at
 the lower left. The user asked for the L and R outputs to be grouped
 together in the lower right corner; keep them there.
 
