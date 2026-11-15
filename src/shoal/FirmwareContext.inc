@@ -142,6 +142,7 @@ namespace hw {
 
 constexpr int kNumPins = 64;
 constexpr int kAdcOffsetHardware = 2730;
+constexpr int kAdcOffsetBipolar5 = 2048;
 
 // What the fake Teensy's peripherals see.
 struct State {

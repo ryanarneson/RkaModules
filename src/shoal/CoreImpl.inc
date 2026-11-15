@@ -87,6 +87,7 @@ struct Core::Impl {
 	Schmitt gates[kNumChannels];
 	bool edges[kNumChannels] = {};  // rising edges latched since the last tick
 	uint32_t dac[kNumChannels] = {}; // codes the DAC is holding
+	int adcOffset = hw::kAdcOffsetHardware; // ADC code of 0 V for the current input range
 	uint32_t uiMicros = 0;           // tick time since the last UI poll
 	uint32_t mainTicks = 0;          // ticks since the last main-loop pass
 
@@ -98,7 +99,7 @@ struct Core::Impl {
 	// Present the latched inputs to the firmware for the coming tick.
 	void applyInputs() {
 		for (int ch = 0; ch < kNumChannels; ch++)
-			hw::state().adc12[ch] = (uint16_t) voltsToAdc12(cv[ch], hw::kAdcOffsetHardware);
+			hw::state().adc12[ch] = (uint16_t) voltsToAdc12(cv[ch], adcOffset);
 		if (edges[0]) OC::DigitalInputs::clock<OC::DIGITAL_INPUT_1>();
 		if (edges[1]) OC::DigitalInputs::clock<OC::DIGITAL_INPUT_2>();
 		if (edges[2]) OC::DigitalInputs::clock<OC::DIGITAL_INPUT_3>();
@@ -122,18 +123,30 @@ Core::~Core() {
 	delete impl_;
 }
 
+// NaN reads as 0 V; infinities are clamped later (voltsToAdc12, Schmitt).
+static float finiteVolts(float volts) {
+	return std::isnan(volts) ? 0.f : volts;
+}
+
 void Core::setCv(int ch, float volts) {
 	if (ch >= 0 && ch < kNumChannels)
-		impl_->cv[ch] = volts;
+		impl_->cv[ch] = finiteVolts(volts);
 }
 
 void Core::setGate(int ch, float volts) {
-	if (ch >= 0 && ch < kNumChannels && impl_->gates[ch].process(volts))
+	// A rising edge stays latched until the next tick, even if the gate has
+	// fallen again by then; several edges in one tick are one clock.
+	if (ch >= 0 && ch < kNumChannels && impl_->gates[ch].process(finiteVolts(volts)))
 		impl_->edges[ch] = true;
 }
 
-void Core::setInputRange(InputRange) {
-	// Task 4
+void Core::setInputRange(InputRange r) {
+	Scope scope(impl_->ctx.get());
+	impl_->adcOffset = r == InputRange::Bipolar5 ? hw::kAdcOffsetBipolar5 : hw::kAdcOffsetHardware;
+	// The firmware subtracts the offset from the smoothed code; the new
+	// codes arrive with the next ADC update.
+	for (int ch = 0; ch < kNumChannels; ch++)
+		OC::g_calibration_data.adc.offset[ch] = (uint16_t) impl_->adcOffset;
 }
 
 void Core::tick() {
@@ -271,6 +284,21 @@ void CoreTest::setTicks(Core& c, uint64_t ticks) {
 uint32_t CoreTest::millis(Core& c) {
 	Scope scope(c.impl_->ctx.get());
 	return ::millis();
+}
+
+uint64_t CoreTest::ticks(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	return hw::state().ticks;
+}
+
+int32_t CoreTest::pitchIn(Core& c, int ch) {
+	Scope scope(c.impl_->ctx.get());
+	return OC::ADC::pitch_value((ADC_CHANNEL) ch);
+}
+
+uint32_t CoreTest::smoothedCode(Core& c, int ch) {
+	Scope scope(c.impl_->ctx.get());
+	return OC::ADC::smoothed_raw_value((ADC_CHANNEL) ch);
 }
 
 } // namespace shoal

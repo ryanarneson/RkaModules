@@ -15,5 +15,12 @@ struct CoreTest {
 	static void setTicks(Core& c, uint64_t ticks);
 	// The firmware's millis() as seen by core c.
 	static uint32_t millis(Core& c);
+	// Ticks core c has run since boot (the shim's 64-bit counter).
+	static uint64_t ticks(Core& c);
+	// OC::ADC::pitch_value(ch): the pitch the firmware reads on CV input ch
+	// (12 << 7 per octave).
+	static int32_t pitchIn(Core& c, int ch);
+	// OC::ADC::smoothed_raw_value(ch): the firmware's smoothed 12-bit code.
+	static uint32_t smoothedCode(Core& c, int ch);
 };
 }
