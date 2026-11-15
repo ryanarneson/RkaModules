@@ -9,6 +9,8 @@ static const rack::math::Vec PARAM_ENC_L_PUSH(102.8f, 43.5f);
 static const rack::math::Vec PARAM_ENC_R_PUSH(126.4f, 43.5f);
 static const rack::math::Vec PARAM_UP(100.0f, 55.0f);
 static const rack::math::Vec PARAM_DOWN(114.6f, 55.0f);
+static const rack::math::Vec PARAM_UI_MODE(127.6f, 55.0f);
+static const rack::math::Vec LIGHT_UI_MODE(133.8f, 55.0f);
 static const rack::math::Vec INPUT_TR1(99.8f, 78.6f);
 static const rack::math::Vec INPUT_TR2(99.8f, 88.6f);
 static const rack::math::Vec INPUT_TR3(99.8f, 98.6f);

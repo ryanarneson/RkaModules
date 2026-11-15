@@ -44,6 +44,14 @@ struct TAmberLight : componentlibrary::TGrayModuleLightWidget<TBase> {
 };
 using AmberLight = TAmberLight<>;
 
+template <typename TBase = app::ModuleLightWidget>
+struct TCyanLight : componentlibrary::TGrayModuleLightWidget<TBase> {
+	TCyanLight() {
+		this->addBaseColor(RkaTheme::CYAN);
+	}
+};
+using CyanLight = TCyanLight<>;
+
 // Latching push button with an amber light inside (mode switches).
 using AmberLatch = componentlibrary::VCVLightLatch<componentlibrary::MediumSimpleLight<AmberLight>>;
 
@@ -125,6 +133,30 @@ struct HoldButton : app::ParamWidget {
 				nvgTransRGBAf(RkaTheme::AMBER, 0.35f), nvgTransRGBAf(RkaTheme::AMBER, 0.f)));
 			nvgFill(args.vg);
 		}
+		ParamWidget::drawLayer(args, layer);
+	}
+};
+
+// A latch in the HoldButton's shape: each click flips the param between its
+// minimum and its maximum. Its lens stays dark (on the HoldButton a lit lens
+// means "held down"), so pair it with a light. Configure the param with
+// configSwitch().
+struct LatchButton : HoldButton {
+	void onDragStart(const DragStartEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		ParamQuantity* pq = getParamQuantity();
+		if (!pq)
+			return;
+		if (isDown())
+			pq->setMin();
+		else
+			pq->setMax();
+	}
+
+	void onDragEnd(const DragEndEvent& e) override {}
+
+	void drawLayer(const DrawArgs& args, int layer) override {
 		ParamWidget::drawLayer(args, layer);
 	}
 };
