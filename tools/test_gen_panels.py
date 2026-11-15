@@ -660,7 +660,7 @@ class Artwork(unittest.TestCase):
 
     def test_knurl_is_individual_ticks_evenly_spaced(self):
         art = g.component_art(g.INSTRUMENT[""])
-        for name in ("HeroKnob", "FaceKnob", "LimbKnob", "Atten", "Encoder"):
+        for name in ("HeroKnob", "DialKnob", "FaceKnob", "LimbKnob", "Atten", "Encoder"):
             w, _, els = art[name]
             knurl = [e for e in els if 'data-part="knurl"' in e]
             self.assertEqual(len(knurl), 1, name)
@@ -684,6 +684,16 @@ class Artwork(unittest.TestCase):
         face = g.SPECIMEN["faces"]["WIDGET_ENC"]
         self.assertEqual([major for _, major in g.face_ticks(face)], [False] * 24)
 
+    def test_fathoms_pitch_scale_is_as_long_as_sways(self):
+        # On the dial-size knob the 13.4 mm face holds the default scale:
+        # the same tick lengths and numeral size as Sway's Rate.
+        pitch, rate = g.PANELS["Fathom"]["faces"]["PARAM_PITCH"], g.PANELS["Sway"]["faces"]["PARAM_RATE"]
+        self.assertEqual(g.component_size(g.PANELS["Fathom"], "Fathom", "param", "PITCH"), "dial")
+        for key in ("tick_r", "minor_len", "major_len", "numeral_r", "numeral_size"):
+            self.assertNotIn(key, pitch, key)
+            self.assertNotIn(key, rate, key)
+        self.assertGreaterEqual(pitch["r"] - g.RADII["dial"], 6.0)
+
     def test_the_lit_cap_is_one_centred_disc(self):
         w, h, els = g.component_art(g.INSTRUMENT[""])["Cap_lit"]
         self.assertEqual(len(els), 1)
@@ -691,7 +701,7 @@ class Artwork(unittest.TestCase):
 
     def test_dark_variants_exist_and_differ(self):
         files = g.component_files()
-        for name in ("HeroKnob", "HeroKnob_bg", "FaceKnob", "LimbKnob", "Atten", "Encoder", "BrassPort",
+        for name in ("HeroKnob", "HeroKnob_bg", "DialKnob", "DialKnob_bg", "FaceKnob", "LimbKnob", "Atten", "Encoder", "BrassPort",
                      "Toggle2_0", "Toggle2_1", "Cap", "JewelSeat", "Screw"):
             self.assertIn(f"{name}.svg", files)
             self.assertIn(f"{name}-dark.svg", files)

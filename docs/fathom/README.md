@@ -24,7 +24,7 @@ arc on the panel is a ping travelling out from it.
   each jack to its attenuverter and on to the knob it moves; the DRIFT and
   DETUNE lines climb up and bend across to their knobs on the arc.
 - Bottom row: the **SUB** output on the left, **L** and **R** on the
-  right, each on a light tile; inputs are bare.
+  right, each on an ivory tile; inputs are bare.
 - The faint line falling from PITCH, marked 10 and 20, is the sounding
   line: a depth scale for the pings, nothing to set.
 

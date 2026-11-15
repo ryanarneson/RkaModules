@@ -127,9 +127,10 @@ output tiles, signal traces, screen windows, the nameplate and foot mark) is
 documented at "The Instrument look" in `tools/gen_panels.py`, and its
 `SPECIMEN` panel uses every part: `make specimen` draws it, components in
 place, to `build/specimen/` as SVG and as PNG at Rack's 100 % and 300 %
-zoom. Its components are `rka::HeroKnob`, `rka::FaceKnob`, `rka::LimbKnob`,
-`rka::Atten`, `rka::KnurlEncoder`, `rka::BrassPort`, `rka::Toggle2`,
-`rka::CapButton`, `rka::CapLatch` and `rka::JewelLight`, with artwork in
+zoom. Its components are `rka::HeroKnob`, `rka::DialKnob`, `rka::FaceKnob`,
+`rka::LimbKnob`, `rka::Atten`, `rka::KnurlEncoder`, `rka::BrassPort`,
+`rka::Toggle2`, `rka::CapButton`, `rka::CapLatch`, `rka::JewelLight` and
+`rka::Screw`, with artwork in
 `res/components/` in normal and dark-panel variants. Instrument panels are
 lettered in D-DIN Condensed only, from `tools/fonts/`: `make panels` shows
 Inkscape that folder and nothing else, and stops if Inkscape would set the
@@ -138,7 +139,9 @@ layout whose trace grazes a control or tile it does not belong to, runs
 under a screen or through lettering, or bends more than once; whose traces
 cross or touch; or whose lettering (the foot mark included) overlaps a
 component, other lettering, a screen, the limb, or a face or tile it does
-not sit on. A misspelt key in a description fails too.
+not sit on. The rack screws (`screws` in a description, placed by the module
+from its layout header's `SCREWS`) are kept clear of all of these as well. A
+misspelt key in a description fails too.
 
 ### Changing a panel
 

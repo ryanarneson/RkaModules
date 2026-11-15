@@ -74,11 +74,11 @@ KIND_COLOUR = {"param": "#ff0000", "input": "#00ff00", "output": "#0000ff", "lig
 # to draw ticks edge to edge.
 RADII = {"big": 8.8, "mid": 6.7, "small": 4.32, "trim": 2.3, "jack": 4.0,
          "encoder": 6.7, "button": 3.0, "light": 1.1}
-# The Instrument look's own components (src/widgets.hpp: HeroKnob, FaceKnob,
-# LimbKnob, Atten, KnurlEncoder, BrassPort, Toggle2, CapLatch / CapButton,
+# The Instrument look's own components (src/widgets.hpp: HeroKnob, DialKnob,
+# FaceKnob, LimbKnob, Atten, KnurlEncoder, BrassPort, Toggle2, CapLatch / CapButton,
 # JewelLight). A knob's radius is to the outside of its knurl. The toggle is
 # a 3.6 x 6.4 mm rectangle; its radius is the circle round it.
-INSTRUMENT_SIZES = {"hero": 9.3, "face": 4.8, "limb": 4.3, "atten": 2.8, "enc": 7.25,
+INSTRUMENT_SIZES = {"hero": 9.3, "dial": 7.0, "face": 4.8, "limb": 4.3, "atten": 2.8, "enc": 7.25,
                     "port": 4.0, "toggle": 3.7, "cap": 3.2, "jewel": 1.0}
 RADII.update(INSTRUMENT_SIZES)
 TOGGLE_W, TOGGLE_H = 3.6, 6.4
@@ -269,7 +269,9 @@ PANELS = {
         + [("output", "SUBOUT", _FA_X[0], 116.0, "SUB"),
            ("output", "LEFT", _FA_X[3], 116.0, "L"),
            ("output", "RIGHT", _FA_X[4], 116.0, "R")],
-        sizes={"PARAM_PITCH": "hero", "PARAM_CUTOFF": "face"},
+        # The smaller main dial: its 13.4 mm face is the mockup's, and the
+        # hero knob would leave the scale no room on it.
+        sizes={"PARAM_PITCH": "dial", "PARAM_CUTOFF": "face"},
         origins=[_FA_O],
         circles=[(*_FA_O, r) for r in (_FA_FILTER, _FA_ATT, 72, 86, 100)],
         # The sounding line, from the origin to the foot of the panel.
@@ -279,8 +281,7 @@ PANELS = {
         limbs=[dict(c=_FA_O, r=_FA_LIMB_R, a0=-50, a1=124, step=2, major=5)],
         faces={
             # A tick per semitone over +-24, numbered in octaves.
-            "PARAM_PITCH": dict(r=13.4, ticks=48, major=12, numerals=["-2", "-1", "0", "+1", "+2"],
-                                tick_r=9.6, minor_len=0.6, major_len=1.0, numeral_r=11.85, numeral_size=1.9),
+            "PARAM_PITCH": dict(r=13.0, ticks=48, major=12, numerals=["-2", "-1", "0", "+1", "+2"]),
             # 20 Hz to 20 kHz: a long tick per octave.
             "PARAM_CUTOFF": dict(r=7.3, ticks=20, major=2),
         },
@@ -1471,6 +1472,7 @@ def instrument_svg(name, spec, pal):
 # Art name: (size, knurl colour, index colour or None, index width, centre dot).
 KNOBS = {
     "HeroKnob": ("hero", "brass", "brass", 0.5, True),
+    "DialKnob": ("dial", "brass", "brass", 0.5, True),
     "FaceKnob": ("face", "brass", "brass", 0.5, True),
     "LimbKnob": ("limb", "brass", "brass", 0.5, True),
     "Atten": ("atten", "dim", "ivory", 0.4, False),
@@ -1485,7 +1487,7 @@ KNURL_TICKS = {"Encoder": 55}
 # Size -> the artwork a component of that size is drawn with, bottom first;
 # of a knob's two layers the second turns.
 ART_LAYERS = {
-    "hero": ("HeroKnob_bg", "HeroKnob"), "face": ("FaceKnob_bg", "FaceKnob"),
+    "hero": ("HeroKnob_bg", "HeroKnob"), "dial": ("DialKnob_bg", "DialKnob"), "face": ("FaceKnob_bg", "FaceKnob"),
     "limb": ("LimbKnob_bg", "LimbKnob"), "atten": ("Atten_bg", "Atten"), "enc": ("Encoder_bg", "Encoder"),
     "port": ("BrassPort",), "toggle": ("Toggle2_1",), "cap": ("Cap",), "jewel": ("JewelSeat",),
 }
@@ -1621,6 +1623,7 @@ SPECIMEN = dict(
         ("param", "RATE", 22.0, 36.0, "RATE"),
         ("light", "RATE", 22.0, 47.2, None),
         ("param", "SPREAD", 51.0, 27.0, "SPREAD"),
+        ("param", "DIAL", 86.0, 12.0, "DIAL"),
         ("widget", "ENC", 77.0, 36.0, "ENCODER"),
         ("param", "PUSH", 89.5, 47.0, "PUSH"),
         ("param", "OFFSET", 53.0, 53.0, "BI/UNI"),
@@ -1643,7 +1646,7 @@ SPECIMEN = dict(
         ("light", "B", 83.2, 112.0, None),
         ("output", "B", 89.0, 112.0, "B"),
     ],
-    sizes={"PARAM_RATE": "hero", "PARAM_SPREAD": "face", "PARAM_OFFSET": "toggle",
+    sizes={"PARAM_RATE": "hero", "PARAM_DIAL": "dial", "PARAM_SPREAD": "face", "PARAM_OFFSET": "toggle",
            "PARAM_ONESHOT": "cap", "PARAM_PUSH": "cap"},
     origins=[_SP],
     circles=[(_SP[0], _SP[1], r) for r in (78, 90, 102, 114)],
@@ -1653,6 +1656,7 @@ SPECIMEN = dict(
     faces={
         "PARAM_RATE": dict(r=16.4, ticks=50, major=5, numerals=list(range(11))),
         "PARAM_SPREAD": dict(r=7.3, ticks=20, major=5),
+        "PARAM_DIAL": dict(r=9.6, ticks=24, major=6),   # the smaller main dial
         "WIDGET_ENC": dict(r=10.4, ticks=24, sweep=360, minor_len=1.3),   # one tick per detent
     },
     tiles=[dict(port="OUTPUT_SIN"), dict(port="OUTPUT_TRI")]
@@ -1668,7 +1672,7 @@ SPECIMEN = dict(
     + [[f"INPUT_{n}", f"PARAM_{n}_ATT", f"PARAM_{n}"] for n in _SP_NAMES[1:]],
     screens=[("SCOPE", 56.0, 66.0, 41.6, 20.8)],
     rulers={"SCOPE": dict(px=0.65, sides="lb", numerals=True)},
-    label_at={"PARAM_RATE": "face", "PARAM_SPREAD": "below", "PARAM_PUSH": "below",
+    label_at={"PARAM_RATE": "face", "PARAM_DIAL": "left", "PARAM_SPREAD": "below", "PARAM_PUSH": "below",
               "LIGHT_TRIG": "right"},
     label_colour={"PARAM_SPREAD": "dim", "PARAM_PUSH": "dim", "PARAM_OFFSET": "dim", "PARAM_ONESHOT": "dim"},
     notes=[(10.0, 64.0, "FM", 2.0, "ivory", "start"),

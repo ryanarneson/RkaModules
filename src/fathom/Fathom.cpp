@@ -186,7 +186,7 @@ struct FathomWidget : ModuleWidget {
 
 		// PITCH, the origin, on its numbered face; the voice knobs and
 		// V/OCT on the limb around it.
-		addParam(createParamCentered<rka::HeroKnob>(mm2px(PARAM_PITCH), module, Fathom::PITCH_PARAM));
+		addParam(createParamCentered<rka::DialKnob>(mm2px(PARAM_PITCH), module, Fathom::PITCH_PARAM));
 		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_SUB), module, Fathom::SUB_PARAM));
 		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_SPREAD), module, Fathom::SPREAD_PARAM));
 		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_DETUNE), module, Fathom::DETUNE_PARAM));

@@ -376,6 +376,14 @@ struct HeroKnob : KnurledKnob {
 	}
 };
 
+// 14 mm: a main control on a smaller numbered face (Fathom's PITCH), where
+// the hero would leave the scale no room.
+struct DialKnob : KnurledKnob {
+	DialKnob() {
+		setArt("DialKnob");
+	}
+};
+
 // 9.6 mm: a secondary control on a small enamel face.
 struct FaceKnob : KnurledKnob {
 	FaceKnob() {
