@@ -1329,8 +1329,12 @@ const uint32_t bjorklund_patterns[] = {
 };
 
 // SHOAL: the pattern table has rows for num_steps 1..31 and 33 beat columns
-// (0..32). H1200's length reaches 32 and Piqued's 0 is guarded by its caller,
-// which read past either end of the table. Only the table index is clamped;
+// (0..32). H1200's length reaches 32 (past the end). Piqued tests only its
+// length setting for 0; a CV mapped to the length can still take the live
+// value to 0 (APP_ENVGEN.ino constrains it to 0..31), which read row -1,
+// before the table (outside the object: any value). Row 0 is used there: its
+// columns 0 and 1 (0 and 1) are also the right one-step patterns. Only the
+// table index is clamped;
 // the cycle length (num_steps + 1) and the rotation keep the caller's value,
 // and a position of 32 (the 33rd step of a length-32 cycle) shifts out, as the
 // Teensy's shift does.

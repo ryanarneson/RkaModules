@@ -18,16 +18,19 @@ void testAdcCadence() {
 	shoal::Core c;
 	run(c, 0.1);  // settle at 0 V (smoothing starts from code 0)
 	const uint32_t before = CoreTest::smoothedCode(c, 0);
-	// Smoothing from below truncates: it settles at most 1 code under.
+	// Smoothing from below truncates: it settles at most 1 code under. The
+	// allowance is one-sided on purpose: approaching from code 0, the
+	// integer smoothing can stop short of the target, never overshoot it.
 	CHECK(before == 2730 || before == 2729, "settled at the 0 V code, got %u", before);
 
 	c.setCv(0, 2.f);
 	uint32_t prev = before;
-	int phase = -1;
+	int phase = -1, changes = 0;
 	for (int i = 0; i < 60; i++) {
 		c.tick();
 		const uint32_t now = CoreTest::smoothedCode(c, 0);
 		if (now != prev) {
+			changes++;
 			if (phase < 0)
 				phase = i % 3;
 			CHECK(i % 3 == phase, "tick %d: value changed off the every-third-tick cadence", i);
@@ -35,6 +38,9 @@ void testAdcCadence() {
 		prev = now;
 	}
 	CHECK(phase >= 0, "value changed");
+	// 20 scans land in the window; the last few may close less than one
+	// visible code, but at least 18 must move the value.
+	CHECK(changes >= 18, "value changed on %d ticks of 60, want at least 18", changes);
 	// Each scan closes a quarter of the gap: 20 scans in 60 ticks leave
 	// 819 * 0.75^20 = 2.6 codes; 100 ticks (33 scans) leave under 1.
 	run(c, 40 * 60e-6);
@@ -85,6 +91,10 @@ void testInputRange() {
 	run(c, 0.02);
 	c.setInputRange(shoal::InputRange::Bipolar5);
 	run(c, 60 * 60e-6);
+	// The offset changes at once but the smoothed code still has to travel
+	// 682 codes (2730 - 2048): after 20 scans 682 * 0.75^20 = 2.2 codes
+	// remain, about 8 pitch units (3.75 per code), on top of the usual
+	// 8-unit allowance. 8 * 3 covers both with a margin.
 	CHECK(std::abs(CoreTest::pitchIn(c, 0) - 2 * 1536) <= 8 * 3, "settles after a mid-run switch, got %d",
 		(int) CoreTest::pitchIn(c, 0));
 	CHECK(allFinite(c), "finite after switching");
@@ -110,12 +120,18 @@ void testHostileVolts() {
 	run(c, 0.02);
 	CHECK(std::abs(CoreTest::pitchIn(c, 0)) <= 8, "NaN CV reads as 0 V");
 	// NaN on a high gate reads as 0 V: the gate falls and can rise again.
+	// App 0 (CopierMaschine) samples CV1 into A on a TR1 clock.
+	c.setCv(0, 1.f);
+	run(c, 0.05);
 	c.setGate(0, 10.f);
 	c.setGate(0, NAN);
 	run(c, 0.002);
+	c.setCv(0, 2.f);
+	run(c, 0.05);
 	c.setGate(0, 10.f);  // rising edge again, must be latched without fault
-	run(c, 0.002);
+	run(c, 0.005);
 	CHECK(allFinite(c), "gate NaN then high");
+	CHECK(std::fabs(c.out(0) - 2.f) < 0.01f, "10 V after a NaN gate clocks: A = %g", (double) c.out(0));
 }
 
 void testShortPulseLatched() {

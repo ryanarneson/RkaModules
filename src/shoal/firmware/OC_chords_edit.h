@@ -67,7 +67,10 @@ public:
       return;
     
     edit_this_progression_ = num_progression;
-    chord_ = &OC::g_user_chords[chord + edit_this_progression_ * OC::Chords::NUM_CHORDS]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
+    // SHOAL: through GetChord, which maps a slot past the 32-entry table to
+    // chord 0; Acid Curds' chord slot (0..31) plus 8 per progression reaches
+    // 55, and the address was formed past the table. chord_ is never read.
+    chord_ = &OC::Chords::GetChord(chord, edit_this_progression_);
     max_chords_ = num_chords;
     owner_ = owner;
     BeginEditing();
@@ -286,7 +289,16 @@ void ChordEditor<Owner>::HandleEncoderEvent(const UI::Event &event) {
   	if (cursor_pos_ < (uint8_t)(max_chords_ + 1)) {
       
       // write to the right slot, at the right index/offset (a nicer struct would be nicer, but well)
-      OC::Chord *edit_user_chord_ = &OC::g_user_chords[edit_this_chord_ + edit_this_progression_ * OC::Chords::NUM_CHORDS]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
+      // SHOAL: g_ prefix (name clashes with GlobalSettings members). The slot
+      // (up to num.chords, 0..31) plus 8 per progression can pass the 32-entry
+      // table; the Teensy then wrote past it (outside the object). Those
+      // writes are dropped, so no chord changes: Acid Curds plays chord 0 for
+      // such a slot (OC::Chords::GetChord, Chords::Update) and that is left
+      // as it was.
+      const int edit_index = edit_this_chord_ + edit_this_progression_ * OC::Chords::NUM_CHORDS;
+      OC::Chord dropped_edit;
+      OC::Chord *edit_user_chord_ = edit_index >= 0 && edit_index < OC::Chords::CHORDS_USER_LAST
+          ? &OC::g_user_chords[edit_index] : &dropped_edit;
       
 	    switch(cursor_quality_pos_) {
 

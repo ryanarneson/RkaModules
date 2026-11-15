@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Shoal: firmware core (no module yet).
+
 ## 2.0.0 (unreleased)
 
 - New module: **Sway**, an 18 HP polyphonic LFO:

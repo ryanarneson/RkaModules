@@ -63,6 +63,18 @@ void MultistageEnvelope::Init() {
 
 uint16_t MultistageEnvelope::ProcessSingleSample(uint8_t control) {
 
+  // SHOAL: level_ index past the array. A change to a type with fewer
+  // segments while the envelope is past the new last segment (Sequins' aux
+  // envelope mode; Piqued resets the envelope on a type change) leaves
+  // segment_ above num_segments_; it never equals it again and walks on
+  // through the stale segments, reading level_[segment_ + 1]. At segment 7
+  // that is level_[8], the first of time_ (int16_t level_[8] is followed by
+  // uint16_t time_[8] on both builds), which is read here by name.
+  auto level_at = [this](int16_t index) -> int32_t {
+    return index < static_cast<int16_t>(kMaxNumSegments)
+        ? level_[index] : static_cast<int16_t>(time_[index - kMaxNumSegments]);
+  };
+
   state_mask_ = 0;
   if (control & CONTROL_GATE_RISING) {
     if (segment_ == num_segments_) {
@@ -104,7 +116,7 @@ uint16_t MultistageEnvelope::ProcessSingleSample(uint8_t control) {
     segment_ = sustain_point_;
     phase_ = 0;
   } else if (phase_ < phase_increment_) {
-    start_value_ = level_[segment_ + 1];
+    start_value_ = level_at(segment_ + 1); // SHOAL: see level_at
     ++segment_;
     phase_ = 0;
     if (segment_ == loop_end_ && (control & CONTROL_GATE)) {
@@ -117,6 +129,14 @@ uint16_t MultistageEnvelope::ProcessSingleSample(uint8_t control) {
       state_mask_ |= ENV_EOC;    
   }
   
+  // SHOAL: from segment 8 the walk (see level_at) reads time_[8..] and
+  // time_multiplier_[8..], which run into shape_ (an enum array, whose size
+  // and so layout the Teensy build need not share) and then out of the
+  // object: no reproducible Teensy result. The envelope is taken as finished
+  // there, as the type it was left by had finished.
+  if (segment_ >= static_cast<int16_t>(kMaxNumSegments))
+    segment_ = num_segments_;
+
   bool done = segment_ == num_segments_;
   bool sustained = sustain_point_ && segment_ == sustain_point_ &&
       control & CONTROL_GATE;
@@ -125,7 +145,7 @@ uint16_t MultistageEnvelope::ProcessSingleSample(uint8_t control) {
       sustained || done ? 0 : lut_env_increments[time_[segment_] >> 8] >> time_multiplier_[segment_];
 
   int32_t a = start_value_;
-  int32_t b = level_[segment_ + 1];
+  int32_t b = level_at(segment_ + 1); // SHOAL: see level_at
   uint16_t t = Interpolate824(
       lookup_table_table[LUT_ENV_LINEAR + shape_[segment_]], phase_);
   value_ = a + ((b - a) * (t >> 1) >> 15);

@@ -118,7 +118,9 @@ public:
       	pending_bit_ = 0;
       	for (int8_t b = 32; b > -1; --b) {
       		// Serial.println(b) ;
-      		uint32_t bitmask = static_cast<uint32_t>(0x01 << b) ;
+      		// SHOAL: b starts at 32; the Teensy's shift by 32 gives 0 (so the
+      		// first test always passes), x86 shifts by 0.
+      		uint32_t bitmask = b < 32 ? static_cast<uint32_t>(0x01 << b) : 0u ;
       		if ((sk_ & bitmask) == bitmask) {
       			bit_sum_ += pending_bit_ ;
       			pending_bit_ = 1;

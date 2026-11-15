@@ -54,6 +54,13 @@ cat >"$tmp/zero_global.cpp" <<'EOF'
 int probe_zero_global;
 int probe_use() { return probe_zero_global++; }
 EOF
+cat >"$tmp/eh_personality_ok.cpp" <<'EOF'
+// A destructor on an unwinding path: the compiler emits
+// DW.ref.__gxx_personality_v0 in a writable section (filled in at load time).
+struct ProbeGuard { ~ProbeGuard(); };
+void probe_may_throw();
+void probe_use() { ProbeGuard g; probe_may_throw(); }
+EOF
 cat >"$tmp/thread_local_ok.cpp" <<'EOF'
 thread_local int probe_thread_local;
 int probe_use() { return probe_thread_local++; }
@@ -91,6 +98,7 @@ expect writable_global fail probe_writable_global
 expect writable_static_member fail 'ProbeClass::probe_static_member'
 expect zero_global fail probe_zero_global
 expect thread_local_ok pass
+expect eh_personality_ok pass
 
 if [ $failures -ne 0 ]; then
 	echo "test_check_shoal_globals: $failures probe(s) failed"

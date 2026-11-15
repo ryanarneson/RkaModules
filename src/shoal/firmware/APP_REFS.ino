@@ -877,7 +877,11 @@ void ReferenceChannel::RenderScreensaver(weegfx::coord_t start_x, uint8_t chan) 
     graphics.setPrintPos(start_x + menu::kIndentDx, y - 7);
   else
     graphics.setPrintPos(start_x + menu::kIndentDx, y);
-  graphics.print(OC::Strings::note_names_unpadded[unscaled_semitone]);
+  // SHOAL: unscaled_pitch is not constrained, so below the lowest octave the
+  // remainder and the semitone are negative (-11..-1) and the index ran
+  // before the array (outside the object: no known Teensy value). The name
+  // of that semitone counted from the octave below is printed instead.
+  graphics.print(OC::Strings::note_names_unpadded[unscaled_semitone < 0 ? unscaled_semitone + 12 : unscaled_semitone]);
 
   graphics.drawHLine(start_x + 16, y, 8);
   graphics.drawBitmap8(start_x + 28, 34 - unscaled_octave * 2 - 1, OC::kBitmapLoopMarkerW, OC::bitmap_loop_markers_8 + OC::kBitmapLoopMarkerW); // was 60

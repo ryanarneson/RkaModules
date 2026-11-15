@@ -42,6 +42,16 @@ struct CoreTest {
 	// the firmware's map for `numSlots` slots and `range` (0: 5 V, 1: 10 V);
 	// slots[i] receives the slot chosen for inputs[i].
 	static void inputMapRun(int numSlots, int range, const int32_t* inputs, int n, int8_t* slots);
+	// Feed `pitches` in turn to a fresh, zeroed braids::Quantizer (as the
+	// firmware's, which live in zero-initialised objects) configured with a
+	// 16-note scale, span 1536, notes 96 * i, all enabled; out[i] receives
+	// Process(pitches[i], 0, 0).
+	static void quantizerRun(const int32_t* pitches, int n, int32_t* out);
+	// Clock a util::IntegerSequence (the firmware's IntSq source) for core c:
+	// sequence `seq`, loop start `start`, length `length`, stride 1, no
+	// Brownian motion, modulus 256 (no wrap); out[i] receives the i-th
+	// Clock() (the value << 8).
+	static void intSeqRun(Core& c, int seq, int start, int length, int n, uint16_t* out);
 	static int userScaleSlots();
 	static int userPatternSlots();
 	static int userChordSlots();

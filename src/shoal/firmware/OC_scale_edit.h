@@ -587,6 +587,11 @@ void ScaleEditor<Owner>::invert_mask() {
 
 template <typename Owner>
 /*static*/ uint16_t ScaleEditor<Owner>::RotateMask(uint16_t mask, int num_notes, int amount) {
+  // SHOAL: a scale with no notes (the "off" scale, braids::scales[0]) made
+  // `amount % num_notes` a division by zero. The Teensy's result: used_bits is
+  // 0, so the mask is 0 and every shift of it is 0, and the fill gives 0xffff.
+  if (num_notes == 0)
+    return 0xffff;
   uint16_t used_bits = ~(0xffffU << num_notes);
   mask &= used_bits;
 

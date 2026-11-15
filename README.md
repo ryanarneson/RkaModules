@@ -34,6 +34,18 @@ src/fathom/              the Fathom drone voice, same shape: Fathom.cpp,
                          Svf.hpp, SuperSaw.hpp, Drift.hpp, Ladder.hpp,
                          Halfband.hpp, DroneVoice.hpp, test_*.cpp,
                          FathomLayout.hpp
+src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware, headless
+  Core.hpp               shoal::Core, the only header the plugin includes
+  Firmware.cpp           the firmware, shim and core as one C++17 unit
+  FirmwareContext.inc    per-instance firmware state (shoal::Context)
+  SettingsAccess.inc     raw settings table for every app
+  CoreImpl.inc           shoal::Core's implementation
+  CoreTest.hpp           test-only hooks into the core
+  test_util.hpp          helpers shared by the Shoal tests
+  test_*.cpp             offline tests, under the sanitizers
+  firmware/              vendored firmware; local changes in CHANGES.md
+  shim/                  Arduino and Teensy stand-ins
+  bench/bench_core.cpp   CPU cost per app (make shoal-bench)
 res/components/          the plugin's own knob SVGs (the trim), generated
 res/<module>/            final panels, text as paths (what Rack loads)
 res-src/<module>/        generated SVGs with live text (input to Inkscape)
@@ -57,6 +69,8 @@ make test         # unit-test the DSP cores (no Rack needed)
 make install      # package and install into your Rack user folder
 make smoke        # load in a real headless Rack, screenshot each module
 make panels       # regenerate panels after editing tools/gen_panels.py
+make shoal-bench  # Shoal: CPU per app, fails above 2 % of a core
+make shoal-globals  # Shoal: the firmware object holds no writable globals
 tools/cross_build.sh   # Windows + Linux packages via Docker -> packages/
 tools/mac_dist.sh      # (on a Mac) arm64 + x64 packages -> packages/
 ```

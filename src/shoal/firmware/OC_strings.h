@@ -58,7 +58,10 @@ namespace OC {
 
 inline
 const char *note_name(int note) {
-  return OC::Strings::note_names[(note + 120) % 12];
+  // SHOAL: for a note below -120 the remainder is negative and the index
+  // ran before the array (outside the object: no known Teensy value); the
+  // name of the note modulo 12, as for every other note, is used instead.
+  return OC::Strings::note_names[((note % 12) + 12) % 12];
 }
 
 #endif // OC_STRINGS_H_

@@ -83,6 +83,12 @@ build/test/%: src/%.cpp $(wildcard src/*.hpp $(MODULES:%=src/%/*.hpp))
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O2 -Wall -Wextra -Isrc -I$(<D) $< -o $@
 
+.PHONY: shoal-bench
+shoal-bench:
+	@mkdir -p build/test/shoal
+	$(CXX) $(SHOAL_FW_FLAGS) -O2 -Isrc src/shoal/bench/bench_core.cpp src/shoal/Firmware.cpp -o build/test/shoal/bench_core
+	build/test/shoal/bench_core
+
 # Load the installed plugin in a real (headless) Rack and render module
 # screenshots. See tools/rack_smoke.sh.
 .PHONY: smoke

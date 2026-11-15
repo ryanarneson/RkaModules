@@ -66,12 +66,13 @@ void ByteBeat::Init() {
 // x % 0 = x (the remainder is x - (x / 0) * 0), and a shift by 32 or more
 // empties the register (an arithmetic right shift fills with the sign).
 // The helpers give those results; the result types are those of the
-// operators they replace.
+// operators they replace. (The -1 tests compare as int64_t so GCC's
+// -Wsign-compare stays quiet for unsigned divisors.)
 template <typename A, typename B>
 static inline auto bb_div(A a, B b) -> decltype(a / b) {
   typedef decltype(a / b) R;
   if (b == 0) return R(0);
-  if (std::is_signed<R>::value && b == -1) return R(0u - static_cast<uint32_t>(a));
+  if (std::is_signed<R>::value && static_cast<int64_t>(b) == -1) return R(0u - static_cast<uint32_t>(a));
   return a / b;
 }
 
@@ -79,7 +80,7 @@ template <typename A, typename B>
 static inline auto bb_mod(A a, B b) -> decltype(a % b) {
   typedef decltype(a % b) R;
   if (b == 0) return R(a);
-  if (std::is_signed<R>::value && b == -1) return R(0);
+  if (std::is_signed<R>::value && static_cast<int64_t>(b) == -1) return R(0);
   return a % b;
 }
 

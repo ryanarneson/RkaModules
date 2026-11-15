@@ -43,7 +43,10 @@ fi
 #   storage_size_: settings::SettingsBase<...>::storage_size_ is declared
 #   `static const size_t` and computed once during static initialisation
 #   (before main, single-threaded); nothing writes it afterwards.
-ALLOWED='13storage_size_E$'
+#   DW.ref.*: GCC's pointer to the C++ exception personality routine
+#   (DW.ref.__gxx_personality_v0, in .data.rel.local with -fPIC), filled in
+#   by relocation at load time and only read by the unwinder.
+ALLOWED='13storage_size_E$|^DW[.]ref[.]'
 
 FORMAT=${SHOAL_OBJ_FORMAT:-}
 if [ -z "$FORMAT" ]; then

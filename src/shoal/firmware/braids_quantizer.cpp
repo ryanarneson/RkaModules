@@ -83,8 +83,15 @@ int32_t Quantizer::Process(int32_t pitch, int32_t root, int32_t transpose) {
     }
 
     // Enlarge the current voronoi cell a bit for hysteresis.
-    previous_boundary_ = (9 * codebook_[q - 1] + 7 * codebook_[q]) >> 4;
-    next_boundary_ = (9 * codebook_[q + 1] + 7 * codebook_[q]) >> 4;
+    // SHOAL: q stays -1 when no distance (truncated to int16) is under 16384,
+    // e.g. a pitch far outside the codebook's range; codebook_[-2] and
+    // codebook_[-1] then read the member before the array. The layout is the
+    // same on the Teensy (bool enabled_, int16_t enabled_notes_[16], int16_t
+    // codebook_[128]), so those reads are enabled_notes_[14] and [15].
+    const int16_t cb_prev = q >= 1 ? codebook_[q - 1] : enabled_notes_[16 + q - 1];
+    const int16_t cb_q = q >= 0 ? codebook_[q] : enabled_notes_[16 + q];
+    previous_boundary_ = (9 * cb_prev + 7 * cb_q) >> 4;
+    next_boundary_ = (9 * codebook_[q + 1] + 7 * cb_q) >> 4;
 
     // Apply transpose after setting up boundaries
     q += transpose;

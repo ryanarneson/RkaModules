@@ -457,7 +457,10 @@ void testForgedUserScale() {
 	std::vector<uint8_t> valid(kImage);
 	a.save(valid.data());
 	const uint32_t counts[] = { 0, 1, 3, 17, 0xFFFFFFFFu };
-	const int apps[] = { 0, 3, 4, 8, 11 };
+	// Acid Curds (11) is not here: its scale setting starts at the semitone
+	// scale (APP_CHORDS.ino, CHORDS_SETTING_SCALE and its menu's CONSTRAIN),
+	// so it can never select a user scale.
+	const int apps[] = { 0, 3, 4, 8 };
 	Core c;
 	for (int slot = 0; slot < CoreTest::userScaleSlots(); slot++)
 		for (uint32_t count : counts) {
@@ -493,6 +496,59 @@ void testForgedUserScale() {
 				CHECK(allFinite(c), "slot %d, %u notes, app %d: outputs finite", slot, (unsigned) count, app);
 			}
 		}
+}
+
+int settingIndex(Core& c, const char* name) {
+	for (int i = 0; i < c.settingCount(); i++)
+		if (std::strcmp(c.settingInfo(i).name, name) == 0)
+			return i;
+	CHECK(false, "no setting named %s", name);
+	return 0;
+}
+
+// RotateMask is reached with the clamped note count. User scale 0 is forged
+// with 0 notes and restores with 4 (the default user scales are semitones, so
+// notes 0, 128, 256, 384). Quantermain channel 1 quantizes CV2 on TR1 with
+// only note 0 active, and CV1 rotates its mask ("CV aux >" = mask) by
+// (code + 127) >> 8. CV2 sits on note 1 (1/12 V): rotations 0 and 4 (4 % 4)
+// give note 0, rotations 1 and 5 (5 % 4) give note 1. The quantizer keeps its
+// last cell across a reconfigure (hysteresis), so each case first clocks CV2
+// at 3 V to leave it.
+void testUserScaleMaskRotates() {
+	Core a;
+	std::vector<uint8_t> img(kImage);
+	a.save(img.data());
+	size_t span, numNotes, notes;
+	CoreTest::userScaleImageOffsets(0, span, numNotes, notes);
+	const uint32_t zero = 0;
+	memcpy(&img[numNotes], &zero, sizeof(zero));
+	CoreTest::fixChecksum(img.data(), false);
+	Core c;
+	CHECK(c.restore(img.data()), "forged page loads");
+	CHECK(CoreTest::userScaleNumNotes(c, 0) == 4, "count clamped to 4, got %u", (unsigned) CoreTest::userScaleNumNotes(c, 0));
+	c.selectApp(3);
+	c.setSettingRaw(0, settingIndex(c, "Scale"), 0);
+	c.setSettingRaw(0, settingIndex(c, "Active notes"), 1);
+	c.setSettingRaw(0, settingIndex(c, "CV Source"), 1);
+	c.setSettingRaw(0, settingIndex(c, "CV aux >"), 4);
+	c.setSettingRaw(0, settingIndex(c, "Trigger source"), 0);
+	struct { int rotate; float want; } cases[] = {
+		{ 0, 0.f }, { 1, 1.f / 12.f }, { 4, 0.f }, { 5, 1.f / 12.f }, { 0, 0.f },
+	};
+	for (const auto& k : cases) {
+		// Code 256 * rotate + 1, where (code + 127) >> 8 is rotate.
+		c.setCv(0, (k.rotate * 256 + 1) / 409.6f);
+		c.setCv(1, 3.f);
+		run(c, 0.05);
+		pulse(c, 0);
+		run(c, 0.01);
+		c.setCv(1, 1.f / 12.f);
+		run(c, 0.05);
+		pulse(c, 0);
+		run(c, 0.01);
+		CHECK(std::fabs(c.out(0) - k.want) < 0.01f, "rotate %d: out %g, want %g", k.rotate, (double) c.out(0),
+			(double) k.want);
+	}
 }
 
 // Viznutcracker sweet (app 10), equation 15: its divisor is 0 when t * pitch
@@ -559,6 +615,7 @@ int main() {
 	testUserDataRoundTrip();
 	testForgedImage();
 	testForgedUserScale();
+	testUserScaleMaskRotates();
 	testBytebeatEquation15();
 	testInputMapUpperBoundary();
 	testResetToDefaults();

@@ -1182,7 +1182,10 @@ void H1200_screensaver() {
   for (size_t i=0; i < 3; ++i, y += line_h) {
     int note = outputs[i + 1];
     int octave = note / 12;
-    note = (note + 120) % 12;
+    // SHOAL: below -120 the remainder was negative and indexed before
+    // note_names_unpadded (outside the object: no known Teensy value); the
+    // note modulo 12 is used, as for every other note.
+    note = ((note % 12) + 12) % 12;
     normalized[i] = note;
 
     graphics.setPrintPos(x_col_1, y);

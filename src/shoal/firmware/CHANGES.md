@@ -109,7 +109,9 @@ is marked `// SHOAL:`.
   (`GlobalSettings` members), `OC::ui` (the apps' `ui` members),
   `OC::calibration_data` (`ADC::Init`/`DAC::Init` parameters),
   `APP_QQ.ino`'s `history` (`APP_REFS.ino` locals) and `APP_A_SEQ.ino`'s
-  `copy_sequence` (`PatternEditor::copy_sequence()`). All uses renamed.
+  `copy_sequence` (`PatternEditor::copy_sequence()`). All uses renamed,
+  including those in `OC_sequence_edit.h` and `util/util_arp.h` (Task 8:
+  listed here by name so every changed file appears in this log).
 - Static data members of `OC::ADC`, `OC::DAC`, `OC::DigitalInputs` and
   `stmlib::Random` became private static accessors returning a reference
   (`values_()`, ...); uses call them. `OC::CORE::ticks` and
@@ -216,10 +218,90 @@ is marked `// SHOAL:`.
   `bb_div`, `bb_mod`, `bb_shr`, which give the Teensy's results where C++ is
   undefined (division by zero is a crash on x86; x/0 = 0, x%0 = x, a shift by
   32 or more empties the register). All are reachable from in-range
-  parameters (p0..p2, the pitch, the last sample).
+  parameters (p0..p2, the pitch, the last sample). (Task 8: their `-1` tests
+  compare as `int64_t`, which keeps GCC's `-Wsign-compare` quiet on the
+  Linux and Windows builds.)
 - `OC_digital_inputs.h` (`DIGITAL_INPUT_MASK`): an index outside 0..31 gives an
   empty mask (Acid Curds, Sequins etc. compute `trigger_source - 1` with
   source 0 = "none", i.e. a shift by -1).
 - `bjorklund.h` (`rotl32`), `bjorklund.cpp` (`EuclideanPattern`): shifts by 32
   or more guarded (a length of 31 with no rotation shifted by 32); the
   `num_steps` clamp of `EuclideanFilter` applies here too.
+- `bjorklund.cpp` (Piqued, "Eucl length" 1 or more with a CV input mapped to
+  "Eleng" and a negative CV): the live length reaches 0, which Piqued's caller
+  does not test (it tests the setting), so `EuclideanFilter(0, ...)` read
+  `bjorklund_patterns[-33 + fill]`, before the table. Outside the object, so
+  no known Teensy value: the clamp reads row 0, whose columns 0 and 1 are the
+  one-step patterns (rest, hit). Comment corrected (it said the caller
+  guards 0). Test: `test_faults` `testPiquedEuclideanLengthZero`.
+- `OC_scale_edit.h` (`ScaleEditor::RotateMask`; CopierMaschine, Quantermain,
+  Meta-Q, Sequins with "Scale" on the "off" scale, value 4, and a mask-rotate
+  CV): the off scale has no notes, so `amount % num_notes` divided by zero.
+  It now returns 0xffff for 0 notes, the Teensy's result (the used-bits mask
+  is 0, every shift of 0 is 0, the fill sets all 16 bits). Test:
+  `test_faults` `testOffScaleMaskRotate`.
+- `OC_menus.cpp` (`scope_render`; Quadraturia, Piqued, Dialectic Ping Pong
+  after Low-rents): the scope history is shared, and Low-rents'
+  `vectorscope_render` leaves 6-bit values in it (0..63) where `scope_render`
+  expects 5-bit ones, so for the first 64 scope updates after the switch the
+  C and D traces asked for rows up to 95 of the 64-row frame. On the Teensy
+  that wrote into the other frame buffer or past it; Shoal's scope frame is
+  the last member of the context, so it wrote past the core's state. Pixels
+  below row 63 are dropped; the 64 visible rows are what the Teensy drew in
+  that frame. Test: `test_faults` `testScopeAfterVectorscope`.
+- `util/util_integer_sequences.h` (`IntegerSequence::Clock`, Per Nørgård's
+  infinity series; Quantermain and CopierMaschine with the IntSq source on
+  sequence 4): the bit loop starts at b = 32 and `0x01 << b` shifted by the
+  type's width. The Teensy's shift gives 0, so the first test always passes;
+  x86 shifted by 0 and tested bit 0 (different for every even index). The
+  mask is 0 for b = 32. Test: `test_faults` `testNorgardSeries` (through the
+  new `CoreTest::intSeqRun`).
+- `peaks_multistage_envelope.cpp` (`MultistageEnvelope::ProcessSingleSample`;
+  Sequins' "aux. mode" changed from ADSR or ADR to AD after the envelope
+  finished): `segment_` stayed above the new `num_segments_`, never equalled
+  it again, and walked on through the stale segments (unchanged: the Teensy
+  does the same). At segment 7 it read `level_[8]`, which on both builds is
+  `time_[0]` (`int16_t level_[8]` then `uint16_t time_[8]`); that read is
+  now made by name. From segment 8 the reads run through `time_multiplier_`
+  into `shape_` (enums, whose size the Teensy build need not share) and out
+  of the object, with `shape_` also indexing `lookup_table_table`: no
+  reproducible result, so the envelope is taken as finished there
+  (`segment_ = num_segments_`), as the old type had left it; the next gate
+  starts it. Piqued is not affected (it resets the envelope on a type
+  change). Test: `test_faults` `testEnvelopeTypeShrinks`.
+- `APP_REFS.ino` (`ReferenceChannel::RenderScreensaver`; References with
+  "Octave" -3 and a negative "Mod range oct"): the unconstrained pitch went
+  below the lowest octave and the semitone index was -11..-1, before
+  `note_names_unpadded` (outside the object: no known Teensy value). The
+  name of that semitone counted from the octave below is printed. Test:
+  `test_faults` `testReferencesLowPitchName`.
+- `APP_A_SEQ.ino` (`SEQ_Channel::process_num_seq_channel`; Sequins in a
+  SEQ+n play mode with the direction switched between pendulum and forward):
+  `_clock`'s pendulum reverse branch leaves the step at -1 when an earlier
+  sequence is still to come, and the step mask was shifted by -1. The
+  Teensy's shift by -1 (its low byte, 255) gives 0, so the step is off; the
+  shift now gives 0 for any count outside 0..31. Test: `test_faults`
+  `testSequinsStepMinusOne`.
+- `OC_chords_edit.h` (`ChordEditor::Edit` and the R encoder handler; Acid
+  Curds with "chord:" up to 31 on progressions 2..4): the slot plus 8 per
+  progression reaches 55 of the 32-entry user chord table. `Edit` formed
+  (never read) a pointer past it, now taken through `OC::Chords::GetChord`;
+  the editor's writes to such a slot went past the table on the Teensy
+  (outside the object) and are dropped, so no chord changes (Acid Curds plays
+  chord 0 for such a slot, as `GetChord` and `Chords::Update` map it). Test:
+  `test_faults` `testChordEditorPastTable`.
+- `OC_strings.h` (`note_name`; Harrington 1200's menu) and `APP_H1200.ino`
+  (`H1200_screensaver`): `(note + 120) % 12` is negative for notes below
+  -120 (reached on the ±5 V range: root CV -5 V, Transpose -11, Octave -3,
+  Inversion -3, minor root), which indexed before the note names (outside the
+  object). Both now use the note modulo 12, the name every other note gets.
+  Test: `test_faults` `testH1200LowNotes`.
+- `braids_quantizer.cpp` (`Quantizer::Process`; Sequins' aux COPY output
+  with large octave offsets, and any pitch far outside the codebook): when no
+  codeword is within 16384 (distances truncated to int16) `q` stays -1 and
+  the hysteresis boundaries read `codebook_[-2]` and `codebook_[-1]`. The
+  class layout is the same on the Teensy (`bool enabled_`, `int16_t
+  enabled_notes_[16]`, `int16_t codebook_[128]`), so these are
+  `enabled_notes_[14]` and `[15]`, which are now read by name. Test:
+  `test_faults` `testQuantizerFarPitch` (through the new
+  `CoreTest::quantizerRun`).

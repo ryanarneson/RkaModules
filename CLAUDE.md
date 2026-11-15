@@ -39,6 +39,9 @@ layout.
 - DSP lives in Rack-free headers in `src/<folder>/` with tests in
   `src/<folder>/test_*.cpp` (using `src/testing.hpp`). Modules only map params/ports/polyphony onto the
   core.
+- Shoal's core is the vendored O&C firmware in `src/shoal/firmware/`;
+  change it only with a `// SHOAL:` mark and a `CHANGES.md` line;
+  `make shoal-globals` must stay clean.
 - Voltage standards: audio ±5 V, bipolar CV ±5 V, unipolar CV 0–10 V,
   gates/triggers 0/10 V, V/OCT 1 V per octave; triggers detect with
   `SchmittTrigger` at 0.1 V / 1 V.

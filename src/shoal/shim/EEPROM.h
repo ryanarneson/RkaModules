@@ -16,7 +16,7 @@ struct EEPROMClass {
 	void update(int idx, uint8_t val) { if (read(idx) != val) write(idx, val); }
 };
 
-static EEPROMClass EEPROM;
+[[maybe_unused]] static EEPROMClass EEPROM;  // unused in most includers (GCC warns)
 
 // Arduino's EEPROM reference and pointer helpers (used by util/EEPROMStorage.h).
 struct EERef {

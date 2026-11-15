@@ -459,6 +459,30 @@ void CoreTest::inputMapRun(int numSlots, int range, const int32_t* inputs, int n
 		slots[i] = map.Process(inputs[i]);
 }
 
+void CoreTest::quantizerRun(const int32_t* pitches, int n, int32_t* out) {
+	braids::Quantizer q;  // zeroed, then Init, as the firmware's
+	memset(static_cast<void*>(&q), 0, sizeof(q));
+	q.Init();
+	braids::Scale scale;
+	scale.span = 1536;
+	scale.num_notes = 16;
+	for (int i = 0; i < 16; i++)
+		scale.notes[i] = (int16_t) (96 * i);
+	q.Configure(scale, 0xffff);
+	for (int i = 0; i < n; i++)
+		out[i] = q.Process(pitches[i], 0, 0);
+}
+
+void CoreTest::intSeqRun(Core& c, int seq, int start, int length, int n, uint16_t* out) {
+	Scope scope(c.impl_->ctx.get());
+	util::IntegerSequence s;
+	s.Init((int16_t) start, (int16_t) length);
+	s.set_int_seq((int16_t) seq);
+	s.set_int_seq_modulus(256);
+	for (int i = 0; i < n; i++)
+		out[i] = s.Clock();
+}
+
 int CoreTest::userScaleSlots() { return OC::Scales::SCALE_USER_LAST; }
 int CoreTest::userPatternSlots() { return OC::Patterns::PATTERN_USER_ALL; }
 int CoreTest::userChordSlots() { return OC::Chords::CHORDS_USER_LAST; }
