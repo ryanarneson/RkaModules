@@ -249,8 +249,8 @@ struct SwayWidget : ModuleWidget {
 		setModule(module);
 		setPanel(createPanel(asset::plugin(pluginInstance, "res/sway/Sway.svg"), asset::plugin(pluginInstance, "res/sway/Sway-dark.svg")));
 
-		addChild(createWidget<ThemedScrew>(Vec(RACK_GRID_WIDTH, 0)));
-		addChild(createWidget<ThemedScrew>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
+		for (const Vec& screw : SCREWS)
+			addChild(createWidgetCentered<rka::Screw>(mm2px(screw)));
 
 		addParam(createParamCentered<rka::HeroKnob>(mm2px(PARAM_RATE), module, Sway::RATE_PARAM));
 		addChild(createLightCentered<rka::JewelLight>(mm2px(LIGHT_RATE), module, Sway::RATE_LIGHT));

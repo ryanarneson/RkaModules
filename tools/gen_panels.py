@@ -113,6 +113,25 @@ def component_size(spec, name, kind, cname):
         return "trim" if cname.endswith("_ATT") else "small"
     return "jack"
 
+# Rack's screws are 15 px (one HP) square, set as Rack's template sets them:
+# one grid step in from the left edge, two in from the right, against the
+# top or bottom rail. The widget (rka::Screw) is drawn at these centres, from
+# the layout header's SCREWS. SCREW_R is the head's radius, for clearances.
+SCREW_R = 2.2
+
+
+def screws_at(hp, *corners):
+    """Screw centres in mm, one per corner named: "tl", "tr", "bl", "br"."""
+    out = []
+    for corner in corners:
+        if corner not in ("tl", "tr", "bl", "br"):
+            sys.exit(f'a screw goes at a corner: "tl", "tr", "bl" or "br", not {corner!r}')
+        x = 1.5 * HP if corner[1] == "l" else (hp - 1.5) * HP
+        y = HP / 2 if corner[0] == "t" else PANEL_H - HP / 2
+        out.append((round(x, 2), round(y, 2)))
+    return out
+
+
 # Placing a column's control on an arc; module descriptions below use it.
 def column_on_arc(cx, cy, r, x):
     """The y at which the vertical line at x meets the circle of radius r
@@ -185,6 +204,8 @@ PANELS = {
         # FM has no knob: its name sits just right of its trace.
         notes=[(_SW_X[0] + 1.6, 61.6, "FM", 2.0, "ivory", "start")],
         preview={"LIGHT_RATE": dict(lit=True)},
+        # As the mockup: clear of the nameplate, top left.
+        screws=screws_at(12, "tr", "bl", "br"),
     ),
     # Fathom, the drone voice. The voice is an "orbit": PITCH is a sun with
     # the four voice knobs on a ring around it, V/OCT in on the ring's left
@@ -476,6 +497,9 @@ def layout_hpp(name, spec):
     for sname, x, y, w, h in spec.get("screens", []):
         lines.append(f"static const rack::math::Rect SCREEN_{sname}"
                      f"(rack::math::Vec({x}f, {y}f), rack::math::Vec({w}f, {h}f));")
+    if spec.get("screws"):
+        lines.append("static const rack::math::Vec SCREWS[] = {"
+                     + ", ".join(f"rack::math::Vec({x}f, {y}f)" for x, y in spec["screws"]) + "};")
     lines += ["}", ""]
     return "\n".join(lines)
 
@@ -574,6 +598,9 @@ def check_screens(name, spec):
 #                     brass bezel
 #   rulers            screen name -> dict(px=mm per pixel, sides="lb",
 #                     numerals=True): pixel rulers outside a screen
+#   screws            [(x, y)]: centres of the rack screws the module places
+#                     (rka::Screw, from the layout header's SCREWS); usually
+#                     screws_at(hp, "tr", ...). Not drawn on the panel; kept clear
 #   label_at          id -> "above" (default), "below", "left", "right", or
 #                     "face" (in ink at the foot of the control's own face).
 #                     An output on a tile is named on the tile instead.
@@ -1055,7 +1082,7 @@ def instrument_texts(name, spec):
 INSTRUMENT_KEYS = {"look", "dir", "hp", "title", "subtitle", "nameplate", "mark", "components", "sizes",
                    "origins", "circles", "radii", "limbs", "faces", "tiles", "traces", "screens", "rulers",
                    "label_at", "label_colour", "label_size", "label_gap", "label_dx", "label_dy", "notes",
-                   "preview"}
+                   "preview", "screws"}
 FACE_KEYS = {"r", "ticks", "major", "sweep", "numerals", "tick_r", "minor_len", "major_len", "numeral_r",
              "numeral_size"}
 TILE_KEYS = {"port", "name", "light", "left", "right", "top", "bottom", "name_at", "name_size"}
@@ -1259,6 +1286,49 @@ def check_lettering(name, spec):
         boxes.append((t, box))
 
 
+def check_screws(name, spec):
+    """A rack screw's head stays on the panel and keeps CLEARANCE from every
+    component, dial face, tile, screen, piece of lettering, limb, origin mark
+    and trace."""
+    comps = comps_of(name, spec)
+    by = {c.id: c for c in comps}
+    w = spec["hp"] * HP
+    texts = instrument_texts(name, spec) + [foot_mark(spec)]
+    limbs = [seg for limb in spec.get("limbs", []) for seg in limb_segments(limb)]
+    need = SCREW_R + CLEARANCE
+    for x, y in spec.get("screws", []):
+        what = f"{name}: the screw at ({x}, {y})"
+        if x - SCREW_R < 0 or y - SCREW_R < 0 or x + SCREW_R > w or y + SCREW_R > PANEL_H:
+            sys.exit(f"{what} is off the panel")
+        for c in comps:
+            if math.hypot(c.x - x, c.y - y) < c.r + need:
+                sys.exit(f"{what} overlaps {c.id}")
+        for fid, face in spec.get("faces", {}).items():
+            f = by[fid]
+            if math.hypot(f.x - x, f.y - y) < face_edge(face) + need:
+                sys.exit(f"{what} overlaps the dial face of {fid}")
+        for tile in spec.get("tiles", []):
+            if point_rect_distance(x, y, tile_rect(tile, by[tile["port"]])) < need:
+                sys.exit(f"{what} overlaps the tile of {tile['port']}")
+        for screen in spec.get("screens", []):
+            if point_rect_distance(x, y, screen_keepout(spec, screen)) < need:
+                sys.exit(f"{what} overlaps SCREEN_{screen[0]}")
+        for t in texts:
+            if point_rect_distance(x, y, text_box(t)) < need:
+                sys.exit(f"{what} overlaps {t.what}")
+        for a, b in limbs:
+            if point_segment_distance((x, y), a, b) < need:
+                sys.exit(f"{what} overlaps the limb")
+        for ox, oy in spec.get("origins", []):
+            if math.hypot(ox - x, oy - y) < ORIGIN_ARM + need:
+                sys.exit(f"{what} overlaps the origin mark at ({ox}, {oy})")
+        for trace in spec.get("traces", []):
+            points = trace_points(name, spec, trace)
+            for a, b in zip(points, points[1:]):
+                if point_segment_distance((x, y), a, b) - TRACE_WIDTH / 2 < need:
+                    sys.exit(f"{what} overlaps {trace_name(trace)}")
+
+
 def check_panel(name, spec):
     """Every layout check for a panel, in either look."""
     if is_instrument(spec):
@@ -1270,6 +1340,7 @@ def check_panel(name, spec):
         check_tiles(name, spec)
         check_traces(name, spec)
         check_lettering(name, spec)
+        check_screws(name, spec)
 
 
 # --- Drawing the panel ---
@@ -1467,6 +1538,11 @@ def component_art(pal):
     # Light: a dark seat holding an unlit lens; JewelLight draws the lit one.
     r = RADII["jewel"]
     art["JewelSeat"] = (2 * r, 2 * r, [disc(r, r, pal["ink"]), disc(r, 0.68, pal["unlit"])])
+
+    # Rack screw, one HP square as Rack's own: a dark head with a brass slot.
+    c = HP / 2
+    art["Screw"] = (HP, HP, [disc(c, SCREW_R, pal["knob"]),
+                             stroke_path([(c - 1.5, c, c + 1.5, c)], pal["brass"], 0.45)])
     return art
 
 
@@ -1509,6 +1585,9 @@ def preview_svg(name, spec, suffix):
             parts.append(f'<g transform="{move}">' + "".join(elements) + "</g>")
         if c.size == "jewel" and state.get("lit"):
             parts.append(f'<circle cx="{num(c.x)}" cy="{num(c.y)}" r="0.68" fill="{pal["signal"]}"/>')
+    w, h, elements = art["Screw"]
+    for x, y in spec.get("screws", []):
+        parts.append(f'<g transform="translate({num(x - w / 2)} {num(y - h / 2)})">' + "".join(elements) + "</g>")
     hidden = '<g inkscape:groupmode="layer" inkscape:label="components"'
     svg = instrument_svg(name, spec, pal)
     return svg.replace(hidden, "\n".join(parts) + "\n" + hidden)

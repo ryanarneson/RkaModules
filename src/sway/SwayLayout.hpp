@@ -36,4 +36,5 @@ static const rack::math::Vec OUTPUT_SQR(25.78f, 116.0f);
 static const rack::math::Vec OUTPUT_MORPH(35.18f, 116.0f);
 static const rack::math::Vec OUTPUT_RAND(44.58f, 116.0f);
 static const rack::math::Vec OUTPUT_EOC(53.98f, 116.0f);
+static const rack::math::Vec SCREWS[] = {rack::math::Vec(53.34f, 2.54f), rack::math::Vec(7.62f, 125.96f), rack::math::Vec(53.34f, 125.96f)};
 }

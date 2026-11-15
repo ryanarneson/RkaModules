@@ -543,6 +543,74 @@ class Areas(unittest.TestCase):
         self.assertIn("SCREEN_S", msg)
 
 
+class Screws(unittest.TestCase):
+    """Rack's screws, at the positions the description gives, keep clear of
+    everything on the panel."""
+
+    def test_screws_sit_where_rack_puts_them(self):
+        # Rack's template: a 15 px screw one grid step in from the left edge
+        # or two from the right, against the rail.
+        self.assertEqual(g.screws_at(10, "tl", "tr", "bl", "br"),
+                         [(7.62, 2.54), (43.18, 2.54), (7.62, 125.96), (43.18, 125.96)])
+        with self.assertRaises(SystemExit) as cm:
+            g.screws_at(10, "top")
+        self.assertIn("'top'", cm.exception.code)
+
+    def test_screws_clear_of_everything_pass(self):
+        g.check_panel("T", spec(screws=g.screws_at(12, "tl", "tr", "bl", "br"), components=[("input", "J", 30.0, 60.0, None)]))
+
+    def test_a_screw_over_a_part_fails_naming_it(self):
+        screw = [(20.0, 60.0)]
+        cases = (
+            (dict(components=[("input", "J", 20.0, 66.0, None)]), "INPUT_J"),
+            (dict(components=[("param", "R", 20.0, 68.0, None)], sizes={"PARAM_R": "face"},
+                  faces={"PARAM_R": dict(r=7.3, ticks=20, major=5)}), "dial face of PARAM_R"),
+            (dict(components=[("output", "X", 20.0, 68.0, "X")], tiles=[dict(port="OUTPUT_X")]),
+             "tile of OUTPUT_X"),
+            (dict(notes=[(20.0, 63.0, "NOTE", 2.0, "dim")]), 'note "NOTE"'),
+            (dict(limbs=[dict(c=(20.0, 20.0), r=41.0, a0=-20, a1=20, step=2, major=5)]), "limb"),
+            (dict(origins=[(20.0, 63.5)]), "origin"),
+            (dict(screens=[("S", 10.0, 62.0, 20.0, 10.0)]), "SCREEN_S"),
+            (dict(components=[("input", "A", 22.0, 90.0, None), ("param", "B", 22.0, 40.0, None)],
+                  traces=[["INPUT_A", "PARAM_B"]]), "trace INPUT_A > PARAM_B"),
+        )
+        for extra, what in cases:
+            msg = failure(self, "T", spec(screws=screw, **extra))
+            self.assertIn("screw at (20.0, 60.0)", msg, what)
+            self.assertIn(what, msg)
+
+    def test_the_foot_mark_and_a_screw(self):
+        g.check_panel("T", spec(screws=[(45.0, 125.96)]))
+        msg = failure(self, "T", spec(screws=[(38.0, 125.96)]))
+        self.assertIn("foot mark", msg)
+        self.assertIn("screw", msg)
+
+    def test_a_screw_off_the_panel_fails(self):
+        msg = failure(self, "T", spec(screws=[(1.0, 60.0)]))
+        self.assertIn("screw at (1.0, 60.0)", msg)
+        self.assertIn("panel", msg)
+
+    def test_layout_header_lists_the_screws(self):
+        hpp = g.layout_hpp("T", spec(screws=g.screws_at(10, "tl", "br")))
+        self.assertIn("static const rack::math::Vec SCREWS[] = {rack::math::Vec(7.62f, 2.54f), "
+                      "rack::math::Vec(43.18f, 125.96f)};", hpp)
+        self.assertNotIn("SCREWS", g.layout_hpp("T", spec()))
+
+    def test_screw_artwork(self):
+        for suffix, pal in g.INSTRUMENT.items():
+            w, h, els = g.component_art(pal)["Screw"]
+            self.assertEqual((w, h), (g.HP, g.HP))        # Rack's 15 px screw
+            head = [e for e in els if e.startswith("<circle")]
+            self.assertEqual(len(head), 1)
+            self.assertIn(f'r="{g.num(g.SCREW_R)}" fill="{pal["knob"]}"', head[0])
+            slot = [e for e in els if "<path" in e]
+            self.assertEqual(len(slot), 1)
+            self.assertIn(f'stroke="{pal["brass"]}"', slot[0])
+            ends = [float(v) for v in re.findall(r"[-\d.]+", slot[0].split('d="')[1].split('"')[0])]
+            for x, y in zip(ends[::2], ends[1::2]):
+                self.assertLess(math.hypot(x - w / 2, y - h / 2), g.SCREW_R)
+
+
 class Descriptions(unittest.TestCase):
     def test_misspelt_keys_fail_naming_the_key(self):
         comps = [("param", "R", 30.0, 40.0, None), ("output", "X", 30.0, 100.0, "X")]
@@ -626,7 +694,7 @@ class Artwork(unittest.TestCase):
     def test_dark_variants_exist_and_differ(self):
         files = g.component_files()
         for name in ("HeroKnob", "HeroKnob_bg", "FaceKnob", "LimbKnob", "Atten", "Encoder", "BrassPort",
-                     "Toggle2_0", "Toggle2_1", "Cap", "JewelSeat"):
+                     "Toggle2_0", "Toggle2_1", "Cap", "JewelSeat", "Screw"):
             self.assertIn(f"{name}.svg", files)
             self.assertIn(f"{name}-dark.svg", files)
             self.assertNotEqual(files[f"{name}.svg"], files[f"{name}-dark.svg"], name)

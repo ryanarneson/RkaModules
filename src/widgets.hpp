@@ -406,6 +406,15 @@ struct BrassPort : app::ThemedSvgPort {
 	}
 };
 
+// Rack screw, one HP square as Rack's own: a dark head with a brass slot.
+// Placed at the layout header's SCREWS:
+// addChild(createWidgetCentered<rka::Screw>(mm2px(SCREWS[i]))).
+struct Screw : app::ThemedSvgScrew {
+	Screw() {
+		setSvg(instrumentArt("Screw", false), instrumentArt("Screw", true));
+	}
+};
+
 // Two-position switch, 3.6 x 6.4 mm: handle down at the param's minimum, up
 // at its maximum. Configure the param with configSwitch().
 struct Toggle2 : app::SvgSwitch {
