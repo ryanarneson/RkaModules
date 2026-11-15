@@ -58,8 +58,8 @@ SHOAL_STATE(uint32_t, ticks_src2) // SHOAL: per-instance state (shoal::Context)
 #define ticks_src2 ticks_src2_ref()
 
 // copy sequence, global
-SHOAL_STATE(uint8_t, copy_sequence) // SHOAL: per-instance state (shoal::Context)
-#define copy_sequence copy_sequence_ref()
+SHOAL_STATE(uint8_t, g_copy_sequence) // SHOAL: per-instance state (shoal::Context); g_ prefix (name clashes with PatternEditor::copy_sequence())
+#define g_copy_sequence g_copy_sequence_ref()
 SHOAL_STATE(uint8_t, copy_length) // SHOAL: per-instance state (shoal::Context)
 #define copy_length copy_length_ref()
 SHOAL_STATE(uint16_t, copy_mask) // SHOAL: per-instance state (shoal::Context)
@@ -649,7 +649,7 @@ public:
   void copy_seq(uint8_t seq, uint8_t len, uint16_t mask) {
 
     // which sequence ?
-    copy_sequence = seq + (!channel_id_ ? 0x0 : OC::Patterns::NUM_PATTERNS);
+    g_copy_sequence = seq + (!channel_id_ ? 0x0 : OC::Patterns::NUM_PATTERNS); // SHOAL: g_ prefix (name clashes with PatternEditor::copy_sequence())
     copy_length = len;
     copy_mask = mask;
     copy_timeout = 0;
@@ -666,7 +666,7 @@ public:
        // copy mask:
        update_pattern_mask(copy_mask, seq);
        // copy note values:
-       memcpy(&OC::g_user_patterns[sequence], &OC::g_user_patterns[copy_sequence], sizeof(OC::Pattern)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
+       memcpy(&OC::g_user_patterns[sequence], &OC::g_user_patterns[g_copy_sequence], sizeof(OC::Pattern)); // SHOAL: g_ prefix (name clashes with GlobalSettings members, PatternEditor::copy_sequence())
        // give more time for more pasting...
        copy_timeout = 0;
        

@@ -34,7 +34,7 @@
 #pragma push_macro("automatonnetz_state")
 #pragma push_macro("ticks_src1")
 #pragma push_macro("ticks_src2")
-#pragma push_macro("copy_sequence")
+#pragma push_macro("g_copy_sequence")
 #pragma push_macro("copy_length")
 #pragma push_macro("copy_mask")
 #pragma push_macro("copy_timeout")
@@ -95,7 +95,7 @@
 #undef automatonnetz_state
 #undef ticks_src1
 #undef ticks_src2
-#undef copy_sequence
+#undef g_copy_sequence
 #undef copy_length
 #undef copy_mask
 #undef copy_timeout
@@ -164,6 +164,13 @@ struct State {
 } // namespace hw
 
 struct Context {
+	// Defaulted (not user-provided), so `new Context()` still zero-initialises.
+	// Not copyable: members point into the context (current_app, the
+	// ADC/DAC calibration pointers, ...).
+	Context() = default;
+	Context(const Context&) = delete;
+	Context& operator=(const Context&) = delete;
+
 	// OC_ADC.cpp
 	OC::ADC::CalibrationData* ADC_calibration_data_;
 	uint32_t ADC_raw_[ADC_CHANNEL_LAST];
@@ -207,7 +214,7 @@ struct Context {
 	// APP_A_SEQ.ino
 	uint32_t ticks_src1 = 0;
 	uint32_t ticks_src2 = 0;
-	uint8_t copy_sequence = 0;
+	uint8_t g_copy_sequence = 0;
 	uint8_t copy_length = OC::Patterns::kMax;
 	uint16_t copy_mask = 0xFFFF;
 	uint64_t copy_timeout = COPYTIMEOUT;
@@ -314,7 +321,7 @@ SHOAL_CONTEXT_REF(uint16_t[ASR::kHistoryDepth], channel_history_ref, channel_his
 SHOAL_CONTEXT_REF(AutomatonnetzState, automatonnetz_state_ref, automatonnetz_state)
 SHOAL_CONTEXT_REF(uint32_t, ticks_src1_ref, ticks_src1)
 SHOAL_CONTEXT_REF(uint32_t, ticks_src2_ref, ticks_src2)
-SHOAL_CONTEXT_REF(uint8_t, copy_sequence_ref, copy_sequence)
+SHOAL_CONTEXT_REF(uint8_t, g_copy_sequence_ref, g_copy_sequence)
 SHOAL_CONTEXT_REF(uint8_t, copy_length_ref, copy_length)
 SHOAL_CONTEXT_REF(uint16_t, copy_mask_ref, copy_mask)
 SHOAL_CONTEXT_REF(uint64_t, copy_timeout_ref, copy_timeout)
@@ -379,7 +386,7 @@ SHOAL_CONTEXT_REF(OC::UiMode, ui_mode_ref, ui_mode)
 #pragma pop_macro("automatonnetz_state")
 #pragma pop_macro("ticks_src1")
 #pragma pop_macro("ticks_src2")
-#pragma pop_macro("copy_sequence")
+#pragma pop_macro("g_copy_sequence")
 #pragma pop_macro("copy_length")
 #pragma pop_macro("copy_mask")
 #pragma pop_macro("copy_timeout")

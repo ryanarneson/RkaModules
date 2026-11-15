@@ -9,6 +9,12 @@
 # sanitizers' unnamed descriptors, which no source object can produce).
 #
 # Usage: tools/check_shoal_globals.sh path/to/object.o
+# The object format follows `uname -s` (Darwin: Mach-O, else ELF); set
+# SHOAL_OBJ_FORMAT=macho or elf to override (tools/test_check_shoal_globals.sh
+# uses it to check ELF objects on a Mac).
+#
+# Regexes are passed to awk with -v, which processes backslash escapes, so
+# they use bracket expressions ([.]) instead of backslashes.
 set -eu
 
 if [ $# -ne 1 ] || [ ! -f "$1" ]; then
@@ -39,20 +45,32 @@ fi
 #   (before main, single-threaded); nothing writes it afterwards.
 ALLOWED='13storage_size_E$'
 
-case "$(uname -s)" in
-Darwin)
+FORMAT=${SHOAL_OBJ_FORMAT:-}
+if [ -z "$FORMAT" ]; then
+	case "$(uname -s)" in
+	Darwin) FORMAT=macho ;;
+	*) FORMAT=elf ;;
+	esac
+fi
+
+case "$FORMAT" in
+macho)
 	# Mach-O: "addr flags... SEGMENT,section name". Assembler-local
 	# labels start with "l" or "L" (C and C++ names start with "_").
 	WRITABLE='^__DATA,__(data|bss|common)$'
 	LOCAL='^(ltmp[0-9]+|l_.*|L.*)$'
 	;;
-*)
+elf)
 	# ELF: "addr flags... section size name"; COMMON shows as *COM*.
 	# -fdata-sections gives .data.<name> / .bss.<name>; .data.rel.ro is
 	# read-only after relocation (skipped below). Assembler-local labels
 	# start with ".L".
-	WRITABLE='^(\.data(\..*)?|\.bss(\..*)?|\*COM\*|COMMON)$'
-	LOCAL='^\.L'
+	WRITABLE='^([.]data([.].*)?|[.]bss([.].*)?|[*]COM[*]|COMMON)$'
+	LOCAL='^[.]L'
+	;;
+*)
+	echo "$0: SHOAL_OBJ_FORMAT must be macho or elf, not '$FORMAT'" >&2
+	exit 2
 	;;
 esac
 
@@ -65,7 +83,7 @@ found=$("$OBJDUMP" -t "$1" | awk -v writable="$WRITABLE" -v loc="$LOCAL" -v allo
 			next
 		name = $NF
 		if (name == sect)                              next # ELF section symbol
-		if (name ~ /^_*(asan|ubsan)/)                  next # sanitizer bookkeeping
+		if (name ~ /^_*(odr_asan|asan|ubsan)/)         next # sanitizer bookkeeping
 		if (name ~ loc)                                next # assembler-local labels
 		if (name ~ allowed)                            next
 		print sect "\t" name

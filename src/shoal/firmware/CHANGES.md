@@ -91,8 +91,9 @@ is marked `// SHOAL:`.
 - Renamed with a `g_` prefix because the macro would hit another identifier:
   `OC::user_scales`, `user_patterns`, `user_chords`, `auto_calibration_data`
   (`GlobalSettings` members), `OC::ui` (the apps' `ui` members),
-  `OC::calibration_data` (`ADC::Init`/`DAC::Init` parameters), and
-  `APP_QQ.ino`'s `history` (`APP_REFS.ino` locals). All uses renamed.
+  `OC::calibration_data` (`ADC::Init`/`DAC::Init` parameters),
+  `APP_QQ.ino`'s `history` (`APP_REFS.ino` locals) and `APP_A_SEQ.ino`'s
+  `copy_sequence` (`PatternEditor::copy_sequence()`). All uses renamed.
 - Static data members of `OC::ADC`, `OC::DAC`, `OC::DigitalInputs` and
   `stmlib::Random` became private static accessors returning a reference
   (`values_()`, ...); uses call them. `OC::CORE::ticks` and

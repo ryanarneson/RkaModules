@@ -3,6 +3,7 @@
 // creation and destruction in any order.
 #include <atomic>
 #include <cmath>
+#include <functional>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -26,14 +27,18 @@ void randomInputs(shoal::Core& c, Lcg& rng, long tick) {
 			c.setGate(ch, (rng.next() >> 28) < 6 ? 10.f : 0.f);
 }
 
-// Run c for `seconds` on the random inputs from rng; return the final codes.
-std::vector<uint32_t> drive(shoal::Core& c, uint32_t seed, double seconds) {
+// Run c for `seconds` on the random inputs from seed; return the final codes.
+// onTicks(i), if given, runs every 256 ticks, after tick i.
+std::vector<uint32_t> drive(shoal::Core& c, uint32_t seed, double seconds,
+		const std::function<void(long)>& onTicks = nullptr) {
 	Lcg rng;
 	rng.state = seed;
 	const long n = std::lround(seconds * shoal::kTickHz);
 	for (long i = 0; i < n; i++) {
 		randomInputs(c, rng, i);
 		c.tick();
+		if (onTicks && i % 256 == 255)
+			onTicks(i);
 	}
 	std::vector<uint32_t> codes;
 	for (int ch = 0; ch < kNumOuts; ch++)
@@ -87,16 +92,32 @@ void testThreads() {
 	const int apps[2] = { 10, 5 };
 	const uint32_t seeds[2] = { 101, 202 };
 	std::vector<uint32_t> threaded[2];
+	// Start barrier: both cores are built and in their app before either
+	// thread ticks. Each thread records whether, in the middle of its run, it
+	// saw the other one also mid-run (started ticking, not finished).
+	std::atomic<int> ready{ 0 };
+	std::atomic<bool> ticking[2] = { { false }, { false } };
+	std::atomic<bool> finished[2] = { { false }, { false } };
+	bool sawOther[2] = { false, false };
 	std::thread t[2];
 	for (int k = 0; k < 2; k++)
 		t[k] = std::thread([&, k] {
 			shoal::Core c;
 			c.seed(seeds[k]);
 			c.selectApp(apps[k]);
-			threaded[k] = drive(c, seeds[k], 5.0);
+			ready++;
+			while (ready.load() < 2) {
+			}
+			ticking[k] = true;
+			threaded[k] = drive(c, seeds[k], 5.0, [&, k](long) {
+				if (ticking[1 - k] && !finished[1 - k])
+					sawOther[k] = true;
+			});
+			finished[k] = true;
 		});
 	for (auto& th : t)
 		th.join();
+	CHECK(sawOther[0] || sawOther[1], "the two threads ticked at the same time");
 	for (int k = 0; k < 2; k++) {
 		shoal::Core c;
 		c.seed(seeds[k]);
