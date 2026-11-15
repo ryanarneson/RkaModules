@@ -256,7 +256,10 @@ Per app, from its survey section:
 2. Drag a slider, pick from a dropdown, toggle mask cells while a clock runs: the sound follows, and the upper screen shows the app's picture.
 3. Click the app name, pick Quantermain: tabs Ch A–D appear and each keeps its own settings.
 4. Switch UI MODE to hardware: the firmware menu shows the same values with the cursor on the row last touched; turn an encoder, switch back: the list shows the change.
-5. A row that says "edit in hardware mode" switches mode when clicked.
+5. A row that says "edit in hardware mode" switches mode when clicked, and hardware mode opens with the firmware's cursor on that row.
 6. Save and reopen: same app, settings and UI mode. Open a patch saved before this stage: it loads in friendly mode with its settings intact.
 7. Scroll the list with the wheel; with the pointer off the list the rack scrolls as usual.
 8. Row size and text are comfortable to read and hit at your usual zoom.
+9. (Added by the final review's fixes.) Click Harrington 1200's "Reset all settings": a small menu titled with the row's name offers "Confirm"; clicking away changes nothing, clicking Confirm resets. The same for Automatonnetz "Clear grid", Meta-Q "Copy scale to all slots, both channels" and both "Clear CV mapping" rows.
+10. The UI MODE button is lit cyan in friendly mode and dark in hardware mode, and stays lit with the room dimmed (View > Room brightness).
+11. Piqued: drag the Attack row and listen; the hardware's envelope page shows the new value when switched to hardware mode (an L push away).
