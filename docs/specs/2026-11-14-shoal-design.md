@@ -328,6 +328,39 @@ little: the sanitizer run is what stands in for the other CPUs.
 
 ## Friendly mode
 
+### Revised 2026-11-15, after stage 2
+
+The user tried hardware mode in Rack and re-watched the reference stream:
+the mouse-driven list is how the module should be used day to day, and
+hardware mode is the alternative, not the other way round. Three changes
+follow, and where the text below disagrees with them, these win.
+
+1. **Friendly mode is the default.** A new module, and a patch saved before
+   the UI MODE control existed, open in friendly mode. Hardware mode is one
+   click away on the panel.
+2. **Encoder-only functions get rows.** Things the hardware puts on the
+   left encoder, the buttons and long presses rather than in the settings
+   menu (CopierMaschine's scale and freeze, Quadraturia's coarse and fine
+   frequency, Automatonnetz's reset and clock, and so on) appear in the
+   list as rows of their own, so friendly mode rarely needs the encoders.
+   Each app's adapter declares them. Left out: the sub-editors (still
+   hardware mode), view toggles, and shortcuts to a setting that already
+   has a row. `docs/specs/2026-11-15-shoal-app-survey.md` lists every such
+   function per app, read from the firmware source.
+3. **Edits replay the firmware's own handlers.** The survey found that in
+   eight apps a direct write to a setting leaves the firmware's menu or its
+   derived state stale, and that the guards differ per setting. So a
+   friendly edit is not a write plus a hand-copied follow-up: the adapter
+   puts the firmware's cursor on the row and sends the app's own encoder
+   and button handlers the events a person would have made. The guards and
+   follow-ups then run because the firmware runs them. Only what no
+   handler can express (toggling one bit of a note mask from outside its
+   sub-editor) calls the app's functions directly, and those are the same
+   functions the sub-editor calls.
+
+UI mode is a panel control, so Rack saves it with the patch as it saves any
+control; it needs no key in the module's own patch data.
+
 ### The settings list
 
 Every app declares its settings in a table (`SETTINGS_DECLARE`): name,
@@ -409,8 +442,8 @@ nothing changed the firmware writes nothing, so the image is the same).
 app is inside the image. The rules for those fields are in
 `src/shoal/PatchState.hpp`, and `src/shoal/testdata/GoldenStateV1.hpp`
 is an image an earlier build saved that every later build must load.
-Later stages add keys beside these, never changing them: the UI mode
-with the friendly mode (stage 3) and the screen colour with the
+Later stages add keys beside these, never changing them: the UI mode is a
+panel control that Rack saves itself (stage 3); the screen colour comes with the
 right-click menu (stage 4). `dataFromJson` builds and boots a new core
 with the restored image off the engine thread; the engine swaps it in.
 The firmware's intended pause while saving does not apply: its save is a
