@@ -58,6 +58,11 @@ public:
 	// a turn past that is dropped).
 	void setButton(Button b, bool down);
 	void turnEncoder(Encoder e, int detents);  // > 0 clockwise
+	// Whether a turn has not yet reached the app's handler: detents still
+	// queued, or the event of one played since the last main-loop pass (at
+	// most 17 ticks later). The host holds a friendly edit until this is
+	// false, so turns and edits reach the app in the order they were made.
+	bool encodersPending() const;
 	// As the app menu's UP button: both encoders; on at boot. Automatonnetz
 	// turns its L encoder's acceleration off on resume; calling this while it
 	// runs overrides that until its next resume (app switch or app menu).

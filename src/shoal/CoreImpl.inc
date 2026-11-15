@@ -90,14 +90,19 @@ static const uint8_t kTriggerPins[kNumChannels] = { TR1, TR2, TR3, TR4 };
 // One UI timer pass: a quadrature sample per encoder (a detent takes two
 // passes), then OC::Ui::Poll, which queues the events the main pass's
 // DispatchEvents hands to the app.
-static void pollUi() {
+// True when it played an encoder sample, whose event (if any) the next
+// main-loop pass dispatches.
+static bool pollUi() {
+	bool played = false;
 	for (int e = 0; e < 2; e++) {
 		bool a, b;
+		played = played || !hw::state().encoders[e].idle();
 		hw::state().encoders[e].poll(a, b);
 		hw::state().pins[kEncoderPins[e][0]] = a ? HIGH : LOW;
 		hw::state().pins[kEncoderPins[e][1]] = b ? HIGH : LOW;
 	}
 	OC::g_ui.Poll();
+	return played;
 }
 
 struct Core::Impl {
@@ -110,6 +115,7 @@ struct Core::Impl {
 	int adcOffset = hw::kAdcOffsetHardware; // ADC code of 0 V for the current input range
 	uint32_t uiMicros = 0;           // tick time since the last UI poll
 	uint32_t mainTicks = 0;          // ticks since the last main-loop pass
+	bool encoderUndispatched = false; // an encoder sample played since the last main-loop pass
 
 	Impl() {
 		Scope scope(ctx.get());
@@ -160,6 +166,7 @@ struct Core::Impl {
 		next->CORE_ticks = ctx->CORE_ticks;
 		for (bool& e : edges)
 			e = false;
+		encoderUndispatched = false;  // the queued turns stay with the old context
 		{
 			// Firmware objects have no destructors that reach firmware state,
 			// but destroy the old instance as its own current context anyway.
@@ -237,12 +244,20 @@ void Core::tick() {
 	impl_->uiMicros += OC_CORE_TIMER_RATE;
 	if (impl_->uiMicros >= OC_UI_TIMER_RATE) {
 		impl_->uiMicros -= OC_UI_TIMER_RATE;
-		pollUi();
+		if (pollUi())
+			impl_->encoderUndispatched = true;
 	}
 	if (++impl_->mainTicks >= 17) {
 		impl_->mainTicks = 0;
 		shoal_main_pass();
+		impl_->encoderUndispatched = false;  // DispatchEvents empties the UI event queue
 	}
+}
+
+bool Core::encodersPending() const {
+	Scope scope(impl_->ctx.get());
+	return impl_->encoderUndispatched || !hw::state().encoders[ENCODER_L].idle()
+		|| !hw::state().encoders[ENCODER_R].idle();
 }
 
 float Core::out(int ch) const {
