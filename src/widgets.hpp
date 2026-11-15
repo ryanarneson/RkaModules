@@ -46,4 +46,221 @@ using AmberLight = TAmberLight<>;
 // Latching push button with an amber light inside (mode switches).
 using AmberLatch = componentlibrary::VCVLightLatch<componentlibrary::MediumSimpleLight<AmberLight>>;
 
+// A 6 mm momentary button with an amber light. Click: down while held.
+// Shift-click: latches down until the next click of either kind (which only
+// releases it). The light is on while the param is above 0. Configure the
+// param with configButton() so it is not randomised.
+struct HoldButton : app::ParamWidget {
+	// The press that started this drag latched the button: keep it down on release.
+	bool latching = false;
+
+	HoldButton() {
+		box.size = mm2px(Vec(6.f, 6.f));
+	}
+
+	bool isDown() {
+		ParamQuantity* pq = getParamQuantity();
+		return pq && pq->getValue() > 0.f;
+	}
+
+	void onDragStart(const DragStartEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		ParamQuantity* pq = getParamQuantity();
+		if (!pq)
+			return;
+		// Down at a press means latched (or loaded down): this click releases it.
+		if (pq->getValue() > 0.f) {
+			latching = false;
+			pq->setMin();
+			return;
+		}
+		latching = (APP->window->getMods() & RACK_MOD_MASK) == GLFW_MOD_SHIFT;
+		pq->setMax();
+	}
+
+	void onDragEnd(const DragEndEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		ParamQuantity* pq = getParamQuantity();
+		if (pq && !latching)
+			pq->setMin();
+		latching = false;
+	}
+
+	// No double-click reset: a button has nothing to reset.
+	void onDoubleClick(const DoubleClickEvent& e) override {}
+
+	void draw(const DrawArgs& args) override {
+		const Vec c = box.size.div(2.f);
+		const float r = box.size.x / 2.f;
+		nvgBeginPath(args.vg);
+		nvgCircle(args.vg, c.x, c.y, r - 0.5f);
+		nvgFillColor(args.vg, RkaTheme::CARD);
+		nvgFill(args.vg);
+		nvgStrokeColor(args.vg, RkaTheme::HINT);
+		nvgStrokeWidth(args.vg, 1.f);
+		nvgStroke(args.vg);
+		// The unlit lens.
+		nvgBeginPath(args.vg);
+		nvgCircle(args.vg, c.x, c.y, r * 0.55f);
+		nvgFillColor(args.vg, nvgTransRGBAf(RkaTheme::HINT, 0.35f));
+		nvgFill(args.vg);
+		ParamWidget::draw(args);
+	}
+
+	void drawLayer(const DrawArgs& args, int layer) override {
+		if (layer == 1 && isDown()) {
+			const Vec c = box.size.div(2.f);
+			const float r = box.size.x / 2.f;
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, c.x, c.y, r * 0.55f);
+			nvgFillColor(args.vg, RkaTheme::AMBER);
+			nvgFill(args.vg);
+			// Halo.
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, c.x, c.y, r * 1.3f);
+			nvgFillPaint(args.vg, nvgRadialGradient(args.vg, c.x, c.y, r * 0.5f, r * 1.3f,
+				nvgTransRGBAf(RkaTheme::AMBER, 0.35f), nvgTransRGBAf(RkaTheme::AMBER, 0.f)));
+			nvgFill(args.vg);
+		}
+		ParamWidget::drawLayer(args, layer);
+	}
+};
+
+// An endless 13.4 mm encoder; not a Rack param, so nothing is saved or
+// randomised. Vertical drag: one detent per 8 px of mouse travel, upward is
+// clockwise (Ctrl/Cmd: 32 px). Scroll wheel over it: one detent per notch.
+// The pointer turns 1/24 turn per detent.
+struct Encoder : widget::OpaqueWidget {
+	std::function<void(int detents)> onTurn;   // > 0 clockwise
+
+	static constexpr float DRAG_PX = 8.f;
+	static constexpr float FINE_DRAG_PX = 32.f;
+	// Rack reports one wheel notch as 50 units of scrollDelta.
+	static constexpr float SCROLL_NOTCH = 50.f;
+
+	int position = 0;   // detents turned since creation, for the pointer
+	float dragAccum = 0.f, scrollAccum = 0.f;
+
+	Encoder() {
+		box.size = mm2px(Vec(13.4f, 13.4f));
+	}
+
+	void turn(int detents) {
+		if (detents == 0)
+			return;
+		position += detents;
+		if (onTurn)
+			onTurn(detents);
+	}
+
+	// Whole detents in `accum` (units of `step`), keeping the remainder.
+	static int take(float& accum, float step) {
+		const int n = int(accum / step);   // truncates toward zero
+		accum -= n * step;
+		return n;
+	}
+
+	void onDragStart(const DragStartEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		dragAccum = 0.f;
+		if (settings::allowCursorLock)
+			APP->window->cursorLock();
+	}
+
+	void onDragMove(const DragMoveEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		const bool fine = (APP->window->getMods() & RACK_MOD_MASK) == RACK_MOD_CTRL;
+		dragAccum += -e.mouseDelta.y;
+		// float(...): C++11 would odr-use the constants through the ?: lvalue.
+		turn(take(dragAccum, fine ? float(FINE_DRAG_PX) : float(DRAG_PX)));
+	}
+
+	void onDragEnd(const DragEndEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		if (settings::allowCursorLock)
+			APP->window->cursorUnlock();
+	}
+
+	void onHoverScroll(const HoverScrollEvent& e) override {
+		scrollAccum += e.scrollDelta.y;
+		turn(take(scrollAccum, SCROLL_NOTCH));
+		e.consume(this);
+	}
+
+	void draw(const DrawArgs& args) override {
+		const Vec c = box.size.div(2.f);
+		const float r = box.size.x / 2.f - 0.5f;
+		nvgBeginPath(args.vg);
+		nvgCircle(args.vg, c.x, c.y, r);
+		nvgFillColor(args.vg, RkaTheme::CARD);
+		nvgFill(args.vg);
+		nvgStrokeColor(args.vg, RkaTheme::HINT);
+		nvgStrokeWidth(args.vg, 1.f);
+		nvgStroke(args.vg);
+		// An inner ring, so it reads as a knob cap rather than a hole.
+		nvgBeginPath(args.vg);
+		nvgCircle(args.vg, c.x, c.y, r * 0.72f);
+		nvgStrokeColor(args.vg, nvgTransRGBAf(RkaTheme::HINT, 0.6f));
+		nvgStrokeWidth(args.vg, 0.75f);
+		nvgStroke(args.vg);
+		const float a = float(2.0 * M_PI) * float(((position % 24) + 24) % 24) / 24.f;
+		const Vec dir(std::sin(a), -std::cos(a));
+		nvgBeginPath(args.vg);
+		nvgMoveTo(args.vg, c.x + dir.x * r * 0.3f, c.y + dir.y * r * 0.3f);
+		nvgLineTo(args.vg, c.x + dir.x * (r - 2.f), c.y + dir.y * (r - 2.f));
+		nvgStrokeColor(args.vg, RkaTheme::INK);
+		nvgStrokeWidth(args.vg, 1.75f);
+		nvgLineCap(args.vg, NVG_ROUND);
+		nvgStroke(args.vg);
+	}
+};
+
+// Draws a 1-bit 128x64 frame (bit y%8 of byte (y/8)*128 + x, the SSD1306
+// page layout) scaled to its box, in the self-illuminating layer, lit
+// pixels in `colour` as horizontal runs, one path per frame.
+struct PixelScreen : widget::Widget {
+	static constexpr int W = 128, H = 64, BYTES = W * H / 8;
+
+	std::function<bool(uint8_t* frame)> source;   // fills BYTES; false: draw nothing
+	NVGcolor colour = RkaTheme::CYAN;
+	uint8_t frame[BYTES] = {};
+
+	bool lit(int x, int y) const {
+		return (frame[(y / 8) * W + x] >> (y % 8)) & 1;
+	}
+
+	void drawLayer(const DrawArgs& args, int layer) override {
+		if (layer == 1 && source && source(frame)) {
+			const float px = box.size.x / W, py = box.size.y / H;
+			// No anti-aliasing: pixel edges fall between device pixels, and
+			// AA would show seams between adjacent rows of lit pixels.
+			nvgSave(args.vg);
+			nvgShapeAntiAlias(args.vg, false);
+			nvgBeginPath(args.vg);
+			for (int y = 0; y < H; y++) {
+				for (int x = 0; x < W;) {
+					if (!lit(x, y)) {
+						x++;
+						continue;
+					}
+					int end = x + 1;
+					while (end < W && lit(end, y))
+						end++;
+					nvgRect(args.vg, x * px, y * py, (end - x) * px, py);
+					x = end;
+				}
+			}
+			nvgFillColor(args.vg, colour);
+			nvgFill(args.vg);
+			nvgRestore(args.vg);
+		}
+		Widget::drawLayer(args, layer);
+	}
+};
+
 }
