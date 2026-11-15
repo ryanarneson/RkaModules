@@ -130,7 +130,7 @@ struct Core::Impl {
 	// settings page and the app data page loaded from the image. Call outside
 	// any Scope on this core: the old context is gone afterwards.
 	bool reboot(const uint8_t* image) {
-		assert(current() != ctx.get());
+		assert(current() != ctx.get());  // meant to stay on in release builds too (nothing defines NDEBUG)
 		std::unique_ptr<Context> next(new Context());
 		const hw::State& was = ctx->hw;
 		hw::State& now = next->hw;

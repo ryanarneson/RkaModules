@@ -171,12 +171,15 @@ is marked `// SHOAL:`.
 
 ## Deliberate deviations
 
-- Outputs start at 0 V (DAC code 24551). The Teensy powers up with every DAC
-  channel at code 0xffff (`DAC::Init` calls `set_all(0xffff)`; about +6.2
-  V) until the app writes; Shoal sets all four channels to 0 V after boot,
-  `resetToDefaults` and `restore`, through `OC::DAC::set_all`, by the user's
-  decision of 2026-11-15. No firmware file changes: `Core::Impl`
-  (`../CoreImpl.inc`) does it after `shoal_boot()`.
+- Outputs start at 0 V (DAC code 24551). On the Teensy, `DAC::Init` sets
+  every channel to code 0xffff (`set_all(0xffff)`; about +6.2 V), and the
+  apps' `Init` functions, which also run during boot, can write too:
+  Automatonnetz's writes channel A, so the Teensy boots with A at about code
+  64980 and B to D at 0xffff until the running app writes them. Shoal sets
+  all four channels to 0 V after boot, `resetToDefaults` and `restore`,
+  through `OC::DAC::set_all`, by the user's decision of 2026-11-15. No
+  firmware file changes: `Core::Impl` (`../CoreImpl.inc`) does it after
+  `shoal_boot()`.
 
 ## Desktop-CPU guards
 

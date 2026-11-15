@@ -6,6 +6,7 @@ VCV Rack 2 modules.
 |---|---|---|
 | [**Sway**](docs/sway/README.md) | 18 | Polyphonic LFO: classic and morphing waves, random, EOC, clock sync, phase spread, one-shot |
 | [**Fathom**](docs/fathom/README.md) | 10 | Deep bass drone voice: sub sine, 7-saw supersaw, drift, ladder filter |
+| [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware |
 
 Each module's manual is in its own folder.
 
@@ -34,8 +35,10 @@ src/fathom/              the Fathom drone voice, same shape: Fathom.cpp,
                          Svf.hpp, SuperSaw.hpp, Drift.hpp, Ladder.hpp,
                          Halfband.hpp, DroneVoice.hpp, test_*.cpp,
                          FathomLayout.hpp
-src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware, headless
-  Core.hpp               shoal::Core, the only header the plugin includes
+src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
+  Shoal.cpp              module and widget, mapped onto shoal::Host
+  Host.hpp               shoal::Host: one Core driven from the audio engine
+  Core.hpp               shoal::Core, the firmware's only public header
   Firmware.cpp           the firmware, shim and core as one C++17 unit
   FirmwareContext.inc    per-instance firmware state (shoal::Context)
   SettingsAccess.inc     raw settings table for every app

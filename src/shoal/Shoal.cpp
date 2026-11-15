@@ -9,6 +9,34 @@
 
 static_assert(shoal::kFrameBytes == rka::PixelScreen::BYTES, "PixelScreen draws a Shoal frame");
 
+// The firmware state in the patch ("data"), version 1:
+//   { "version": 1, "state": "<base64 of kStateBytes bytes>", "inputRange": 0 }
+// state is the firmware's EEPROM image; inputRange is 0 (Hardware) or 1 (±5 V).
+static const int STATE_VERSION = 1;
+
+// A patch's state image: true, with `state` and `range` set, only for version
+// 1 with a state that decodes to exactly kStateBytes. Anything else (a field
+// missing, another version, bad base64, the wrong length) is false: the
+// caller restores the defaults. An inputRange other than 1 reads as Hardware.
+static bool decodeState(json_t* rootJ, std::vector<uint8_t>& state, shoal::InputRange& range) {
+	json_t* versionJ = json_object_get(rootJ, "version");
+	json_t* stateJ = json_object_get(rootJ, "state");
+	if (!json_is_integer(versionJ) || json_integer_value(versionJ) != STATE_VERSION || !json_is_string(stateJ))
+		return false;
+	try {
+		state = string::fromBase64(std::string(json_string_value(stateJ), json_string_length(stateJ)));
+	}
+	catch (std::exception&) {
+		return false;
+	}
+	if (state.size() != (size_t) shoal::kStateBytes)
+		return false;
+	json_t* rangeJ = json_object_get(rootJ, "inputRange");
+	const bool bipolar = json_is_integer(rangeJ) && json_integer_value(rangeJ) == 1;
+	range = bipolar ? shoal::InputRange::Bipolar5 : shoal::InputRange::Hardware;
+	return true;
+}
+
 
 struct Shoal : Module {
 	enum ParamId {
@@ -68,6 +96,49 @@ struct Shoal : Module {
 
 	void onSampleRateChange(const SampleRateChangeEvent& e) override {
 		host.setSampleRate(e.sampleRate);
+	}
+
+	// Rack calls the four below off the engine thread. A restore or reset
+	// boots the replacement firmware here; the engine only swaps it in.
+
+	json_t* dataToJson() override {
+		uint8_t state[shoal::kStateBytes];
+		shoal::InputRange range = shoal::InputRange::Hardware;
+		host.snapshot(state, &range);
+		json_t* rootJ = json_object();
+		json_object_set_new(rootJ, "version", json_integer(STATE_VERSION));
+		json_object_set_new(rootJ, "state", json_string(string::toBase64(state, sizeof(state)).c_str()));
+		json_object_set_new(rootJ, "inputRange", json_integer(range == shoal::InputRange::Bipolar5 ? 1 : 0));
+		return rootJ;
+	}
+
+	void dataFromJson(json_t* rootJ) override {
+		std::vector<uint8_t> state;
+		shoal::InputRange range = shoal::InputRange::Hardware;
+		if (decodeState(rootJ, state, range))
+			host.requestRestore(state.data(), range);
+		else
+			host.requestRestore(nullptr, shoal::InputRange::Hardware);
+		releaseButtons();
+	}
+
+	// Initialize: a new core's defaults (CopierMaschine), outputs at 0 V.
+	void onReset(const ResetEvent& e) override {
+		shoal::ControlEvent ev;
+		ev.type = shoal::ControlEvent::Reset;
+		ev.index = 0;
+		ev.value = 0;
+		host.post(ev);
+		releaseButtons();
+	}
+
+	// Randomize leaves the firmware alone (and the buttons are not randomisable).
+	void onRandomize(const RandomizeEvent& e) override {}
+
+	// A button latched when the patch was saved is not held on load or reset.
+	void releaseButtons() {
+		for (int i = 0; i < PARAMS_LEN; i++)
+			params[i].setValue(0.f);
 	}
 
 	void process(const ProcessArgs& args) override {

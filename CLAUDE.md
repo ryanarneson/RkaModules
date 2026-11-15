@@ -42,6 +42,9 @@ layout.
 - Shoal's core is the vendored O&C firmware in `src/shoal/firmware/`;
   change it only with a `// SHOAL:` mark and a `CHANGES.md` line;
   `make shoal-globals` must stay clean.
+- The Shoal module (`src/shoal/Shoal.cpp`) only maps jacks, buttons,
+  lights and the patch data onto `shoal::Host`; only the engine thread
+  touches the running core (restore and reset build a new one off it).
 - Voltage standards: audio ±5 V, bipolar CV ±5 V, unipolar CV 0–10 V,
   gates/triggers 0/10 V, V/OCT 1 V per octave; triggers detect with
   `SchmittTrigger` at 0.1 V / 1 V.

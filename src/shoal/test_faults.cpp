@@ -602,7 +602,12 @@ void testH1200LowNotes() {
 
 int main(int argc, char** argv) {
 	if (argc == 3 && std::strcmp(argv[1], "--sweep") == 0) {
-		const unsigned long seed = std::strtoul(argv[2], nullptr, 10);
+		char* end = nullptr;
+		const unsigned long seed = std::strtoul(argv[2], &end, 10);
+		if (end == argv[2] || *end != '\0') {
+			std::fprintf(stderr, "test_faults: --sweep wants a number, got \"%s\"\n", argv[2]);
+			return 2;
+		}
 		seedBase = (uint32_t) seed * 100000u;
 		testRandomSettingCombinations();
 		char name[48];
