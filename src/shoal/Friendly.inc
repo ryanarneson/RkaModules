@@ -142,19 +142,21 @@ struct Text {
 private:
 	Text& digits(bool negative, uint64_t magnitude, int decimals, int width) {
 		char buf[32];  // filled from the end
-		// 20 digits, a point and a sign need 22; the explicit bound on n is
-		// for the compiler (g++'s -Wstringop-overflow cannot see that).
-		const int last = (int) sizeof(buf) - 1;
-		int n = 0;
+		// 20 digits, a point and a sign need 22. The index is unsigned and
+		// bounded explicitly for the compiler: with -fwrapv, g++'s
+		// -Wstringop-overflow took a signed n++ as able to wrap negative.
+		const size_t last = sizeof(buf) - 1;
+		const size_t point = decimals > 0 ? (size_t) decimals : 0;
+		size_t n = 0;
 		do {
 			buf[n++] = (char) ('0' + magnitude % 10);
 			magnitude /= 10;
-			if (n == decimals && n < last)
+			if (point && n == point && n < last)
 				buf[n++] = '.';
-		} while (n < last && (magnitude || n < (decimals ? decimals + 2 : 1)));  // at least one digit before the point
+		} while (n < last && (magnitude || n < (point ? point + 2 : 1)));  // at least one digit before the point
 		if (negative && n < last)
 			buf[n++] = '-';
-		for (int i = n; i < width; i++)
+		for (int i = (int) n; i < width; i++)
 			ch(' ');
 		while (n)
 			ch(buf[--n]);

@@ -616,7 +616,8 @@ Left open by stage 3 (friendly mode):
   builds them.
 - g++'s `-Wstringop-overflow` false alarm in `Text::digits`
   (`Friendly.inc`), seen in the cross-builds up to d3e545d, is silenced
-  by an explicit bound on the write index; the warning was never a real
+  by an unsigned, explicitly bounded write index (with `-fwrapv`, g++ took
+  the signed index as able to wrap negative); the warning was never a real
   overflow (at most 28 of the buffer's 32 bytes are written).
 - Stage 4 as planned: the right-click menu, the References meters and
   the full manual (`docs/shoal/README.md` covers friendly mode, not each
