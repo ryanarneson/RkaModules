@@ -12,11 +12,10 @@ The four channel levels sit on a limb numbered in degrees to port and
 starboard. Each channel's Pan sits beneath its level on the next arc.
 
 **Sketched controls.** Master (the hero), four Level knobs, four Pan
-attenuverter-size knobs. Each channel has two jacks, staggered: its input
-a little left of the channel's column, labelled IN 1 to IN 4, traced up
-to its Level; and a Pan CV input a little right and lower, labelled PAN,
-traced straight up to its Pan knob. Signal and Clip lights at the lower
-left.
+attenuverter-size knobs. Each channel is one straight column, lined up at
+the user's request: Level, then Pan, then the Pan CV jack, then the input
+jack (IN 1 to IN 4), joined by a single trace. Signal and Clip lights at
+the lower left.
 
 Rulings from the user: the L and R outputs are grouped together in the
 lower right corner; the input jacks carry labels, because a trace alone
