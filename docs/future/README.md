@@ -7,6 +7,9 @@ design: names are working titles and have not been checked against the VCV
 Library, and the control sets are first guesses made to draw the panels.
 None has been through a design conversation yet.
 
+A suggested order for building them, with the user's music in mind, is
+in [ROADMAP.md](ROADMAP.md).
+
 The thread running through them is a ship's instrument set. Sway keeps
 time, Fathom sounds the depth, Shoal is the water itself; each idea here
 takes one more instrument and builds its panel geometry from it.
