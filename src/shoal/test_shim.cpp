@@ -125,6 +125,16 @@ static void testEncoderPins() {
 		CHECK(a && b, "idle after capped queue drains");
 	}
 	{
+		// INT_MIN (whose negation does not fit an int) is capped too.
+		shoal::EncoderPins p;
+		FwEncoder e;
+		p.turn(INT32_MIN);
+		int sum = 0;
+		for (int i = 0; i < 5000; i++)
+			sum += e.read(p);
+		CHECK(sum < 0 && sum >= -300, "turn(INT_MIN): sum %d", sum);
+	}
+	{
 		// Direction changes back to back keep their order.
 		shoal::EncoderPins p;
 		FwEncoder e;

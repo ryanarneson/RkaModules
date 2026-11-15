@@ -9,7 +9,8 @@
 // Context()`), which zero-initialises it the same way before the default
 // member initialisers and member constructors run.
 
-#include "Core.hpp" // kNumChannels
+#include "Core.hpp" // kNumChannels, kFrameBytes
+#include "shim/Pins.hpp"
 
 // The name macros would rewrite the member names below; switch them off for
 // this file and restore them at the end (CoreImpl.inc uses them).
@@ -74,6 +75,7 @@
 #pragma push_macro("g_calibration_data")
 #pragma push_macro("LAST_REDRAW_TIME")
 #pragma push_macro("ui_mode")
+#pragma push_macro("app_menu_cursor")
 #undef g_auto_calibration_data
 #undef g_user_chords
 #undef circle_pos_lut
@@ -135,6 +137,7 @@
 #undef g_calibration_data
 #undef LAST_REDRAW_TIME
 #undef ui_mode
+#undef app_menu_cursor
 
 namespace shoal {
 
@@ -151,6 +154,7 @@ struct State {
 	uint8_t eeprom[EEPROMClass::kLength];  // EEPROM image
 	uint32_t rng;                          // Arduino random() state
 	uint64_t ticks;                        // core ticks since boot (64-bit: millis() wraps at 2^32 ms)
+	EncoderPins encoders[2];               // queued detents per shoal::Encoder, played onto the pins
 
 	State() {
 		memset(pins, HIGH, sizeof(pins));
@@ -261,6 +265,7 @@ struct Context {
 	OC::AppData app_settings;
 	OC::AppDataStorage app_data_storage;
 	const OC::App* current_app = &available_apps[OC::DEFAULT_APP_INDEX];
+	OC::menu::ScreenCursor<5> app_menu_cursor;
 	// OC_calibration.ino
 	OC::CalibrationData g_calibration_data;
 	// o_c_REV.ino
@@ -271,6 +276,10 @@ struct Context {
 	volatile uint32_t CORE_ticks = 0;
 	// The shim's fake hardware (CoreImpl.inc).
 	hw::State hw;
+	// Private frames Core::drawMenu and Core::drawScope draw into (weegfx
+	// layout), so neither screen disturbs the other.
+	alignas(4) uint8_t menu_frame[kFrameBytes];
+	alignas(4) uint8_t scope_frame[kFrameBytes];
 };
 
 Context*& current() {
@@ -359,6 +368,7 @@ SHOAL_CONTEXT_REF(OC::GlobalSettingsStorage, OC::global_settings_storage_ref, gl
 SHOAL_CONTEXT_REF(OC::AppData, OC::app_settings_ref, app_settings)
 SHOAL_CONTEXT_REF(OC::AppDataStorage, OC::app_data_storage_ref, app_data_storage)
 SHOAL_CONTEXT_REF(const OC::App*, OC::apps::current_app_ref, current_app)
+SHOAL_CONTEXT_REF(OC::menu::ScreenCursor<5>, OC::app_menu_cursor_ref, app_menu_cursor)
 SHOAL_CONTEXT_REF(OC::CalibrationData, OC::g_calibration_data_ref, g_calibration_data)
 SHOAL_CONTEXT_REF(unsigned long, LAST_REDRAW_TIME_ref, LAST_REDRAW_TIME)
 SHOAL_CONTEXT_REF(uint_fast8_t, MENU_REDRAW_ref, MENU_REDRAW)
@@ -427,3 +437,4 @@ SHOAL_CONTEXT_REF(OC::UiMode, ui_mode_ref, ui_mode)
 #pragma pop_macro("g_calibration_data")
 #pragma pop_macro("LAST_REDRAW_TIME")
 #pragma pop_macro("ui_mode")
+#pragma pop_macro("app_menu_cursor")

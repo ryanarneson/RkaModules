@@ -25,19 +25,27 @@ public:
 	void tick();                       // one 60 µs firmware tick, plus UI poll and main-loop pass when due
 	float out(int ch) const;           // volts
 	uint32_t outCode(int ch) const;    // raw 16-bit DAC code
-	// Controls.
+	// Controls, through the firmware's own debounce (a press registers after
+	// 7 ms, a long press is held 1 s) and encoder acceleration. Detents queue;
+	// each plays out over two 1 ms UI polls (capped near 256 queued per encoder).
 	void setButton(Button b, bool down);
-	void turnEncoder(Encoder e, int detents);
-	void setEncoderAcceleration(bool on);
-	// Screens. dst is kFrameBytes; see pixel().
-	void drawMenu(uint8_t* dst);
-	void drawScope(uint8_t* dst);
+	void turnEncoder(Encoder e, int detents);  // > 0 clockwise
+	void setEncoderAcceleration(bool on);      // as the app menu's UP button; on at boot
+	// Screens, drawn on request (call on the tick thread, at any rate or
+	// never). drawMenu: the app's menu, or the app-selection menu while it is
+	// open. drawScope: the app's screensaver view. Each draws into its own
+	// frame, so neither disturbs the other or the firmware's UI state.
+	void drawMenu(uint8_t* dst);       // dst is kFrameBytes
+	void drawScope(uint8_t* dst);      // dst is kFrameBytes
+	// Frame layout (weegfx, the SH1106's page order): 8 pages of 8 rows,
+	// 128 bytes per page; pixel (x, y) is bit (y % 8) of byte
+	// (y / 8) * 128 + x, set = lit. (0, 0) is top left. False off-frame.
 	static bool pixel(const uint8_t* frame, int x, int y);
 	// Apps.
 	int app() const;
-	void selectApp(int index);
+	void selectApp(int index);         // as choosing it in the app menu; closes that menu
 	static const char* appName(int index);
-	bool appMenuOpen() const;
+	bool appMenuOpen() const;          // opened by an R long press
 	// Settings of the current app (raw: range-clamped, no app guards).
 	int channels() const;
 	int settingCount() const;

@@ -922,7 +922,10 @@ void REFS_screensaver() {
   float c0_freq_ = references_app.get_C0_freq() ;
   float bpm_ = (60.0 * frequency_)/references_app.get_ppqn() ;
 
-  int32_t freq_decicents_deviation_ = round(12000.0 * log2f(frequency_ / c0_freq_)) + 500;
+  // SHOAL: with no frequency, log2f(0) is -inf, whose conversion to int is
+  // undefined on the host (ARM saturates). The results are only printed when
+  // frequency_ >= c0_freq_, so use 0 then.
+  int32_t freq_decicents_deviation_ = frequency_ > 0.0f ? round(12000.0 * log2f(frequency_ / c0_freq_)) + 500 : 0;
   int8_t freq_octave_ = -2 + ((freq_decicents_deviation_)/ 12000) ;
   int8_t freq_note_ = (freq_decicents_deviation_ - ((freq_octave_ + 2) * 12000)) / 1000;
   int32_t freq_decicents_residual_ = ((freq_decicents_deviation_ - ((freq_octave_ - 1) * 12000)) % 1000) - 500;

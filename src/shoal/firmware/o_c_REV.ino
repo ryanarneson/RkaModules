@@ -28,7 +28,8 @@
 //   shoal_boot()       the setup() sequence without delays, splash screen,
 //                      calibration UI or timers;
 //   shoal_tick()       the body of CORE_timer_ISR (called every 60 us);
-//   shoal_main_pass()  one pass of the loop() body, without the draw.
+//   shoal_main_pass()  one pass of the loop() body, without the draw
+//                      (Core::drawMenu/drawScope draw on request).
 // The UI timer ISR is OC::g_ui.Poll(), called by the shim every 1 ms.
 
 #include <EEPROM.h>
@@ -111,26 +112,19 @@ void shoal_boot() {
 
 void FASTRUN shoal_main_pass() {
 
-    // don't change current_app while it's running
-    if (OC::UI_MODE_APP_SETTINGS == ui_mode) {
-      OC::g_ui.AppSettings(); // SHOAL: g_ prefix (name clashes with app ui members)
-      ui_mode = OC::UI_MODE_MENU;
-    }
+    // SHOAL: the app menu is non-blocking (Ui::DispatchEvents opens, runs and
+    // closes it), so there is no UI_MODE_APP_SETTINGS step here. While it is
+    // open the current app's loop() does not run, as upstream's blocking
+    // AppSettings() kept it from running.
 
     // Run current app
-    OC::apps::current_app->loop();
+    if (!OC::g_ui.app_menu_open()) // SHOAL: app suspended while the app menu is open
+      OC::apps::current_app->loop();
 
     // UI events
-    OC::UiMode mode = OC::g_ui.DispatchEvents(OC::apps::current_app); // SHOAL: g_ prefix (name clashes with app ui members)
-
-    // State transition for app
-    if (mode != ui_mode) {
-      if (OC::UI_MODE_SCREENSAVER == mode)
-        OC::apps::current_app->HandleAppEvent(OC::APP_EVENT_SCREENSAVER_ON);
-      else if (OC::UI_MODE_SCREENSAVER == ui_mode)
-        OC::apps::current_app->HandleAppEvent(OC::APP_EVENT_SCREENSAVER_OFF);
-      ui_mode = mode;
-    }
+    // SHOAL: no screensaver state, so no APP_EVENT_SCREENSAVER_ON/OFF
+    // transitions; the mode is MENU or APP_SETTINGS (app menu open).
+    ui_mode = OC::g_ui.DispatchEvents(OC::apps::current_app); // SHOAL: g_ prefix (name clashes with app ui members)
 
     if (millis() - LAST_REDRAW_TIME > REDRAW_TIMEOUT_MS)
       MENU_REDRAW = 1;

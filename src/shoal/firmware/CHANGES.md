@@ -44,10 +44,26 @@ Each change is marked `// SHOAL:` in the file.
 - `OC_ui.h`: `OC_debug.h` include and the `OC_UI_DEBUG` event counters in
   `PushEvent` deleted (`OC_debug.*` is dropped).
 - `OC_ui.cpp`: `Ui::Splashscreen()` deleted.
-- `OC_apps.ino`: `Ui::AppSettings()` stubbed to do nothing and
-  `Ui::ConfirmReset()` to return false, until the non-blocking app menu
-  (stage 1, Task 5). `::FOURCC` qualified in `GlobalSettings` and `AppData`
-  (clang: the member name hides the template).
+- `OC_ui.h`, `OC_ui.cpp`, `OC_apps.ino`, `o_c_REV.ino` (stage 1, Task 5):
+  the blocking `Ui::AppSettings()` loop became a non-blocking app menu,
+  `Ui::AppMenuOpen()`, `AppMenuHandle(event)` and `AppMenuClose(change)`
+  (flag `app_menu_open_` in `Ui`, cursor `OC::app_menu_cursor` in the
+  context). `DispatchEvents` opens it on an R long press, routes every event
+  to it while open and closes it unchanged after `APP_SELECTION_TIMEOUT_MS`
+  idle. R press or long press switches app (no save: the host saves), UP
+  toggles acceleration, L does nothing (`DebugStats` dropped);
+  `app_isr_enabled` is not toggled (single-threaded). `shoal_main_pass()`
+  skips the app's `loop()` while it is open (upstream's loop was blocked)
+  and has no `UI_MODE_APP_SETTINGS` step. `draw_app_menu()` draws into the
+  caller's frame (no `GRAPHICS_BEGIN_FRAME`/`END_FRAME`).
+- `OC_ui.cpp`, `o_c_REV.ino` (Task 5): no screensaver state.
+  `DispatchEvents` no longer sets `screensaver_` on idle or on an UP long
+  press (which now does nothing), and `APP_EVENT_SCREENSAVER_ON/OFF` are
+  never sent. Shoal draws the screensaver view on its own screen
+  (`Core::drawScope`).
+- `OC_apps.ino`: `Ui::ConfirmReset()` returns false. `::FOURCC` qualified
+  in `GlobalSettings` and `AppData` (clang: the member name hides the
+  template).
 - `OC_calibration.h`: `::FOURCC` qualified, as above.
 - `OC_calibration.ino`: calibration UI deleted (`Ui::Calibrate`, steps,
   drawing, `calibration_save`, `calibration_storage`,
@@ -130,6 +146,10 @@ is marked `// SHOAL:`.
 
 ## Desktop-CPU guards
 
+- `APP_REFS.ino` (References screensaver view): with no TR4 frequency,
+  `round(12000 * log2f(0))` converted -inf to `int32_t` (undefined on the
+  host; ARM saturates). The value is printed only when a frequency is
+  measured, so it is now 0 when the frequency is 0.
 - `frames_poly_lfo.cpp` (Quadraturia, any settings): `PolyLfo::Render` read
   `dac_code_[i-1]` at `i == 0` (index -1). The value is multiplied by
   `am_depths[0]`, which is always 0, so it now reads 0 instead.

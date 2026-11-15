@@ -58,7 +58,13 @@ public:
   bool ConfirmReset();
   void DebugStats();
   void Calibrate();
-  void AppSettings();
+  // SHOAL: the blocking AppSettings() loop became a non-blocking app menu
+  // (OC_apps.ino): DispatchEvents opens it on an R long press and routes
+  // events to it while it is open.
+  void AppMenuOpen();
+  void AppMenuHandle(const UI::Event &event);
+  void AppMenuClose(bool change);
+  bool app_menu_open() const { return app_menu_open_; }
   UiMode DispatchEvents(const OC::App *app); // SHOAL: const (available_apps is a read-only table)
 
   void Poll();
@@ -121,6 +127,7 @@ private:
   uint16_t button_ignore_mask_;
   bool screensaver_;
   bool preempt_screensaver_;
+  bool app_menu_open_; // SHOAL: non-blocking app menu
 
   UI::Encoder<encR1, encR2> encoder_right_;
   UI::Encoder<encL1, encL2> encoder_left_;

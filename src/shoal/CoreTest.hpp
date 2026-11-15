@@ -22,5 +22,8 @@ struct CoreTest {
 	static int32_t pitchIn(Core& c, int ch);
 	// OC::ADC::smoothed_raw_value(ch): the firmware's smoothed 12-bit code.
 	static uint32_t smoothedCode(Core& c, int ch);
+	// The setting index (as in Core::setting) under the menu cursor of
+	// CopierMaschine (app 0); -1 for any other app.
+	static int menuSetting(Core& c);
 };
 }

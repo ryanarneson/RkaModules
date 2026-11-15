@@ -44,6 +44,7 @@ void Ui::Init() {
   button_ignore_mask_ = 0;
   screensaver_ = false;
   preempt_screensaver_ = false;
+  app_menu_open_ = false; // SHOAL: non-blocking app menu
 
   encoder_right_.Init(OC_GPIO_ENC_PINMODE);
   encoder_left_.Init(OC_GPIO_ENC_PINMODE);
@@ -115,6 +116,21 @@ void FASTRUN Ui::Poll() {
 
 UiMode Ui::DispatchEvents(const App *app) { // SHOAL: const (available_apps is a read-only table)
 
+  // SHOAL: while the non-blocking app menu is open it takes every event
+  // (as upstream's AppSettings() loop did) and closes, unchanged, after
+  // APP_SELECTION_TIMEOUT_MS without input.
+  if (app_menu_open_) {
+    while (app_menu_open_ && event_queue_.available()) {
+      const UI::Event event = event_queue_.PullEvent();
+      if (IgnoreEvent(event))
+        continue;
+      AppMenuHandle(event);
+    }
+    if (app_menu_open_ && idle_time() >= APP_SELECTION_TIMEOUT_MS)
+      AppMenuClose(false);
+    return app_menu_open_ ? UI_MODE_APP_SETTINGS : UI_MODE_MENU;
+  }
+
   while (event_queue_.available()) {
     const UI::Event event = event_queue_.PullEvent();
     if (IgnoreEvent(event))
@@ -145,11 +161,14 @@ UiMode Ui::DispatchEvents(const App *app) { // SHOAL: const (available_apps is a
             VBiasManager *vbias_m = vbias_m->get();
             vbias_m->AdvanceBias();
         #else
-            if (!preempt_screensaver_) screensaver_ = true;
+            // SHOAL: no screensaver state: an UP long press does nothing
+            // (Shoal shows the screensaver view on its own screen).
         #endif
         }
-        else if (OC::CONTROL_BUTTON_R == event.control)
+        else if (OC::CONTROL_BUTTON_R == event.control) {
+          AppMenuOpen(); // SHOAL: non-blocking app menu; queued events go to it
           return UI_MODE_APP_SETTINGS;
+        }
         else
           app->HandleButtonEvent(event);
         break;
@@ -162,13 +181,9 @@ UiMode Ui::DispatchEvents(const App *app) { // SHOAL: const (available_apps is a
     MENU_REDRAW = 1;
   }
 
-  if (idle_time() > screensaver_timeout())
-    screensaver_ = true;
-
-  if (screensaver_)
-    return UI_MODE_SCREENSAVER;
-  else
-    return UI_MODE_MENU;
+  // SHOAL: no screensaver state: idling does not enter it, so the first
+  // input after a pause is never swallowed.
+  return UI_MODE_MENU;
 }
 
 // SHOAL: Ui::Splashscreen() deleted; Shoal boots straight into the saved app.

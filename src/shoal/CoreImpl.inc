@@ -113,6 +113,11 @@ struct Core::Impl {
 	}
 };
 
+// Firmware pins of shoal::Button and shoal::Encoder (OC_gpio.h); the
+// firmware's UI::Button and UI::Encoder poll them in OC::Ui::Poll.
+static const uint8_t kButtonPins[] = { but_top, but_bot, butL, butR };
+static const uint8_t kEncoderPins[][2] = { { encL1, encL2 }, { encR1, encR2 } };
+
 Core::Core() : impl_(new Impl) {
 }
 
@@ -162,6 +167,13 @@ void Core::tick() {
 	impl_->uiMicros += OC_CORE_TIMER_RATE;
 	if (impl_->uiMicros >= OC_UI_TIMER_RATE) {
 		impl_->uiMicros -= OC_UI_TIMER_RATE;
+		// One quadrature sample per encoder per poll: a detent takes two polls.
+		for (int e = 0; e < 2; e++) {
+			bool a, b;
+			hw::state().encoders[e].poll(a, b);
+			hw::state().pins[kEncoderPins[e][0]] = a ? HIGH : LOW;
+			hw::state().pins[kEncoderPins[e][1]] = b ? HIGH : LOW;
+		}
 		OC::g_ui.Poll();
 	}
 	if (++impl_->mainTicks >= 17) {
@@ -178,31 +190,53 @@ uint32_t Core::outCode(int ch) const {
 	return ch >= 0 && ch < kNumChannels ? impl_->dac[ch] : 0;
 }
 
-void Core::setButton(Button, bool) {
-	// Task 5
+void Core::setButton(Button b, bool down) {
+	if (b >= sizeof(kButtonPins))
+		return;
+	Scope scope(impl_->ctx.get());
+	// Buttons are active low.
+	hw::state().pins[kButtonPins[b]] = down ? LOW : HIGH;
 }
 
-void Core::turnEncoder(Encoder, int) {
-	// Task 5
+void Core::turnEncoder(Encoder e, int detents) {
+	if (e > ENCODER_R)
+		return;
+	Scope scope(impl_->ctx.get());
+	hw::state().encoders[e].turn(detents);
 }
 
-void Core::setEncoderAcceleration(bool) {
-	// Task 5
+void Core::setEncoderAcceleration(bool on) {
+	Scope scope(impl_->ctx.get());
+	// What the app menu's UP button does.
+	OC::global_settings.encoders_enable_acceleration = on;
+	OC::g_ui.encoders_enable_acceleration(on);
 }
 
 void Core::drawMenu(uint8_t* dst) {
-	// Task 5
-	memset(dst, 0, kFrameBytes);
+	Scope scope(impl_->ctx.get());
+	uint8_t* frame = impl_->ctx->menu_frame;
+	graphics.Begin(frame, true);
+	if (OC::g_ui.app_menu_open())
+		OC::draw_app_menu(OC::app_menu_cursor);
+	else
+		OC::apps::current_app->DrawMenu();
+	graphics.End();
+	memcpy(dst, frame, kFrameBytes);
 }
 
 void Core::drawScope(uint8_t* dst) {
-	// Task 5
-	memset(dst, 0, kFrameBytes);
+	Scope scope(impl_->ctx.get());
+	uint8_t* frame = impl_->ctx->scope_frame;
+	graphics.Begin(frame, true);
+	OC::apps::current_app->DrawScreensaver();
+	graphics.End();
+	memcpy(dst, frame, kFrameBytes);
 }
 
-bool Core::pixel(const uint8_t*, int, int) {
-	// Task 5
-	return false;
+bool Core::pixel(const uint8_t* frame, int x, int y) {
+	if (x < 0 || x >= kFrameW || y < 0 || y >= kFrameH)
+		return false;
+	return (frame[(y >> 3) * kFrameW + x] >> (y & 7)) & 1;
 }
 
 int Core::app() const {
@@ -212,10 +246,18 @@ int Core::app() const {
 
 void Core::selectApp(int index) {
 	Scope scope(impl_->ctx.get());
-	if (index < 0 || index >= kNumApps || index == app())
+	if (index < 0 || index >= kNumApps)
 		return;
+	if (OC::g_ui.app_menu_open())
+		OC::g_ui.AppMenuClose(false);
+	if (index == app())
+		return;
+	// The app menu's change path (OC::Ui::AppMenuClose).
 	OC::apps::current_app->HandleAppEvent(OC::APP_EVENT_SUSPEND);
 	OC::apps::set_current_app(index);
+	FreqMeasure.end();
+	OC::DigitalInputs::reInit();
+	OC::g_ui.encoders_enable_acceleration(OC::global_settings.encoders_enable_acceleration);
 	OC::apps::current_app->HandleAppEvent(OC::APP_EVENT_RESUME);
 }
 
@@ -224,8 +266,8 @@ const char* Core::appName(int index) {
 }
 
 bool Core::appMenuOpen() const {
-	// Task 5
-	return false;
+	Scope scope(impl_->ctx.get());
+	return OC::g_ui.app_menu_open();
 }
 
 int Core::channels() const {
@@ -233,19 +275,52 @@ int Core::channels() const {
 	return 0;
 }
 
+// Settings access per app. Only CopierMaschine (app 0, one settings object)
+// is filled in so far; Task 6 adds the other apps (and the channel argument).
+namespace {
+struct AppSettings {
+	int count;                                          // settings per channel
+	const settings::value_attr& (*attr)(size_t index);  // the app's SETTINGS_DECLARE table
+	int (*get)(int channel, int index);
+};
+
+int asrGet(int, int index) {
+	return asr.get_value(index);
+}
+
+constexpr AppSettings kAppSettings[] = {
+	{ ASR_SETTING_LAST, &ASR::value_attr, &asrGet },
+};
+
+// The current app's entry, or null where Task 6 has not added it yet.
+const AppSettings* currentAppSettings() {
+	const int app = OC::apps::index_of(OC::global_settings.current_app_id);
+	const int n = (int) (sizeof(kAppSettings) / sizeof(kAppSettings[0]));
+	return app >= 0 && app < n ? &kAppSettings[app] : nullptr;
+}
+} // namespace
+
 int Core::settingCount() const {
-	// Task 6
-	return 0;
+	Scope scope(impl_->ctx.get());
+	const AppSettings* a = currentAppSettings();
+	return a ? a->count : 0;
 }
 
-SettingInfo Core::settingInfo(int) const {
-	// Task 6
-	return SettingInfo{ "", 0, 0, 0, nullptr };
+SettingInfo Core::settingInfo(int index) const {
+	Scope scope(impl_->ctx.get());
+	const AppSettings* a = currentAppSettings();
+	if (!a || index < 0 || index >= a->count)
+		return SettingInfo{ "", 0, 0, 0, nullptr };
+	const settings::value_attr& v = a->attr((size_t) index);
+	return SettingInfo{ v.name, v.min_, v.max_, v.default_, v.value_names };
 }
 
-int Core::setting(int, int) const {
-	// Task 6
-	return 0;
+int Core::setting(int channel, int index) const {
+	Scope scope(impl_->ctx.get());
+	const AppSettings* a = currentAppSettings();
+	if (!a || index < 0 || index >= a->count)
+		return 0;
+	return a->get(channel, index);
 }
 
 bool Core::setSettingRaw(int, int, int) {
@@ -299,6 +374,13 @@ int32_t CoreTest::pitchIn(Core& c, int ch) {
 uint32_t CoreTest::smoothedCode(Core& c, int ch) {
 	Scope scope(c.impl_->ctx.get());
 	return OC::ADC::smoothed_raw_value((ADC_CHANNEL) ch);
+}
+
+int CoreTest::menuSetting(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	if (c.app() != 0)
+		return -1;
+	return asr.enabled_setting_at(asr_state.cursor_pos());
 }
 
 } // namespace shoal

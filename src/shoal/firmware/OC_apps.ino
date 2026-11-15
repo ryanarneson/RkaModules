@@ -325,8 +325,9 @@ void Init(bool reset_settings) {
 
 }; // namespace apps
 
+// SHOAL: draws into the frame the caller has begun (Core::drawMenu), so
+// GRAPHICS_BEGIN_FRAME/GRAPHICS_END_FRAME are removed here.
 void draw_app_menu(const menu::ScreenCursor<5> &cursor) {
-  GRAPHICS_BEGIN_FRAME(true);
 
   menu::SettingsListItem item;
   item.x = menu::kIndentDx;
@@ -343,8 +344,6 @@ void draw_app_menu(const menu::ScreenCursor<5> &cursor) {
        graphics.drawBitmap8(item.x + 2, item.y + 1, 4, bitmap_indicator_4x8);
     item.DrawCustom();
   }
-
-  GRAPHICS_END_FRAME();
 }
 
 void draw_save_message(uint8_t c) {
@@ -354,12 +353,57 @@ void draw_save_message(uint8_t c) {
   GRAPHICS_END_FRAME();
 }
 
-// SHOAL: the blocking app-selection loop and the reset confirmation are
-// stubbed until Shoal's non-blocking app menu replaces them (Task 5).
-// AppSettings() changes nothing; ConfirmReset() declines.
-void Ui::AppSettings() {
+SHOAL_STATE(menu::ScreenCursor<5>, app_menu_cursor) // SHOAL: per-instance state (shoal::Context)
+#define app_menu_cursor app_menu_cursor_ref()
+
+// SHOAL: upstream's blocking AppSettings() loop, split into a non-blocking
+// app menu driven by Ui::DispatchEvents. Open suspends the current app,
+// events scroll and choose, and close (with or without a change) resumes the
+// current app. Differences: an R long press switches without saving (saving
+// is the host's job in Shoal), L does nothing (DebugStats is dropped), and
+// app_isr_enabled is not toggled around the switch (the shim runs ticks and
+// the main pass on one thread, so no ISR can fire in between).
+void Ui::AppMenuOpen() {
+  SetButtonIgnoreMask();
+
+  apps::current_app->HandleAppEvent(APP_EVENT_SUSPEND);
+
+  app_menu_cursor.Init(0, NUM_AVAILABLE_APPS - 1);
+  app_menu_cursor.Scroll(apps::index_of(global_settings.current_app_id));
+  app_menu_open_ = true;
 }
 
+void Ui::AppMenuHandle(const UI::Event &event) {
+  if (UI::EVENT_ENCODER == event.type && CONTROL_ENCODER_R == event.control) {
+    app_menu_cursor.Scroll(event.value);
+  } else if (CONTROL_BUTTON_R == event.control) {
+    AppMenuClose(true);
+  } else if (CONTROL_BUTTON_UP == event.control) {
+    bool enabled = !global_settings.encoders_enable_acceleration;
+    SERIAL_PRINTLN("Encoder acceleration: %s", enabled ? "enabled" : "disabled");
+    encoders_enable_acceleration(enabled);
+    global_settings.encoders_enable_acceleration = enabled;
+  }
+}
+
+void Ui::AppMenuClose(bool change) {
+  event_queue_.Flush();
+  event_queue_.Poke();
+  app_menu_open_ = false;
+
+  if (change) {
+    apps::set_current_app(app_menu_cursor.cursor_pos());
+    FreqMeasure.end();
+    OC::DigitalInputs::reInit();
+  }
+
+  encoders_enable_acceleration(global_settings.encoders_enable_acceleration);
+
+  // Restore state
+  apps::current_app->HandleAppEvent(APP_EVENT_RESUME);
+}
+
+// SHOAL: the reset confirmation is stubbed: it declines.
 bool Ui::ConfirmReset() {
   return false;
 }

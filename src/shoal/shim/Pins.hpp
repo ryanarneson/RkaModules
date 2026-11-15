@@ -14,7 +14,9 @@ namespace shoal {
 struct EncoderPins {
 	void turn(int detents) {
 		const bool fwd = detents > 0;
-		for (int i = 0, n = fwd ? detents : -detents; i < n; i++) {
+		// Magnitude in unsigned arithmetic: -INT_MIN does not fit an int.
+		const unsigned n = fwd ? (unsigned) detents : 0u - (unsigned) detents;
+		for (unsigned i = 0; i < n; i++) {
 			if (queue.size() > kMaxQueued)
 				return; // hostile caller: drop the rest
 			queue.push_back(fwd ? kFwd1 : kRev1);
