@@ -104,7 +104,8 @@ blur, so glows are a faint wide stroke under a thin bright one. Use the
 widgets in `src/widgets.hpp` (`rka::BigKnob`, `rka::MidKnob`,
 `rka::SmallKnob`, `rka::Trim`, `rka::CyanMagentaLight`, and for Shoal
 `rka::HoldButton`, a momentary button that shift-click latches,
-`rka::LatchButton`, a click-to-toggle switch in the same shape,
+`rka::LatchButton`, a click-to-toggle switch in the same shape that
+lights itself cyan when on,
 `rka::Encoder`, an endless encoder turned by drag or scroll wheel, and
 `rka::PixelScreen`, a 128x64 1-bit frame drawn in one accent) rather than
 stock ones so modules match. `rka::Trim` is the plugin's own 4.6 mm
