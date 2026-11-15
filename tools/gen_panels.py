@@ -224,8 +224,11 @@ PANELS = {
         sizes={"ENC_L_PUSH": "button", "ENC_R_PUSH": "button", "UP": "button", "DOWN": "button"},
         cards=[
             (91.0, 15.0, 47.2, 47.0, None),
-            (91.0, 66.0, 47.2, 47.0, None),
-            (119.0, 67.0, 18.0, 45.0, "cyan"),
+            # The jacks card and the OUT card inside it (1 mm inset) reach
+            # down so the D jack (y 108.6, sprite radius ~4.2) clears the
+            # OUT border by 1.4 mm.
+            (91.0, 66.0, 47.2, 49.2, None),
+            (119.0, 67.0, 18.0, 47.2, "cyan"),
         ],
         # name, x, y, w, h in mm; each is drawn by the module (128x64 at
         # 0.65 mm per pixel for the scope and editor).

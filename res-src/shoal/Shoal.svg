@@ -10,9 +10,9 @@
 <rect x="3" y="12.9" width="136.24" height="1.0" rx="0.5" fill="url(#rule)" opacity="0.35"/>
 <rect x="3" y="13.2" width="136.24" height="0.4" fill="url(#rule)" opacity="1.0"/>
 <rect x="91.0" y="15.0" width="47.2" height="47.0" rx="1.5" fill="#0f1828" stroke="#2a3a55" stroke-width="0.3" stroke-opacity="1.0"/>
-<rect x="91.0" y="66.0" width="47.2" height="47.0" rx="1.5" fill="#0f1828" stroke="#2a3a55" stroke-width="0.3" stroke-opacity="1.0"/>
-<rect x="119.0" y="67.0" width="18.0" height="45.0" rx="1.5" fill="none" stroke="#22e6ef" stroke-width="1.2" opacity="0.21"/>
-<rect x="119.0" y="67.0" width="18.0" height="45.0" rx="1.5" fill="#0f1828" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="1.0"/>
+<rect x="91.0" y="66.0" width="47.2" height="49.2" rx="1.5" fill="#0f1828" stroke="#2a3a55" stroke-width="0.3" stroke-opacity="1.0"/>
+<rect x="119.0" y="67.0" width="18.0" height="47.2" rx="1.5" fill="none" stroke="#22e6ef" stroke-width="1.2" opacity="0.21"/>
+<rect x="119.0" y="67.0" width="18.0" height="47.2" rx="1.5" fill="#0f1828" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="1.0"/>
 <rect x="4.0" y="16.0" width="83.2" height="5.0" rx="1.0" fill="#04070c" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="1.0"/>
 <rect x="4.0" y="21.5" width="83.2" height="41.6" rx="1.0" fill="#04070c" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="1.0"/>
 <rect x="4.0" y="67.0" width="83.2" height="41.6" rx="1.0" fill="#04070c" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="1.0"/>

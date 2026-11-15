@@ -53,6 +53,9 @@ build/test/shoal/test_shim: src/shoal/test_shim.cpp src/testing.hpp $(SHOAL_DEPS
 	@mkdir -p $(@D)
 	$(CXX) $(SHOAL_TEST_FLAGS) -Isrc $< -o $@
 
+# The encoder's detent arithmetic (src/Detents.hpp, shared by every module).
+build/test/shoal/test_detents: src/Detents.hpp
+
 build/test/shoal/test_%: src/shoal/test_%.cpp build/test/shoal/Firmware.o src/testing.hpp
 	@mkdir -p $(@D)
 	$(CXX) $(SHOAL_TEST_FLAGS) -Isrc $(filter %.cpp %.o,$^) -o $@

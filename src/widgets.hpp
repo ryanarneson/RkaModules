@@ -1,5 +1,6 @@
 #pragma once
 #include <rack.hpp>
+#include "Detents.hpp"
 #include "RkaTheme.hpp"
 #include "plugin.hpp"
 
@@ -130,42 +131,30 @@ struct HoldButton : app::ParamWidget {
 
 // An endless 13.4 mm encoder; not a Rack param, so nothing is saved or
 // randomised. Vertical drag: one detent per 8 px of mouse travel, upward is
-// clockwise (Ctrl/Cmd: 32 px). Scroll wheel over it: one detent per notch.
-// The pointer turns 1/24 turn per detent.
+// clockwise (Ctrl/Cmd: 32 px). Scroll wheel over it: one detent per notch,
+// only when Rack's "scroll wheel knob control" setting is on (as Rack's
+// knobs); otherwise the rack scrolls. The pointer turns 1/24 turn per detent
+// that onTurn takes.
 struct Encoder : widget::OpaqueWidget {
-	std::function<void(int detents)> onTurn;   // > 0 clockwise
+	// > 0 clockwise. Returns false if the turn was dropped (the pointer stays).
+	std::function<bool(int detents)> onTurn;
 
-	static constexpr float DRAG_PX = 8.f;
-	static constexpr float FINE_DRAG_PX = 32.f;
-	// Rack reports one wheel notch as 50 units of scrollDelta.
-	static constexpr float SCROLL_NOTCH = 50.f;
-
-	int position = 0;   // detents turned since creation, for the pointer
-	float dragAccum = 0.f, scrollAccum = 0.f;
+	int position = 0;   // detents taken since creation, for the pointer
+	DetentCounter drag, scroll;
 
 	Encoder() {
 		box.size = mm2px(Vec(13.4f, 13.4f));
 	}
 
 	void turn(int detents) {
-		if (detents == 0)
-			return;
-		position += detents;
-		if (onTurn)
-			onTurn(detents);
-	}
-
-	// Whole detents in `accum` (units of `step`), keeping the remainder.
-	static int take(float& accum, float step) {
-		const int n = int(accum / step);   // truncates toward zero
-		accum -= n * step;
-		return n;
+		if (detents != 0 && onTurn && onTurn(detents))
+			position += detents;
 	}
 
 	void onDragStart(const DragStartEvent& e) override {
 		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
 			return;
-		dragAccum = 0.f;
+		drag.clear();
 		if (settings::allowCursorLock)
 			APP->window->cursorLock();
 	}
@@ -174,9 +163,7 @@ struct Encoder : widget::OpaqueWidget {
 		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
 			return;
 		const bool fine = (APP->window->getMods() & RACK_MOD_MASK) == RACK_MOD_CTRL;
-		dragAccum += -e.mouseDelta.y;
-		// float(...): C++11 would odr-use the constants through the ?: lvalue.
-		turn(take(dragAccum, fine ? float(FINE_DRAG_PX) : float(DRAG_PX)));
+		turn(drag.add(-e.mouseDelta.y, fine ? FINE_DRAG_PX_PER_DETENT : DRAG_PX_PER_DETENT));
 	}
 
 	void onDragEnd(const DragEndEvent& e) override {
@@ -187,9 +174,20 @@ struct Encoder : widget::OpaqueWidget {
 	}
 
 	void onHoverScroll(const HoverScrollEvent& e) override {
-		scrollAccum += e.scrollDelta.y;
-		turn(take(scrollAccum, SCROLL_NOTCH));
+		if (!settings::knobScroll)
+			return;   // not consumed: the rack scrolls
+#if defined ARCH_MAC
+		const float notch = scrollUnitsPerNotch(true);
+#else
+		const float notch = scrollUnitsPerNotch(false);
+#endif
+		turn(scroll.add(e.scrollDelta.y, notch));
 		e.consume(this);
+	}
+
+	void onLeave(const LeaveEvent& e) override {
+		scroll.clear();
+		OpaqueWidget::onLeave(e);
 	}
 
 	void draw(const DrawArgs& args) override {
