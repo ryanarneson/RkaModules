@@ -44,6 +44,7 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 	list::SliderDrag slider;
 	float sliderWidth = 0.f;
 	int32_t sliderMin = 0, sliderMax = 0, sliderTarget = 0;
+	list::SliderHold sliderHold;   // the target shown after a slider drag ends
 	list::MaskPaint paint;
 	float thumbGrab = 0.f;
 
@@ -60,7 +61,8 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 	// --- Edits ---
 
 	// Queue an edit and offer the queue to the host at once; what the host
-	// refuses is offered again every frame (step).
+	// refuses is offered again every frame (step, and ShoalWidget::step
+	// while the list is hidden).
 	void send(const FriendlyEdit& e) {
 		outbox.add(e);
 		flush();
@@ -109,6 +111,7 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 		if (host)
 			host->model(model);
 		flush();
+		sliderHold.update(model, rack::system::getTime());
 		// Follow the firmware's cursor when it moves to another row (an
 		// encoder turn, or an edit made here), and start a new app or tab
 		// with its cursor in view.
@@ -197,7 +200,8 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 				// A drag changes the value from where it is; a press alone
 				// changes nothing (and may be the first of a double click).
 				beginDrag(Drag::Slider, r);
-				sliderWidth = inset(l.control(r, i), l).w;
+				sliderHold.clear();
+				sliderWidth = l.inset(l.control(r, i)).w;
 				sliderMin = r.min;
 				sliderMax = r.max;
 				sliderTarget = r.value;
@@ -261,8 +265,12 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 	}
 
 	void onDragEnd(const DragEndEvent& e) override {
-		if (e.button == GLFW_MOUSE_BUTTON_LEFT)
-			drag = Drag::None;
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		// The bar keeps the drag's target until the model has it.
+		if (drag == Drag::Slider)
+			sliderHold.begin(dragApp, dragTab, dragId, sliderTarget, rack::system::getTime());
+		drag = Drag::None;
 	}
 
 	// A slider goes back to its default.
@@ -273,8 +281,16 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 		if (hit.part != list::Part::Control)
 			return;
 		const Row& r = model.row[hit.index];
-		if (r.kind == RowKind::Number)
-			send(list::editFor(model, FriendlyEdit::SetValue, r.id, r.def));
+		if (r.kind != RowKind::Number)
+			return;
+		send(list::editFor(model, FriendlyEdit::SetValue, r.id, r.def));
+		// The second press also started a drag, from the value before the
+		// reset: it goes on from the default, so a pixel of jitter does not
+		// put the old value back.
+		if (drag == Drag::Slider && dragRow() == hit.index) {
+			slider.begin(r.def, sliderWidth, sliderMin, sliderMax);
+			sliderTarget = r.def;
+		}
 	}
 
 	void onHover(const HoverEvent& e) override {
@@ -353,12 +369,6 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 
 	// --- Drawing: nanovg in RkaTheme's colours, in the light layer like the
 	// other screens. ---
-
-	// A control's drawn box inside its part of the row.
-	static list::Box inset(const list::Box& b, const list::Layout& l) {
-		const float u = l.lineH() / 13.f;
-		return list::Box{ b.x + 2.f * u, b.y + 1.5f * u, b.w - 5.f * u, b.h - 3.f * u };
-	}
 
 	void drawLayer(const DrawArgs& args, int layer) override {
 		if (layer == 1)
@@ -531,16 +541,18 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 			return;
 		}
 
-		// The pointer's row is lightened; the firmware's cursor row has a bar
-		// on its left edge (amber while the hardware is editing its value)
-		// and a brighter label.
-		if (rowHot || dragged)
-			pen.fill(b, dim(RkaTheme::INK, 0.07f));
+		// The pointer's row is lightened. The firmware's cursor row is tinted
+		// cyan, with a bar on its left edge (amber while the hardware is
+		// editing its value) and a brighter label.
 		const bool cursor = (r.flags & kRowCursor) != 0;
 		if (cursor)
-			pen.fill(list::Box{ b.x + pen.u, b.y + pen.u, 1.5f * pen.u, b.h - 2.f * pen.u }, (r.flags & kRowEditing) ? RkaTheme::AMBER : RkaTheme::CYAN);
+			pen.fill(b, dim(RkaTheme::CYAN, 0.09f));
+		if (rowHot || dragged)
+			pen.fill(b, dim(RkaTheme::INK, 0.07f));
+		if (cursor)
+			pen.fill(list::Box{ b.x + pen.u, b.y + pen.u, 3.f * pen.u, b.h - 2.f * pen.u }, (r.flags & kRowEditing) ? RkaTheme::AMBER : RkaTheme::CYAN);
 
-		const list::Box c = inset(l.control(r, i), l);
+		const list::Box c = l.inset(l.control(r, i));
 		const float radius = 1.5f * pen.u;
 		const NVGcolor edge = controlHot || dragged ? RkaTheme::CYAN : dim(RkaTheme::HINT, 0.7f);
 		char value[24];
@@ -558,11 +570,13 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 
 		switch (r.kind) {
 			case RowKind::Number: {
-				// A bar filled to the value (from zero when the range
-				// straddles it), the value printed on it. During a drag it
-				// shows the pointer's target; the model's value otherwise.
-				const int32_t v = dragged && drag == Drag::Slider ? sliderTarget : r.value;
+				// A track the width of the range, filled to the value (from
+				// zero when the range straddles it), the value printed on
+				// it. During a drag it shows the pointer's target, and for a
+				// moment after (SliderHold); the model's value otherwise.
+				const int32_t v = dragged && drag == Drag::Slider ? sliderTarget : sliderHold.shown(model, i);
 				pen.fill(c, RkaTheme::CARD, radius);
+				pen.fill(c, dim(RkaTheme::CYAN, 0.12f), radius);
 				const float vx = list::sliderX(v, c.w, r.min, r.max);
 				const float zx = r.min < 0 && r.max > 0 ? list::sliderX(0, c.w, r.min, r.max) : 0.f;
 				const float x0 = vx < zx ? vx : zx, x1 = vx < zx ? zx : vx;
@@ -602,12 +616,16 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 				break;
 			}
 			case RowKind::Mask: {
-				// One cell per note, lit when active; the cells tile the
-				// control, each drawn with a gap.
+				// One cell per note, lit when active. The cells tile the
+				// control's drawn box, with a gap between neighbours only, so
+				// the outer edges line up with the dropdowns and sliders.
 				const int cells = list::Layout::cellCount(r);
+				const float gap = 0.75f * pen.u;
 				for (int n = 0; n < cells; n++) {
 					const list::Box whole = l.cell(r, i, n);
-					const list::Box cell = { whole.x + pen.u, c.y, whole.w - 2.f * pen.u, c.h };
+					const float x0 = n > 0 ? whole.x + gap : whole.x;
+					const float x1 = n < cells - 1 ? whole.right() - gap : whole.right();
+					const list::Box cell = { x0, whole.y, x1 - x0, whole.h };
 					const bool on = (((uint32_t) r.value >> n) & 1u) != 0;
 					const bool hot = rowHot && hover.part == list::Part::Cell && hover.cell == n;
 					if (on)

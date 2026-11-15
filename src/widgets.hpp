@@ -137,10 +137,29 @@ struct HoldButton : app::ParamWidget {
 	}
 };
 
+// Sets a param the way a click on a stock switch does: Edit > Undo puts it
+// back. Nothing is recorded when the value does not change.
+inline void setParamUndoable(ParamQuantity* pq, float value, const std::string& action) {
+	if (!pq || !pq->module)
+		return;
+	const float oldValue = pq->getValue();
+	pq->setValue(value);
+	const float newValue = pq->getValue();
+	if (newValue == oldValue)
+		return;
+	history::ParamChange* h = new history::ParamChange;
+	h->name = action;
+	h->moduleId = pq->module->id;
+	h->paramId = pq->paramId;
+	h->oldValue = oldValue;
+	h->newValue = newValue;
+	APP->history->push(h);
+}
+
 // A latch in the HoldButton's shape: each click flips the param between its
-// minimum and its maximum. Its lens stays dark (on the HoldButton a lit lens
-// means "held down"), so pair it with a light. Configure the param with
-// configSwitch().
+// minimum and its maximum, undoably. Its lens stays dark (on the HoldButton
+// a lit lens means "held down"), so pair it with a light. Configure the
+// param with configSwitch().
 struct LatchButton : HoldButton {
 	void onDragStart(const DragStartEvent& e) override {
 		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
@@ -148,10 +167,7 @@ struct LatchButton : HoldButton {
 		ParamQuantity* pq = getParamQuantity();
 		if (!pq)
 			return;
-		if (isDown())
-			pq->setMin();
-		else
-			pq->setMax();
+		setParamUndoable(pq, isDown() ? pq->getMinValue() : pq->getMaxValue(), "move switch");
 	}
 
 	void onDragEnd(const DragEndEvent& e) override {}

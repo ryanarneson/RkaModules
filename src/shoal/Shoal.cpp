@@ -175,7 +175,8 @@ struct Shoal : Module {
 			// Smoothed, so a 1 ms trigger still shows.
 			lights[TR1_LIGHT + ch].setBrightnessSmooth(host.gateHigh(ch) ? 1.f : 0.f, args.sampleTime);
 		}
-		lights[UI_MODE_LIGHT].setBrightness(params[UI_MODE_PARAM].getValue() > 0.5f ? 1.f : 0.f);
+		// UI_MODE_LIGHT is set by the widget (ShoalWidget::step), so it is
+		// right while the engine is paused.
 	}
 };
 
@@ -247,7 +248,7 @@ struct ShoalWidget : ModuleWidget {
 		friendlyList->live = module != nullptr;
 		friendlyList->onHardwareMode = [=]() {
 			if (module)
-				module->params[Shoal::UI_MODE_PARAM].setValue(0.f);
+				rka::setParamUndoable(module->paramQuantities[Shoal::UI_MODE_PARAM], 0.f, "move switch");
 		};
 		addChild(friendlyList);
 		OutputStrip* strip = createWidget<OutputStrip>(mm2px(SCREEN_STRIP.pos));
@@ -279,12 +280,19 @@ struct ShoalWidget : ModuleWidget {
 	}
 
 	// Friendly mode (and the module browser) shows the list on the lower
-	// screen; hardware mode the firmware's menu.
+	// screen; hardware mode the firmware's menu. The UI MODE light is set
+	// here rather than in process(), so it follows a click (or an undo)
+	// while the engine is paused.
 	void step() override {
 		Shoal* m = getModule<Shoal>();
 		const bool friendly = !m || m->params[Shoal::UI_MODE_PARAM].getValue() > 0.5f;
 		friendlyList->setVisible(friendly);
 		menuScreen->setVisible(!friendly);
+		if (m)
+			m->lights[Shoal::UI_MODE_LIGHT].setBrightness(friendly ? 1.f : 0.f);
+		// A hidden widget is not stepped: edits the host refused before the
+		// switch to hardware mode are offered here every frame as well.
+		friendlyList->flush();
 		ModuleWidget::step();
 	}
 

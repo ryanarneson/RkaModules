@@ -170,7 +170,9 @@ void testHit() {
 		checkHit(l, m, b.x + in, b.y + in, Part::Tab, t, -1, "tab left edge");
 		checkHit(l, m, b.right() - in, b.bottom() - in, Part::Tab, t, -1, "tab right edge");
 	}
-	// Row boundaries: the first and last pixel of each visible row.
+	// Row boundaries: the first and last pixel of each visible row. The
+	// scrollbar takes the rows' right end (below).
+	const float rowsEnd = l.scrollbarHit().x;
 	for (int i = l.scroll; i < l.scroll + l.visible; i++) {
 		const Box b = l.row(i);
 		const Box lab = l.label(m.row[i], i), con = l.control(m.row[i], i);
@@ -180,17 +182,28 @@ void testHit() {
 		}
 		if (m.row[i].kind == RowKind::Action) {
 			checkHit(l, m, b.x + in, b.y + in, Part::Control, i, -1, "action left");
-			checkHit(l, m, b.right() - in, b.bottom() - in, Part::Control, i, -1, "action right");
+			checkHit(l, m, rowsEnd - in, b.bottom() - in, Part::Control, i, -1, "action right");
 			continue;
 		}
 		checkHit(l, m, lab.x + in, b.y + in, Part::Label, i, -1, "label top left");
 		checkHit(l, m, lab.right() - in, b.bottom() - in, Part::Label, i, -1, "label bottom right");
 		checkHit(l, m, con.x + in, b.y + in, Part::Control, i, -1, "control top left");
-		checkHit(l, m, con.right() - in, b.bottom() - in, Part::Control, i, -1, "control bottom right");
+		checkHit(l, m, rowsEnd - in, b.bottom() - in, Part::Control, i, -1, "control bottom right");
+		// The widened scrollbar covers no more of the control than its
+		// drawn margin and a few pixels.
+		CHECK(l.inset(con).right() - rowsEnd < 5.f, "row %d: the scrollbar takes %g of the drawn control", i, l.inset(con).right() - rowsEnd);
 	}
-	const Box bar = l.scrollbar();
+	const Box bar = l.scrollbar(), barHit = l.scrollbarHit();
 	checkHit(l, m, bar.x + in, bar.y + in, Part::Scrollbar, -1, -1, "scrollbar top");
 	checkHit(l, m, bar.right() - in, bar.bottom() - in, Part::Scrollbar, -1, -1, "scrollbar bottom");
+	// At 100 % zoom the drawn bar is about 7 px; a press takes 12.
+	CHECK(bar.w < kScrollbarHitMin && near(barHit.w, kScrollbarHitMin) && near(barHit.right(), w), "scrollbar hit %g wide, drawn %g", barHit.w, bar.w);
+	checkHit(l, m, w - kScrollbarHitMin + in, l.rowsArea().y + in, Part::Scrollbar, -1, -1, "scrollbar's widened left edge");
+	checkHit(l, m, w - kScrollbarHitMin - in, l.rowsArea().y + in, Part::Control, l.scroll, -1, "left of the widened scrollbar");
+	// A list with nothing to scroll has no scrollbar to hit.
+	const FriendlyModel short1 = makeModel(1, 3);
+	const Layout ls(w, h, short1, 0);
+	checkHit(ls, short1, w - in, ls.rowsArea().y + in, Part::Control, 0, -1, "no scrollbar: the control reaches the edge");
 	// Outside the screen.
 	checkHit(l, m, -1.f, 5.f, Part::None, -1, -1, "left of the screen");
 	checkHit(l, m, 5.f, h + 1.f, Part::None, -1, -1, "below the screen");
@@ -217,18 +230,26 @@ void testMaskCells() {
 		FriendlyModel m = makeModel(1, 3);
 		m.row[1] = makeRow(RowKind::Mask, 1, 0xffff, 0, cells);
 		const Layout l(kSizes[0][0], kSizes[0][1], m, 0);
-		const Box con = l.control(m.row[1], 1);
-		float x = con.x;
+		// The cells tile the box the other controls draw in, so they line up
+		// with the sliders and dropdowns above and below.
+		const Box con = l.control(m.row[1], 1), drawn = l.inset(con);
+		const Box slider = l.inset(l.control(m.row[0], 0));
+		CHECK(near(drawn.x, slider.x) && near(drawn.right(), slider.right()), "%d cells: the mask lines up with a slider", cells);
+		CHECK(drawn.x > con.x && drawn.right() < con.right() && drawn.y > con.y && drawn.bottom() < con.bottom(), "%d cells: inside the control", cells);
+		float x = drawn.x;
 		for (int n = 0; n < cells; n++) {
 			const Box c = l.cell(m.row[1], 1, n);
-			CHECK(near(c.x, x) && near(c.y, con.y) && near(c.h, con.h) && c.w > 0.f, "%d cells: cell %d at %g, want %g", cells, n, c.x, x);
+			CHECK(near(c.x, x) && near(c.y, drawn.y) && near(c.h, drawn.h) && c.w > 0.f, "%d cells: cell %d at %g, want %g", cells, n, c.x, x);
 			x = c.right();
 			checkHit(l, m, c.x + in, c.y + in, Part::Cell, 1, n, "cell left edge");
 			checkHit(l, m, c.x + c.w / 2, c.y + c.h / 2, Part::Cell, 1, n, "cell centre");
 			checkHit(l, m, c.right() - in, c.bottom() - in, Part::Cell, 1, n, "cell right edge");
 			CHECK(l.cellAt(m.row[1], 1, c.x + c.w / 2) == n, "%d cells: cellAt the centre of %d", cells, n);
 		}
-		CHECK(near(x, con.right()), "%d cells end at %g, want %g", cells, x, con.right());
+		CHECK(near(x, drawn.right()), "%d cells end at %g, want %g", cells, x, drawn.right());
+		// The control's margins still press the end cells.
+		checkHit(l, m, con.x + in, con.y + in, Part::Cell, 1, 0, "the control's left margin");
+		checkHit(l, m, con.right() - in, con.bottom() - in, Part::Cell, 1, cells - 1, "the control's right margin");
 		// Painting past either end stays on the end cell.
 		CHECK(l.cellAt(m.row[1], 1, con.x - 50.f) == 0 && l.cellAt(m.row[1], 1, con.right() + 50.f) == cells - 1, "%d cells: cellAt clamps", cells);
 		checkHit(l, m, con.x - in, con.y + in, Part::Label, 1, -1, "left of the cells");
@@ -404,13 +425,68 @@ void testOutbox() {
 	CHECK(h.apps.size() == 1 && h.edits.size() == 1 && h.edits[0].app == 6, "then the edit made after it");
 	CHECK(o.empty(), "empty");
 
-	// Full: a new edit is refused, a new target for a waiting row is not.
+	// Full (the engine paused, say): the newest edit always goes in. A new
+	// target for a waiting row replaces it; anything else makes room by
+	// dropping the oldest edit that is not a row's target, or the oldest.
 	h.room = 0;
 	for (int i = 0; i < Outbox::kSlots; i++)
 		CHECK(o.add(makeEdit(FriendlyEdit::SetValue, 3, 0, i, i)), "slot %d", i);
-	CHECK(!o.add(makeEdit(FriendlyEdit::SetValue, 3, 0, 100, 1)), "a new row does not fit");
-	CHECK(!o.add(makeEdit(FriendlyEdit::Press, 3, 0, 256, 0)), "nor does a press");
-	CHECK(o.add(makeEdit(FriendlyEdit::SetValue, 3, 0, 5, 77)) && o.edits[5].value == 77, "a waiting row takes its new target");
+	CHECK(o.add(makeEdit(FriendlyEdit::SetValue, 3, 0, 5, 77)) && o.edits[5].value == 77 && o.count == Outbox::kSlots, "a waiting row takes its new target");
+	CHECK(!o.add(makeEdit(FriendlyEdit::SetValue, 3, 0, 100, 1)), "a new row drops an older edit");
+	CHECK(o.count == Outbox::kSlots && o.edits[0].id == 1 && o.edits[Outbox::kSlots - 1].id == 100, "all targets: the oldest (row 0) went, the new row is last");
+	CHECK(!o.add(makeEdit(FriendlyEdit::Press, 3, 0, 256, 0)), "a press drops the oldest target");
+	CHECK(o.edits[0].id == 2 && o.edits[Outbox::kSlots - 1].type == FriendlyEdit::Press, "row 1 went, the press is last");
+	CHECK(!o.add(makeEdit(FriendlyEdit::ToggleBit, 3, 0, 9, 3)), "a toggle drops an older edit");
+	CHECK(o.edits[0].id == 2 && o.edits[Outbox::kSlots - 2].id == 100 && o.edits[Outbox::kSlots - 1].type == FriendlyEdit::ToggleBit,
+		"the press went before any target: row 2 is still first");
+	bool press = false;
+	for (int i = 0; i < o.count; i++)
+		press = press || o.edits[i].type == FriendlyEdit::Press;
+	CHECK(!press && o.count == Outbox::kSlots, "the press is gone, %d waiting", o.count);
+	// What survives still goes out in order once the host has room.
+	h.edits.clear();
+	h.room = 100;
+	h.flush(o);
+	CHECK(h.edits.size() == (size_t) Outbox::kSlots && h.edits[0].id == 2 && h.edits.back().type == FriendlyEdit::ToggleBit && o.empty(), "flushed in order");
+}
+
+// After a slider drag ends the bar holds the target until the model has it
+// or a quarter of a second has passed.
+void testSliderHold() {
+	FriendlyModel m = makeModel(2, 4);
+	m.app = 3;
+	m.tab = 1;
+	m.row[2].value = 10;
+	SliderHold hold;
+	CHECK(hold.shown(m, 2) == 10, "no hold: the model's value");
+	hold.begin(3, 1, 2, 40, 100.0);
+	hold.update(m, 100.0);
+	CHECK(hold.active && hold.shown(m, 2) == 40 && hold.shown(m, 1) == m.row[1].value, "held: the target on its row only");
+	hold.update(m, 100.0 + kSliderHoldSeconds * 0.9);
+	CHECK(hold.shown(m, 2) == 40, "still held before the time is up");
+	m.row[2].value = 40;
+	hold.update(m, 100.01);
+	CHECK(!hold.active, "the model caught up: released");
+	m.row[2].value = 37;   // the firmware's guard stopped it short
+	CHECK(hold.shown(m, 2) == 37, "then the model's value, whatever it is");
+	// The model never reaches it: released when the time is up.
+	hold.begin(3, 1, 2, 90, 200.0);
+	hold.update(m, 200.0 + kSliderHoldSeconds - 0.01);
+	CHECK(hold.shown(m, 2) == 90, "held until the time is up");
+	hold.update(m, 200.0 + kSliderHoldSeconds);
+	CHECK(!hold.active && hold.shown(m, 2) == 37, "time up: the model's value");
+	CHECK(kSliderHoldSeconds == 0.25, "a quarter of a second");
+	// Another tab or app, or the row gone: released at once.
+	hold.begin(3, 1, 2, 90, 300.0);
+	m.tab = 0;
+	CHECK(hold.shown(m, 2) == 37, "another tab's row of the same id is not held");
+	hold.update(m, 300.0);
+	CHECK(!hold.active, "another tab: released");
+	m.tab = 1;
+	hold.begin(3, 1, 2, 90, 300.0);
+	m.row[2].id = 77;
+	hold.update(m, 300.0);
+	CHECK(!hold.active, "the row is gone: released");
 }
 
 // Dragging across a mask paints the state the first cell was given.
@@ -509,6 +585,7 @@ int main() {
 	testSlider();
 	testScroll();
 	testOutbox();
+	testSliderHold();
 	testMaskPaint();
 	testValueText();
 	testFindAndEdit();

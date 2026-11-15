@@ -36,8 +36,9 @@ struct DetentCounter {
 
 // Detents whose receiver refused them (a full event queue), kept so that the
 // turn is offered again instead of lost. Turns add up; the sum is held to
-// +-TURN_BACKLOG_MAX.
-constexpr int TURN_BACKLOG_MAX = 256;
+// +-TURN_BACKLOG_MAX, so an engine stopped while the encoder was turned
+// resumes with a short turn, not a burst of everything turned meanwhile.
+constexpr int TURN_BACKLOG_MAX = 16;
 
 struct TurnBacklog {
 	int unsent = 0;

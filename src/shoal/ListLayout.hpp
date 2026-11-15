@@ -1,7 +1,8 @@
 #pragma once
 // Shoal friendly list: where everything on the lower screen goes, what a
 // point on it hits, and the arithmetic and bookkeeping of its gestures
-// (slider drags, scrolling, mask painting, edits the host's queue refused).
+// (slider drags and their release, scrolling, mask painting, edits the
+// host's queue refused).
 // The Rack widget (FriendlyList.hpp) only draws these boxes and feeds them
 // mouse events. Rack-free, C++11, tested offline (test_list.cpp).
 //
@@ -30,6 +31,9 @@ constexpr float kHeaderShare = 0.14f;      // of the height
 constexpr float kControlShare = 0.56f;     // of a row's width: slider, dropdown, mask, sub-editor
 constexpr float kToggleShare = 0.2f;       // of a row's width: an on/off switch
 constexpr float kScrollbarShare = 0.03f;   // of the width
+// The scrollbar takes a press this far from the right edge, in the list's
+// units (pixels at 100 % zoom), however narrow it is drawn.
+constexpr float kScrollbarHitMin = 12.f;
 
 // The furthest a list of `rows` can scroll with `visible` shown, in rows.
 inline int maxScroll(int rows, int visible) {
@@ -121,6 +125,15 @@ struct Layout {
 		const float th = thumbH(bar);
 		return Box{ bar.x, bar.y + (bar.h - th) * scroll / maxScroll(rows, visible), bar.w, th };
 	}
+	// Where a press goes to the scrollbar: the drawn bar, widened leftwards
+	// to kScrollbarHitMin over the rows' right margin.
+	Box scrollbarHit() const {
+		const Box bar = scrollbar();
+		if (!scrollable())
+			return bar;
+		const float hw = bar.w > kScrollbarHitMin ? bar.w : kScrollbarHitMin;
+		return Box{ w - hw, bar.y, hw, bar.h };
+	}
 	// The scroll that puts the thumb's top nearest y.
 	int scrollForThumbTop(float y) const {
 		if (!scrollable())
@@ -152,9 +165,16 @@ struct Layout {
 		const Box b = row(i);
 		return Box{ b.x, b.y, b.w - b.w * controlShare(r.kind), b.h };
 	}
-	// Cell n of a mask row's control; the cells tile it, cell 0 on the left.
+	// What a control draws in: its box less a margin, the same for every kind,
+	// so sliders, dropdowns and mask cells line up.
+	Box inset(const Box& b) const {
+		const float u = lineH() / 13.f;
+		return Box{ b.x + 2.f * u, b.y + 1.5f * u, b.w - 5.f * u, b.h - 3.f * u };
+	}
+	// Cell n of a mask row; the cells tile the control's inset box, cell 0 on
+	// the left. A press anywhere on the control goes to the nearest cell.
 	Box cell(const Row& r, int i, int n) const {
-		const Box c = control(r, i);
+		const Box c = inset(control(r, i));
 		const int cells = cellCount(r);
 		if (n < 0 || n >= cells)
 			return Box{ 0.f, 0.f, 0.f, 0.f };
@@ -164,7 +184,7 @@ struct Layout {
 	// for a row with no cells.
 	int cellAt(const Row& r, int i, float x) const {
 		const int cells = cellCount(r);
-		const Box c = control(r, i);
+		const Box c = inset(control(r, i));
 		if (cells <= 0 || c.w <= 0.f)
 			return -1;
 		const int n = x <= c.x ? 0 : (int) ((x - c.x) / c.w * cells);
@@ -186,7 +206,7 @@ struct Layout {
 			const int t = (int) (x / w * tabs);
 			return Hit{ Part::Tab, t >= tabs ? tabs - 1 : t, -1 };
 		}
-		if (scrollable() && x >= scrollbar().x)
+		if (scrollable() && x >= scrollbarHit().x)
 			return Hit{ Part::Scrollbar, -1, -1 };
 		const int i = scroll + n - (kLines - visible);
 		if (i < 0 || i >= rows)
@@ -259,6 +279,49 @@ struct SliderDrag {
 	}
 };
 
+// After a slider drag ends the bar keeps showing the drag's target until the
+// model's value for that row reaches it or kSliderHoldSeconds have passed,
+// so it does not flick back to the value before the last edit arrived. Then
+// it shows the model's value, whatever that is.
+constexpr double kSliderHoldSeconds = 0.25;
+
+struct SliderHold {
+	bool active = false;
+	int app = -1, tab = -1, id = -1;
+	int32_t target = 0;
+	double until = 0.0;
+
+	void begin(int dragApp, int dragTab, int dragId, int32_t value, double now) {
+		active = true;
+		app = dragApp;
+		tab = dragTab;
+		id = dragId;
+		target = value;
+		until = now + kSliderHoldSeconds;
+	}
+	void clear() {
+		active = false;
+	}
+	// Ends the hold once the model shows the target, the time is up, or the
+	// row is gone (another app or tab, or a list without it).
+	void update(const FriendlyModel& m, double now) {
+		if (!active)
+			return;
+		int i = -1;
+		if (m.app == app && m.tab == tab)
+			for (int k = 0; k < m.rows && k < kMaxRows; k++)
+				if (m.row[k].id == id)
+					i = k;
+		if (i < 0 || m.row[i].value == target || now >= until)
+			active = false;
+	}
+	// The value row i of `m` shows: the held target, or the model's value.
+	int32_t shown(const FriendlyModel& m, int i) const {
+		const Row& r = m.row[i];
+		return active && m.app == app && m.tab == tab && r.id == id ? target : r.value;
+	}
+};
+
 // --- Mask painting: a press toggles one cell, and dragging on gives every
 // cell crossed the state that one was given. Each cell is decided once per
 // drag, so a model that has not caught up is not toggled twice. ---
@@ -312,9 +375,12 @@ struct Outbox {
 
 	bool empty() const { return count == 0 && app < 0; }
 
-	// Queue an edit. A SetValue for a row that already has one waiting, and
-	// a SelectTab when one is waiting, replace it in place: only the latest
-	// target matters. False: no room, the edit is dropped.
+	// Queue an edit; the newest always goes in. A SetValue for a row that
+	// already has one waiting, and a SelectTab when one is waiting, replace it
+	// in place: only the latest target matters. With every slot taken, one
+	// waiting edit makes room: the oldest that is not a SetValue (a SetValue
+	// is a row's latest target, still to be applied), or the oldest of all
+	// when every one is. False: an older edit was dropped for this one.
 	bool add(const FriendlyEdit& e) {
 		if (e.type == FriendlyEdit::SetValue || e.type == FriendlyEdit::SelectTab) {
 			for (int i = 0; i < count; i++) {
@@ -327,10 +393,21 @@ struct Outbox {
 				}
 			}
 		}
-		if (count >= kSlots)
-			return false;
+		bool dropped = false;
+		if (count >= kSlots) {
+			int drop = 0;
+			for (int i = 0; i < count; i++)
+				if (edits[i].type != FriendlyEdit::SetValue) {
+					drop = i;
+					break;
+				}
+			for (int i = drop + 1; i < count; i++)
+				edits[i - 1] = edits[i];
+			count--;
+			dropped = true;
+		}
 		edits[count++] = e;
-		return true;
+		return !dropped;
 	}
 
 	// Choose an app. Edits still waiting were drawn for the app being left,

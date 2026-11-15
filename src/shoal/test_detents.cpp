@@ -56,6 +56,14 @@ static void testBacklog() {
 	CHECK(b.add(1000) == rka::TURN_BACKLOG_MAX, "held to the maximum, got %d", b.unsent);
 	CHECK(b.add(-5000) == -rka::TURN_BACKLOG_MAX, "and to the minimum, got %d", b.unsent);
 	CHECK(b.add(-2147483647 - 1) == -rka::TURN_BACKLOG_MAX, "no overflow");
+	// The engine stopped while the encoder kept turning: what it gets on
+	// resuming is a short turn.
+	CHECK(rka::TURN_BACKLOG_MAX == 16, "the backlog is capped at 16 detents, got %d", rka::TURN_BACKLOG_MAX);
+	b.clear();
+	for (int i = 0; i < 500; i++)
+		b.add(1);
+	CHECK(b.unsent == 16, "500 refused detents wait as 16, got %d", b.unsent);
+	CHECK(b.add(-3) == 13, "and turning back counts from the cap, got %d", b.unsent);
 }
 
 int main() {
