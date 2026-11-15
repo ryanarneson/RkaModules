@@ -23,24 +23,32 @@ struct CoreTest {
 	static int32_t pitchIn(Core& c, int ch);
 	// OC::ADC::smoothed_raw_value(ch): the firmware's smoothed 12-bit code.
 	static uint32_t smoothedCode(Core& c, int ch);
-	// The setting index (as in Core::setting) under the menu cursor of
-	// CopierMaschine (app 0), Harrington 1200 (1), Automatonnetz (2, grid
-	// view; -1 in the cell view), Quantermain (3), Meta-Q (4), Quadraturia (5),
-	// Low-rents (6), Dialectic Ping Pong (9), Viznutcracker sweet (10) or
-	// References (12), on the selected channel; -1 for any other app, or when
-	// the cursor's row is past the end of the list.
+	// The setting index (as in Core::setting) under the menu cursor of the
+	// current app, on the selected channel and the page shown: -1 when the
+	// cursor's row is past the end of the list, in Automatonnetz's cell view
+	// and on Piqued's envelope page.
 	static int menuSetting(Core& c);
-	// The menu cursor's row (cursor_pos) of the apps above; -1 for others.
+	// The menu cursor's row (cursor_pos).
 	static int menuRow(Core& c);
-	// Whether that cursor is in edit mode (false for other apps).
+	// Whether that cursor is in edit mode.
 	static bool menuEditing(Core& c);
 	// The firmware's selected channel (0 for an app with one).
 	static int selectedChannel(Core& c);
 	// The firmware's menu, as settings in row order, for the selected channel
-	// of CopierMaschine, Harrington 1200, Automatonnetz (grid view),
-	// Quantermain, Meta-Q, Dialectic Ping Pong, Viznutcracker sweet or
-	// References: up to `max` into out; the count, or -1 for another app.
+	// and the page shown, of every app but Quadraturia and Low-rents (whose
+	// cursor is a setting index): up to `max` into out; the count, or -1 for
+	// those two.
 	static int enabledSettings(Core& c, int* out, int max);
+	// The menu page shown: Piqued 0 (envelope segments) or 1 (settings);
+	// Sequins and Acid Curds 0 (parameters) or 1 (CV mapping), of the
+	// selected channel; -1 for the other apps.
+	static int menuPage(Core& c);
+	// Piqued's Euclidean editor: whether its L encoder edits the length
+	// (true) or the fill.
+	static bool piquedEuclidLength(Core& c);
+	// One UI timer pass (the encoders' quadrature and OC::Ui::Poll) with no
+	// main pass: what the panel did is queued, not yet handed to the app.
+	static void pollUi(Core& c);
 	// Whether the current app's friendly adapter is on its settings menu
 	// (its accepting(); true for an adapter without one).
 	static bool friendlyAccepting(Core& c);
@@ -51,7 +59,7 @@ struct CoreTest {
 	// do". Unlike the hardware, an R or UP long press reaches the app too.
 	static void encoderEvent(Core& c, Encoder e, int delta);
 	// Whether app `app` has a friendly-mode adapter of its own (one that
-	// takes edits), not the read-only generic one.
+	// takes edits); every app has one.
 	static bool friendlyHasAdapter(int app);
 	// Friendly mode through a stand-in for the Low-rents adapter with one
 	// thing wrong (Friendly.inc, namespace fake); c must be on Low-rents.

@@ -4,7 +4,7 @@
 // classes, their state and their handlers are visible.
 //
 // This file is the framework: the Adapter struct, the helpers every adapter
-// uses (events, text, rows, the cursor), the generic adapter, the table of
+// uses (events, text, rows, the cursor), the table of
 // adapters and the code common to all of them (the checks that drop an
 // edit, and the model's frame). The adapters themselves are in
 // FriendlyAdapters<n>.inc, included in the middle of this file.
@@ -159,8 +159,8 @@ private:
 
 // ---- Rows -------------------------------------------------------------------
 
-// Append a row. kMaxRows holds every app's largest list (the static_asserts
-// below, and test_friendly), so a model is never cut short; if an adapter
+// Append a row. kMaxRows holds every app's largest list (Sequins, 46 rows;
+// test_friendly fails on a cut model), so a model is never cut short; if an adapter
 // written wrong adds more, the model says so (kModelTruncated) and the rows
 // past the end go to a scratch row nobody reads.
 inline Row& addRow(FriendlyModel& m, RowKind kind, int id, const char* label) {
@@ -292,8 +292,9 @@ inline int enabledRowOf(const T& obj, int setting) {
 // whose list can be rebuilt under an editing cursor (a stale list the edit
 // rebuilds), passes a Menu. The rule the helpers then keep: a friendly edit
 // never opens a sub-editor, and a SetValue ends on the settings menu with
-// the cursor not editing. Where an R push would open a sub-editor, they
-// leave edit mode through the app menu instead (leaveViaAppMenu).
+// the cursor not editing. Where an R push would not leave edit mode (it
+// opens a sub-editor, or switches page), they leave it by suspending and
+// resuming the app instead (suspendAndResume).
 
 // What the cursor helpers need to know of an app's menu, for the selected
 // channel, as its handlers see it now.
@@ -301,20 +302,23 @@ struct Menu {
 	// The setting at a menu row, read as the app's R-push and R-encoder
 	// handlers read it (enabled_setting_at(row), past the list's end too).
 	int (*settingAt)(int menuRow);
-	// Whether the R push on that setting's row opens a sub-editor.
+	// Whether the R push on that setting's row does something other than
+	// toggle edit mode: opens a sub-editor (or switches menu page).
 	bool (*opensEditor)(int setting);
 	// The setting's menu row; -1: hidden.
 	int (*rowOf)(int setting);
 };
 
-// Leave edit mode where an R push would open a sub-editor, as a person
-// must: R long press (the app menu opens; the app gets SUSPEND), R push (it
-// closes on the same app; RESUME, on which each app that passes a Menu
-// leaves edit mode and closes its editors). Like the hardware's, the round
-// trip drops UI events still queued.
-inline void leaveViaAppMenu() {
-	OC::g_ui.AppMenuOpen();
-	OC::g_ui.AppMenuClose(true);
+// Leave edit mode where an R push would open a sub-editor: the app gets
+// SUSPEND then RESUME, as when Core::selectApp leaves and re-enters it. On
+// RESUME each app that passes a Menu leaves edit mode and closes its
+// editors. This is what the app sees of the way out a person takes (an R
+// long press opens the app menu, an R push closes it on the same app), less
+// the app menu itself: nothing is drawn, and UI events the panel queued
+// meanwhile are kept (the app menu's close would drop them).
+inline void suspendAndResume() {
+	OC::apps::current_app->HandleAppEvent(OC::APP_EVENT_SUSPEND);
+	OC::apps::current_app->HandleAppEvent(OC::APP_EVENT_RESUME);
 }
 
 // Whether the cursor is editing on a row whose R push opens a sub-editor
@@ -323,11 +327,11 @@ inline bool editingOnEditorRow(const Cursor& c, const Menu* menu) {
 	return c.editing() && menu && menu->opensEditor(menu->settingAt(c.cursor_pos()));
 }
 
-// Leave edit mode: an R push, or the app menu where the R push would open a
-// sub-editor. Not editing: nothing.
+// Leave edit mode: an R push, or suspendAndResume where the R push would
+// open a sub-editor. Not editing: nothing.
 inline void leaveEditing(const Cursor& c, const Menu* menu) {
 	if (editingOnEditorRow(c, menu))
-		leaveViaAppMenu();
+		suspendAndResume();
 	else if (c.editing())
 		button(OC::CONTROL_BUTTON_R);
 }
@@ -404,21 +408,6 @@ inline bool menuEdit(const FriendlyEdit& e, const Row& row, Cursor& c, int menuR
 	}
 }
 
-// ---- The generic adapter ----------------------------------------------------
-// For an app without an adapter of its own yet: the first channel's settings
-// (its enabled list if the app keeps one), read-only. It knows neither the
-// app's cursor nor its handlers, so it marks no row and drops every edit.
-
-template <class T, int N, T& (*Obj)(int)>
-struct GenericEnabled {
-	static_assert(N + 8 <= kMaxRows, "kMaxRows holds the whole table and its extra rows");
-	static void rows(FriendlyModel& m, int) { addEnabled(m, Obj(0), nullptr); }
-};
-
-constexpr Adapter generic(void (*rows)(FriendlyModel&, int), const NameCount* nameCounts = nullptr, int numNameCounts = 0) {
-	return Adapter{ nullptr, rows, nullptr, nullptr, nullptr, nameCounts, numNameCounts, nullptr, 0 };
-}
-
 // ---- The adapters -----------------------------------------------------------
 // One file per group of apps; each defines `constexpr Adapter kAdapter` in a
 // namespace named after its app, for the table below.
@@ -426,17 +415,9 @@ constexpr Adapter generic(void (*rows)(FriendlyModel&, int), const NameCount* na
 #include "FriendlyAdapters1.inc"
 #include "FriendlyAdapters2.inc"
 #include "FriendlyAdapters3.inc"
+#include "FriendlyAdapters4.inc"
 
 // ---- The table --------------------------------------------------------------
-
-// Name arrays shorter than their range (survey: "Value names shorter than
-// the setting's range"); counts as declared in the firmware source.
-constexpr NameCount kPiquedNames[] = {
-	{ ENV_SETTING_TRIGGER_INPUT, 4, nullptr },    // 0..6 over OC::Strings::trigger_input_names[4]
-};
-constexpr NameCount kAcidCurdsNames[] = {
-	{ CHORDS_SETTING_CHORD_SLOT, 8, nullptr },    // 0..CHORDS_USER_LAST - 1 over chords_slots, 8 names
-};
 
 // One adapter per app, in available_apps order (as kAppSettings).
 constexpr Adapter kAdapters[] = {
@@ -447,11 +428,11 @@ constexpr Adapter kAdapters[] = {
 	metaq::kAdapter,
 	quadraturia::kAdapter,
 	lowrents::kAdapter,
-	generic(&GenericEnabled<EnvelopeGenerator, ENV_SETTING_LAST, &envObj>::rows, kPiquedNames, 1),
-	generic(&GenericEnabled<SEQ_Channel, SEQ_CHANNEL_SETTING_LAST, &seqObj>::rows),
+	piqued::kAdapter,
+	sequins::kAdapter,
 	pingpong::kAdapter,
 	viznut::kAdapter,
-	generic(&GenericEnabled<Chords, CHORDS_SETTING_LAST, &chordsObj>::rows, kAcidCurdsNames, 1),
+	acidcurds::kAdapter,
 	references::kAdapter,
 };
 static_assert(sizeof(kAdapters) / sizeof(kAdapters[0]) == NUM_AVAILABLE_APPS, "one friendly adapter per app");

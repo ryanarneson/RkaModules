@@ -23,10 +23,10 @@ using shoal::RowKind;
 namespace {
 
 constexpr int kCopier = 0, kH1200 = 1, kAutomatonnetz = 2, kQuantermain = 3, kMetaQ = 4, kQuadraturia = 5, kLowRents = 6;
-constexpr int kPingPong = 9, kViznutcracker = 10, kReferences = 12;
-// The apps with an adapter of their own (Tasks 1 to 3).
-constexpr int kAdapted[] = { kCopier, kH1200, kAutomatonnetz, kQuantermain, kMetaQ, kQuadraturia, kLowRents, kPingPong,
-	kViznutcracker, kReferences };
+constexpr int kPiqued = 7, kSequins = 8, kPingPong = 9, kViznutcracker = 10, kAcidCurds = 11, kReferences = 12;
+// The apps with an adapter of their own: all of them (Tasks 1 to 4).
+constexpr int kAdapted[] = { kCopier, kH1200, kAutomatonnetz, kQuantermain, kMetaQ, kQuadraturia, kLowRents, kPiqued, kSequins,
+	kPingPong, kViznutcracker, kAcidCurds, kReferences };
 
 bool adapted(int app) {
 	for (int a : kAdapted)
@@ -41,7 +41,6 @@ constexpr int kExtraId = 256;
 // of the array in the firmware source.
 struct ShortNames { int app; const char* label; int count; };
 const ShortNames kShortNames[] = {
-	{ 7, "Trigger input", 4 },   // OC_strings.cpp:21 trigger_input_names[4], range 0..6
 	{ 11, "chord:", 8 },         // APP_CHORDS.ino:984 chords_slots, 8 names, range 0..CHORDS_USER_LAST - 1
 };
 
@@ -55,11 +54,16 @@ const LabelOverride kLabelOverrides[] = {
 	{ 2, 1, "dy", "Step Y" },
 };
 
-// Choice rows whose names an adapter gives in place of the table's (a
-// firmware array naming the whole range, where the table's is short).
-struct NameOverride { int app, setting; const char* last; };
+// Choice rows whose names an adapter gives in place of the table's: an
+// array naming the whole range where the table's is short (the table's
+// names first, then the rest, the last of them `last`, on the first tab),
+// or, with `sameAs` (an app and a setting), another table's names for the
+// same values.
+struct NameOverride { int app, setting; const char* last; int sameAsApp, sameAsSetting; };
 const NameOverride kNameOverrides[] = {
-	{ 4, 14, "Turing" },   // Meta-Q CV source 0..4: cv_input_names has 4; channel_input_sources (APP_QQ.ino) has these 5 first
+	{ 4, 14, "Turing", -1, -1 },          // Meta-Q CV source 0..4: cv_input_names has 4; channel_input_sources (APP_QQ.ino) has these 5 first
+	{ 7, 5, "D end of cycle", -1, -1 },   // Piqued trigger input 0..6: trigger_input_names has 4; 4-6 are the other channels' EOC
+	{ 8, 6, nullptr, 11, 0 },             // Sequins scale: the table's short names; its menu row draws OC::scale_names (Acid Curds' table)
 };
 
 const ShortNames* shortNamesFor(int app, const char* label) {
@@ -270,6 +274,11 @@ struct Pair {
 	void checkSame(const char* what, const char* label, int target) {
 		const char* an = Core::appName(a.app());
 		CHECK(sameSettings(a, b), "%s %s (%s -> %d): settings differ", an, what, label, target);
+		// What the model does not show: the menu page, and Piqued's Euclidean
+		// editor's L-encoder mode.
+		CHECK(CoreTest::menuPage(a) == CoreTest::menuPage(b) && CoreTest::piquedEuclidLength(a) == CoreTest::piquedEuclidLength(b),
+			"%s %s (%s -> %d): page %d and %d, Euclidean length mode %d and %d", an, what, label, target, CoreTest::menuPage(a),
+			CoreTest::menuPage(b), CoreTest::piquedEuclidLength(a), CoreTest::piquedEuclidLength(b));
 		const FriendlyModel ma = model(a), mb = model(b);
 		const int d = modelDiff(ma, mb);
 		CHECK(d < 0, "%s %s (%s -> %d): models differ at %d", an, what, label, target, d);
@@ -336,13 +345,19 @@ void testGenericModel() {
 						names = &o;
 				if (r.kind == RowKind::Choice && !names)
 					CHECK(r.names == s.valueNames, "%s row %d (%s): names", an, i, r.label);
-				if (names) {
-					// The table's names first, then the one it lacks.
+				if (names && names->last) {
+					// The table's names first, then the ones it lacks.
 					bool same = r.kind == RowKind::Choice && r.names != s.valueNames && r.nameCount == r.max - r.min + 1;
-					for (int k = 0; same && k < r.nameCount - 1; k++)
+					for (int k = 0; same && k < 4; k++)  // both tables have four names
 						same = std::strcmp(r.names[k], s.valueNames[k]) == 0;
 					CHECK(same && std::strcmp(r.names[r.nameCount - 1], names->last) == 0, "%s row %d (%s): names do not end in '%s'",
 						an, i, r.label, names->last);
+				} else if (names) {
+					Core other;
+					other.selectApp(names->sameAsApp);
+					const shoal::SettingInfo o = other.settingInfo(names->sameAsSetting);
+					CHECK(r.kind == RowKind::Choice && r.names == o.valueNames && r.names != s.valueNames && o.max == s.max
+						&& r.nameCount == r.max - r.min + 1, "%s row %d (%s): not %s's names", an, i, r.label, Core::appName(names->sameAsApp));
 				}
 			}
 		}
@@ -910,14 +925,18 @@ int menuRowOf(Core& c, int setting) {
 // against an internal source with a continuous trigger looks at one encoder
 // event at a time, so a person turning one detent at a time is stopped where
 // one event of several steps would jump past.
+// Piqued's Euclidean offset (the R encoder) and fill (the Euclidean editor's
+// L encoder) are held to the length by guards that look at one event too.
 bool guardedRow(int app, int id) {
-	return (app == kQuantermain && (id == 3 || id == 5)) || (app == kMetaQ && (id == 14 || id == 15));
+	return (app == kQuantermain && (id == 3 || id == 5)) || (app == kMetaQ && (id == 14 || id == 15))
+		|| (app == kPiqued && (id == 11 || id == 12));
 }
 
 // Settings the list shows that the firmware's menu does not (CopierMaschine's
-// scale: the L encoder and the L push).
+// and Acid Curds' scale: the L encoder and the L push; Piqued's Euclidean
+// fill: the Euclidean editor's L encoder).
 bool outsideMenu(int app, int id) {
-	return app == kCopier && id == 0;
+	return ((app == kCopier || app == kAcidCurds) && id == 0) || (app == kPiqued && id == 11);
 }
 
 // The hardware gesture for a setting of the selected channel's menu, in apps
@@ -982,7 +1001,13 @@ bool rowsAreMenu(Core& c, const FriendlyModel& m) {
 // on core b for a row the menu does not have, and says whether it did.
 // A guarded row (guardedRow) ends where the gesture ends, not always on the
 // target.
-void listEquivalence(int app, void (*prepare)(Pair&, int tab), bool (*special)(Core& b, const Row& row, int target) = nullptr) {
+//
+// What `special` returns: 0, not done (the row is a plain menu row);
+// kOffMenu, done, and the cursor is not on the row (a row the menu does not
+// have); kOnRow, done, and the cursor ends on the row.
+enum { kOffMenu = 1, kOnRow = 2 };
+typedef int (*Special)(Core& b, const Row& row, int target);
+void listEquivalence(int app, void (*prepare)(Pair&, int tab), Special special = nullptr) {
 	Pair p(app);
 	const char* an = Core::appName(app);
 	const int tabs = model(p.a).tabs;
@@ -1010,8 +1035,9 @@ void listEquivalence(int app, void (*prepare)(Pair&, int tab), bool (*special)(C
 				CHECK(taken == listed, "%s tab %d %s -> %d: %s", an, tab, row.label, target, listed ? "dropped" : "taken while hidden");
 				if (!listed)
 					continue;
-				const bool inMenu = !(special && special(p.b, row, target));
-				if (inMenu)
+				const int done = special ? special(p.b, row, target) : 0;
+				const bool inMenu = done != kOffMenu;
+				if (!done)
 					listGesture(p.b, row.id, target);
 				const int want = guardedRow(app, row.id) ? p.b.setting(tab, row.id) : target;
 				if (row.id < kExtraId)
@@ -1378,20 +1404,20 @@ constexpr int kCopyScale = kExtraId, kResetMask = kExtraId + 1;  // Quantermain'
 // CopierMaschine's rows the menu does not have, as the hardware does them on
 // core b: the scale (the L encoder from the scale it shows, then L push),
 // Hold / Freeze (DOWN) and Delay type (DOWN long press).
-bool copierGesture(Core& b, const Row& row, int target) {
+int copierGesture(Core& b, const Row& row, int target) {
 	if (row.id == 0) {  // no preview pending in these tests: the L encoder shows the committed scale
 		CoreTest::encoderEvent(b, shoal::ENCODER_L, target - b.setting(0, 0));
 		CoreTest::buttonEvent(b, shoal::BUTTON_L, false);
-		return true;
+		return kOffMenu;
 	}
 	if (row.id == kHold || row.id == kDelayType) {
 		const FriendlyModel m = model(b);
 		const Row* r = findRow(m, row.id);
 		if (r && r->value != target)
 			CoreTest::buttonEvent(b, shoal::BUTTON_DOWN, row.id == kDelayType);
-		return true;
+		return kOffMenu;
 	}
-	return false;
+	return 0;
 }
 
 void testCopierEquivalence() {
@@ -1782,7 +1808,8 @@ void testQuantizerStatus() {
 // Whether `id` is one of the app's mask settings, whose row's R push opens
 // the scale editor.
 bool isMaskSetting(int app, int id) {
-	return (app == kCopier && id == 3) || (app == kQuantermain && id == 2) || (app == kMetaQ && id >= 9 && id <= 12);
+	return (app == kCopier && id == 3) || (app == kQuantermain && id == 2) || (app == kMetaQ && id >= 9 && id <= 12)
+		|| (app == kSequins && id >= 10 && id <= 14) || (app == kAcidCurds && (id == 3 || id == 17));
 }
 
 // A person leaving edit mode: an R push, or, on a mask row (where it would
@@ -1970,6 +1997,811 @@ void testMetaQSlotMask() {
 	}
 }
 
+
+// ---- Task 4: Piqued, Sequins, Acid Curds ------------------------------------
+
+// Piqued's settings (APP_ENVGEN.ino).
+constexpr int kPqTrigger = 5, kPqDelayMode = 6, kPqLength = 10, kPqFill = 11, kPqOffset = 12;
+constexpr int kPqSegments = kExtraId;  // the envelope page, edited in hardware mode only
+
+// Piqued: to the settings page, as a person does (L push on the envelope page).
+void piquedSettingsPage(Core& c) {
+	if (CoreTest::menuPage(c) == 0)
+		CoreTest::buttonEvent(c, shoal::BUTTON_L, false);
+}
+
+// Piqued's Euclidean editor, as a person uses it: cursor to the Offset row,
+// R push (the editor opens), L push if the L encoder edits the other of
+// length and fill, the L encoder (a detent at a time for the fill, whose
+// guard looks at one event), R push (it closes).
+void euclidGesture(Core& c, bool length, int target) {
+	const int ch = CoreTest::selectedChannel(c);
+	CoreTest::encoderEvent(c, shoal::ENCODER_R, menuRowOf(c, kPqOffset) - CoreTest::menuRow(c));
+	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+	if (CoreTest::piquedEuclidLength(c) != length)
+		CoreTest::buttonEvent(c, shoal::BUTTON_L, false);
+	const int delta = target - c.setting(ch, length ? kPqLength : kPqFill);
+	if (length)
+		CoreTest::encoderEvent(c, shoal::ENCODER_L, delta);
+	else
+		for (int i = 0; i < std::abs(delta); i++)
+			CoreTest::encoderEvent(c, shoal::ENCODER_L, delta > 0 ? 1 : -1);
+	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+}
+
+// Piqued's rows that are not a plain menu gesture: the fill (the Euclidean
+// editor), and a length from one length to another (the Euclidean editor's
+// length, which pulls fill and offset down with it; the cursor is turned
+// back to the Length row). A length to or from Off is the menu row.
+int piquedGesture(Core& b, const Row& row, int target) {
+	const int ch = CoreTest::selectedChannel(b);
+	piquedSettingsPage(b);
+	if (row.id == kPqFill) {
+		euclidGesture(b, false, target);
+		return kOffMenu;
+	}
+	if (row.id == kPqLength && target > 0 && b.setting(ch, kPqLength) > 0) {
+		euclidGesture(b, true, target);
+		CoreTest::encoderEvent(b, shoal::ENCODER_R, menuRowOf(b, kPqLength) - CoreTest::menuRow(b));
+		return kOnRow;
+	}
+	return 0;
+}
+
+// Every Piqued row of every tab, with the delay and Euclidean rows shown.
+void testPiquedEquivalence() {
+	listEquivalence(kPiqued, [](Pair& p, int tab) {
+		piquedSettingsPage(p.b);
+		setBoth(p, kPiqued, tab, kPqDelayMode, 1);
+		setBoth(p, kPiqued, tab, kPqLength, 7);
+		p.checkSame("prepare", "Eucl length", 7);
+	}, &piquedGesture);
+	// The trigger input's default is the table's (TR1) on every channel,
+	// although Init gives channel n TRn: SetValue to the default gives TR1.
+	Core c;
+	c.selectApp(kPiqued);
+	for (int tab = 0; tab < 4; tab++) {
+		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, kPiqued, model(c).tab, 0, tab)), "Piqued: SelectTab %d dropped", tab);
+		const FriendlyModel m = model(c);
+		const Row* r = findRow(m, kPqTrigger);
+		CHECK(r && r->value == tab && r->def == 0, "Piqued tab %d: trigger input %d, default %d", tab, r ? (int) r->value : -1,
+			r ? (int) r->def : -1);
+		if (r)
+			CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, tab, kPqTrigger, r->def)) && c.setting(tab, kPqTrigger) == 0,
+				"Piqued tab %d: trigger input %d after setting the default", tab, c.setting(tab, kPqTrigger));
+	}
+}
+
+// Offset <= length and fill <= length + 1, and a shorter length pulls both
+// down: through the list as through the encoders.
+void testPiquedEuclidBounds() {
+	Pair p(kPiqued);
+	auto set = [&](int id, int target, const char* what) {
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, 0, id, target)), "Piqued %s -> %d dropped", what, target);
+		const FriendlyModel m = model(p.b);
+		const Row* r = findRow(m, id);
+		if (!r || !piquedGesture(p.b, *r, target)) {
+			piquedSettingsPage(p.b);
+			listGesture(p.b, id, target);
+		}
+		checkSettled(p.a, what);
+		p.checkSame("bounds", what, target);
+	};
+	set(kPqLength, 9, "length");  // Off to 10 steps: the menu row
+	set(kPqOffset, 32, "offset");
+	set(kPqFill, 32, "fill");
+	CHECK(p.a.setting(0, kPqOffset) == 9 && p.a.setting(0, kPqFill) == 10, "Piqued: offset %d (want 9), fill %d (want 10)",
+		p.a.setting(0, kPqOffset), p.a.setting(0, kPqFill));
+	set(kPqLength, 3, "shorter length");
+	CHECK(p.a.setting(0, kPqLength) == 3 && p.a.setting(0, kPqOffset) == 3 && p.a.setting(0, kPqFill) == 4,
+		"Piqued: length %d, offset %d, fill %d after shortening to 3", p.a.setting(0, kPqLength), p.a.setting(0, kPqOffset),
+		p.a.setting(0, kPqFill));
+	{
+		const FriendlyModel m = model(p.a);
+		const Row* r = findRow(m, kPqLength);
+		CHECK(r && (r->flags & (shoal::kRowCursor | shoal::kRowEditing)) == shoal::kRowCursor, "Piqued: the length row's flags %d after an edit",
+			r ? r->flags : -1);
+	}
+	set(kPqFill, 0, "fill");
+	set(kPqLength, 20, "longer length");
+	CHECK(p.a.setting(0, kPqOffset) == 3 && p.a.setting(0, kPqFill) == 0, "Piqued: a longer length moved offset %d or fill %d",
+		p.a.setting(0, kPqOffset), p.a.setting(0, kPqFill));
+	// Off: the menu row, which leaves fill and offset (hidden now) as they are.
+	set(kPqLength, 0, "length Off");
+	const FriendlyModel m = model(p.a);
+	CHECK(!findRow(m, kPqOffset) && !findRow(m, kPqFill) && p.a.setting(0, kPqOffset) == 3, "Piqued: length Off: offset row listed %d",
+		findRow(m, kPqOffset) != nullptr);
+	CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, 0, kPqFill, 2)), "Piqued: fill taken with the length Off");
+}
+
+// Piqued's two pages: the envelope page (a new core's, the Segments row) and
+// the settings page. An edit on a settings row switches page as L push does;
+// segment editing (R push on the envelope page) makes the list busy.
+void testPiquedPages() {
+	Pair p(kPiqued);
+	{
+		const FriendlyModel m = model(p.a);
+		const Row* seg = findRow(m, kPqSegments);
+		CHECK(CoreTest::menuPage(p.a) == 0 && seg && seg->kind == RowKind::SubEditor && (seg->flags & shoal::kRowCursor) && m.row[0].id == kPqSegments,
+			"Piqued: a new core is not on the envelope page with the Segments row first");
+		CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, 0, kPqSegments, 1)), "Piqued: SetValue on Segments taken");
+	}
+	// From the envelope page: SetValue switches page (L push) and edits.
+	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, 0, 26, 3)), "Piqued: Attack mult dropped on the envelope page");
+	CoreTest::buttonEvent(p.b, shoal::BUTTON_L, false);
+	listGesture(p.b, 26, 3);
+	CHECK(CoreTest::menuPage(p.a) == 1 && p.a.setting(0, 26) == 3, "Piqued: page %d, Attack mult %d", CoreTest::menuPage(p.a), p.a.setting(0, 26));
+	p.checkSame("from the envelope page", "Attack mult", 3);
+	// Focus on Segments: back to the envelope page, as L push; on a settings row: to it.
+	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, kPiqued, 0, kPqSegments, 0)), "Piqued: Focus on Segments dropped");
+	CoreTest::buttonEvent(p.b, shoal::BUTTON_L, false);
+	CHECK(CoreTest::menuPage(p.a) == 0, "Piqued: Focus on Segments left page %d", CoreTest::menuPage(p.a));
+	p.checkSame("focus", "Segments", 0);
+	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, kPiqued, 0, 30, 0)), "Piqued: Focus on Sampled Ampl dropped");
+	CoreTest::buttonEvent(p.b, shoal::BUTTON_L, false);
+	CoreTest::encoderEvent(p.b, shoal::ENCODER_R, menuRowOf(p.b, 30) - CoreTest::menuRow(p.b));
+	CHECK(CoreTest::menuPage(p.a) == 1 && CoreTest::menuSetting(p.a) == 30, "Piqued: Focus: page %d, cursor on %d", CoreTest::menuPage(p.a),
+		CoreTest::menuSetting(p.a));
+	p.checkSame("focus", "Sampled Ampl", 0);
+	// The Euclidean editor left open by the panel, in its length mode: an edit
+	// elsewhere closes it with an R push first (as the L encoder and L push
+	// mean something else while it is open), and the R push ends its length mode.
+	setBoth(p, kPiqued, 0, kPqLength, 5);
+	for (Core* c : { &p.a, &p.b }) {
+		CoreTest::encoderEvent(*c, shoal::ENCODER_R, menuRowOf(*c, kPqOffset) - CoreTest::menuRow(*c));
+		CoreTest::buttonEvent(*c, shoal::BUTTON_R, false);
+		CoreTest::buttonEvent(*c, shoal::BUTTON_L, false);
+	}
+	CHECK(CoreTest::piquedEuclidLength(p.a) && CoreTest::menuEditing(p.a), "Piqued: the Euclidean editor is not open on its length");
+	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, 0, kPqOffset, 2)), "Piqued: offset dropped with the editor open");
+	const int steps = 2 - p.b.setting(0, kPqOffset);
+	for (int i = 0; i < steps; i++)
+		CoreTest::encoderEvent(p.b, shoal::ENCODER_R, 1);
+	CoreTest::buttonEvent(p.b, shoal::BUTTON_R, false);
+	CHECK(!CoreTest::piquedEuclidLength(p.a) && p.a.setting(0, kPqOffset) == 2, "Piqued: offset %d, length mode %d", p.a.setting(0, kPqOffset),
+		CoreTest::piquedEuclidLength(p.a));
+	checkSettled(p.a, "offset with the editor open");
+	p.checkSame("editor open", "offset", 2);
+	for (Core* c : { &p.a, &p.b }) {
+		CoreTest::buttonEvent(*c, shoal::BUTTON_R, false);
+		CoreTest::buttonEvent(*c, shoal::BUTTON_L, false);
+	}
+	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, kPiqued, 0, 0, 2)), "Piqued: SelectTab dropped with the editor open");
+	CoreTest::buttonEvent(p.b, shoal::BUTTON_R, false);
+	tabGesture(p.b, 2);
+	CHECK(model(p.a).tab == 2 && p.a.setting(0, kPqLength) == 5 && p.a.setting(0, kPqFill) == 1, "Piqued: SelectTab with the editor open: tab %d, length %d, fill %d",
+		model(p.a).tab, p.a.setting(0, kPqLength), p.a.setting(0, kPqFill));
+	p.checkSame("editor open", "select tab", 2);
+	// Segment editing: busy, every edit dropped, until R push ends it.
+	for (Core* c : { &p.a, &p.b })
+		CoreTest::buttonEvent(*c, shoal::BUTTON_L, false);
+	CHECK(CoreTest::menuPage(p.a) == 0 && !(model(p.a).flags & shoal::kModelBusy), "Piqued: envelope page busy");
+	CoreTest::buttonEvent(p.a, shoal::BUTTON_R, false);
+	const Snapshot before = snapshot(p.a);
+	const FriendlyModel busy = model(p.a);
+	const Row* seg = findRow(busy, kPqSegments);
+	CHECK((busy.flags & shoal::kModelBusy) && !CoreTest::friendlyAccepting(p.a) && seg
+		&& (seg->flags & (shoal::kRowCursor | shoal::kRowEditing)) == (shoal::kRowCursor | shoal::kRowEditing),
+		"Piqued segment editing: flags %d", busy.flags);
+	CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, 2, 26, 1)), "Piqued segment editing: SetValue taken");
+	CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, kPiqued, 2, kPqSegments, 0)), "Piqued segment editing: Focus taken");
+	CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, kPiqued, 2, 0, 1)), "Piqued segment editing: SelectTab taken");
+	CHECK(sameSnapshot(before, snapshot(p.a)) && CoreTest::menuPage(p.a) == 0, "Piqued segment editing: a dropped edit changed the app");
+	CoreTest::buttonEvent(p.a, shoal::BUTTON_R, false);
+	CHECK(!(model(p.a).flags & shoal::kModelBusy), "Piqued: busy after segment editing ended");
+}
+
+// The menu page holding `setting` (Sequins, Acid Curds), as a person gets
+// there: the page shown if it lists the setting, else DOWN (from the
+// parameters) or UP (from the CV mapping).
+void pageFor(Core& c, int setting) {
+	if (menuRowOf(c, setting) < 0)
+		CoreTest::buttonEvent(c, CoreTest::menuPage(c) == 0 ? shoal::BUTTON_DOWN : shoal::BUTTON_UP, false);
+}
+
+// A friendly SetValue on core a; on core b the page, then the menu gesture.
+void pagedSetBoth(Pair& p, int app, int tab, int id, int target) {
+	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, tab, id, target)), "%s: setting %d -> %d on tab %d dropped",
+		Core::appName(app), id, target, tab);
+	tabGesture(p.b, tab);
+	pageFor(p.b, id);
+	listGesture(p.b, id, target);
+}
+
+// The model's sections: two headings, "Parameters" then "CV mapping".
+// Returns the index of the second.
+int sections(const FriendlyModel& m, const char* an) {
+	int heads = 0, second = -1;
+	for (int i = 0; i < m.rows; i++)
+		if (m.row[i].kind == RowKind::Heading) {
+			CHECK(std::strcmp(m.row[i].label, heads ? "CV mapping" : "Parameters") == 0, "%s: heading %d is '%s'", an, heads, m.row[i].label);
+			if (heads++)
+				second = i;
+		}
+	CHECK(heads == 2 && m.row[0].kind == RowKind::Heading, "%s: %d headings", an, heads);
+	return second;
+}
+
+// Whether the setting rows of section `first..end` are the page shown, in
+// its order: placeholders (Sequins' "-", Acid Curds' "-" and " ") left out,
+// a setting listed already (in the first section) left out, a step mask of
+// Sequins in the list (any sequence's) is the selected sequence's row.
+bool sectionIsMenu(Core& c, const FriendlyModel& m, int first, int end) {
+	int list[128];
+	const int n = CoreTest::enabledSettings(c, list, 128);
+	const bool sequins = c.app() == kSequins;
+	const int seq = sequins ? c.setting(CoreTest::selectedChannel(c), 15) : 0;
+	int k = first;
+	for (int i = 0; i < n; i++) {
+		int id = list[i];
+		if ((sequins && id == 44) || (!sequins && (id == 29 || id == 30)))
+			continue;
+		if (sequins && id >= 11 && id <= 14)
+			id = 11 + seq;
+		bool before = false;
+		for (int j = 0; j < first; j++)
+			before = before || m.row[j].id == id;
+		if (before)
+			continue;
+		while (k < end && (m.row[k].id >= kExtraId || outsideMenu(c.app(), m.row[k].id)))
+			k++;
+		if (k >= end || m.row[k].id != id)
+			return false;
+		k++;
+	}
+	for (; k < end; k++)
+		if (m.row[k].id < kExtraId && !outsideMenu(c.app(), m.row[k].id))
+			return false;
+	return true;
+}
+
+// Both pages' rows, every value row edited to six targets from the last row
+// up, the page switched as a person would where the row is on the other
+// page. Afterwards the app shows the edited row's page, the cursor on it.
+void pagedEquivalence(int app, void (*prepare)(Pair&, int tab), Special special = nullptr) {
+	Pair p(app);
+	const char* an = Core::appName(app);
+	const int tabs = model(p.a).tabs;
+	int edits = 0, switched = 0;
+	for (int tab = 0; tab < tabs; tab++) {
+		if (tabs > 1) {
+			CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, app, model(p.a).tab, 0, tab)), "%s: SelectTab %d dropped", an, tab);
+			tabGesture(p.b, tab);
+			p.checkSame("select tab", "tab", tab);
+		}
+		if (prepare)
+			prepare(p, tab);
+		const FriendlyModel first = model(p.a);
+		CHECK(first.tab == tab, "%s: on tab %d, want %d", an, first.tab, tab);
+		sections(first, an);
+		for (int n = first.rows - 1; n >= 0; n--) {
+			const Row row = first.row[n];
+			if (!isValueRow(row) || row.id >= kExtraId)
+				continue;
+			int targets[6];
+			targetsFor(row, targets);
+			for (int target : targets) {
+				const bool listed = findRow(model(p.a), row.id) != nullptr;
+				const int page = CoreTest::menuPage(p.a);
+				const bool taken = p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, tab, row.id, target));
+				CHECK(taken == listed, "%s tab %d %s -> %d: %s", an, tab, row.label, target, listed ? "dropped" : "taken while hidden");
+				if (!listed)
+					continue;
+				const int done = special ? special(p.b, row, target) : 0;
+				if (!done) {
+					pageFor(p.b, row.id);
+					listGesture(p.b, row.id, target);
+				}
+				switched += CoreTest::menuPage(p.a) != page;
+				CHECK(p.a.setting(tab, row.id) == target, "%s tab %d %s: %d, want %d", an, tab, row.label, p.a.setting(tab, row.id), target);
+				const FriendlyModel after = model(p.a);
+				const Row* r = findRow(after, row.id);
+				const int flags = done == kOffMenu ? 0 : shoal::kRowCursor;
+				CHECK(!(after.flags & shoal::kModelBusy), "%s tab %d %s: busy after an edit", an, tab, row.label);
+				CHECK(r && r->value == target && (r->flags & (shoal::kRowCursor | shoal::kRowEditing)) == flags,
+					"%s tab %d %s: the model shows %d, flags %d", an, tab, row.label, r ? (int) r->value : -1, r ? r->flags : -1);
+				if (done != kOffMenu)
+					CHECK(CoreTest::menuSetting(p.a) == row.id, "%s tab %d %s: the cursor is on %d (page %d)", an, tab, row.label,
+						CoreTest::menuSetting(p.a), CoreTest::menuPage(p.a));
+				p.checkSame("edit", row.label, target);
+				edits++;
+			}
+		}
+	}
+	CHECK(edits >= 10 * 6 * tabs && switched >= 2, "%s: only %d edits, %d page switches", an, edits, switched);
+}
+
+// Sequins' settings (APP_A_SEQ.ino).
+constexpr int kSqMode = 0, kSqScale = 6, kSqScaleMask = 10, kSqMask1 = 11, kSqSequence = 15, kSqPlaymode = 20, kSqDirection = 21;
+constexpr int kSqTransposeCv = 27, kSqDummy = 44;
+constexpr int kSqSync = kExtraId, kSqCopyScale = kExtraId + 1, kSqWaitEoS = kExtraId + 2, kSqClearCv = kExtraId + 3;
+
+void testSequinsEquivalence() {
+	// Aux ADR (the envelope rows), direction Brownian (its probability rows).
+	pagedEquivalence(kSequins, [](Pair& p, int tab) {
+		pagedSetBoth(p, kSequins, tab, kSqMode, 3);
+		pagedSetBoth(p, kSequins, tab, kSqDirection, 5);
+		p.checkSame("prepare", "aux mode", 3);
+	});
+	// Play mode ARP (its rows), aux copy; then S+H (the CV range row), aux AD.
+	pagedEquivalence(kSequins, [](Pair& p, int tab) {
+		pagedSetBoth(p, kSequins, tab, kSqPlaymode, tab ? 8 : 7);
+		pagedSetBoth(p, kSequins, tab, kSqMode, tab ? 2 : 1);
+		p.checkSame("prepare", "playmode", 7);
+	});
+	// The Scale row's R push re-reads the scale (update_scale(true)): with a
+	// user scale's notes changed underneath, a SetValue to the same scale
+	// makes the quantizer take them, as the person's two pushes do.
+	Pair p(kSequins), idle(kSequins);
+	for (Pair* q : { &p, &idle }) {
+		pagedSetBoth(*q, kSequins, 0, kSqScale, 1);
+		pagedSetBoth(*q, kSequins, 0, kSqPlaymode, 0);
+		q->checkSame("prepare", "scale", 1);  // runs them: the scale is taken before its notes change
+		for (Core* c : { &q->a, &q->b })
+			for (int i = 0; i < 16; i++) {
+				CoreTest::userScaleNote(*c, 1, i) = (int16_t) (128 * (i % 12) + (i & 1 ? 40 : 0));
+				CoreTest::userPatternNote(*c, 0, i) = (int16_t) (128 * i + 70);  // A's sequence 1: between the notes
+			}
+	}
+	pagedSetBoth(p, kSequins, 0, kSqScale, 1);
+	p.checkSame("re-read", "scale", 1);
+	bool same = false, differs = false;
+	runThree(p.a, p.b, idle.a, p.rng, 20000, same, differs);
+	CHECK(same && differs, "Sequins: the Scale row's pushes: same %d, differs from no pushes %d", same, differs);
+}
+
+// The pattern editor's toggle of step `bit`, as a person: cursor to the step
+// mask row, R push (the editor opens on the selected sequence, its cursor on
+// the first step), the L encoder to the step, L push, R push (it closes).
+void patternToggle(Core& c, int bit) {
+	int list[128];
+	const int n = CoreTest::enabledSettings(c, list, 128);
+	int row = -1;
+	for (int i = 0; i < n && row < 0; i++)
+		if (list[i] >= kSqMask1 && list[i] <= kSqMask1 + 3)
+			row = i;
+	CoreTest::encoderEvent(c, shoal::ENCODER_R, row - CoreTest::menuRow(c));
+	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+	CHECK(!CoreTest::friendlyAccepting(c), "Sequins: the pattern editor did not open");
+	CoreTest::encoderEvent(c, shoal::ENCODER_L, bit);
+	CoreTest::buttonEvent(c, shoal::BUTTON_L, false);
+	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+	CHECK(CoreTest::friendlyAccepting(c), "Sequins: the pattern editor did not close");
+}
+
+// The selected sequence's length, set in the pattern editor as a person does
+// (its last cursor place, the R encoder).
+void sequenceLength(Core& c, int length) {
+	int list[128];
+	const int n = CoreTest::enabledSettings(c, list, 128);
+	int row = -1;
+	for (int i = 0; i < n && row < 0; i++)
+		if (list[i] >= kSqMask1 && list[i] <= kSqMask1 + 3)
+			row = i;
+	CoreTest::encoderEvent(c, shoal::ENCODER_R, row - CoreTest::menuRow(c));
+	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+	CoreTest::encoderEvent(c, shoal::ENCODER_L, 20);
+	const int seq = c.setting(CoreTest::selectedChannel(c), kSqSequence);
+	CoreTest::encoderEvent(c, shoal::ENCODER_R, length - c.setting(CoreTest::selectedChannel(c), 16 + seq));
+	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+}
+
+// Sequins' step mask is a Mask row of the selected sequence, one cell per
+// step of its length; a ToggleBit is the pattern editor's L push (the
+// editor's write and pattern_changed, which the arpeggiator needs). The
+// scale mask is a Mask row as in the quantizer apps.
+void testSequinsMask() {
+	for (int playmode : { 0, 7 }) {  // none; ARP, which rebuilds its notes only on pattern_changed
+		Pair p(kSequins);
+		for (int tab = 0; tab < 2; tab++) {
+			pagedSetBoth(p, kSequins, tab, kSqPlaymode, playmode);
+			for (int length : { 5, 16 }) {
+				for (int seq : { 0, 2 }) {
+					pagedSetBoth(p, kSequins, tab, kSqSequence, seq);
+					for (Core* c : { &p.a, &p.b })
+						sequenceLength(*c, length);
+					p.checkSame("length", "sequence", length);
+					const int id = kSqMask1 + seq;
+					const FriendlyModel m = model(p.a);
+					const Row* r = findRow(m, id);
+					CHECK(r && r->kind == RowKind::Mask && r->max == length && r->value == p.a.setting(tab, id) && std::strcmp(r->label, "--> edit") == 0,
+						"Sequins tab %d seq %d: mask row of %d cells (want %d)", tab, seq, r ? (int) r->max : -1, length);
+					for (int other = 0; other < 4; other++)
+						CHECK(other == seq || !findRow(m, kSqMask1 + other), "Sequins tab %d: sequence %d's mask row listed", tab, other + 1);
+					CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, kSequins, tab, id, length)), "Sequins: the step past the last toggled");
+					// Each step off, then on again (an empty mask is allowed).
+					for (int pass = 0; pass < 2; pass++)
+						for (int bit = 0; bit < length; bit++) {
+							const int want = p.a.setting(tab, id) ^ (1 << bit);
+							CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, kSequins, tab, id, bit)), "Sequins: step %d dropped", bit);
+							patternToggle(p.b, bit);
+							CHECK(p.a.setting(tab, id) == want, "Sequins: mask %04x, want %04x", p.a.setting(tab, id), want);
+							checkSettled(p.a, "step mask");
+							// The menu's step mask row draws the mask pattern_changed shows.
+							CHECK(sameFrame(p.a, p.b), "Sequins: step %d: the menu differs from the editor's", bit);
+							if (bit % 4 == 0 || bit == length - 1)
+								p.checkSame("step mask", "step", bit);
+						}
+				}
+			}
+		}
+	}
+	// The firmware does not rebuild its menu when the sequence changes: its
+	// list keeps the old sequence's mask; the row follows the sequence.
+	Pair p(kSequins);
+	pagedSetBoth(p, kSequins, 0, kSqSequence, 3);
+	int list[128];
+	CoreTest::enabledSettings(p.a, list, 128);
+	{
+		const FriendlyModel m = model(p.a);
+		CHECK(list[3] == kSqMask1 && findRow(m, kSqMask1 + 3) && !findRow(m, kSqMask1), "Sequins: firmware row %d; mask rows 1 %d, 4 %d", list[3],
+			findRow(m, kSqMask1) != nullptr, findRow(m, kSqMask1 + 3) != nullptr);
+	}
+	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, kSequins, 0, kSqMask1 + 3, 6)), "Sequins: sequence 4's step dropped");
+	patternToggle(p.b, 6);
+	CHECK(p.a.setting(0, kSqMask1 + 3) == 0xffbf && p.a.setting(0, kSqMask1) == 0xffff, "Sequins: masks %04x, %04x", p.a.setting(0, kSqMask1 + 3),
+		p.a.setting(0, kSqMask1));
+	p.checkSame("stale list", "step", 6);
+	// From the CV mapping page, which lists the step mask too: no page switch.
+	for (Core* c : { &p.a, &p.b })
+		CoreTest::buttonEvent(*c, shoal::BUTTON_DOWN, false);
+	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, kSequins, 0, kSqMask1 + 3, 0)), "Sequins: step on the CV page dropped");
+	patternToggle(p.b, 0);
+	CHECK(CoreTest::menuPage(p.a) == 1 && p.a.setting(0, kSqMask1 + 3) == 0xffbe, "Sequins: page %d, mask %04x", CoreTest::menuPage(p.a),
+		p.a.setting(0, kSqMask1 + 3));
+	p.checkSame("CV page", "step", 0);
+	// The scale mask: the scale editor's toggle (last note kept), from the CV
+	// page (the scale mask row is on the parameters page).
+	for (int bit : { 3, 0, 11 }) {
+		const uint16_t want = expectToggle((uint16_t) p.a.setting(0, kSqScaleMask), bit, 12);
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, kSequins, 0, kSqScaleMask, bit)), "Sequins: scale note %d dropped", bit);
+		pageFor(p.b, kSqScaleMask);
+		editorToggle(p.b, kSqScaleMask, bit);
+		CHECK(p.a.setting(0, kSqScaleMask) == want && CoreTest::menuPage(p.a) == 0, "Sequins: scale mask %04x, want %04x", p.a.setting(0, kSqScaleMask), want);
+		checkSettled(p.a, "scale mask");
+		p.checkSame("scale mask", "note", bit);
+	}
+}
+
+// Acid Curds' settings (APP_CHORDS.ino).
+constexpr int kAcScale = 0, kAcMask = 3, kAcPlaymode = 6, kAcDirection = 7, kAcChordEdit = 17, kAcRootCv = 18;
+constexpr int kAcClearCv = kExtraId;
+
+// Acid Curds' scale: the L encoder from the scale shown (no preview pending
+// in these tests), then L push.
+int acidGesture(Core& b, const Row& row, int target) {
+	if (row.id != kAcScale)
+		return 0;
+	CoreTest::encoderEvent(b, shoal::ENCODER_L, target - b.setting(0, kAcScale));
+	CoreTest::buttonEvent(b, shoal::BUTTON_L, false);
+	return kOffMenu;
+}
+
+void testAcidCurdsEquivalence() {
+	{
+		Core c;
+		c.selectApp(kAcidCurds);
+		const FriendlyModel m = model(c);
+		const Row* scale = findRow(m, kAcScale);
+		const Row* chordEdit = findRow(m, kAcChordEdit);
+		const Row* mask = findRow(m, kAcMask);
+		CHECK(scale && scale == &m.row[1] && scale->kind == RowKind::Choice && scale->value == 5, "Acid Curds: no Scale row after the heading");
+		CHECK(chordEdit && chordEdit->kind == RowKind::SubEditor && mask && mask->kind == RowKind::Mask && mask->max == 12,
+			"Acid Curds: chord editor and mask rows");
+		CHECK(!findRow(m, 12) && !findRow(m, 13), "Acid Curds: CHORD_SLOT or a chord count is listed");
+	}
+	// Direction Brownian (its rows).
+	pagedEquivalence(kAcidCurds, [](Pair& p, int) {
+		pagedSetBoth(p, kAcidCurds, 0, kAcDirection, 5);
+		p.checkSame("prepare", "direction", 5);
+	}, &acidGesture);
+	// Play mode S+H: direction hidden, Brownian probability still shown.
+	pagedEquivalence(kAcidCurds, [](Pair& p, int) {
+		pagedSetBoth(p, kAcidCurds, 0, kAcDirection, 5);
+		pagedSetBoth(p, kAcidCurds, 0, kAcPlaymode, 8);
+		p.checkSame("prepare", "playmode", 8);
+	}, &acidGesture);
+}
+
+// Building the model reads both pages' lists without switching page: the
+// page, the cursor, the firmware's list and what drawMenu draws stay as they
+// were over 1000 builds, on either page, either channel, editing or not.
+// The section of the page shown is that page's menu, and the other section
+// is what the other page shows once switched to.
+void testSectionsLeaveMenuAlone() {
+	for (int app : { kSequins, kAcidCurds }) {
+		const char* an = Core::appName(app);
+		const int tabs = app == kSequins ? 2 : 1;
+		for (int tab = 0; tab < tabs; tab++)
+			for (int page = 0; page < 2; page++)
+				for (int editing = 0; editing < 2; editing++) {
+					Core c;
+					c.selectApp(app);
+					run(c, 0.1);
+					// Rows that differ between the pages: aux ADR, direction Brownian.
+					if (app == kSequins)
+						CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, tab, kSqMode, 3)), "%s: aux mode dropped", an);
+					CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, tab, app == kSequins ? kSqDirection : kAcDirection, 5)),
+						"%s: direction dropped", an);
+					if (page)
+						CoreTest::buttonEvent(c, shoal::BUTTON_DOWN, false);
+					CoreTest::encoderEvent(c, shoal::ENCODER_R, 5 - CoreTest::menuRow(c));
+					if (editing)
+						CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+					CHECK(CoreTest::menuPage(c) == page && CoreTest::selectedChannel(c) == tab && CoreTest::menuEditing(c) == (editing != 0),
+						"%s: not on page %d, tab %d, editing %d", an, page, tab, editing);
+					int list[128], after[128];
+					const int n = CoreTest::enabledSettings(c, list, 128);
+					const int row = CoreTest::menuRow(c);
+					Frame3 f0, f1;
+					c.drawMenu(f0.bytes);
+					FriendlyModel m = model(c);
+					for (int i = 0; i < 1000; i++)
+						c.friendlyModel(m);
+					c.drawMenu(f1.bytes);
+					const int n1 = CoreTest::enabledSettings(c, after, 128);
+					CHECK(CoreTest::menuPage(c) == page && CoreTest::menuRow(c) == row && CoreTest::menuEditing(c) == (editing != 0)
+						&& n1 == n && std::memcmp(list, after, sizeof(int) * (size_t) n) == 0,
+						"%s tab %d page %d: the models changed the menu: page %d, row %d, editing %d, %d rows", an, tab, page,
+						CoreTest::menuPage(c), CoreTest::menuRow(c), CoreTest::menuEditing(c), n1);
+					CHECK(std::memcmp(f0.bytes, f1.bytes, sizeof(f0.bytes)) == 0, "%s tab %d page %d: the models changed what the menu draws", an,
+						tab, page);
+					checkWellFormed(c, m, "sections");
+					CHECK(modelDiff(m, model(c)) < 0, "%s: models differ", an);
+					const int second = sections(m, an);
+					if (second < 0)
+						continue;
+					CHECK(sectionIsMenu(c, m, page ? second + 1 : 1, page ? m.rows : second), "%s tab %d page %d: the section is not the menu",
+						an, tab, page);
+					CoreTest::buttonEvent(c, page ? shoal::BUTTON_UP : shoal::BUTTON_DOWN, false);
+					CHECK(sectionIsMenu(c, m, page ? 1 : second + 1, page ? second : m.rows), "%s tab %d page %d: the other section is not the other page",
+						an, tab, page);
+				}
+	}
+}
+
+// Sequins' and Acid Curds' extra rows are their buttons.
+void testPagedActions() {
+	// Sync (L push): both channels restart on the next clock.
+	{
+		Pair p(kSequins);
+		pagedSetBoth(p, kSequins, 0, 4, 22);  // mult/div x3
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Press, kSequins, 0, kSqSync, 0)), "Sequins Sync dropped");
+		CoreTest::buttonEvent(p.b, shoal::BUTTON_L, false);
+		p.checkSame("action", "Sync", 0);
+	}
+	// Copy scale to the other channel (L long press): scale and mask.
+	{
+		Pair p(kSequins), idle(kSequins);
+		for (Pair* q : { &p, &idle }) {
+			pagedSetBoth(*q, kSequins, 0, kSqScale, 6);
+			for (Core* c : { &q->a, &q->b })
+				CHECK(c->friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, kSequins, 0, kSqScaleMask, 2)), "Sequins: scale note dropped");
+			q->checkSame("before", "Copy scale", 0);
+		}
+		const FriendlyModel m = model(p.a);
+		const Row* r = findRow(m, kSqCopyScale);
+		CHECK(r && r->kind == RowKind::Action && std::strcmp(r->label, "Copy scale to other channel") == 0, "Sequins: no Copy scale row");
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Press, kSequins, 0, kSqCopyScale, 0)), "Sequins Copy scale dropped");
+		CoreTest::buttonEvent(p.b, shoal::BUTTON_L, true);
+		CHECK(p.a.setting(1, kSqScale) == 6 && p.a.setting(1, kSqScaleMask) == p.a.setting(0, kSqScaleMask), "Sequins: B has scale %d, mask %04x",
+			p.a.setting(1, kSqScale), p.a.setting(1, kSqScaleMask));
+		p.checkSame("action", "Copy scale", 0);
+		bool same = false, differs = false;
+		runThree(p.a, p.b, idle.a, p.rng, 20000, same, differs);
+		CHECK(same && differs, "Sequins Copy scale: same %d, differs from no copy %d", same, differs);
+	}
+	// Clear CV mapping (DOWN long press on the CV mapping page), from the
+	// parameters page: DOWN first. The firmware is left on the CV page.
+	{
+		Pair p(kSequins);
+		pagedSetBoth(p, kSequins, 1, kSqTransposeCv, 2);
+		pagedSetBoth(p, kSequins, 1, kSqScale, 7);
+		CHECK(p.a.setting(1, kSqTransposeCv) == 2 && CoreTest::menuPage(p.a) == 0, "Sequins: transpose CV %d, page %d", p.a.setting(1, kSqTransposeCv),
+			CoreTest::menuPage(p.a));
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Press, kSequins, 1, kSqClearCv, 0)), "Sequins Clear CV mapping dropped");
+		CoreTest::buttonEvent(p.b, shoal::BUTTON_DOWN, false);
+		CoreTest::buttonEvent(p.b, shoal::BUTTON_DOWN, true);
+		CHECK(p.a.setting(1, kSqTransposeCv) == 0 && CoreTest::menuPage(p.a) == 1, "Sequins Clear CV mapping: transpose CV %d, page %d",
+			p.a.setting(1, kSqTransposeCv), CoreTest::menuPage(p.a));
+		p.checkSame("action", "Clear CV mapping", 0);
+		// Wait for end of sequence (DOWN long press on the parameters page, both
+		// channels), from the CV page: UP first.
+		const FriendlyModel m = model(p.a);
+		const Row* r = findRow(m, kSqWaitEoS);
+		CHECK(r && r->kind == RowKind::Toggle && r->value == 0, "Sequins: no Wait for end of sequence row");
+		for (int target : { 1, 1, 0 }) {
+			const int before = p.a.setting(0, kSqDummy);
+			CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kSequins, 1, kSqWaitEoS, target)), "Sequins: Wait for end of sequence dropped");
+			if (before != target) {
+				if (CoreTest::menuPage(p.b) == 1)
+					CoreTest::buttonEvent(p.b, shoal::BUTTON_UP, false);
+				CoreTest::buttonEvent(p.b, shoal::BUTTON_DOWN, true);
+			}
+			const FriendlyModel after = model(p.a);
+			const Row* shown = findRow(after, kSqWaitEoS);
+			CHECK(p.a.setting(0, kSqDummy) == target && p.a.setting(1, kSqDummy) == target && shown && shown->value == target,
+				"Sequins: wait for end of sequence %d %d, want %d", p.a.setting(0, kSqDummy), p.a.setting(1, kSqDummy), target);
+			p.checkSame("action", "Wait for end of sequence", target);
+		}
+	}
+	// Acid Curds' Clear CV mapping: DOWN long press, on either page.
+	{
+		Pair p(kAcidCurds);
+		pagedSetBoth(p, kAcidCurds, 0, kAcRootCv, 3);
+		pagedSetBoth(p, kAcidCurds, 0, kAcDirection, 2);
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Press, kAcidCurds, 0, kAcClearCv, 0)), "Acid Curds Clear CV mapping dropped");
+		CoreTest::buttonEvent(p.b, shoal::BUTTON_DOWN, true);
+		CHECK(p.a.setting(0, kAcRootCv) == 0 && CoreTest::menuPage(p.a) == 0, "Acid Curds: root CV %d", p.a.setting(0, kAcRootCv));
+		p.checkSame("action", "Clear CV mapping", 0);
+	}
+}
+
+// Sequins' scale and pattern editors and Acid Curds' scale and chord
+// editors take the controls: busy, every edit dropped, until R push closes
+// them. Focus reaches their rows; a SetValue on them is dropped.
+void testPagedBusy() {
+	struct Case { int app, id; RowKind kind; };
+	const Case cases[] = { { kSequins, kSqScaleMask, RowKind::Mask }, { kSequins, kSqMask1, RowKind::Mask },
+		{ kAcidCurds, kAcMask, RowKind::Mask }, { kAcidCurds, kAcChordEdit, RowKind::SubEditor } };
+	for (const Case& k : cases) {
+		const char* an = Core::appName(k.app);
+		Core c;
+		c.selectApp(k.app);
+		CoreTest::buttonEvent(c, shoal::BUTTON_DOWN, false);  // the CV page: Focus goes back where needed
+		const FriendlyModel m = model(c);
+		const Row* r = findRow(m, k.id);
+		CHECK(r && r->kind == k.kind, "%s: row %d kind %d", an, k.id, r ? (int) r->kind : -1);
+		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, k.app, 0, k.id, 1)), "%s: SetValue on row %d taken", an, k.id);
+		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::Focus, k.app, 0, k.id, 0)) && CoreTest::menuSetting(c) == k.id, "%s: Focus on %d: cursor on %d",
+			an, k.id, CoreTest::menuSetting(c));
+		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);  // opens the editor
+		const Snapshot before = snapshot(c);
+		const FriendlyModel busy = model(c);
+		CHECK((busy.flags & shoal::kModelBusy) && !CoreTest::friendlyAccepting(c), "%s: row %d's editor: flags %d", an, k.id, busy.flags);
+		checkWellFormed(c, busy, "editor open");
+		const int other = k.app == kSequins ? 7 : 11;  // octave
+		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, k.app, 0, other, 2)), "%s: SetValue taken with an editor open", an);
+		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::Focus, k.app, 0, other, 0)), "%s: Focus taken with an editor open", an);
+		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::Press, k.app, 0, k.app == kSequins ? kSqSync : kAcClearCv, 0)), "%s: Press taken", an);
+		if (k.kind == RowKind::Mask)
+			CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, k.app, 0, k.id, 1)), "%s: ToggleBit taken with an editor open", an);
+		CHECK(sameSnapshot(before, snapshot(c)), "%s: a dropped edit changed a setting", an);
+		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);  // closes it
+		CHECK(!(model(c).flags & shoal::kModelBusy), "%s: busy after the editor closed", an);
+	}
+}
+
+// Focus on every row of the paged apps: a setting row's page is shown and
+// the cursor is on it; other rows leave both alone.
+void testFocusPagedApps() {
+	for (int app : { kSequins, kAcidCurds, kPiqued }) {
+		const char* an = Core::appName(app);
+		Core c;
+		c.selectApp(app);
+		const FriendlyModel first = model(c);
+		for (int pass = 0; pass < 2 * first.rows; pass++) {
+			const int n = pass < first.rows ? pass : 2 * first.rows - 1 - pass;
+			const Row row = first.row[n];
+			const int page = CoreTest::menuPage(c), before = CoreTest::menuSetting(c);
+			const Snapshot settings = snapshot(c);
+			const bool taken = c.friendlyEdit(makeEdit(FriendlyEdit::Focus, app, 0, row.id, 0));
+			CHECK(taken == (row.kind != RowKind::Heading), "%s: Focus on '%s': %d", an, row.label, taken);
+			CHECK(sameSnapshot(settings, snapshot(c)), "%s: Focus on '%s' changed a setting", an, row.label);
+			checkWellFormed(c, model(c), "focus");
+			if (app == kPiqued && row.id == kPqFill) {  // its editor is the Offset row's
+				CHECK(CoreTest::menuSetting(c) == kPqOffset, "%s: Focus on the fill: cursor on %d", an, CoreTest::menuSetting(c));
+				continue;
+			}
+			if (row.id >= kExtraId || outsideMenu(app, row.id)) {
+				if (!(app == kPiqued && row.id == kPqSegments))
+					CHECK(CoreTest::menuPage(c) == page && CoreTest::menuSetting(c) == before, "%s: Focus on '%s' moved the cursor", an, row.label);
+				continue;
+			}
+			CHECK(CoreTest::menuSetting(c) == row.id && !CoreTest::menuEditing(c), "%s: Focus on '%s': cursor on %d (page %d)", an, row.label,
+				CoreTest::menuSetting(c), CoreTest::menuPage(c));
+		}
+	}
+}
+
+// Title-bar status lines, as ENVGEN_menu, SEQ_menu and CHORDS_menu draw
+// their text, and Piqued's trigger input names.
+void testLastAppsStatus() {
+	{
+		Core c;
+		c.selectApp(kSequins);
+		CHECK(std::strcmp(model(c).status, "#A/1  #B/1") == 0, "Sequins status '%s'", model(c).status);
+		CoreTest::buttonEvent(c, shoal::BUTTON_UP, false);  // the octave toggle on A
+		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kSequins, 1, kSqSequence, 2)), "Sequins: sequence dropped");
+		CHECK(std::strcmp(model(c).status, "#A/1+  #B/3") == 0, "Sequins status '%s'", model(c).status);
+	}
+	{
+		Core c;
+		c.selectApp(kAcidCurds);
+		CHECK(std::strcmp(model(c).status, "#1 Semitone") == 0, "Acid Curds status '%s'", model(c).status);
+		CoreTest::encoderEvent(c, shoal::ENCODER_L, 1);
+		CoreTest::buttonEvent(c, shoal::BUTTON_UP, false);
+		CHECK(std::strcmp(model(c).status, "+1 Next: Ionian") == 0, "Acid Curds status '%s'", model(c).status);
+		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kAcidCurds, 0, kAcScale, 6)), "Acid Curds: scale dropped");
+		CHECK(std::strcmp(model(c).status, "+1 Ionian") == 0, "Acid Curds status '%s'", model(c).status);
+	}
+	{
+		// Values 4-6 of a channel's trigger input are the other three channels'
+		// end of cycle, in letter order (trigger_setting_to_channel_index).
+		static const char* const others[4] = { "BCD", "ACD", "ABD", "ABC" };
+		Core c;
+		c.selectApp(kPiqued);
+		for (int tab = 0; tab < 4; tab++) {
+			CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, kPiqued, model(c).tab, 0, tab)), "Piqued: SelectTab %d dropped", tab);
+			CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, tab, kPqTrigger, 6)), "Piqued: trigger input dropped");
+			const FriendlyModel m = model(c);
+			const Row* r = findRow(m, kPqTrigger);
+			CHECK(r && r->nameCount == 7 && std::strcmp(r->names[3], "TR4") == 0 && r->text[0] == 0, "Piqued tab %d: trigger input names", tab);
+			for (int k = 0; r && k < 3; k++) {
+				char want[16] = "X end of cycle";
+				want[0] = others[tab][k];
+				CHECK(std::strcmp(r->names[4 + k], want) == 0, "Piqued tab %d: value %d is '%s', want '%s'", tab, 4 + k, r->names[4 + k], want);
+			}
+		}
+		CHECK(model(c).status[0] == 0, "Piqued status '%s'", model(c).status);
+	}
+}
+
+// Every app has an adapter of its own (none is read-only), and exactly one
+// row carries the cursor whenever the firmware's cursor is on a listed row,
+// on every page.
+void testEveryAppHasAnAdapter() {
+	for (int app = 0; app < shoal::kNumApps; app++) {
+		const char* an = Core::appName(app);
+		CHECK(CoreTest::friendlyHasAdapter(app), "%s has no adapter of its own", an);
+		Core c;
+		c.selectApp(app);
+		CHECK(checkWellFormed(c, model(c), "new core") == 1, "%s: a new core's model has no row under the cursor", an);
+		// The other page (Piqued: settings; Sequins, Acid Curds: CV mapping),
+		// and the cursor moved down it.
+		if (app == kPiqued)
+			CoreTest::buttonEvent(c, shoal::BUTTON_L, false);
+		if (app == kSequins || app == kAcidCurds)
+			CoreTest::buttonEvent(c, shoal::BUTTON_DOWN, false);
+		for (int step = 0; step < 6; step++) {
+			CoreTest::encoderEvent(c, shoal::ENCODER_R, 2);
+			const FriendlyModel m = model(c);
+			const int cursors = checkWellFormed(c, m, "panel");
+			const int under = CoreTest::menuSetting(c);
+			if (under >= 0 && findRow(m, under))
+				CHECK(cursors == 1, "%s: the cursor on setting %d, %d rows marked", an, under, cursors);
+		}
+	}
+}
+
+// A panel encoder turn queued (polled, not yet handed to the app) when an
+// edit leaves edit mode by suspending and resuming the app: the turn is
+// still applied afterwards.
+void testRecoveryKeepsPanelEvents() {
+	Pair p(kQuantermain);
+	setBoth(p, kQuantermain, 0, 0, 4);  // A: scale Off, so that its row 2 is not the mask
+	// Edit mode on A's row 2, then the L encoder to B, where row 2 is the mask.
+	for (Core* c : { &p.a, &p.b }) {
+		CoreTest::encoderEvent(*c, shoal::ENCODER_R, 2 - CoreTest::menuRow(*c));
+		CoreTest::buttonEvent(*c, shoal::BUTTON_R, false);
+		CoreTest::encoderEvent(*c, shoal::ENCODER_L, 1);
+	}
+	CHECK(CoreTest::menuEditing(p.a) && CoreTest::menuSetting(p.a) == 2, "Quantermain: not editing on the mask row");
+	p.a.turnEncoder(shoal::ENCODER_R, -1);
+	for (int i = 0; i < 4; i++)
+		CoreTest::pollUi(p.a);
+	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kQuantermain, 1, 9, 2)), "Quantermain: octave dropped");
+	personSet(p.b, 9, 2);
+	checkSettled(p.a, "edit with a turn queued");
+	const int row = CoreTest::menuRow(p.a);
+	run(p.a, 0.01);
+	run(p.b, 0.01);
+	CoreTest::encoderEvent(p.b, shoal::ENCODER_R, -1);
+	CHECK(CoreTest::menuRow(p.a) == row - 1 && CoreTest::menuRow(p.b) == row - 1, "Quantermain: the queued turn left the cursor on row %d (and %d), want %d",
+		CoreTest::menuRow(p.a), CoreTest::menuRow(p.b), row - 1);
+	CHECK(p.a.setting(1, 9) == 2 && sameSettings(p.a, p.b), "Quantermain: octave %d", p.a.setting(1, 9));
+}
+
 } // namespace
 
 int main() {
@@ -2006,6 +2838,19 @@ int main() {
 	testStaleListRebuild();
 	testLeaveMaskEditing();
 	testMetaQSlotMask();
+	testPiquedEquivalence();
+	testPiquedEuclidBounds();
+	testPiquedPages();
+	testSequinsEquivalence();
+	testSequinsMask();
+	testAcidCurdsEquivalence();
+	testSectionsLeaveMenuAlone();
+	testPagedActions();
+	testPagedBusy();
+	testFocusPagedApps();
+	testLastAppsStatus();
+	testEveryAppHasAnAdapter();
+	testRecoveryKeepsPanelEvents();
 	testEditStorm();
 	return rkatest::finish("test_friendly");
 }

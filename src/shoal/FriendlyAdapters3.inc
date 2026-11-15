@@ -163,13 +163,14 @@ constexpr Adapter kAdapter = { &header, &rows, nullptr, &edit, &accepting, nullp
 // mode, and the R encoder does nothing there (Meta-Q's nudges the mask as a
 // number, an upstream slip in its guard). Both apps pass a Menu, so the
 // cursor helpers stop the steps when the setting under the cursor changes,
-// leave edit mode through the app menu where an R push would open the
-// editor, and finish the turn on the setting's new row (Friendly.inc).
+// leave edit mode by suspending and resuming the app where an R push would
+// open the editor, and finish the turn on the setting's new row
+// (Friendly.inc).
 
 // The edits common to both apps, on `channel` (the selected one): the mask
 // row's ToggleBit (on `slot`), and SetValue (unit steps for `guarded`
 // settings) and Focus on a menu row. First, a cursor the panel left editing
-// on a mask row leaves edit mode (through the app menu).
+// on a mask row leaves edit mode (suspendAndResume).
 template <class Channel>
 inline bool quantizerEdit(const FriendlyEdit& e, const Row& row, Channel& channel, Cursor& cursor, int slot,
 		const Menu& menu, bool (*guarded)(int)) {
@@ -177,7 +178,7 @@ inline bool quantizerEdit(const FriendlyEdit& e, const Row& row, Channel& channe
 	if (menuRow < 0)  // an extra row: Focus leaves the cursor where it is
 		return e.type == FriendlyEdit::Focus;
 	if (editingOnEditorRow(cursor, &menu))
-		leaveViaAppMenu();
+		suspendAndResume();
 	switch (e.type) {
 		case FriendlyEdit::ToggleBit:  // the mask row (the framework checked)
 			moveCursor(cursor, menuRow, &menu);
