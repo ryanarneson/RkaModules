@@ -202,7 +202,8 @@ PANELS = {
     # Shoal, the Ornament & Crime emulation. The left 83 mm is three screens
     # the module draws (output strip, scope, editor); on the right a controls
     # card (two encoders with push buttons, then UP, DOWN and the UI MODE
-    # latch with its light) over a jacks card: TRIG / CV / OUT columns, four
+    # latch, which lights itself in friendly mode, at the mirror of UP about
+    # the card's centre) over a jacks card: TRIG / CV / OUT columns, four
     # rows, a light beside each trigger and output jack.
     "Shoal": dict(
         dir="shoal",
@@ -215,8 +216,7 @@ PANELS = {
             ("param", "ENC_R_PUSH", 126.4, 43.5, None),
             ("param", "UP", 100.0, 55.0, "UP"),
             ("param", "DOWN", 114.6, 55.0, "DOWN"),
-            ("param", "UI_MODE", 127.6, 55.0, "UI MODE"),
-            ("light", "UI_MODE", 133.8, 55.0, None),
+            ("param", "UI_MODE", 129.2, 55.0, "UI MODE"),
         ]
         + [("input", f"TR{i + 1}", 99.8, 78.6 + 10.0 * i, None) for i in range(4)]
         + [("light", f"TR{i + 1}", 106.0, 78.6 + 10.0 * i, None) for i in range(4)]

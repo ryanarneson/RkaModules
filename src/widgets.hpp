@@ -157,10 +157,19 @@ inline void setParamUndoable(ParamQuantity* pq, float value, const std::string& 
 }
 
 // A latch in the HoldButton's shape: each click flips the param between its
-// minimum and its maximum, undoably. Its lens stays dark (on the HoldButton
-// a lit lens means "held down"), so pair it with a light. Configure the
-// param with configSwitch().
+// minimum and its maximum, undoably. It lights itself while the param is at
+// its maximum: the whole lens cyan, with a halo, on the light layer (full
+// brightness in a dimmed room); off, the lens is dark. Configure the param
+// with configSwitch().
 struct LatchButton : HoldButton {
+	// Lit with no module (the module browser): the param's default.
+	bool litWithoutModule = false;
+
+	bool lit() {
+		ParamQuantity* pq = getParamQuantity();
+		return pq ? pq->getValue() > 0.5f * (pq->getMinValue() + pq->getMaxValue()) : litWithoutModule;
+	}
+
 	void onDragStart(const DragStartEvent& e) override {
 		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
 			return;
@@ -173,6 +182,19 @@ struct LatchButton : HoldButton {
 	void onDragEnd(const DragEndEvent& e) override {}
 
 	void drawLayer(const DrawArgs& args, int layer) override {
+		if (layer == 1 && lit()) {
+			const Vec c = box.size.div(2.f);
+			const float r = box.size.x / 2.f;
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, c.x, c.y, r * 0.7f);
+			nvgFillColor(args.vg, RkaTheme::CYAN);
+			nvgFill(args.vg);
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, c.x, c.y, r * 1.45f);
+			nvgFillPaint(args.vg, nvgRadialGradient(args.vg, c.x, c.y, r * 0.6f, r * 1.45f,
+				nvgTransRGBAf(RkaTheme::CYAN, 0.4f), nvgTransRGBAf(RkaTheme::CYAN, 0.f)));
+			nvgFill(args.vg);
+		}
 		ParamWidget::drawLayer(args, layer);
 	}
 };
