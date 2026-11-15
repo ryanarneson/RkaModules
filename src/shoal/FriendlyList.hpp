@@ -190,6 +190,9 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 	void pressControl(const list::Layout& l, int i) {
 		const Row& r = model.row[i];
 		if (r.kind == RowKind::SubEditor) {
+			// Hardware mode opens with the firmware's cursor on the row.
+			if (!busy())
+				send(list::editFor(model, FriendlyEdit::Focus, r.id, 0));
 			toHardware();
 			return;
 		}
@@ -214,6 +217,10 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 				send(list::editFor(model, FriendlyEdit::SetValue, r.id, r.value ? 0 : 1));
 				break;
 			case RowKind::Action:
+				if (list::asksFirst(r)) {
+					openConfirmMenu(r);
+					break;
+				}
 				beginDrag(Drag::Action, r);
 				send(list::editFor(model, FriendlyEdit::Press, r.id, 0));
 				break;
@@ -347,6 +354,19 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 		}
 	}
 
+	// An Action that undoes work: a menu titled with its label, whose one
+	// item posts the Press.
+	void openConfirmMenu(const Row& r) {
+		rack::ui::Menu* menu = rack::createMenu();
+		menu->addChild(rack::createMenuLabel(r.label ? r.label : ""));
+		rack::WeakPtr<FriendlyList> weak = this;
+		const FriendlyEdit edit = list::editFor(model, FriendlyEdit::Press, r.id, 0);
+		menu->addChild(rack::createMenuItem("Confirm", "", [=]() {
+			if (weak)
+				weak->send(edit);
+		}));
+	}
+
 	void openChoiceMenu(const Row& r) {
 		if ((int64_t) r.max - r.min >= kMaxChoices)
 			return;   // no firmware list is near this long
@@ -443,9 +463,9 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 		const list::Layout l = layout();
 		Pen pen;
 		pen.vg = vg;
-		pen.u = l.lineH() / 13.f;
+		pen.u = l.unit();
 		pen.text = l.lineH() * 0.8f;
-		pen.pad = 5.f * pen.u;
+		pen.pad = l.textPad();
 		const list::Hit hover = live && hovering ? l.hit(model, hoverPos.x, hoverPos.y) : list::Hit{ list::Part::None, -1, -1 };
 
 		nvgSave(vg);
@@ -534,7 +554,7 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 
 		if (r.kind == RowKind::Heading) {
 			// A section title with a rule to the end of the row.
-			const float end = pen.write(b, NVG_ALIGN_LEFT, label, RkaTheme::VIOLET, pen.text * 0.92f);
+			const float end = pen.write(l.labelText(r, i), NVG_ALIGN_LEFT, label, RkaTheme::VIOLET, pen.text * 0.92f);
 			const float x = end + pen.pad;
 			if (x < b.right() - pen.pad)
 				pen.fill(list::Box{ x, b.y + b.h / 2, b.right() - pen.pad - x, pen.u }, dim(RkaTheme::VIOLET, 0.4f));
@@ -550,7 +570,7 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 		if (rowHot || dragged)
 			pen.fill(b, dim(RkaTheme::INK, 0.07f));
 		if (cursor)
-			pen.fill(list::Box{ b.x + pen.u, b.y + pen.u, 3.f * pen.u, b.h - 2.f * pen.u }, (r.flags & kRowEditing) ? RkaTheme::AMBER : RkaTheme::CYAN);
+			pen.fill(l.cursorBar(i), (r.flags & kRowEditing) ? RkaTheme::AMBER : RkaTheme::CYAN);
 
 		const list::Box c = l.inset(l.control(r, i));
 		const float radius = 1.5f * pen.u;
@@ -566,7 +586,7 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 			return;
 		}
 
-		pen.write(l.label(r, i), NVG_ALIGN_LEFT, label, cursor ? RkaTheme::INK : dim(RkaTheme::INK, 0.72f), pen.text);
+		pen.write(l.labelText(r, i), NVG_ALIGN_LEFT, label, cursor ? RkaTheme::INK : dim(RkaTheme::INK, 0.72f), pen.text);
 
 		switch (r.kind) {
 			case RowKind::Number: {

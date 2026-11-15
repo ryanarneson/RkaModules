@@ -165,6 +165,26 @@ struct Layout {
 		const Box b = row(i);
 		return Box{ b.x, b.y, b.w - b.w * controlShare(r.kind), b.h };
 	}
+	// About one pixel at Rack's default zoom: the drawing's line width.
+	float unit() const { return lineH() / 13.f; }
+	// How far text is written in from the edge of the box it is given.
+	float textPad() const { return 5.f * unit(); }
+	// The bar on the left edge of the firmware's cursor row.
+	Box cursorBar(int i) const {
+		const Box b = row(i);
+		if (b.h <= 0.f)
+			return b;
+		const float u = unit();
+		return Box{ b.x + u, b.y + u, 3.f * u, b.h - 2.f * u };
+	}
+	// Where a row's label (a heading's title) is written: the label's box
+	// less two units on the left, on every row, so that the text clears the
+	// cursor bar and the labels line up whichever row has the cursor.
+	Box labelText(const Row& r, int i) const {
+		const Box b = label(r, i);
+		const float in = 2.f * unit();
+		return b.w > in ? Box{ b.x + in, b.y, b.w - in, b.h } : Box{ b.x, b.y, 0.f, b.h };
+	}
 	// What a control draws in: its box less a margin, the same for every kind,
 	// so sliders, dropdowns and mask cells line up.
 	Box inset(const Box& b) const {
@@ -464,6 +484,12 @@ inline FriendlyEdit editFor(const FriendlyModel& m, FriendlyEdit::Type type, int
 	e.id = (int16_t) id;
 	e.value = value;
 	return e;
+}
+
+// Whether a press on row r's control asks for confirmation before it posts
+// the Press: an Action that undoes work (kRowConfirm).
+inline bool asksFirst(const Row& r) {
+	return r.kind == RowKind::Action && (r.flags & kRowConfirm) != 0;
 }
 
 // A Choice row's name for `value`; null where the firmware has none.

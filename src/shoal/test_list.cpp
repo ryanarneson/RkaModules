@@ -148,6 +148,27 @@ void testRowParts() {
 	CHECK(l.label(m.row[2], 2).w == 0.f && near(l.control(m.row[2], 2).w, action.w), "an action is all control");
 	CHECK(l.control(m.row[3], 3).w < l.control(m.row[0], 0).w, "a toggle's control is narrower than a slider's");
 	CHECK(near(l.control(m.row[4], 4).x, l.control(m.row[0], 0).x) && near(l.control(m.row[5], 5).x, l.control(m.row[0], 0).x), "sliders, dropdowns and sub-editors line up");
+	// Label text starts at least two units clear of the cursor row's bar, at
+	// the same x on every row, with the cursor or not, inside the label's box.
+	const float u = l.unit();
+	for (int i : { 0, 1, 3, 4, 5 }) {
+		const Box text = l.labelText(m.row[i], i), bar = l.cursorBar(i), label = l.label(m.row[i], i);
+		const float start = text.x + l.textPad();
+		CHECK(start >= bar.right() + 2.f * u - kEps && near(text.x, l.labelText(m.row[0], 0).x) && inside(text, label) && text.w > 0.f,
+			"row %d: label text starts at %g, the cursor bar ends at %g", i, start, bar.right());
+		CHECK(inside(bar, l.row(i)) && bar.w > 0.f, "row %d: the cursor bar is outside its row", i);
+	}
+}
+
+// An Action row that undoes work asks first; nothing else does.
+void testAsksFirst() {
+	Row a = makeRow(RowKind::Action, 256);
+	CHECK(!asksFirst(a), "a plain action asks");
+	a.flags = shoal::kRowConfirm | shoal::kRowExtra;
+	CHECK(asksFirst(a), "a destructive action does not ask");
+	Row t = makeRow(RowKind::Toggle, 3, 0, 0, 1);
+	t.flags = shoal::kRowConfirm;
+	CHECK(!asksFirst(t), "a toggle asks");
 }
 
 void checkHit(const Layout& l, const FriendlyModel& m, float x, float y, Part part, int index, int cell, const char* what) {
@@ -580,6 +601,7 @@ void testFindAndEdit() {
 int main() {
 	testTiling();
 	testRowParts();
+	testAsksFirst();
 	testHit();
 	testMaskCells();
 	testSlider();
