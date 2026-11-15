@@ -48,12 +48,14 @@ THEMES = {
 }
 
 # Placeholder colours from https://vcvrack.com/manual/Panel
-KIND_COLOUR = {"param": "#ff0000", "input": "#00ff00", "output": "#0000ff", "light": "#ff00ff"}
+KIND_COLOUR = {"param": "#ff0000", "input": "#00ff00", "output": "#0000ff", "light": "#ff00ff",
+               "widget": "#ffff00"}
 
 # Widget radii in mm (src/widgets.hpp): Rogan 3PS, Rogan 1PS, Befaco tiny,
 # our 4.6 mm trim, PJ301M. Used to keep components clear of each other and
 # to draw ticks edge to edge.
-RADII = {"big": 8.8, "mid": 6.7, "small": 4.32, "trim": 2.3, "jack": 4.0}
+RADII = {"big": 8.8, "mid": 6.7, "small": 4.32, "trim": 2.3, "jack": 4.0,
+         "encoder": 6.7, "button": 3.0, "light": 1.1}
 TRIM_D = 4.6
 # Clearance a layout must keep between any two components, mm.
 CLEARANCE = 0.3
@@ -65,6 +67,10 @@ def component_size(spec, name, kind, cname):
     sizes = spec.get("sizes", {})
     if cname in sizes:
         return sizes[cname]
+    if kind == "widget":
+        return "encoder"
+    if kind == "light":
+        return "light"
     if (name, cname) in BIG_KNOBS:
         return "big"
     if kind == "param":
@@ -191,11 +197,52 @@ PANELS = {
         # the text clears the ring.
         label_dx={"VOCT": -1.5, "SUBOUT": 1.5},
     ),
+    # Shoal, the Ornament & Crime emulation. The left 83 mm is three screens
+    # the module draws (output strip, scope, editor); on the right a controls
+    # card (two encoders with push buttons, UP / DOWN, and a free slot for
+    # the stage 3 UI MODE latch) over a jacks card: TRIG / CV / OUT columns,
+    # four rows, a light beside each trigger and output jack.
+    "Shoal": dict(
+        dir="shoal",
+        hp=28,
+        title="SHOAL",
+        components=[
+            ("widget", "ENC_L", 102.8, 29.0, "ENC L"),
+            ("widget", "ENC_R", 126.4, 29.0, "ENC R"),
+            ("param", "ENC_L_PUSH", 102.8, 43.5, None),
+            ("param", "ENC_R_PUSH", 126.4, 43.5, None),
+            ("param", "UP", 100.0, 55.0, "UP"),
+            ("param", "DOWN", 114.6, 55.0, "DOWN"),
+        ]
+        + [("input", f"TR{i + 1}", 99.8, 78.6 + 10.0 * i, None) for i in range(4)]
+        + [("light", f"TR{i + 1}", 106.0, 78.6 + 10.0 * i, None) for i in range(4)]
+        + [("input", f"CV{i + 1}", 112.0, 78.6 + 10.0 * i, None) for i in range(4)]
+        + [("light", n, 124.9, 78.6 + 10.0 * i, None) for i, n in enumerate("ABCD")]
+        + [("output", n, 131.6, 78.6 + 10.0 * i, None) for i, n in enumerate("ABCD")],
+        sizes={"ENC_L_PUSH": "button", "ENC_R_PUSH": "button", "UP": "button", "DOWN": "button"},
+        cards=[
+            (91.0, 15.0, 47.2, 47.0, None),
+            (91.0, 66.0, 47.2, 47.0, None),
+            (119.0, 67.0, 18.0, 45.0, "cyan"),
+        ],
+        # name, x, y, w, h in mm; each is drawn by the module (128x64 at
+        # 0.65 mm per pixel for the scope and editor).
+        screens=[("STRIP", 4.0, 16.0, 83.2, 5.0),
+                 ("SCOPE", 4.0, 21.5, 83.2, 41.6),
+                 ("EDITOR", 4.0, 67.0, 83.2, 41.6)],
+        label_accents={"ENC_L": "ink", "ENC_R": "ink"},
+        label_size={"ENC_L": 2.3, "ENC_R": 2.3, "UP": 2.0, "DOWN": 2.0},
+        label_gap={"ENC_L": 9.6, "ENC_R": 9.6, "UP": 5.4, "DOWN": 5.4},
+        notes=[(99.8, 72.2, "TRIG", 2.0, "ink"), (112.0, 72.2, "CV", 2.0, "ink"),
+               (128.0, 72.2, "OUT", 2.0, "cyan")]
+        + [(93.6, 79.4 + 10.0 * i, str(i + 1), 2.2, "label") for i in range(4)]
+        + [(121.4, 79.4 + 10.0 * i, n, 2.2, "cyan") for i, n in enumerate("ABCD")],
+    ),
 }
 
 LABEL_SIZE = 2.6   # mm
 TITLE_SIZE = 4.5   # mm
-LABEL_GAP = {"param": 7.0, "input": 6.2, "output": 6.2}
+LABEL_GAP = {"param": 7.0, "input": 6.2, "output": 6.2, "widget": 9.0, "light": 3.0}
 BIG_KNOBS = {("Sway", "RATE"), ("Fathom", "PITCH")}  # labels sit further above larger knobs
 
 
@@ -223,6 +270,13 @@ def card(x, y, w, h, t, accent):
     out.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="1.5" fill="{t["card"]}" '
                f'stroke="{edge}" stroke-width="0.3" stroke-opacity="{edge_opacity}"/>')
     return out
+
+
+def screen(x, y, w, h, t):
+    """A display the module draws: a near-black rounded rectangle with a thin
+    accent edge. Dimmed with the theme like every other accent."""
+    return (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="1.0" fill="#04070c" '
+            f'stroke="{ACCENTS["cyan"]}" stroke-width="0.3" stroke-opacity="{t["accent_opacity"]}"/>')
 
 
 def ring(cx, cy, r, t, accent):
@@ -301,6 +355,8 @@ def panel_svg(name, spec, t):
     ]
     for x, y, cw, ch, accent in spec["cards"]:
         out += card(x, y, cw, ch, t, accent)
+    for _, x, y, w, h in spec.get("screens", []):
+        out.append(screen(x, y, w, h, t))
     for cx, cy, r, accent in spec.get("rings", []):
         out += ring(cx, cy, r, t, accent)
     for x1, y1, x2, y2, accent, dotted in spec.get("lines", []):
@@ -328,7 +384,10 @@ def panel_svg(name, spec, t):
             fill, extra = t["label"], ""
         out.append(text(x, y - gap, label, sizes.get(cname, LABEL_SIZE), fill, "bold", extra))
     for x, y, s, size, colour in spec.get("notes", []):
-        out.append(text(x, y, s, size, t[colour], "bold"))
+        if colour in ACCENTS:
+            out.append(text(x, y, s, size, ACCENTS[colour], "bold", f' fill-opacity="{t["accent_opacity"]}"'))
+        else:
+            out.append(text(x, y, s, size, t[colour], "bold"))
     out.append(text(w / 2, PANEL_H - 3.0, "RKA", 3.2, ACCENTS["amber"], "bold",
                     f' fill-opacity="{t["accent_opacity"]}"'))
     # Placeholders for helper.py createmodule; hidden so they never render.
@@ -351,6 +410,9 @@ def layout_hpp(name, spec):
     ]
     for kind, cname, x, y, _ in spec["components"]:
         lines.append(f"static const rack::math::Vec {kind.upper()}_{cname}({x}f, {y}f);")
+    for sname, x, y, w, h in spec.get("screens", []):
+        lines.append(f"static const rack::math::Rect SCREEN_{sname}"
+                     f"(rack::math::Vec({x}f, {y}f), rack::math::Vec({w}f, {h}f));")
     lines += ["}", ""]
     return "\n".join(lines)
 
@@ -380,12 +442,29 @@ def check_clearance(name, spec):
                 sys.exit(f"{name}: {a} and {b} are {gap:.2f} mm apart (need {CLEARANCE})")
 
 
+def check_screens(name, spec):
+    """Fail if a screen leaves the panel or a component comes within
+    CLEARANCE of one."""
+    w = spec["hp"] * HP
+    for sname, sx, sy, sw, sh in spec.get("screens", []):
+        if sx < 0 or sy < 0 or sx + sw > w or sy + sh > PANEL_H:
+            sys.exit(f"{name}: screen SCREEN_{sname} is outside the panel")
+        for kind, cname, x, y, _ in spec["components"]:
+            r = RADII[component_size(spec, name, kind, cname)] + CLEARANCE
+            # Distance from the centre to the rectangle.
+            dx = max(sx - x, 0.0, x - (sx + sw))
+            dy = max(sy - y, 0.0, y - (sy + sh))
+            if dx * dx + dy * dy < r * r:
+                sys.exit(f"{name}: {kind.upper()} {cname} overlaps screen SCREEN_{sname}")
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent)
     (root / "src" / "RkaTheme.hpp").write_text(theme_hpp())
     trim_svgs(root)
     for name, spec in PANELS.items():
         check_clearance(name, spec)
+        check_screens(name, spec)
         svg_dir = root / "res-src" / spec["dir"]
         svg_dir.mkdir(parents=True, exist_ok=True)
         for suffix, theme in THEMES.items():

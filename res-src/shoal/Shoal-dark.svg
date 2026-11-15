@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="142.24mm" height="128.5mm" viewBox="0 0 142.24 128.5">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="128.5" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0a101c"/><stop offset="1" stop-color="#030509"/></linearGradient>
+<linearGradient id="rule" x1="3" y1="0" x2="139.24" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22e6ef"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+</defs>
+<rect width="142.24" height="128.5" fill="url(#bg)"/>
+<text x="71.12" y="11.50" font-family="DejaVu Sans" font-size="4.5" font-weight="bold" text-anchor="middle" fill="#22e6ef" stroke="#22e6ef" stroke-width="0.99" stroke-linejoin="round" opacity="0.22">SHOAL</text>
+<text x="71.12" y="11.50" font-family="DejaVu Sans" font-size="4.5" font-weight="bold" text-anchor="middle" fill="#b9c8d6">SHOAL</text>
+<rect x="3" y="12.9" width="136.24" height="1.0" rx="0.5" fill="url(#rule)" opacity="0.22"/>
+<rect x="3" y="13.2" width="136.24" height="0.4" fill="url(#rule)" opacity="0.75"/>
+<rect x="91.0" y="15.0" width="47.2" height="47.0" rx="1.5" fill="#0a0f1a" stroke="#1c2738" stroke-width="0.3" stroke-opacity="1.0"/>
+<rect x="91.0" y="66.0" width="47.2" height="47.0" rx="1.5" fill="#0a0f1a" stroke="#1c2738" stroke-width="0.3" stroke-opacity="1.0"/>
+<rect x="119.0" y="67.0" width="18.0" height="45.0" rx="1.5" fill="none" stroke="#22e6ef" stroke-width="1.2" opacity="0.13"/>
+<rect x="119.0" y="67.0" width="18.0" height="45.0" rx="1.5" fill="#0a0f1a" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="0.75"/>
+<rect x="4.0" y="16.0" width="83.2" height="5.0" rx="1.0" fill="#04070c" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="0.75"/>
+<rect x="4.0" y="21.5" width="83.2" height="41.6" rx="1.0" fill="#04070c" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="0.75"/>
+<rect x="4.0" y="67.0" width="83.2" height="41.6" rx="1.0" fill="#04070c" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="0.75"/>
+<text x="102.80" y="19.40" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#b9c8d6">ENC L</text>
+<text x="126.40" y="19.40" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#b9c8d6">ENC R</text>
+<text x="100.00" y="49.60" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#7d8ea0">UP</text>
+<text x="114.60" y="49.60" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#7d8ea0">DOWN</text>
+<text x="99.80" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#b9c8d6">TRIG</text>
+<text x="112.00" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#b9c8d6">CV</text>
+<text x="128.00" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">OUT</text>
+<text x="93.60" y="79.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#7d8ea0">1</text>
+<text x="93.60" y="89.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#7d8ea0">2</text>
+<text x="93.60" y="99.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#7d8ea0">3</text>
+<text x="93.60" y="109.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#7d8ea0">4</text>
+<text x="121.40" y="79.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">A</text>
+<text x="121.40" y="89.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">B</text>
+<text x="121.40" y="99.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">C</text>
+<text x="121.40" y="109.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="0.75">D</text>
+<text x="41.60" y="125.50" font-family="DejaVu Sans" font-size="3.2" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="0.75">RKA</text>
+<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
+<circle id="widget-ENC_L" cx="102.8" cy="29.0" r="1" fill="#ffff00"/>
+<circle id="widget-ENC_R" cx="126.4" cy="29.0" r="1" fill="#ffff00"/>
+<circle id="param-ENC_L_PUSH" cx="102.8" cy="43.5" r="1" fill="#ff0000"/>
+<circle id="param-ENC_R_PUSH" cx="126.4" cy="43.5" r="1" fill="#ff0000"/>
+<circle id="param-UP" cx="100.0" cy="55.0" r="1" fill="#ff0000"/>
+<circle id="param-DOWN" cx="114.6" cy="55.0" r="1" fill="#ff0000"/>
+<circle id="input-TR1" cx="99.8" cy="78.6" r="1" fill="#00ff00"/>
+<circle id="input-TR2" cx="99.8" cy="88.6" r="1" fill="#00ff00"/>
+<circle id="input-TR3" cx="99.8" cy="98.6" r="1" fill="#00ff00"/>
+<circle id="input-TR4" cx="99.8" cy="108.6" r="1" fill="#00ff00"/>
+<circle id="light-TR1" cx="106.0" cy="78.6" r="1" fill="#ff00ff"/>
+<circle id="light-TR2" cx="106.0" cy="88.6" r="1" fill="#ff00ff"/>
+<circle id="light-TR3" cx="106.0" cy="98.6" r="1" fill="#ff00ff"/>
+<circle id="light-TR4" cx="106.0" cy="108.6" r="1" fill="#ff00ff"/>
+<circle id="input-CV1" cx="112.0" cy="78.6" r="1" fill="#00ff00"/>
+<circle id="input-CV2" cx="112.0" cy="88.6" r="1" fill="#00ff00"/>
+<circle id="input-CV3" cx="112.0" cy="98.6" r="1" fill="#00ff00"/>
+<circle id="input-CV4" cx="112.0" cy="108.6" r="1" fill="#00ff00"/>
+<circle id="light-A" cx="124.9" cy="78.6" r="1" fill="#ff00ff"/>
+<circle id="light-B" cx="124.9" cy="88.6" r="1" fill="#ff00ff"/>
+<circle id="light-C" cx="124.9" cy="98.6" r="1" fill="#ff00ff"/>
+<circle id="light-D" cx="124.9" cy="108.6" r="1" fill="#ff00ff"/>
+<circle id="output-A" cx="131.6" cy="78.6" r="1" fill="#0000ff"/>
+<circle id="output-B" cx="131.6" cy="88.6" r="1" fill="#0000ff"/>
+<circle id="output-C" cx="131.6" cy="98.6" r="1" fill="#0000ff"/>
+<circle id="output-D" cx="131.6" cy="108.6" r="1" fill="#0000ff"/>
+</g>
+</svg>
