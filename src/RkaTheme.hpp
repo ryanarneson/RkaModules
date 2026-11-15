@@ -12,4 +12,21 @@ static const NVGcolor GREEN = nvgRGB(0x4a, 0xde, 0x80);
 static const NVGcolor CARD = nvgRGB(0x0f, 0x18, 0x28);
 static const NVGcolor HINT = nvgRGB(0x5f, 0x71, 0x87);
 static const NVGcolor INK = nvgRGB(0xe6, 0xf4, 0xff);
+// The Instrument look (INSTRUMENT in tools/gen_panels.py); _DARK: Rack's dark panels.
+static const NVGcolor GROUND = nvgRGB(0x15, 0x17, 0x1c);
+static const NVGcolor GROUND_DARK = nvgRGB(0x0d, 0x0e, 0x12);
+static const NVGcolor BRASS = nvgRGB(0xc9, 0xa4, 0x6a);
+static const NVGcolor BRASS_DARK = nvgRGB(0x9c, 0x7f, 0x52);
+static const NVGcolor IVORY = nvgRGB(0xef, 0xe6, 0xd2);
+static const NVGcolor IVORY_DARK = nvgRGB(0xba, 0xb3, 0xa3);
+static const NVGcolor INK_ON_IVORY = nvgRGB(0x1c, 0x1a, 0x16);
+static const NVGcolor INK_ON_IVORY_DARK = nvgRGB(0x16, 0x15, 0x11);
+static const NVGcolor DIM = nvgRGB(0x8a, 0x84, 0x74);
+static const NVGcolor DIM_DARK = nvgRGB(0x75, 0x70, 0x62);
+static const NVGcolor KNOB = nvgRGB(0x23, 0x26, 0x2d);
+static const NVGcolor KNOB_DARK = nvgRGB(0x1a, 0x1c, 0x22);
+static const NVGcolor GLASS = nvgRGB(0x05, 0x08, 0x0c);
+static const NVGcolor GLASS_DARK = nvgRGB(0x03, 0x05, 0x08);
+static const NVGcolor SIGNAL = nvgRGB(0x6f, 0xd6, 0xe0);
+static const NVGcolor SIGNAL_DARK = nvgRGB(0x6f, 0xd6, 0xe0);
 }

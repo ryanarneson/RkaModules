@@ -30,17 +30,21 @@ include $(RACK_DIR)/plugin.mk
 
 
 # Regenerate panels: layout -> res-src/<module>/*.svg + src/<module>/*Layout.hpp
-# -> Inkscape text-to-path -> res/<module>/*.svg. Needs Inkscape; the results are committed so
-# plain builds (and CI) don't.
+# -> Inkscape text-to-path -> res/<module>/*.svg, and the components in
+# res/components/. Needs Inkscape; the results are committed so plain builds
+# (and CI) don't. Instrument panels are lettered from tools/fonts/ only.
 # On macOS the Inkscape cask doesn't put the CLI on PATH.
 INKSCAPE ?= $(or $(shell command -v inkscape),$(wildcard /Applications/Inkscape.app/Contents/MacOS/inkscape),inkscape)
 .PHONY: panels
 panels:
-	python3 tools/gen_panels.py
-	for f in $(MODULES:%=res-src/%/*.svg); do \
-		out="res/$$(basename $$(dirname $$f))"; mkdir -p "$$out"; \
-		$(INKSCAPE) "$$f" --export-text-to-path --export-plain-svg --export-filename="$$out/$$(basename $$f)" || exit 1; \
-	done
+	python3 tools/gen_panels.py --inkscape "$(INKSCAPE)"
+
+# The Instrument look's specimen panel (every primitive and component), with
+# the components drawn in place, to build/specimen/: SVG, and PNG at Rack's
+# 100 % and 300 % zoom. Not a module; nothing goes to res/.
+.PHONY: specimen
+specimen:
+	python3 tools/gen_panels.py --specimen --inkscape "$(INKSCAPE)"
 
 # Offline unit tests (`make test`) and the Shoal test flags; tests.mk also
 # runs on its own, without the Rack SDK (CI does).

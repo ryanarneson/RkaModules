@@ -9,8 +9,15 @@ MODULES ?= $(patsubst src/%/,%,$(sort $(dir $(wildcard src/*/test_*.cpp))))
 
 TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_*.cpp)))
 .PHONY: test
-test: shoal-globals $(TEST_BINS)
+test: shoal-globals panels-test $(TEST_BINS)
 	@for t in $(TEST_BINS); do ./$$t || exit 1; done
+
+# The panel generator's geometry and layout checks, and that the committed
+# panels, layout headers, colours and components are what it generates.
+# Needs python3 only: no packages, no Inkscape.
+.PHONY: panels-test
+panels-test:
+	python3 tools/test_gen_panels.py
 
 # -fno-unsafe-math-optimizations undoes compile.mk's -funsafe-math-optimizations
 # for the firmware, so the plugin and the tests share floating-point semantics.

@@ -6,23 +6,38 @@ For each module in PANELS (folder `dir`) this writes:
   res-src/<dir>/<Name>-dark.svg  dark panel, same geometry
   src/<dir>/<Name>Layout.hpp     component centres in mm, read by the module widget
 and, once for the plugin:
-  src/RkaTheme.hpp         the palette's accent and widget colours for C++
-  res/components/Trim*.svg the attenuverter knob, in the palette's colours
+  src/RkaTheme.hpp         the palettes' colours for widgets drawn in C++
+  res/components/*.svg     the plugin's own knobs, port, switch, button cap
+                           and light seat, in the palettes' colours
 
-`make panels` then runs Inkscape to convert text to paths (Rack's SVG renderer
-cannot draw <text>) and writes the finished panels to res/<dir>/.
+With `--inkscape <path>` (as `make panels` runs it) it then has Inkscape
+convert text to paths (Rack's SVG renderer cannot draw <text>) and writes
+the finished panels to res/<dir>/.
 
-The look ("Nightglow") is shared by every module: navy panel, slate cards
-with thin glowing borders, light labels, and neon accents. Rack's renderer
-(nanosvg) has gradients and opacity but no blur, so glows are faked with a
-wide, faint stroke under a thin bright one. Besides `cards`, a panel may
-carry `rings` (glowing circles), `lines` (solid or dotted) and `glyphs`
-(small stroked paths); label gaps may be negative to sit below a control.
+A panel is drawn in one of two looks, chosen by its `look` key.
 
-Usage: python3 tools/gen_panels.py [repo dir]
+"nightglow" (the default; being retired): navy panel, slate cards with thin
+glowing borders, light labels, and neon accents. Rack's renderer (nanosvg)
+has gradients and opacity but no blur, so glows are faked with a wide, faint
+stroke under a thin bright one. Besides `cards`, a panel may carry `rings`
+(glowing circles), `lines` (solid or dotted) and `glyphs` (small stroked
+paths); label gaps may be negative to sit below a control.
+
+"instrument": brass and ivory on near-black. See "The Instrument look"
+below for its keys, and SPECIMEN for a panel that uses every one of them
+(`make specimen` draws it, with the components in place, to build/specimen/).
+
+Usage: python3 tools/gen_panels.py [--inkscape PATH] [--specimen | --preview] [repo dir]
 """
+import argparse
+import math
+import os
+import struct
+import subprocess
 import sys
+from collections import namedtuple
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 HP = 5.08
 PANEL_H = 128.5
@@ -58,6 +73,14 @@ KIND_COLOUR = {"param": "#ff0000", "input": "#00ff00", "output": "#0000ff", "lig
 # to draw ticks edge to edge.
 RADII = {"big": 8.8, "mid": 6.7, "small": 4.32, "trim": 2.3, "jack": 4.0,
          "encoder": 6.7, "button": 3.0, "light": 1.1}
+# The Instrument look's own components (src/widgets.hpp: HeroKnob, FaceKnob,
+# LimbKnob, Atten, KnurlEncoder, BrassPort, Toggle2, CapLatch / CapButton,
+# JewelLight). A knob's radius is to the outside of its knurl. The toggle is
+# a 3.6 x 6.4 mm rectangle; its radius is the circle round it.
+INSTRUMENT_SIZES = {"hero": 9.3, "face": 4.8, "limb": 4.3, "atten": 2.8, "enc": 7.25,
+                    "port": 4.0, "toggle": 3.7, "cap": 3.2, "jewel": 1.0}
+RADII.update(INSTRUMENT_SIZES)
+TOGGLE_W, TOGGLE_H = 3.6, 6.4
 TRIM_D = 4.6
 # Clearance a layout must keep between any two components, mm.
 CLEARANCE = 0.3
@@ -66,6 +89,16 @@ CLEARANCE = 0.3
 def component_size(spec, name, kind, cname):
     """Which RADII entry a component uses: the panel's `sizes`, else a trim
     for `*_ATT` params, a small knob for other params, a jack for ports."""
+    if is_instrument(spec):
+        size = spec.get("sizes", {}).get(cid(kind, cname))
+        if size is None:
+            size = {"light": "jewel", "widget": "enc", "input": "port", "output": "port"}.get(kind)
+        if size is None:
+            size = "atten" if cname.endswith("_ATT") else "limb"
+        if size not in INSTRUMENT_SIZES:
+            sys.exit(f"{name}: {cid(kind, cname)} has size {size!r}; the Instrument sizes are "
+                     f"{', '.join(INSTRUMENT_SIZES)}")
+        return size
     if kind == "light":
         return "light"   # before `sizes`: a light may share its param's name
     sizes = spec.get("sizes", {})
@@ -324,11 +357,10 @@ def tick(name, spec, a, b, t, accent):
                 t, accent, True)
 
 
-def trim_svgs(root):
+def trim_svgs():
     """The plugin's own attenuverter: a TRIM_D mm disc in the panel's card
     colour with a thin rim (the background SVG) and a bright pointer (the
-    knob SVG that rotates). Written straight to res/components: no text, so
-    no Inkscape pass."""
+    knob SVG that rotates). File name -> SVG; no text, so no Inkscape pass."""
     t = THEMES[""]
     c = TRIM_D / 2
     head = (f'<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" '
@@ -337,13 +369,12 @@ def trim_svgs(root):
                  f'stroke="{t["hint"]}" stroke-width="0.25"/>\n</svg>\n')
     fg = head + (f'<line x1="{c}" y1="{c - 0.4:.2f}" x2="{c}" y2="0.35" stroke="{t["ink"]}" '
                  f'stroke-width="0.5" stroke-linecap="round"/>\n</svg>\n')
-    out = root / "res" / "components"
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "Trim_bg.svg").write_text(bg)
-    (out / "Trim.svg").write_text(fg)
+    return {"Trim_bg.svg": bg, "Trim.svg": fg}
 
 
 def panel_svg(name, spec, t):
+    if is_instrument(spec):
+        return instrument_svg(name, spec, t)
     w = spec["hp"] * HP
     cyan, violet = ACCENTS["cyan"], ACCENTS["violet"]
     out = [
@@ -443,6 +474,14 @@ def theme_hpp():
         hexcol = THEMES[""][key]
         r, g, b = (int(hexcol[i:i + 2], 16) for i in (1, 3, 5))
         lines.append(f"static const NVGcolor {key.upper()} = nvgRGB(0x{r:02x}, 0x{g:02x}, 0x{b:02x});")
+    # The Instrument look, for widgets drawn in code. NAME is the default
+    # panel's colour, NAME_DARK the one for Rack's "dark panels" preference.
+    lines.append("// The Instrument look (INSTRUMENT in tools/gen_panels.py); _DARK: Rack's dark panels.")
+    for const, key in INSTRUMENT_WIDGET_COLOURS:
+        for suffix, tag in (("", ""), ("-dark", "_DARK")):
+            hexcol = INSTRUMENT[suffix][key]
+            r, g, b = (int(hexcol[i:i + 2], 16) for i in (1, 3, 5))
+            lines.append(f"static const NVGcolor {const}{tag} = nvgRGB(0x{r:02x}, 0x{g:02x}, 0x{b:02x});")
     lines += ["}", ""]
     return "\n".join(lines)
 
@@ -466,6 +505,8 @@ def check_screens(name, spec):
             sys.exit(f"{name}: screen SCREEN_{sname} is outside the panel")
         for kind, cname, x, y, _ in spec["components"]:
             r = RADII[component_size(spec, name, kind, cname)] + CLEARANCE
+            if is_instrument(spec):
+                r += SCREEN_BEZEL   # drawn outside the screen's rectangle
             # Distance from the centre to the rectangle.
             dx = max(sx - x, 0.0, x - (sx + sw))
             dy = max(sy - y, 0.0, y - (sy + sh))
@@ -473,19 +514,1059 @@ def check_screens(name, spec):
                 sys.exit(f"{name}: {kind.upper()} {cname} overlaps screen SCREEN_{sname}")
 
 
+# ---------------------------------------------------------------------------
+# The Instrument look
+#
+# Brass and ivory on near-black; see docs/specs/2026-11-15-instrument-look-
+# design.md. Every drawn line is a scale, a centre mark, a construction line,
+# a signal trace or a label. A panel with look="instrument" is described by:
+#
+#   title, subtitle   the nameplate, top left; `nameplate` (x, y) moves it
+#   mark              the foot mark, if not "R K A . INSTRUMENTS"
+#   components        as Nightglow: (kind, name, x, y, label). Elsewhere a
+#                     component is named by its id, KIND_NAME, as in the
+#                     layout header: "PARAM_RATE", "INPUT_PW", "LIGHT_A"
+#   sizes             id -> one of INSTRUMENT_SIZES, where the default is
+#                     wrong (param: limb, or atten for *_ATT; input, output:
+#                     port; light: jewel; widget: enc)
+#   origins           [(x, y)]: a brass crosshair where arcs are struck from
+#   circles           [(cx, cy, r)]: construction circles
+#   radii             [(x1, y1, x2, y2)]: construction lines
+#   limbs             [dict(c=(cx, cy), r=, a0=, a1=, step=, major=)]: a brass
+#                     arc from a0 to a1 degrees, ticked on its outer side
+#                     every `step` degrees, longer every `major` ticks
+#   faces             id -> dict(r=, ticks=, major=, sweep=270, numerals=None):
+#                     the enamel dial face under a control
+#   tiles             [dict(port=id, name=, light=id, left=, right=, top=,
+#                     bottom=, name_at=(dx, dy), name_size=)]: an output's
+#                     ivory tile; only `port` is required
+#   traces            [[id, ..., id]]: a signal trace from a jack through
+#                     the controls on its way to the one it moves; an (x, y)
+#                     among the ids is an elbow (at most one)
+#   screens           as Nightglow: (name, x, y, w, h), drawn as glass in a
+#                     brass bezel
+#   rulers            screen name -> dict(px=mm per pixel, sides="lb",
+#                     numerals=True): pixel rulers outside a screen
+#   label_at          id -> "above" (default), "below", "left", "right", or
+#                     "face" (in ink at the foot of the control's own face).
+#                     An output on a tile is named on the tile instead.
+#   label_colour, label_size, label_gap, label_dx, label_dy   id -> value
+#   notes             [(x, y, text, size, colour)] or with a sixth, the
+#                     anchor ("start", "middle", "end"); colour is "ivory",
+#                     "dim", "brass" or "ink"
+#   preview           id -> dict(turn=degrees, lit=True, frame=0): how the
+#                     component is shown in the preview drawing only
+#
+# Angles on an arc (limbs, arc_point) are measured at its centre from
+# straight down, positive toward the right. Angles on a dial (faces, knob
+# turn) are measured from straight up, positive clockwise.
+# ---------------------------------------------------------------------------
+
+# The one typeface. No other family is ever written into an Instrument
+# panel, and Inkscape is shown only tools/fonts/ when it converts one.
+FONT_INSTRUMENT = "D-DIN Condensed"
+FONT_DIR = Path(__file__).resolve().parent / "fonts"
+FONT_FILES = {"normal": "D-DINCondensed.ttf", "bold": "D-DINCondensed-Bold.ttf"}
+
+# "" is the default panel, "-dark" Rack's "dark panels" preference: the same
+# drawing turned down. `signal` (things that light up) is not dimmed.
+INSTRUMENT = {
+    "": dict(ground="#15171c", construction="#2c3340", brass="#c9a46a", ivory="#efe6d2",
+             ink="#1c1a16", dim="#8a8474", knob="#23262d", glass="#05080c", signal="#6fd6e0",
+             knob_ring="#343842", brass_shade="#6b5838", cap="#2e323a", hole="#000000",
+             unlit="#2b4f55", glint="#d8f6f9"),
+    "-dark": dict(ground="#0d0e12", construction="#1e232c", brass="#9c7f52", ivory="#bab3a3",
+                  ink="#161511", dim="#757062", knob="#1a1c22", glass="#030508", signal="#6fd6e0",
+                  knob_ring="#282b33", brass_shade="#52432b", cap="#23262c", hole="#000000",
+                  unlit="#213c41", glint="#d8f6f9"),
+}
+# C++ constant -> palette key (RkaTheme::BRASS, RkaTheme::BRASS_DARK, ...).
+INSTRUMENT_WIDGET_COLOURS = (("GROUND", "ground"), ("BRASS", "brass"), ("IVORY", "ivory"),
+                             ("INK_ON_IVORY", "ink"), ("DIM", "dim"), ("KNOB", "knob"),
+                             ("GLASS", "glass"), ("SIGNAL", "signal"))
+
+FOOT_MARK = "R K A · INSTRUMENTS"
+SCREEN_BEZEL = 0.45      # mm of brass round a screen, outside its rectangle
+LABEL_CLEARANCE = 0.2    # mm between lettering and any component
+TILE = dict(left=4.4, right=4.4, top=7.2, bottom=4.6)   # mm from the port's centre
+
+
+def is_instrument(spec):
+    look = spec.get("look", "nightglow")
+    if look not in ("nightglow", "instrument"):
+        sys.exit(f'unknown look {look!r}: a panel is "nightglow" or "instrument"')
+    return look == "instrument"
+
+
+def themes_for(spec):
+    """Suffix -> palette for a panel's two variants."""
+    return INSTRUMENT if is_instrument(spec) else THEMES
+
+
+def cid(kind, cname):
+    """A component's id, as its constant in the layout header."""
+    return f"{kind.upper()}_{cname}"
+
+
+def num(v):
+    """A coordinate for SVG: three decimals at most, no trailing zeros."""
+    s = f"{v:.3f}".rstrip("0").rstrip(".")
+    return "0" if s in ("-0", "") else s
+
+
+# --- Geometry helpers (pure; tools/test_gen_panels.py) ---
+
+def column_on_arc(cx, cy, r, x):
+    """The y at which the vertical line at x meets the circle of radius r
+    about (cx, cy), below the centre. ValueError if the column misses it."""
+    dx = x - cx
+    if abs(dx) > r:
+        raise ValueError(f"the column at x = {x} misses the arc of radius {r} about ({cx}, {cy})")
+    return cy + math.sqrt(r * r - dx * dx)
+
+
+def arc_point(cx, cy, r, deg):
+    """The point on the circle of radius r about (cx, cy) at `deg` degrees
+    from straight down, positive toward the right."""
+    a = math.radians(deg)
+    return cx + r * math.sin(a), cy + r * math.cos(a)
+
+
+def dial_point(cx, cy, r, deg):
+    """The point r from a dial's centre at `deg` degrees of turn: 0 straight
+    up, positive clockwise, as a knob's pointer moves."""
+    a = math.radians(deg)
+    return cx + r * math.sin(a), cy - r * math.cos(a)
+
+
+def trace_end(start, centre, radius):
+    """Where a trace coming from `start`, aimed at a control's centre, stops:
+    the point on the control's edge on the line between them. ValueError if
+    `start` is not outside the control."""
+    dx, dy = centre[0] - start[0], centre[1] - start[1]
+    d = math.hypot(dx, dy)
+    if d <= radius:
+        raise ValueError(f"({start[0]}, {start[1]}) is inside the control at ({centre[0]}, {centre[1]}) "
+                         f"that the trace runs to")
+    k = (d - radius) / d
+    return start[0] + dx * k, start[1] + dy * k
+
+
+def point_segment_distance(p, a, b):
+    """Distance from point p to the segment a-b."""
+    vx, vy = b[0] - a[0], b[1] - a[1]
+    length2 = vx * vx + vy * vy
+    k = 0.0 if length2 == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / length2))
+    return math.hypot(p[0] - a[0] - k * vx, p[1] - a[1] - k * vy)
+
+
+def segment_distance(a, b, c, d):
+    """Distance between segments a-b and c-d: 0 if they cross."""
+    def side(p, q, r):
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+    if side(a, b, c) * side(a, b, d) < 0 and side(c, d, a) * side(c, d, b) < 0:
+        return 0.0
+    return min(point_segment_distance(a, c, d), point_segment_distance(b, c, d),
+               point_segment_distance(c, a, b), point_segment_distance(d, a, b))
+
+
+def point_rect_distance(x, y, rect):
+    """Distance from a point to a rectangle (x0, y0, x1, y1): 0 inside."""
+    dx = max(rect[0] - x, 0.0, x - rect[2])
+    dy = max(rect[1] - y, 0.0, y - rect[3])
+    return math.hypot(dx, dy)
+
+
+def rect_distance(a, b):
+    """Distance between two rectangles: 0 if they overlap."""
+    dx = max(b[0] - a[2], 0.0, a[0] - b[2])
+    dy = max(b[1] - a[3], 0.0, a[1] - b[3])
+    return math.hypot(dx, dy)
+
+
+def limb_ticks(limb):
+    """[(degrees, is_major)] for a limb: a tick at every multiple of `step`
+    from a0 to a1; every `major`-th multiple is a long one."""
+    step = limb["step"]
+    first, last = math.ceil(limb["a0"] / step - 1e-9), math.floor(limb["a1"] / step + 1e-9)
+    return [(k * step, k % limb["major"] == 0) for k in range(first, last + 1)]
+
+
+def face_ticks(face):
+    """[(degrees of turn, is_major)] for a dial face: `ticks` equal divisions
+    of `sweep` degrees, centred on straight up; every `major`-th is long.
+    A full circle does not repeat its first tick."""
+    sweep = face.get("sweep", 270)
+    count = face["ticks"] + (0 if sweep >= 360 else 1)
+    return [(-sweep / 2 + sweep * i / face["ticks"], i % face["major"] == 0) for i in range(count)]
+
+
+# --- Lettering: metrics read from the typeface itself, so a label's box is
+# known without Inkscape. ---
+
+FACES = {}   # weight -> dict(upm, cap, advance)
+
+
+def read_ttf(path):
+    """Units per em, cap height and advance width per character of a
+    TrueType file (tables head, hhea, hmtx, OS/2, and cmap format 4)."""
+    d = path.read_bytes()
+    tables = {}
+    for i in range(struct.unpack(">H", d[4:6])[0]):
+        tag, _, off, length = struct.unpack(">4sIII", d[12 + 16 * i:28 + 16 * i])
+        tables[tag.decode("latin-1")] = d[off:off + length]
+    upm = struct.unpack(">H", tables["head"][18:20])[0]
+    metrics = struct.unpack(">H", tables["hhea"][34:36])[0]
+    widths = [struct.unpack(">H", tables["hmtx"][4 * i:4 * i + 2])[0] for i in range(metrics)]
+    os2 = tables["OS/2"]
+    cap = struct.unpack(">h", os2[88:90])[0] if struct.unpack(">H", os2[0:2])[0] >= 2 else 0
+    cmap = tables["cmap"]
+    sub = None
+    for i in range(struct.unpack(">H", cmap[2:4])[0]):
+        off = struct.unpack(">I", cmap[8 + 8 * i:12 + 8 * i])[0]
+        if struct.unpack(">H", cmap[off:off + 2])[0] == 4:
+            sub = cmap[off:]
+            break
+    if sub is None:
+        sys.exit(f"{path}: no format 4 character map")
+    seg2 = struct.unpack(">H", sub[6:8])[0]
+    seg = seg2 // 2
+    ends = struct.unpack(f">{seg}H", sub[14:14 + seg2])
+    starts = struct.unpack(f">{seg}H", sub[16 + seg2:16 + 2 * seg2])
+    deltas = struct.unpack(f">{seg}h", sub[16 + 2 * seg2:16 + 3 * seg2])
+    ranges_at = 16 + 3 * seg2
+    ranges = struct.unpack(f">{seg}H", sub[ranges_at:ranges_at + seg2])
+    advance = {}
+    for i in range(seg):
+        for c in range(starts[i], min(ends[i], 0xFFFE) + 1):
+            if ranges[i] == 0:
+                glyph = (c + deltas[i]) & 0xFFFF
+            else:
+                at = ranges_at + 2 * i + ranges[i] + 2 * (c - starts[i])
+                glyph = struct.unpack(">H", sub[at:at + 2])[0]
+                if glyph:
+                    glyph = (glyph + deltas[i]) & 0xFFFF
+            if glyph:
+                advance[chr(c)] = widths[min(glyph, metrics - 1)]
+    return dict(upm=upm, cap=(cap if cap > 0 else 0.7 * upm) / upm, advance=advance)
+
+
+def typeface(weight):
+    if weight not in FACES:
+        path = FONT_DIR / FONT_FILES[weight]
+        if not path.is_file():
+            sys.exit(f"typeface missing: {path}. Instrument panels are lettered in {FONT_INSTRUMENT} only "
+                     f"(tools/fonts/README.md); there is no fallback.")
+        FACES[weight] = read_ttf(path)
+    return FACES[weight]
+
+
+def text_width(s, size, spacing, weight):
+    """Width in mm of s at `size` mm, `spacing` mm between letters."""
+    face = typeface(weight)
+    for ch in s:
+        if ch not in face["advance"]:
+            sys.exit(f"{FONT_INSTRUMENT} ({weight}) has no glyph for {ch!r} in {s!r}")
+    return sum(face["advance"][ch] for ch in s) * size / face["upm"] + spacing * max(len(s) - 1, 0)
+
+
+def cap_height(size, weight="normal"):
+    return typeface(weight)["cap"] * size
+
+
+# Sizes below are about a sixth larger than the mockups': D-DIN Condensed is
+# that much narrower than their stand-in face, so the lettering fills the
+# same width and reads better at rack zoom.
+# One piece of lettering: baseline (x, y), anchored "start", "middle" or
+# "end"; `what` describes it in a failed check.
+Text = namedtuple("Text", "x y s size colour weight anchor spacing what")
+
+
+def text_box(t):
+    """(x0, y0, x1, y1) of a Text's capitals."""
+    w = text_width(t.s, t.size, t.spacing, t.weight)
+    x0 = t.x - {"start": 0.0, "middle": w / 2, "end": w}[t.anchor]
+    return x0, t.y - cap_height(t.size, t.weight), x0 + w, t.y
+
+
+def text_svg(t, pal):
+    # SVG letterspacing also follows the last letter; shift so that the
+    # letters themselves sit where the anchor says.
+    x = t.x + {"start": 0.0, "middle": t.spacing / 2, "end": t.spacing}[t.anchor]
+    return (f'<text x="{x:.2f}" y="{t.y:.2f}" font-family="{FONT_INSTRUMENT}" font-size="{num(t.size)}" '
+            f'font-weight="{t.weight}" letter-spacing="{num(t.spacing)}" text-anchor="{t.anchor}" '
+            f'fill="{pal[t.colour]}">{escape(t.s)}</text>')
+
+
+# --- The layout model ---
+
+Comp = namedtuple("Comp", "id kind name x y size r label")
+
+
+def comps_of(name, spec):
+    """A panel's components, in order."""
+    out, seen = [], set()
+    for kind, cname, x, y, label in spec["components"]:
+        key = cid(kind, cname)
+        if key in seen:
+            sys.exit(f"{name}: two components are called {key}")
+        seen.add(key)
+        size = component_size(spec, name, kind, cname)
+        out.append(Comp(key, kind, cname, x, y, size, RADII[size], label))
+    return out
+
+
+def face_bezel(face):
+    """Width of a face's brass bezel; the stroke is centred on its radius."""
+    return max(0.45, min(0.7, 0.045 * face["r"]))
+
+
+def face_edge(face):
+    return face["r"] + face_bezel(face) / 2
+
+
+def edge_radius(spec, c):
+    """How far a control reaches for a trace or the foot mark: to the bezel
+    of its dial face if it has one."""
+    face = spec.get("faces", {}).get(c.id)
+    return face_edge(face) if face else c.r
+
+
+def face_tick_radius(face, c):
+    """Where a face's graduations start: just outside its knob."""
+    return face.get("tick_r", c.r + 0.6)
+
+
+def tile_rect(tile, c):
+    e = dict(TILE, **{k: tile[k] for k in TILE if k in tile})
+    return c.x - e["left"], c.y - e["top"], c.x + e["right"], c.y + e["bottom"]
+
+
+def on_face_or_tile(spec, by, c):
+    """Whether a component sits on ivory (a dial face or a tile) rather than
+    on the ground."""
+    for fid, face in spec.get("faces", {}).items():
+        f = by[fid]
+        if math.hypot(c.x - f.x, c.y - f.y) + c.r <= face["r"]:
+            return True
+    for tile in spec.get("tiles", []):
+        if point_rect_distance(c.x, c.y, tile_rect(tile, by[tile["port"]])) == 0:
+            return True
+    return False
+
+
+def trace_name(trace):
+    ids = [n for n in trace if isinstance(n, str)]
+    return f"trace {ids[0]} > {ids[-1]}" if ids else "trace"
+
+
+def trace_centres(name, spec, trace):
+    """A trace's polyline through the centres of its components and its
+    elbow, after checking its shape."""
+    by = {c.id: c for c in comps_of(name, spec)}
+    label = trace_name(trace)
+    for n in trace:
+        if isinstance(n, str) and n not in by:
+            sys.exit(f"{name}: {label} names {n}, which is not a component")
+    if len(trace) < 2 or not isinstance(trace[0], str) or not isinstance(trace[-1], str):
+        sys.exit(f"{name}: {label} must start at a component and end at one")
+    if sum(1 for n in trace if not isinstance(n, str)) > 1:
+        sys.exit(f"{name}: {label} has more than one elbow")
+    return [(by[n].x, by[n].y) if isinstance(n, str) else (float(n[0]), float(n[1])) for n in trace]
+
+
+def trace_points(name, spec, trace):
+    """The drawn polyline of a trace: from the edge of its first component,
+    through its elbow and the centres of the controls it passes under, to
+    the edge of the control it moves, arriving aimed at that control's
+    centre."""
+    by = {c.id: c for c in comps_of(name, spec)}
+    centres = trace_centres(name, spec, trace)
+    try:
+        start = trace_end(centres[1], centres[0], edge_radius(spec, by[trace[0]]))
+        end = trace_end(centres[-2], centres[-1], edge_radius(spec, by[trace[-1]]))
+    except ValueError as e:
+        sys.exit(f"{name}: {trace_name(trace)}: {e}")
+    return [start] + centres[1:-1] + [end]
+
+
+def foot_mark(spec):
+    return Text(spec["hp"] * HP / 2, PANEL_H - 2.9, spec.get("mark", FOOT_MARK), 1.6, "dim", "normal",
+                "middle", 0.5, "the foot mark")
+
+
+LABEL_COLOUR = {"param": "ivory", "widget": "ivory", "input": "dim", "output": "dim", "light": "dim"}
+
+
+def instrument_texts(name, spec):
+    """Every piece of lettering on an Instrument panel except the foot mark."""
+    comps = comps_of(name, spec)
+    by = {c.id: c for c in comps}
+    faces, tiles = spec.get("faces", {}), {t["port"]: t for t in spec.get("tiles", [])}
+    out = []
+    nx, ny = spec.get("nameplate", (5.0, 10.0))
+    out.append(Text(nx, ny, spec["title"], 5.2, "ivory", "normal", "start", 1.4, f'title "{spec["title"]}"'))
+    if spec.get("subtitle"):
+        out.append(Text(nx, ny + 3.8, spec["subtitle"], 1.7, "dim", "normal", "start", 0.45,
+                        f'subtitle "{spec["subtitle"]}"'))
+
+    # Dial numerals: upright, centred on a circle outside the graduations.
+    for fid, face in faces.items():
+        numerals = face.get("numerals")
+        if not numerals:
+            continue
+        c = by[fid]
+        majors = [deg for deg, major in face_ticks(face) if major]
+        if len(numerals) != len(majors):
+            sys.exit(f"{name}: the face of {fid} has {len(majors)} major ticks and {len(numerals)} numerals")
+        size = face.get("numeral_size", 1.9)
+        r = face.get("numeral_r", face_tick_radius(face, c) + 3.7)
+        for deg, s in zip(majors, numerals):
+            x, y = dial_point(c.x, c.y, r, deg)
+            out.append(Text(x, y + cap_height(size) / 2, str(s), size, "ink", "normal", "middle", 0.0,
+                            f'numeral "{s}" on the face of {fid}'))
+
+    # Names of components.
+    for c in comps:
+        tile = tiles.get(c.id)
+        label = tile.get("name", c.label) if tile else c.label
+        if not label:
+            continue
+        what = f'label "{label}"'
+        size = spec.get("label_size", {}).get(c.id)
+        dx, dy = spec.get("label_dx", {}).get(c.id, 0.0), spec.get("label_dy", {}).get(c.id, 0.0)
+        if tile:
+            # In ink on the tile: above the port unless the tile says where.
+            ax, ay = tile.get("name_at", (0.0, -4.7))
+            out.append(Text(c.x + ax + dx, c.y + ay + dy, label, tile.get("name_size", size or 2.0), "ink", "bold",
+                            "middle", 0.25, what))
+            continue
+        at = spec.get("label_at", {}).get(c.id, "above")
+        if at == "face":
+            if c.id not in faces:
+                sys.exit(f'{name}: {c.id} is labelled at "face" but has no face')
+            size = size or 2.3
+            out.append(Text(c.x + dx, c.y + faces[c.id]["r"] - 2.0 + dy, label, size, "ink", "bold", "middle",
+                            0.6, what))
+            continue
+        size = size or 2.0
+        colour = spec.get("label_colour", {}).get(c.id, LABEL_COLOUR[c.kind])
+        weight = "bold" if colour == "ink" else "normal"
+        reach = edge_radius(spec, c) + spec.get("label_gap", {}).get(c.id, 1.2)
+        cap = cap_height(size, weight)
+        if at == "above":
+            x, y, anchor = c.x, c.y - reach, "middle"
+        elif at == "below":
+            x, y, anchor = c.x, c.y + reach + cap, "middle"
+        elif at == "right":
+            x, y, anchor = c.x + reach, c.y + cap / 2, "start"
+        elif at == "left":
+            x, y, anchor = c.x - reach, c.y + cap / 2, "end"
+        else:
+            sys.exit(f'{name}: {c.id} is labelled at {at!r}; use "above", "below", "left", "right" or "face"')
+        out.append(Text(x + dx, y + dy, label, size, colour, weight, anchor, 0.25, what))
+
+    for note in spec.get("notes", []):
+        x, y, s, size, colour = note[:5]
+        anchor = note[5] if len(note) > 5 else "middle"
+        out.append(Text(x, y, s, size, colour, "bold" if colour == "ink" else "normal", anchor, 0.25,
+                        f'note "{s}"'))
+
+    # Numerals under a screen's pixel ruler.
+    for sname, sx, sy, sw, sh in spec.get("screens", []):
+        ruler = spec.get("rulers", {}).get(sname)
+        if ruler and ruler.get("numerals"):
+            y = sy + sh + SCREEN_BEZEL + 0.4 + 1.3 + 0.7 + cap_height(1.4)
+            for px in range(0, round(sw / ruler["px"]) + 1, 32):
+                out.append(Text(sx + px * ruler["px"], y, str(px), 1.4, "dim", "normal", "middle", 0.0,
+                                f'numeral "{px}" under SCREEN_{sname}'))
+    return out
+
+
+# --- Checks. Each fails the build with a message naming the parts. ---
+
+def check_references(name, spec):
+    ids = {c.id for c in comps_of(name, spec)}
+    for key in ("sizes", "faces", "label_at", "label_colour", "label_size", "label_gap", "label_dx", "label_dy",
+                "preview"):
+        for ref in spec.get(key, {}):
+            if ref not in ids:
+                sys.exit(f"{name}: `{key}` names {ref}, which is not a component")
+    screens = {s[0] for s in spec.get("screens", [])}
+    for ref in spec.get("rulers", {}):
+        if ref not in screens:
+            sys.exit(f"{name}: `rulers` names {ref}, which is not a screen")
+    for tile in spec.get("tiles", []):
+        for key in ("port", "light"):
+            if key in tile and tile[key] not in ids:
+                sys.exit(f"{name}: a tile names {tile[key]}, which is not a component")
+    for colours in (spec.get("label_colour", {}).values(), (n[4] for n in spec.get("notes", []))):
+        for colour in colours:
+            if colour not in ("ivory", "dim", "brass", "ink"):
+                sys.exit(f'{name}: lettering is "ivory", "dim", "brass" or "ink", not {colour!r}')
+
+
+def check_faces(name, spec):
+    """A component is either on a dial face, clear of its rim, or off it,
+    clear of its bezel; and faces keep clear of each other."""
+    comps = comps_of(name, spec)
+    by = {c.id: c for c in comps}
+    faces = list(spec.get("faces", {}).items())
+    for i, (fid, face) in enumerate(faces):
+        f = by[fid]
+        if face_tick_radius(face, f) + 1.7 > face["r"]:
+            sys.exit(f"{name}: the face of {fid} (radius {face['r']}) is too small for its scale")
+        for c in comps:
+            d = math.hypot(c.x - f.x, c.y - f.y)
+            on = d + c.r + CLEARANCE <= face["r"]
+            off = d - c.r - CLEARANCE >= face_edge(face)
+            if c.id != fid and not on and not off:
+                sys.exit(f"{name}: {c.id} straddles the bezel of {fid}'s dial face")
+        for oid, other in faces[i + 1:]:
+            o = by[oid]
+            gap = math.hypot(o.x - f.x, o.y - f.y) - face_edge(face) - face_edge(other)
+            if gap < CLEARANCE:
+                sys.exit(f"{name}: the dial faces of {fid} and {oid} are {gap:.2f} mm apart (need {CLEARANCE})")
+
+
+def check_tiles(name, spec):
+    """A tile holds its port (and its light, if it names one), stays on the
+    panel, and keeps clear of every other component and tile."""
+    comps = comps_of(name, spec)
+    by = {c.id: c for c in comps}
+    w = spec["hp"] * HP
+    tiles = [(t, tile_rect(t, by[t["port"]])) for t in spec.get("tiles", [])]
+    for i, (tile, rect) in enumerate(tiles):
+        port = tile["port"]
+        if rect[0] < 0 or rect[1] < 0 or rect[2] > w or rect[3] > PANEL_H:
+            sys.exit(f"{name}: the tile of {port} is outside the panel")
+        own = {port, tile.get("light")}
+        for c in comps:
+            if c.id in own:
+                inside = (rect[0] <= c.x - c.r and c.x + c.r <= rect[2]
+                          and rect[1] <= c.y - c.r and c.y + c.r <= rect[3])
+                if not inside:
+                    sys.exit(f"{name}: {c.id} does not fit on the tile of {port}")
+            elif point_rect_distance(c.x, c.y, rect) < c.r + CLEARANCE:
+                sys.exit(f"{name}: {c.id} overlaps the tile of {port}")
+        for other, orect in tiles[i + 1:]:
+            if rect_distance(rect, orect) < CLEARANCE:
+                sys.exit(f"{name}: the tiles of {port} and {other['port']} overlap")
+
+
+def check_traces(name, spec):
+    """A trace keeps CLEARANCE from every control it does not belong to (to
+    the bezel, for one on a dial face), and no two traces cross or touch."""
+    comps = comps_of(name, spec)
+    drawn = []
+    for trace in spec.get("traces", []):
+        label = trace_name(trace)
+        centres = trace_centres(name, spec, trace)
+        own = {n for n in trace if isinstance(n, str)}
+        for a, b in zip(centres, centres[1:]):
+            for c in comps:
+                if c.id in own:
+                    continue
+                gap = point_segment_distance((c.x, c.y), a, b) - edge_radius(spec, c)
+                if gap < CLEARANCE:
+                    sys.exit(f"{name}: {label} passes {gap:.2f} mm from {c.id}, which it does not belong to "
+                             f"(need {CLEARANCE})")
+        drawn.append((label, trace_points(name, spec, trace)))
+    for i, (la, pa) in enumerate(drawn):
+        for lb, pb in drawn[i + 1:]:
+            for a, b in zip(pa, pa[1:]):
+                for c, d in zip(pb, pb[1:]):
+                    if segment_distance(a, b, c, d) < CLEARANCE:
+                        sys.exit(f"{name}: {la} and {lb} cross or touch")
+
+
+def check_foot(name, spec):
+    """The foot mark fits the panel and overlaps no component, face or tile."""
+    comps = comps_of(name, spec)
+    by = {c.id: c for c in comps}
+    box = text_box(foot_mark(spec))
+    if box[0] < 1.0 or box[2] > spec["hp"] * HP - 1.0:
+        sys.exit(f"{name}: the foot mark does not fit the panel's width; shorten it with `mark`")
+    for c in comps:
+        if point_rect_distance(c.x, c.y, box) < edge_radius(spec, c) + CLEARANCE:
+            sys.exit(f"{name}: the foot mark overlaps {c.id}")
+    for tile in spec.get("tiles", []):
+        if rect_distance(box, tile_rect(tile, by[tile["port"]])) < CLEARANCE:
+            sys.exit(f"{name}: the foot mark overlaps the tile of {tile['port']}")
+
+
+def check_labels(name, spec):
+    """No lettering overlaps a component or leaves the panel."""
+    comps = comps_of(name, spec)
+    w = spec["hp"] * HP
+    for t in instrument_texts(name, spec):
+        box = text_box(t)
+        if box[0] < 0 or box[1] < 0 or box[2] > w or box[3] > PANEL_H:
+            sys.exit(f"{name}: {t.what} runs off the panel")
+        for c in comps:
+            if point_rect_distance(c.x, c.y, box) < c.r + LABEL_CLEARANCE:
+                sys.exit(f"{name}: {t.what} overlaps {c.id}")
+
+
+def check_panel(name, spec):
+    """Every layout check for a panel, in either look."""
+    if is_instrument(spec):
+        check_references(name, spec)
+    check_clearance(name, spec)
+    check_screens(name, spec)
+    if is_instrument(spec):
+        check_faces(name, spec)
+        check_tiles(name, spec)
+        check_traces(name, spec)
+        check_foot(name, spec)
+        check_labels(name, spec)
+
+
+# --- Drawing the panel ---
+
+def stroke_path(segments, colour, width, extra=""):
+    """One <path> of separate straight strokes: nanosvg draws no dashes, so
+    every tick of a scale or a knurl is its own segment."""
+    d = " ".join(f"M{num(x1)} {num(y1)}L{num(x2)} {num(y2)}" for x1, y1, x2, y2 in segments)
+    return f'<path d="{d}" fill="none" stroke="{colour}" stroke-width="{num(width)}"{extra}/>'
+
+
+def limb_svg(limb, pal):
+    """A brass arc graduated on its outer side, like a sextant's limb."""
+    (cx, cy), r = limb["c"], limb["r"]
+    a0, a1 = limb["a0"], limb["a1"]
+    if not 0 < a1 - a0 < 360:
+        sys.exit(f"a limb runs from a0 to a larger a1, less than a full turn (got {a0} to {a1})")
+    x0, y0 = arc_point(cx, cy, r, a0)
+    x1, y1 = arc_point(cx, cy, r, a1)
+    # Increasing angle runs anticlockwise on screen: SVG sweep flag 0.
+    out = [f'<path d="M{num(x0)} {num(y0)}A{num(r)} {num(r)} 0 {1 if a1 - a0 > 180 else 0} 0 {num(x1)} {num(y1)}" '
+           f'fill="none" stroke="{pal["brass"]}" stroke-width="0.35"/>']
+    for major, length, width in ((False, limb.get("minor_len", 1.0), 0.14), (True, limb.get("major_len", 2.0), 0.25)):
+        segs = [arc_point(cx, cy, r, deg) + arc_point(cx, cy, r + length, deg)
+                for deg, is_major in limb_ticks(limb) if is_major == major]
+        if segs:
+            out.append(stroke_path(segs, pal["brass"], width))
+    return out
+
+
+def face_svg(face, c, pal):
+    """An enamel dial face: ivory disc, brass bezel, graduations in ink."""
+    out = [f'<circle cx="{num(c.x)}" cy="{num(c.y)}" r="{num(face["r"])}" fill="{pal["ivory"]}" '
+           f'stroke="{pal["brass"]}" stroke-width="{num(face_bezel(face))}"/>']
+    r = face_tick_radius(face, c)
+    for major, length, width in ((False, face.get("minor_len", 0.9), 0.16), (True, face.get("major_len", 1.7), 0.28)):
+        segs = [dial_point(c.x, c.y, r, deg) + dial_point(c.x, c.y, r + length, deg)
+                for deg, is_major in face_ticks(face) if is_major == major]
+        if segs:
+            out.append(stroke_path(segs, pal["ink"], width))
+    return out
+
+
+def screen_svg(sname, x, y, w, h, ruler, pal):
+    """A window of dark glass in a brass bezel; the bezel lies outside the
+    rectangle the module draws in. With a ruler: a tick every 8 pixels,
+    longer every 32, outside the bezel on the left and/or under it."""
+    b = SCREEN_BEZEL
+    out = [f'<rect x="{num(x - b / 2)}" y="{num(y - b / 2)}" width="{num(w + b)}" height="{num(h + b)}" '
+           f'rx="0.8" fill="{pal["glass"]}" stroke="{pal["brass"]}" stroke-width="{num(b)}"/>']
+    if ruler:
+        px, off = ruler["px"], b + 0.4
+        for major, length, width in ((False, 0.6, 0.15), (True, 1.3, 0.25)):
+            segs = []
+            if "b" in ruler.get("sides", "lb"):
+                segs += [(x + i * px, y + h + off, x + i * px, y + h + off + length)
+                         for i in range(0, round(w / px) + 1, 8) if (i % 32 == 0) == major]
+            if "l" in ruler.get("sides", "lb"):
+                segs += [(x - off, y + i * px, x - off - length, y + i * px)
+                         for i in range(0, round(h / px) + 1, 8) if (i % 32 == 0) == major]
+            if segs:
+                out.append(stroke_path(segs, pal["brass"], width))
+    return out
+
+
+def instrument_svg(name, spec, pal):
+    w = spec["hp"] * HP
+    comps = comps_of(name, spec)
+    by = {c.id: c for c in comps}
+    out = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" '
+        f'width="{w:.2f}mm" height="{PANEL_H}mm" viewBox="0 0 {w:.2f} {PANEL_H}">',
+        f'<rect width="{w:.2f}" height="{PANEL_H}" fill="{pal["ground"]}"/>',
+    ]
+    # Construction: faint geometry behind everything.
+    for cx, cy, r in spec.get("circles", []):
+        out.append(f'<circle cx="{num(cx)}" cy="{num(cy)}" r="{num(r)}" fill="none" '
+                   f'stroke="{pal["construction"]}" stroke-width="0.25"/>')
+    if spec.get("radii"):
+        out.append(stroke_path(spec["radii"], pal["construction"], 0.25))
+    for limb in spec.get("limbs", []):
+        out += limb_svg(limb, pal)
+    for x, y in spec.get("origins", []):
+        out.append(stroke_path([(x - 1.6, y, x + 1.6, y), (x, y - 1.6, x, y + 1.6)], pal["brass"], 0.2))
+        out.append(f'<circle cx="{num(x)}" cy="{num(y)}" r="0.8" fill="none" stroke="{pal["brass"]}" '
+                   f'stroke-width="0.2"/>')
+    # Signal traces, under the controls.
+    for trace in spec.get("traces", []):
+        d = "L".join(f"{num(x)} {num(y)}" for x, y in trace_points(name, spec, trace))
+        out.append(f'<path d="M{d}" fill="none" stroke="{pal["dim"]}" stroke-width="0.25" '
+                   f'stroke-linejoin="round"/>')
+    # A seat of bare ground under each control that is not on ivory: it
+    # masks the limb, traces and construction lines passing beneath, since a
+    # knurled ring is not solid.
+    for c in comps:
+        if not on_face_or_tile(spec, by, c):
+            out.append(f'<circle cx="{num(c.x)}" cy="{num(c.y)}" r="{num(c.r + CLEARANCE)}" fill="{pal["ground"]}"/>')
+    for sname, sx, sy, sw, sh in spec.get("screens", []):
+        out += screen_svg(sname, sx, sy, sw, sh, spec.get("rulers", {}).get(sname), pal)
+    for fid, face in spec.get("faces", {}).items():
+        out += face_svg(face, by[fid], pal)
+    for tile in spec.get("tiles", []):
+        x0, y0, x1, y1 = tile_rect(tile, by[tile["port"]])
+        out.append(f'<rect x="{num(x0)}" y="{num(y0)}" width="{num(x1 - x0)}" height="{num(y1 - y0)}" rx="0.7" '
+                   f'fill="{pal["ivory"]}"/>')
+    for t in instrument_texts(name, spec) + [foot_mark(spec)]:
+        out.append(text_svg(t, pal))
+    # Placeholders for helper.py createmodule; hidden so they never render.
+    out.append('<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">')
+    for c in comps:
+        out.append(f'<circle id="{c.kind}-{c.name}" cx="{c.x}" cy="{c.y}" r="1" fill="{KIND_COLOUR[c.kind]}"/>')
+    out.append('</g>')
+    out.append('</svg>')
+    return "\n".join(out) + "\n"
+
+
+# --- Component artwork (res/components/), drawn by the widgets in
+# src/widgets.hpp. A knob is two files: <Name>_bg.svg stays still, <Name>.svg
+# turns with the param. ---
+
+# Art name: (size, knurl colour, index colour or None, index width, centre dot).
+KNOBS = {
+    "HeroKnob": ("hero", "brass", "brass", 0.5, True),
+    "FaceKnob": ("face", "brass", "brass", 0.5, True),
+    "LimbKnob": ("limb", "brass", "brass", 0.5, True),
+    "Atten": ("atten", "dim", "ivory", 0.4, False),
+    "Encoder": ("enc", "brass", None, 0.0, True),
+}
+KNURL_PITCH = 0.65   # mm from tick to tick round the knurl
+# The encoder turns 1/24 of a turn per detent and has no index: with 8 more
+# ticks than a multiple of 24, each detent visibly shifts its knurl a third
+# of a tick, in the direction it was turned.
+KNURL_TICKS = {"Encoder": 56}
+# Size -> the artwork a component of that size is drawn with, bottom first;
+# of a knob's two layers the second turns.
+ART_LAYERS = {
+    "hero": ("HeroKnob_bg", "HeroKnob"), "face": ("FaceKnob_bg", "FaceKnob"),
+    "limb": ("LimbKnob_bg", "LimbKnob"), "atten": ("Atten_bg", "Atten"), "enc": ("Encoder_bg", "Encoder"),
+    "port": ("BrassPort",), "toggle": ("Toggle2_1",), "cap": ("Cap",), "jewel": ("JewelSeat",),
+}
+# Artwork that is the same on dark panels: it is light, not paint.
+UNTHEMED_ART = ("Cap_lit",)
+
+
+def component_art(pal):
+    """Art name -> (width mm, height mm, [SVG elements]) in one palette."""
+    art = {}
+
+    def disc(c, r, fill):
+        return f'<circle cx="{num(c)}" cy="{num(c)}" r="{num(r)}" fill="{fill}"/>'
+
+    for art_name, (size, knurl, index, index_w, dot) in KNOBS.items():
+        radius = RADII[size]
+        c, d = radius, 2 * radius
+        body, ring = radius - 0.7, radius - 0.25    # the knurl is 0.5 mm deep
+        art[art_name + "_bg"] = (d, d, [
+            disc(c, body, pal["knob"]),
+            f'<circle cx="{num(c)}" cy="{num(c)}" r="{num(0.7 * body)}" fill="none" stroke="{pal["knob_ring"]}" '
+            f'stroke-width="0.25"/>'])
+        count = KNURL_TICKS.get(art_name, round(2 * math.pi * ring / KNURL_PITCH))
+        ticks = [dial_point(c, c, ring - 0.25, 360 * i / count) + dial_point(c, c, ring + 0.25, 360 * i / count)
+                 for i in range(count)]
+        turning = [stroke_path(ticks, pal[knurl], 0.54 * 2 * math.pi * ring / count, ' data-part="knurl"')]
+        if index:
+            turning.append(f'<path d="M{num(c)} {num(c - 0.35 * body)}L{num(c)} {num(c - 0.92 * body)}" fill="none" '
+                           f'stroke="{pal[index]}" stroke-width="{num(index_w)}" stroke-linecap="round"/>')
+        if dot:
+            turning.append(disc(c, 0.45, pal["brass"]))
+        art[art_name] = (d, d, turning)
+
+    r = RADII["port"]
+    art["BrassPort"] = (2 * r, 2 * r, [disc(r, r, pal["brass"]), disc(r, 0.6875 * r, pal["brass_shade"]),
+                                       disc(r, 0.4 * r, pal["hole"])])
+
+    # Two-position switch: frame 0 with the handle down, frame 1 up.
+    for frame, top in ((0, TOGGLE_H - 0.675 - 2.6), (1, 0.675)):
+        art[f"Toggle2_{frame}"] = (TOGGLE_W, TOGGLE_H, [
+            f'<rect x="0.125" y="0.125" width="{num(TOGGLE_W - 0.25)}" height="{num(TOGGLE_H - 0.25)}" rx="0.5" '
+            f'fill="{pal["knob"]}" stroke="{pal["brass"]}" stroke-width="0.25"/>',
+            f'<rect x="{num(TOGGLE_W / 2 - 1.125)}" y="{num(top)}" width="2.25" height="2.6" rx="0.3" '
+            f'fill="{pal["ivory"]}"/>'])
+
+    # Button: a dark body in a brass rim, and its cap. Cap_lit is drawn over
+    # Cap while the button is lit.
+    r = RADII["cap"]
+    art["Cap"] = (2 * r, 2 * r, [
+        f'<circle cx="{num(r)}" cy="{num(r)}" r="{num(r - 0.15)}" fill="{pal["knob"]}" stroke="{pal["brass"]}" '
+        f'stroke-width="0.3"/>',
+        disc(r, 2.0, pal["cap"])])
+    art["Cap_lit"] = (2 * r, 2 * r, [
+        disc(r, 2.0, pal["signal"]),
+        f'<circle cx="{num(r - 0.6)}" cy="{num(r - 0.6)}" r="0.5" fill="{pal["glint"]}"/>'])
+
+    # Light: a dark seat holding an unlit lens; JewelLight draws the lit one.
+    r = RADII["jewel"]
+    art["JewelSeat"] = (2 * r, 2 * r, [disc(r, r, pal["ink"]), disc(r, 0.68, pal["unlit"])])
+    return art
+
+
+def art_svg(w, h, elements):
+    return (f'<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" '
+            f'width="{num(w)}mm" height="{num(h)}mm" viewBox="0 0 {num(w)} {num(h)}">\n'
+            + "\n".join(elements) + "\n</svg>\n")
+
+
+def component_files():
+    """File name -> SVG for everything in res/components/."""
+    files = dict(trim_svgs())
+    for suffix, pal in INSTRUMENT.items():
+        for art_name, (w, h, elements) in component_art(pal).items():
+            if suffix and art_name in UNTHEMED_ART:
+                continue
+            files[f"{art_name}{suffix}.svg"] = art_svg(w, h, elements)
+    return files
+
+
+def preview_svg(name, spec, suffix):
+    """The panel with its components drawn in place, as Rack will show it:
+    for looking at a layout without Rack. `preview` in the description turns
+    a knob, lights a cap or flips a switch."""
+    pal = INSTRUMENT[suffix]
+    art = component_art(pal)
+    parts = []
+    for c in comps_of(name, spec):
+        state = spec.get("preview", {}).get(c.id, {})
+        layers = list(ART_LAYERS[c.size])
+        if c.size == "toggle":
+            layers = [f'Toggle2_{state.get("frame", 1)}']
+        if c.size == "cap" and state.get("lit"):
+            layers.append("Cap_lit")
+        for i, layer in enumerate(layers):
+            w, h, elements = art[layer]
+            move = f"translate({num(c.x - w / 2)} {num(c.y - h / 2)})"
+            if layer in KNOBS and state.get("turn"):
+                move += f" rotate({num(state['turn'])} {num(w / 2)} {num(h / 2)})"
+            parts.append(f'<g transform="{move}">' + "".join(elements) + "</g>")
+        if c.size == "jewel" and state.get("lit"):
+            parts.append(f'<circle cx="{num(c.x)}" cy="{num(c.y)}" r="0.68" fill="{pal["signal"]}"/>')
+    hidden = '<g inkscape:groupmode="layer" inkscape:label="components"'
+    svg = instrument_svg(name, spec, pal)
+    return svg.replace(hidden, "\n".join(parts) + "\n" + hidden)
+
+
+# --- The specimen: not a module. One panel using every Instrument
+# primitive and every component at each size, to look at (`make specimen`
+# writes it to build/specimen/, never to res/). ---
+
+_SP = (52.0, 6.0)                 # the pivot its arcs are struck from
+_SP_COL = [8.0, 19.0, 30.0, 41.0]
+_SP_NAMES = ["FM", "PW", "PHASE", "SKEW"]
+
+
+def _on(r, x):
+    return round(column_on_arc(_SP[0], _SP[1], r, x), 2)
+
+
+SPECIMEN = dict(
+    look="instrument",
+    dir="specimen",
+    hp=20,
+    title="SPECIMEN",
+    subtitle="EVERY PART OF THE INSTRUMENT LOOK",
+    components=[
+        ("param", "RATE", 22.0, 36.0, "RATE"),
+        ("light", "RATE", 22.0, 47.2, None),
+        ("param", "SPREAD", 51.0, 27.0, "SPREAD"),
+        ("widget", "ENC", 77.0, 36.0, "ENCODER"),
+        ("param", "PUSH", 89.5, 47.0, "PUSH"),
+        ("param", "OFFSET", 53.0, 53.0, "BI/UNI"),
+        ("param", "ONESHOT", 64.0, 55.0, "1-SHOT"),
+    ]
+    # Three knobs where their columns meet the limb; four attenuverters on
+    # the next arc out; their jacks in a row.
+    + [("param", n, x, _on(66, x), n) for n, x in zip(_SP_NAMES[1:], _SP_COL[1:])]
+    + [("param", n + "_ATT", x, _on(78, x), None) for n, x in zip(_SP_NAMES, _SP_COL)]
+    + [("input", n, x, 96.0, None) for n, x in zip(_SP_NAMES, _SP_COL)]
+    + [
+        ("input", "CLOCK", 8.0, 111.0, "CLOCK"),
+        ("input", "RESET", 19.0, 111.0, "RESET"),
+        ("output", "SIN", 30.0, 111.0, "SIN"),
+        ("output", "TRI", 41.0, 111.0, "TRI"),
+        ("input", "TRIG", 62.0, 101.0, "TRIG"),
+        ("light", "TRIG", 68.2, 101.0, None),
+        ("light", "A", 83.2, 101.0, None),
+        ("output", "A", 89.0, 101.0, "A"),
+        ("light", "B", 83.2, 112.0, None),
+        ("output", "B", 89.0, 112.0, "B"),
+    ],
+    sizes={"PARAM_RATE": "hero", "PARAM_SPREAD": "face", "PARAM_OFFSET": "toggle",
+           "PARAM_ONESHOT": "cap", "PARAM_PUSH": "cap"},
+    origins=[_SP],
+    circles=[(_SP[0], _SP[1], r) for r in (78, 90, 102, 114)],
+    radii=[(_SP[0], _SP[1], _SP_COL[1], _on(66, _SP_COL[1])), (_SP[0], _SP[1], _SP_COL[3], _on(66, _SP_COL[3]))],
+    # From off the left edge to the last knob on it.
+    limbs=[dict(c=_SP, r=66, a0=-54, a1=-9.6, step=1, major=5)],
+    faces={
+        "PARAM_RATE": dict(r=16.4, ticks=50, major=5, numerals=list(range(11))),
+        "PARAM_SPREAD": dict(r=7.3, ticks=20, major=5),
+        "WIDGET_ENC": dict(r=10.4, ticks=24, major=6, sweep=360),
+    },
+    tiles=[dict(port="OUTPUT_SIN"), dict(port="OUTPUT_TRI")]
+    + [dict(port=f"OUTPUT_{n}", light=f"LIGHT_{n}", left=11.0, right=5.0, top=4.6, bottom=4.6,
+            name_at=(-8.6, 0.75), name_size=2.1) for n in "AB"],
+    traces=[
+        # Up its column, one elbow, then aimed at the centre of the dial.
+        ["INPUT_FM", "PARAM_FM_ATT", (8.0, 58.0), "PARAM_RATE"],
+        # A push button joined to its encoder.
+        ["PARAM_PUSH", "WIDGET_ENC"],
+    ]
+    # Straight up a column: jack, attenuverter, knob.
+    + [[f"INPUT_{n}", f"PARAM_{n}_ATT", f"PARAM_{n}"] for n in _SP_NAMES[1:]],
+    screens=[("SCOPE", 56.0, 66.0, 41.6, 20.8)],
+    rulers={"SCOPE": dict(px=0.65, sides="lb", numerals=True)},
+    label_at={"PARAM_RATE": "face", "PARAM_SPREAD": "below", "PARAM_PUSH": "below",
+              "LIGHT_TRIG": "right"},
+    label_colour={"PARAM_SPREAD": "dim", "PARAM_PUSH": "dim", "PARAM_OFFSET": "dim", "PARAM_ONESHOT": "dim"},
+    notes=[(10.0, 64.0, "FM", 2.0, "ivory", "start"),
+           (50.5, 100.0, "IVORY", 2.0, "ivory"), (50.5, 104.0, "DIM", 2.0, "dim"),
+           (50.5, 108.0, "BRASS", 2.0, "brass")],
+    preview={"PARAM_RATE": dict(turn=60), "PARAM_PW": dict(turn=-135), "PARAM_PHASE": dict(turn=135),
+             "PARAM_FM_ATT": dict(turn=-90), "PARAM_ONESHOT": dict(lit=True), "LIGHT_RATE": dict(lit=True),
+             "LIGHT_A": dict(lit=True)},
+)
+
+
+# --- Inkscape: text to paths, in the one typeface ---
+
+def instrument_env(root):
+    """The environment Inkscape runs in for an Instrument panel: a private
+    fontconfig file that lists tools/fonts/ and nothing else."""
+    for fname in FONT_FILES.values():
+        if not (FONT_DIR / fname).is_file():
+            sys.exit(f"typeface missing: {FONT_DIR / fname} (tools/fonts/README.md); there is no fallback.")
+    work = root / "build" / "panels"
+    work.mkdir(parents=True, exist_ok=True)
+    conf = work / "fonts.conf"
+    conf.write_text('<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n'
+                    f'  <dir>{escape(str(FONT_DIR))}</dir>\n'
+                    f'  <cachedir>{escape(str(work / "fontcache"))}</cachedir>\n</fontconfig>\n')
+    return dict(os.environ, FONTCONFIG_FILE=str(conf))
+
+
+def check_inkscape_typeface(inkscape, env, root):
+    """Fail unless Inkscape really sets text in D-DIN Condensed, in both
+    weights: the advance of a capital H, measured from two rows of them, must
+    be the typeface's own. A substituted font does not pass."""
+    rows = [(f"{weight}{count}", weight, count) for weight in FONT_FILES for count in (8, 16)]
+    probe = root / "build" / "panels" / "probe.svg"
+    probe.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="600" viewBox="0 0 2000 600">\n'
+                     + "".join(f'<text id="{key}" x="10" y="{120 * (i + 1)}" font-family="{FONT_INSTRUMENT}" '
+                               f'font-size="100" font-weight="{weight}">{"H" * count}</text>\n'
+                               for i, (key, weight, count) in enumerate(rows)) + '</svg>\n')
+    done = subprocess.run([inkscape, "--query-all", str(probe)], env=env, check=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, universal_newlines=True)
+    widths = {}
+    for line in done.stdout.splitlines():
+        cells = line.split(",")
+        if len(cells) == 5:
+            widths[cells[0]] = float(cells[3])
+    for weight in FONT_FILES:
+        face = typeface(weight)
+        want = 100.0 * face["advance"]["H"] / face["upm"]
+        try:
+            got = (widths[f"{weight}16"] - widths[f"{weight}8"]) / 8
+        except KeyError:
+            sys.exit(f"could not measure Inkscape's lettering ({inkscape} --query-all)")
+        if abs(got - want) > 0.01 * want:
+            sys.exit(f"Inkscape is not setting text in {FONT_INSTRUMENT} ({weight}): a capital H advances "
+                     f"{got:.2f} where the typeface's is {want:.2f}. Refusing to convert with a substitute.")
+
+
+def text_to_path(inkscape, src, out, env=None):
+    out.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run([inkscape, str(src), "--export-text-to-path", "--export-plain-svg",
+                    f"--export-filename={out}"], env=env, check=True)
+
+
+def write_preview(root, name, spec, out_dir, inkscape):
+    """The panel's two variants as Rack loads them (if Inkscape is given),
+    its layout header, and previews with the components in place: SVG, and
+    PNG at Rack's 100 % and 300 % zoom."""
+    check_panel(name, spec)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    env = instrument_env(root)
+    if inkscape:
+        check_inkscape_typeface(inkscape, env, root)
+    for suffix, pal in INSTRUMENT.items():
+        panel = out_dir / f"{name}{suffix}.svg"
+        panel.write_text(panel_svg(name, spec, pal))
+        preview = out_dir / f"{name}{suffix}-preview.svg"
+        preview.write_text(preview_svg(name, spec, suffix))
+        (out_dir / f"{name}Layout.hpp").write_text(layout_hpp(name, spec))
+        if inkscape:
+            text_to_path(inkscape, panel, out_dir / "paths" / panel.name, env)
+            for zoom in (100, 300):
+                subprocess.run([inkscape, str(preview), "--export-type=png", f"--export-dpi={0.75 * zoom}",
+                                f"--export-filename={out_dir / f'{name}{suffix}-{zoom}.png'}"],
+                               env=env, check=True, stderr=subprocess.DEVNULL)
+    print(f"drew {name} in {out_dir}")
+
+
 def main():
-    root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent)
+    ap = argparse.ArgumentParser(description="Generate RKA's panels, layout headers, colours and components.")
+    ap.add_argument("root", nargs="?", default=str(Path(__file__).resolve().parent.parent), help="repo dir")
+    ap.add_argument("--inkscape", metavar="PATH", help="also convert text to paths with this Inkscape, into res/")
+    ap.add_argument("--specimen", action="store_true", help="only draw the specimen panel, to build/specimen/")
+    ap.add_argument("--preview", action="store_true",
+                    help="only draw each Instrument module with its components in place, to build/preview/")
+    args = ap.parse_args()
+    root = Path(args.root)
+
+    if args.specimen:
+        write_preview(root, "Specimen", SPECIMEN, root / "build" / "specimen", args.inkscape)
+        return
+    if args.preview:
+        for name, spec in PANELS.items():
+            if is_instrument(spec):
+                write_preview(root, name, spec, root / "build" / "preview", args.inkscape)
+        return
+
     (root / "src" / "RkaTheme.hpp").write_text(theme_hpp())
-    trim_svgs(root)
+    components = root / "res" / "components"
+    components.mkdir(parents=True, exist_ok=True)
+    for fname, svg in component_files().items():
+        (components / fname).write_text(svg)
     for name, spec in PANELS.items():
-        check_clearance(name, spec)
-        check_screens(name, spec)
+        check_panel(name, spec)
         svg_dir = root / "res-src" / spec["dir"]
         svg_dir.mkdir(parents=True, exist_ok=True)
-        for suffix, theme in THEMES.items():
+        for suffix, theme in themes_for(spec).items():
             (svg_dir / f"{name}{suffix}.svg").write_text(panel_svg(name, spec, theme))
         (root / "src" / spec["dir"] / f"{name}Layout.hpp").write_text(layout_hpp(name, spec))
         print(f"generated {name}")
+
+    if args.inkscape:
+        # Nightglow panels go through Inkscape as they always have (its own
+        # fonts); Instrument panels see tools/fonts/ and nothing else.
+        env = None
+        for name, spec in PANELS.items():
+            if is_instrument(spec) and env is None:
+                env = instrument_env(root)
+                check_inkscape_typeface(args.inkscape, env, root)
+            for suffix in themes_for(spec):
+                text_to_path(args.inkscape, root / "res-src" / spec["dir"] / f"{name}{suffix}.svg",
+                             root / "res" / spec["dir"] / f"{name}{suffix}.svg",
+                             env if is_instrument(spec) else None)
 
 
 if __name__ == "__main__":

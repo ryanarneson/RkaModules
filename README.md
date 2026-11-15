@@ -57,13 +57,16 @@ src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   firmware/              vendored firmware; local changes in CHANGES.md
   shim/                  Arduino and Teensy stand-ins
   bench/bench_core.cpp   CPU cost per app (make shoal-bench)
-res/components/          the plugin's own knob SVGs (the trim), generated
+res/components/          the plugin's own knobs, port, switch, button cap and
+                         light seat as SVGs, generated
 res/<module>/            final panels, text as paths (what Rack loads)
 res-src/<module>/        generated SVGs with live text (input to Inkscape)
 docs/<module>/           the module's manual and panel image
 docs/specs/, docs/plans/ design docs and implementation plans
 tools/gen_panels.py      panel layouts for every module: the one source
                          for SVGs and positions
+tools/test_gen_panels.py its tests (geometry, layout checks, stale outputs)
+tools/fonts/             D-DIN Condensed, the Instrument panels' typeface
 packages/                release packages from tools/cross_build.sh and
                          tools/mac_dist.sh
 ```
@@ -80,6 +83,8 @@ make test         # unit-test the DSP cores (no Rack needed)
 make install      # package and install into your Rack user folder
 make smoke        # load in a real headless Rack, screenshot each module
 make panels       # regenerate panels after editing tools/gen_panels.py
+make panels-test  # the generator's own tests (part of make test)
+make specimen     # draw the Instrument look's specimen to build/specimen/
 make shoal-bench  # Shoal: CPU per app, fails above 2 % of a core
 make shoal-globals  # Shoal: the firmware object holds no writable globals
 tools/cross_build.sh   # Windows + Linux packages via Docker -> packages/
@@ -112,6 +117,26 @@ stock ones so modules match. `rka::Trim` is the plugin's own 4.6 mm
 attenuverter; `gen_panels.py` draws its SVGs into `res/components/` from
 the palette, and its `RADII` table keeps components clear of each other
 and draws ticks edge to edge.
+
+Nightglow is being replaced by "Instrument" (brass and ivory on near-black;
+`docs/specs/2026-11-15-instrument-look-design.md`), one module at a time. A
+panel chooses with `look="instrument"` in its description; until every
+module has moved, both looks live in the generator and an unconverted module
+regenerates byte for byte. The Instrument language (limb, enamel faces,
+output tiles, signal traces, screen windows, the nameplate and foot mark) is
+documented at "The Instrument look" in `tools/gen_panels.py`, and its
+`SPECIMEN` panel uses every part: `make specimen` draws it, components in
+place, to `build/specimen/` as SVG and as PNG at Rack's 100 % and 300 %
+zoom. Its components are `rka::HeroKnob`, `rka::FaceKnob`, `rka::LimbKnob`,
+`rka::Atten`, `rka::KnurlEncoder`, `rka::BrassPort`, `rka::Toggle2`,
+`rka::CapButton`, `rka::CapLatch` and `rka::JewelLight`, with artwork in
+`res/components/` in normal and dark-panel variants. Instrument panels are
+lettered in D-DIN Condensed only, from `tools/fonts/`: `make panels` shows
+Inkscape that folder and nothing else, and stops if Inkscape would set the
+text in any other face. Besides component clearance the generator fails a
+layout whose trace grazes a control it does not belong to, whose traces
+cross, whose foot mark overlaps a component or tile, or whose lettering
+overlaps a component.
 
 ### Changing a panel
 
