@@ -129,11 +129,13 @@ uint16_t MultistageEnvelope::ProcessSingleSample(uint8_t control) {
       state_mask_ |= ENV_EOC;    
   }
   
-  // SHOAL: from segment 8 the walk (see level_at) reads time_[8..] and
-  // time_multiplier_[8..], which run into shape_ (an enum array, whose size
-  // and so layout the Teensy build need not share) and then out of the
-  // object: no reproducible Teensy result. The envelope is taken as finished
-  // there, as the type it was left by had finished.
+  // SHOAL: at segment 8 the Teensy does not finish: it ramps slowly from
+  // time_[0] toward time_[1] (level_[8], level_[9]), timed by in-object
+  // neighbours past time_ and time_multiplier_, and within a few segments
+  // walks through shape_ (an enum array, whose size the Teensy build need not
+  // share) into unpredictable memory. Shoal deliberately deviates: the
+  // envelope is taken as finished here and restarts on the next gate. This
+  // forced finish does not set ENV_EOC.
   if (segment_ >= static_cast<int16_t>(kMaxNumSegments))
     segment_ = num_segments_;
 

@@ -1,9 +1,5 @@
 # Changelog
 
-## Unreleased
-
-- Shoal: firmware core (no module yet).
-
 ## 2.0.0 (unreleased)
 
 - New module: **Sway**, an 18 HP polyphonic LFO:
@@ -37,3 +33,4 @@
 - "Nightglow" look shared by all modules: navy panels, glowing cards,
   colour-coded outputs, white knobs, and the plugin's own small
   attenuverter trim; panels can carry glowing rings.
+- Shoal: firmware core (no module yet).

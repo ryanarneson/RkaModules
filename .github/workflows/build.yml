@@ -21,14 +21,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # plugin.mk (and so the Rack SDK) isn't needed for the tests, so build
-      # them directly rather than through the Makefile.
-      - name: DSP unit tests
-        run: |
-          for t in src/*/test_*.cpp; do
-            g++ -std=c++17 -O2 -Wall -Wextra -Werror -Isrc -I"$(dirname "$t")" "$t" -o "${t%.cpp}"
-            "./${t%.cpp}"
-          done
+      # The test rules live in tests.mk, which needs neither plugin.mk nor
+      # the Rack SDK; the Shoal tests run under ASan/UBSan with the
+      # Makefile's own flags.
+      - name: Unit tests
+        run: make -f tests.mk test TEST_WERROR=-Werror CXX=g++
 
   build:
     name: ${{ matrix.platform }}

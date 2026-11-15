@@ -281,6 +281,71 @@ void testResetToDefaults() {
 	CHECK(b.restore(img.data()) && snapshot(b) == freshSettings, "reset core saves defaults");
 }
 
+// Everything a patch could have changed: every app setting, the user scales,
+// patterns and chords, a running sequencer, and a saved EEPROM image.
+void dirty(Core& c) {
+	scramble(c, 8);
+	for (int slot = 0; slot < CoreTest::userScaleSlots(); slot++) {
+		CoreTest::userScaleNumNotes(c, slot) = 3 + slot;
+		for (int n = 0; n < 16; n++)
+			CoreTest::userScaleNote(c, slot, n) = (int16_t) (1234 + slot + n);
+	}
+	for (int slot = 0; slot < CoreTest::userPatternSlots(); slot++)
+		for (int n = 0; n < 16; n++)
+			CoreTest::userPatternNote(c, slot, n) = (int16_t) (1234 - 17 * n + slot);
+	for (int slot = 0; slot < CoreTest::userChordSlots(); slot++)
+		for (int f = 0; f < 5; f++)
+			CoreTest::userChordField(c, slot, f) = (int8_t) ((slot + f) % 3 + 1);
+	for (int k = 0; k < 5; k++) {
+		c.setCv(0, 0.5f * k);
+		run(c, 0.01);
+		pulse(c, 0);
+	}
+	std::vector<uint8_t> img(kImage);
+	c.save(img.data());
+}
+
+// After resetToDefaults, or a rejected restore, the core saves exactly what a
+// fresh core saves: no user data, setting or storage state carries over.
+void testResetSavesAFreshImage() {
+	Core fresh;
+	std::vector<uint8_t> want(kImage);
+	fresh.save(want.data());
+	std::vector<uint8_t> bad(kImage, 0x5a);
+	for (int how = 0; how < 2; how++) {
+		const char* what = how == 0 ? "reset" : "rejected restore";
+		Core c;
+		dirty(c);
+		if (how == 0)
+			c.resetToDefaults();
+		else
+			CHECK(!c.restore(bad.data()), "a garbage image is rejected");
+		std::vector<uint8_t> got(kImage);
+		c.save(got.data());
+		int first = -1;
+		for (int i = 0; i < kImage && first < 0; i++)
+			if (got[i] != want[i])
+				first = i;
+		CHECK(first < 0, "%s: image differs from a fresh core's at byte %d", what, first);
+		CHECK(CoreTest::userPatternNote(c, 0, 3) == CoreTest::userPatternNote(fresh, 0, 3), "%s: pattern 0 note 3 is %d",
+			what, CoreTest::userPatternNote(c, 0, 3));
+		// The reset core still restores a good image, to what a fresh core
+		// restores from it. (Not byte-identical to the image: on the first
+		// load DAC::choose_calibration_data fills the auto-calibration table
+		// the image held as zeros, so the next save rewrites that page.)
+		Core src, ref;
+		dirty(src);
+		std::vector<uint8_t> img(kImage), again(kImage), refImg(kImage);
+		src.save(img.data());
+		CHECK(c.restore(img.data()) && ref.restore(img.data()), "%s: then a good image restores", what);
+		CHECK(CoreTest::userPatternNote(c, 0, 3) == CoreTest::userPatternNote(src, 0, 3), "%s: restored pattern", what);
+		c.save(again.data());
+		ref.save(refImg.data());
+		CHECK(again == refImg, "%s: and saves what a fresh core restoring it saves", what);
+		CHECK(snapshot(c) == snapshot(src), "%s: restored settings", what);
+	}
+}
+
 // restore re-runs the firmware's start-up, which reloads the calibration
 // defaults; the core's input range (not in the image) must survive it.
 void testInputRangeSurvives() {
@@ -619,6 +684,7 @@ int main() {
 	testBytebeatEquation15();
 	testInputMapUpperBoundary();
 	testResetToDefaults();
+	testResetSavesAFreshImage();
 	testInputRangeSurvives();
 	testRestoreClosesAppMenu();
 	return rkatest::finish("test_state");

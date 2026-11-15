@@ -42,46 +42,13 @@ panels:
 		$(INKSCAPE) "$$f" --export-text-to-path --export-plain-svg --export-filename="$$out/$$(basename $$f)" || exit 1; \
 	done
 
-# Offline unit tests of the DSP core; no Rack or libRack needed.
-# Each src/<module>/test_*.cpp builds to build/test/<module>/test_*.
-TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_*.cpp)))
-.PHONY: test
-test: shoal-globals $(TEST_BINS)
-	@for t in $(TEST_BINS); do ./$$t || exit 1; done
-
-# -fno-unsafe-math-optimizations undoes compile.mk's -funsafe-math-optimizations
-# for the firmware, so the plugin and the tests share floating-point semantics.
-SHOAL_FW_FLAGS = -std=c++17 -fwrapv -fno-strict-aliasing -fno-unsafe-math-optimizations \
-	-Isrc/shoal/shim -Isrc/shoal/firmware
-SHOAL_TEST_FLAGS = $(SHOAL_FW_FLAGS) -O1 -g -fsanitize=address,undefined \
-	-fno-sanitize=alignment,shift-base -fno-sanitize-recover=all
-SHOAL_DEPS = $(shell find src/shoal -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.ino' -o -name '*.cpp' \) ! -name 'test_*.cpp')
+# Offline unit tests (`make test`) and the Shoal test flags; tests.mk also
+# runs on its own, without the Rack SDK (CI does).
+include tests.mk
 
 # Firmware.cpp is C++17 inside a C++11 plugin. compile.mk puts -std=c++11 in
 # CXXFLAGS and then appends $(FLAGS), so FLAGS (not CXXFLAGS) lands last.
 build/src/shoal/Firmware.cpp.o: FLAGS += $(SHOAL_FW_FLAGS)
-
-build/test/shoal/Firmware.o: src/shoal/Firmware.cpp $(SHOAL_DEPS)
-	@mkdir -p $(@D)
-	$(CXX) $(SHOAL_TEST_FLAGS) -Isrc -c $< -o $@
-
-# The firmware object must hold no writable global state: every mutable
-# firmware global lives in the per-instance shoal::Context.
-.PHONY: shoal-globals
-shoal-globals: build/test/shoal/Firmware.o
-	tools/check_shoal_globals.sh $<
-
-build/test/shoal/test_shim: src/shoal/test_shim.cpp $(SHOAL_DEPS)
-	@mkdir -p $(@D)
-	$(CXX) $(SHOAL_TEST_FLAGS) -Isrc $< -o $@
-
-build/test/shoal/test_%: src/shoal/test_%.cpp build/test/shoal/Firmware.o
-	@mkdir -p $(@D)
-	$(CXX) $(SHOAL_TEST_FLAGS) -Isrc $^ -o $@
-
-build/test/%: src/%.cpp $(wildcard src/*.hpp $(MODULES:%=src/%/*.hpp))
-	@mkdir -p $(@D)
-	$(CXX) -std=c++17 -O2 -Wall -Wextra -Isrc -I$(<D) $< -o $@
 
 .PHONY: shoal-bench
 shoal-bench:

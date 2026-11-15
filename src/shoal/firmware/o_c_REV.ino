@@ -26,7 +26,8 @@
 // SHOAL: this file is restructured for the host. The timers, ISRs and the
 // endless loop() are replaced by three functions the shim calls:
 //   shoal_boot()       the setup() sequence without delays, splash screen,
-//                      calibration UI or timers;
+//                      calibration UI or timers; returns whether app data
+//                      loaded from the EEPROM;
 //   shoal_tick()       the body of CORE_timer_ISR (called every 60 us);
 //   shoal_main_pass()  one pass of the loop() body, without the draw
 //                      (Core::drawMenu/drawScope draw on request).
@@ -82,7 +83,7 @@ void FASTRUN shoal_tick() {
 
 /*       ---------------------------------------------------------         */
 
-void shoal_boot() {
+bool shoal_boot() { // SHOAL: returns apps::Init's result
   OC::DigitalInputs::Init();
   OC::ADC::Init(&OC::g_calibration_data.adc); // Yes, it's using the calibration_data before it's loaded... // SHOAL: g_ prefix (name clashes with Init parameters)
   OC::DAC::Init(&OC::g_calibration_data.dac); // SHOAL: g_ prefix (name clashes with Init parameters)
@@ -102,10 +103,11 @@ void shoal_boot() {
   OC::g_ui.set_screensaver_timeout(OC::g_calibration_data.screensaver_timeout); // SHOAL: g_ prefix (names clash with app ui members, Init parameters)
 
   // initialize apps
-  OC::apps::Init(false);
+  const bool app_data_loaded = OC::apps::Init(false); // SHOAL: result kept for the caller
 
   // from the start of loop()
   OC::CORE::app_isr_enabled_ref() = true; // SHOAL: per-instance state
+  return app_data_loaded; // SHOAL
 }
 
 /*  ---------    main loop  --------  */

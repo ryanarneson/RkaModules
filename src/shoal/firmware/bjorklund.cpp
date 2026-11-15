@@ -1347,13 +1347,13 @@ bool EuclideanFilter(uint8_t num_steps, uint8_t num_beats, uint8_t rotation, uin
   if (num_beats > (num_steps + 1)) {
     num_beats = num_steps + 1;
   }
-  uint32_t pattern = bjorklund_row(num_steps, num_beats);
+  uint32_t pattern = bjorklund_row(num_steps, num_beats); // SHOAL: clamped table index
   if (rotation) {
     rotation = rotation % (num_steps + 1);
     pattern = rotl32(pattern, num_steps, rotation) ;
   }
   uint8_t position = clock % (num_steps + 1) ;
-  return position < 32 && static_cast<bool>(pattern & (0x01u << position)) ;
+  return position < 32 && static_cast<bool>(pattern & (0x01u << position)) ; // SHOAL: position 32 shifts out (0), as on the Teensy
 }
 
 uint32_t EuclideanPattern(uint8_t num_steps, uint8_t num_beats, uint8_t rotation) {

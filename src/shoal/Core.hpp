@@ -2,6 +2,12 @@
 // Shoal core: the Ornament & Crime v1.3.6 firmware behind a fake-hardware
 // shim. The only header the rest of the plugin and the tests include; it
 // hides every firmware type. Rack-free, C++11-compatible.
+//
+// Threading: all non-static members of one Core (inputs, tick, controls,
+// draws, settings, state) must be called from one thread at a time; the
+// caller serialises them. Different Cores are independent and may run on
+// different threads at once. The static members (pixel, appName) are safe
+// from any thread.
 #include <cstdint>
 
 namespace shoal {
@@ -34,8 +40,7 @@ public:
 	// turns its L encoder's acceleration off on resume; calling this while it
 	// runs overrides that until its next resume (app switch or app menu).
 	void setEncoderAcceleration(bool on);
-	// Screens, drawn on request (call on the tick thread, at any rate or
-	// never). drawMenu: the app's menu, or the app-selection menu while it is
+	// Screens, drawn on request (at any rate or never; see Threading above). drawMenu: the app's menu, or the app-selection menu while it is
 	// open. drawScope: the app's screensaver view. Each draws into its own
 	// frame, so neither disturbs the other or the firmware's UI state.
 	void drawMenu(uint8_t* dst);       // dst is kFrameBytes
@@ -57,7 +62,10 @@ public:
 	bool setSettingRaw(int channel, int index, int value);
 	// State.
 	void save(uint8_t* out);           // kStateBytes
-	bool restore(const uint8_t* in);   // kStateBytes; false = rejected, defaults loaded
+	// restore and resetToDefaults reboot the firmware as a new Core would;
+	// only the input range, the held inputs and buttons, the random state
+	// and the clocks carry over.
+	bool restore(const uint8_t* in);   // kStateBytes; false = rejected, a new Core's defaults
 	void resetToDefaults();
 	void seed(uint32_t s);             // all firmware random sources
 private:

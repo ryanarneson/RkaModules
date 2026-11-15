@@ -131,9 +131,12 @@ void scope_render() {
       graphics.setPixel(64 + x, 0 + averaged_scope_history[DAC_CHANNEL_B][index]);
       // SHOAL: averaged_scope_history keeps 6-bit values written by
       // vectorscope_render (Low-rents) until 64 scope updates replace them, so
-      // just after an app switch 32 + value reaches row 95. Those pixels fall
-      // below the 64-row frame (on the Teensy, into the next frame buffer or
-      // past it) and are dropped; the 64 visible rows are unchanged.
+      // just after an app switch 32 + value reaches row 95, below the 64-row
+      // frame. On the Teensy both frames share FrameBuffer::frame_memory_
+      // [1024 * 2]: frame 0's overflow lands in frame 1 (cleared before it is
+      // drawn); frame 1's ORs into frame_buffers_[], write_ptr_ and read_ptr_
+      // of the same object and then past it. Shoal's scope frame has no
+      // equivalent, so the write is dropped; the 64 visible rows are unchanged.
       if (32 + averaged_scope_history[DAC_CHANNEL_C][index] < 64)
         graphics.setPixel(x, 32 + averaged_scope_history[DAC_CHANNEL_C][index]);
       if (32 + averaged_scope_history[DAC_CHANNEL_D][index] < 64)

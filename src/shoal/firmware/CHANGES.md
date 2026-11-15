@@ -74,7 +74,8 @@ Each change is marked `// SHOAL:` in the file.
   (the setup sequence without delays, splash, calibration or timers),
   `shoal_tick()` (the body of `CORE_timer_ISR`) and `shoal_main_pass()` (one
   pass of the loop body without the draw). Debug-profiling and VOR includes
-  removed.
+  removed. `shoal_boot()` returns whether `apps::Init` loaded app data
+  (the core boots a fresh instance to restore an image).
 - `src/drivers/display.h`, `display.cpp`: SH1106 paged driver and
   `AdjustOffset` deleted; `Flush`/`Update` do nothing; `GRAPHICS_END_FRAME`
   also marks the frame read, so a frame is always available to draw into.
@@ -245,10 +246,13 @@ is marked `// SHOAL:`.
   `vectorscope_render` leaves 6-bit values in it (0..63) where `scope_render`
   expects 5-bit ones, so for the first 64 scope updates after the switch the
   C and D traces asked for rows up to 95 of the 64-row frame. On the Teensy
-  that wrote into the other frame buffer or past it; Shoal's scope frame is
-  the last member of the context, so it wrote past the core's state. Pixels
-  below row 63 are dropped; the 64 visible rows are what the Teensy drew in
-  that frame. Test: `test_faults` `testScopeAfterVectorscope`.
+  both frames share `FrameBuffer::frame_memory_[1024 * 2]`: frame 0's
+  overflow lands in frame 1 (which is cleared before it is drawn), and frame
+  1's overflow ORs into `frame_buffers_[]`, `write_ptr_` and `read_ptr_` of
+  the same object and then past it. Shoal's scope frame has no such
+  neighbour (it is the last member of the context, so the write went past
+  the core's state); the write is dropped. The 64 visible rows are what the
+  Teensy drew in that frame. Test: `test_faults` `testScopeAfterVectorscope`.
 - `util/util_integer_sequences.h` (`IntegerSequence::Clock`, Per Nørgård's
   infinity series; Quantermain and CopierMaschine with the IntSq source on
   sequence 4): the bit loop starts at b = 32 and `0x01 << b` shifted by the
@@ -262,12 +266,15 @@ is marked `// SHOAL:`.
   it again, and walked on through the stale segments (unchanged: the Teensy
   does the same). At segment 7 it read `level_[8]`, which on both builds is
   `time_[0]` (`int16_t level_[8]` then `uint16_t time_[8]`); that read is
-  now made by name. From segment 8 the reads run through `time_multiplier_`
-  into `shape_` (enums, whose size the Teensy build need not share) and out
-  of the object, with `shape_` also indexing `lookup_table_table`: no
-  reproducible result, so the envelope is taken as finished there
-  (`segment_ = num_segments_`), as the old type had left it; the next gate
-  starts it. Piqued is not affected (it resets the envelope on a type
+  now made by name. At segment 8 the Teensy does not finish: it ramps
+  slowly from `time_[0]` toward `time_[1]` (`level_[8]`, `level_[9]`), timed
+  by in-object neighbours past `time_` and `time_multiplier_`, and within a
+  few segments the reads run through `shape_` (enums, whose size the Teensy
+  build need not share) and out of the object, with `shape_` also indexing
+  `lookup_table_table`: unpredictable memory. Shoal instead takes the
+  envelope as finished at segment 8 (`segment_ = num_segments_`), a
+  deliberate deviation; the next gate restarts it. The forced finish does
+  not set `ENV_EOC`. Piqued is not affected (it resets the envelope on a type
   change). Test: `test_faults` `testEnvelopeTypeShrinks`.
 - `APP_REFS.ino` (`ReferenceChannel::RenderScreensaver`; References with
   "Octave" -3 and a negative "Mod range oct"): the unconstrained pitch went
@@ -279,8 +286,9 @@ is marked `// SHOAL:`.
   SEQ+n play mode with the direction switched between pendulum and forward):
   `_clock`'s pendulum reverse branch leaves the step at -1 when an earlier
   sequence is still to come, and the step mask was shifted by -1. The
-  Teensy's shift by -1 (its low byte, 255) gives 0, so the step is off; the
-  shift now gives 0 for any count outside 0..31. Test: `test_faults`
+  Teensy's register shift uses the bottom byte of the count, so -1 shifts by
+  255 and gives 0: the step is off. -1 is the only count outside 0..31 that
+  can arrive, and the guard gives 0 for it. Test: `test_faults`
   `testSequinsStepMinusOne`.
 - `OC_chords_edit.h` (`ChordEditor::Edit` and the R encoder handler; Acid
   Curds with "chord:" up to 31 on progressions 2..4): the slot plus 8 per

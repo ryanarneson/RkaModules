@@ -1479,8 +1479,9 @@ public:
       if (_playmode != PM_ARP) {
         // SHOAL: _clock's pendulum reverse branch steps from 0 to -1 and, when
         // an earlier sequence of the play mode is still to come (EoS -1),
-        // leaves clk_cnt_ at -1. The Teensy's shift by -1 (by 255, its low
-        // byte) gives 0: the step is off.
+        // leaves clk_cnt_ at -1. ARM register shifts use the bottom byte of
+        // the count, so a shift by -1 is a shift by 255, which gives 0: the
+        // step is off. -1 is the only count outside 0..31 that can arrive.
         _out = (uint32_t) clk_cnt_ < 32 ? (display_mask_ >> clk_cnt_) & 1u : 0u;
         step_state_ = _out ? ON : OFF;  
         _out = (_out && _change) ? true : false; 

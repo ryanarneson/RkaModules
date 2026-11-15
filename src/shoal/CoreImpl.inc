@@ -80,6 +80,12 @@ uint8_t* shoal_eeprom_data() {
 
 namespace shoal {
 
+// Firmware pins of shoal::Button and shoal::Encoder (OC_gpio.h); the
+// firmware's UI::Button and UI::Encoder poll them in OC::Ui::Poll.
+static const uint8_t kButtonPins[] = { but_top, but_bot, butL, butR };
+static const uint8_t kEncoderPins[][2] = { { encL1, encL2 }, { encR1, encR2 } };
+static const uint8_t kTriggerPins[kNumChannels] = { TR1, TR2, TR3, TR4 };
+
 struct Core::Impl {
 	// Value-initialised: zeroed first, like the globals it replaces.
 	std::unique_ptr<Context> ctx{ new Context() };
@@ -102,24 +108,40 @@ struct Core::Impl {
 			OC::g_calibration_data.adc.offset[ch] = (uint16_t) adcOffset;
 	}
 
-	// The firmware's start-up from the EEPROM image (shoal_boot's calibration
-	// and UI set-up, then apps::Init's load); returns whether app data loaded.
-	// A boot to defaults, but for the host's inputs and the clocks.
-	bool reinit() {
-		for (auto& e : hw::state().encoders)
-			e.clear();
+	// Replace the firmware instance with a newly constructed one booted from
+	// `image` (null: an erased EEPROM, as a new core has), so nothing of the
+	// old instance's firmware state survives. What the host owns carries over:
+	// the input range, the levels on the input pins and ADC, the random
+	// sources and the clocks. Queued encoder detents and latched gate edges
+	// are dropped. Returns whether app data loaded from the image. Call
+	// outside any Scope on this core: the old context is gone afterwards.
+	bool reboot(const uint8_t* image) {
+		std::unique_ptr<Context> next(new Context());
+		const hw::State& was = ctx->hw;
+		hw::State& now = next->hw;
+		if (image)
+			memcpy(now.eeprom, image, kStateBytes);
+		for (uint8_t pin : kButtonPins)
+			now.pins[pin] = was.pins[pin];
+		for (uint8_t pin : kTriggerPins)
+			now.pins[pin] = was.pins[pin];
+		memcpy(now.adc12, was.adc12, sizeof(now.adc12));
+		now.rng = was.rng;
+		now.ticks = was.ticks;
+		next->Random_rng_state_ = ctx->Random_rng_state_;
+		next->CORE_ticks = ctx->CORE_ticks;
 		for (bool& e : edges)
 			e = false;
-		calibration_load();  // defaults; the input range is the core's, not the firmware's
-		applyInputRange();
-		OC::DAC::restore_scaling(0);  // apps::Init restores it only from a good page
-		OC::g_ui.Init();  // closes the app menu, drops queued events and press state
-		OC::g_ui.configure_encoders(OC::g_calibration_data.encoder_config());
-		OC::g_ui.set_screensaver_timeout(OC::g_calibration_data.screensaver_timeout);
-		ui_mode = OC::UI_MODE_MENU;
-		FreqMeasure.end();
-		OC::DigitalInputs::reInit();
-		return OC::apps::Init(false);
+		{
+			// Firmware objects have no destructors that reach firmware state,
+			// but destroy the old instance as its own current context anyway.
+			Scope scope(ctx.get());
+			ctx = std::move(next);
+		}
+		Scope scope(ctx.get());
+		const bool loaded = shoal_boot();
+		applyInputRange();  // shoal_boot loaded the calibration defaults
+		return loaded;
 	}
 
 	// Present the latched inputs to the firmware for the coming tick.
@@ -130,7 +152,6 @@ struct Core::Impl {
 		if (edges[1]) OC::DigitalInputs::clock<OC::DIGITAL_INPUT_2>();
 		if (edges[2]) OC::DigitalInputs::clock<OC::DIGITAL_INPUT_3>();
 		if (edges[3]) OC::DigitalInputs::clock<OC::DIGITAL_INPUT_4>();
-		static const uint8_t kTriggerPins[kNumChannels] = { TR1, TR2, TR3, TR4 };
 		for (int ch = 0; ch < kNumChannels; ch++) {
 			edges[ch] = false;
 			// Trigger inputs are active low.
@@ -138,11 +159,6 @@ struct Core::Impl {
 		}
 	}
 };
-
-// Firmware pins of shoal::Button and shoal::Encoder (OC_gpio.h); the
-// firmware's UI::Button and UI::Encoder poll them in OC::Ui::Poll.
-static const uint8_t kButtonPins[] = { but_top, but_bot, butL, butR };
-static const uint8_t kEncoderPins[][2] = { { encL1, encL2 }, { encR1, encR2 } };
 
 Core::Core() : impl_(new Impl) {
 }
@@ -342,22 +358,17 @@ void Core::save(uint8_t* out) {
 }
 
 bool Core::restore(const uint8_t* in) {
-	Scope scope(impl_->ctx.get());
 	static_assert(kStateBytes == EEPROMClass::kLength, "image is the whole EEPROM");
-	memcpy(hw::state().eeprom, in, kStateBytes);
-	if (impl_->reinit())
+	if (impl_->reboot(in))
 		return true;
-	// Rejected: defaults, and an empty EEPROM, so that no stale page of the
-	// rejected image can outrank what the next save writes.
-	memset(hw::state().eeprom, 0, kStateBytes);
-	impl_->reinit();
+	// Rejected: a new core's defaults over an erased EEPROM, so that no stale
+	// page of the rejected image can outrank what the next save writes.
+	impl_->reboot(nullptr);
 	return false;
 }
 
 void Core::resetToDefaults() {
-	Scope scope(impl_->ctx.get());
-	memset(hw::state().eeprom, 0, kStateBytes);
-	impl_->reinit();
+	impl_->reboot(nullptr);
 }
 
 void Core::seed(uint32_t s) {
