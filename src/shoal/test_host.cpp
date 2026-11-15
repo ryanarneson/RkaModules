@@ -3,18 +3,40 @@
 // snapshots published for another thread, and the two threads together.
 #include <atomic>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
+#include <new>
 #include <thread>
 
 #include "testing.hpp"
 #include "Host.hpp"
 #include "CoreTest.hpp"
 
+// Heap allocations and frees made by operator new / delete on this thread
+// (a Core and its firmware Context, among everything else).
+static thread_local long tAllocs = 0, tFrees = 0;
+
+void* operator new(std::size_t n) {
+	tAllocs++;
+	if (void* p = std::malloc(n ? n : 1))
+		return p;
+	throw std::bad_alloc();
+}
+void operator delete(void* p) noexcept {
+	if (p)
+		tFrees++;
+	std::free(p);
+}
+void operator delete(void* p, std::size_t) noexcept {
+	operator delete(p);
+}
+
 namespace shoal {
 // Test-only hooks into Host (friend of Host).
 struct HostTest {
-	static Core& core(Host& h) { return h.core_; }
+	static Core& core(Host& h) { return *h.core_; }
 	static void disableSave(Host& h) { h.saveEnabled_ = false; }
+	static std::mutex& stateMutex(Host& h) { return h.stateMutex_; }
 };
 }
 
@@ -210,27 +232,41 @@ void testRestoreRejects() {
 	InputRange r;
 	fresh.snapshot(want.bytes, &r);
 
-	for (int nullImage = 0; nullImage < 2; nullImage++) {
+	// The rejected image, a null image and a Reset each replace a core that
+	// has moved away from the defaults (app 3, a setting changed).
+	const char* const how[3] = { "junk", "null", "Reset" };
+	for (int mode = 0; mode < 3; mode++) {
 		Host h(1);
+		run(h, 0.6);
+		h.post(selectApp(3));
+		run(h, 0.1);
+		shoal::Core& before = HostTest::core(h);
+		CHECK(h.app() == 3, "%s: app %d before the request", how[mode], h.app());
+		CHECK(before.setSettingRaw(0, 0, before.setting(0, 0) == before.settingInfo(0).min
+			? before.settingInfo(0).max : before.settingInfo(0).min), "%s: a setting changed", how[mode]);
+		run(h, 0.6);  // a save with the change published
 		Image junk;
 		std::memset(junk.bytes, 0x5a, sizeof junk.bytes);
-		h.requestRestore(nullImage ? nullptr : junk.bytes, InputRange::Hardware);
+		if (mode == 2)
+			h.post(ControlEvent{ ControlEvent::Reset, 0, 0 });
+		else
+			h.requestRestore(mode == 1 ? nullptr : junk.bytes, InputRange::Hardware);
 		run(h, 1.0);
-		CHECK(h.app() == 0, "%s: app %d", nullImage ? "null" : "junk", h.app());
+		CHECK(h.app() == 0, "%s: app %d", how[mode], h.app());
 		Image got;
 		h.snapshot(got.bytes, &r);
-		CHECK(std::memcmp(got.bytes, want.bytes, shoal::kStateBytes) == 0,
-			"%s: snapshot is a fresh host's", nullImage ? "null" : "junk");
+		CHECK(std::memcmp(got.bytes, want.bytes, shoal::kStateBytes) == 0, "%s: snapshot is a fresh host's", how[mode]);
 		CHECK(r == InputRange::Hardware, "range");
-		CHECK(sameSettings(HostTest::core(h), HostTest::core(fresh)), "%s: settings are a fresh host's",
-			nullImage ? "null" : "junk");
+		CHECK(sameSettings(HostTest::core(h), HostTest::core(fresh)), "%s: settings are a fresh host's", how[mode]);
 	}
 
-	// Straight after a null request the snapshot is a new core's image.
+	// Straight after a null request the snapshot is a new core's image; then
+	// the engine runs a new core.
 	Host h(1);
 	run(h, 0.6);
 	h.post(selectApp(3));
 	run(h, 0.6);
+	CHECK(h.app() == 3, "app 3 before the null request");
 	h.requestRestore(nullptr, InputRange::Bipolar5);
 	Image got, boot;
 	shoal::Core c;
@@ -238,6 +274,10 @@ void testRestoreRejects() {
 	h.snapshot(got.bytes, &r);
 	CHECK(std::memcmp(got.bytes, boot.bytes, shoal::kStateBytes) == 0, "null: a new core's image at once");
 	CHECK(r == InputRange::Bipolar5, "null: the requested range");
+	run(h, 1.0);
+	CHECK(h.app() == 0, "null: app %d after the restore ran", h.app());
+	h.snapshot(got.bytes, &r);
+	CHECK(r == InputRange::Bipolar5, "null: the range is kept by the engine");
 }
 
 void testSaveDoesNotDisturb() {
@@ -267,12 +307,110 @@ void testSaveDoesNotDisturb() {
 	CHECK(a.out(0) != 0.f, "the outputs moved");
 }
 
+// Events posted after a restore request are applied to the restored core
+// even when the engine first finds the UI holding the lock.
+void testEventsWaitForRestore() {
+	Host h(1);
+	run(h, 0.1);
+	h.requestRestore(nullptr, InputRange::Hardware);
+	h.post(selectApp(3));
+	std::atomic<int> step(0);
+	std::thread holder([&] {
+		std::lock_guard<std::mutex> lock(HostTest::stateMutex(h));
+		step.store(1);
+		while (step.load() != 2) {}
+	});
+	while (step.load() != 1) {}
+	run(h, 0.05);  // the swap and the events must both wait
+	CHECK(h.app() == 0, "app %d while the restore waits", h.app());
+	step.store(2);
+	holder.join();
+	run(h, 0.1);
+	CHECK(h.app() == 3, "app %d: SelectApp applied after the restore", h.app());
+}
+
+// Heap operations on this thread while running `seconds` of samples.
+long engineHeapOps(Host& h, double seconds) {
+	const long before = tAllocs + tFrees;
+	run(h, seconds);
+	return tAllocs + tFrees - before;
+}
+
+// The engine path never allocates, frees or boots firmware, also while it
+// swaps in a restored or reset core: those are built, and the retired ones
+// deleted, on the requesting thread.
+void testNoEngineAllocation() {
+	Host a(1);
+	a.post(selectApp(3));
+	run(a, 1.0);
+	Image img;
+	InputRange r;
+	a.snapshot(img.bytes, &r);
+
+	Host h(1);
+	h.setButton(shoal::BUTTON_UP, false);
+	CHECK(engineHeapOps(h, 1.0) == 0, "running");
+	h.post(acceleration(false));
+	h.post(turn(shoal::ENCODER_R, 2));
+	CHECK(engineHeapOps(h, 0.1) == 0, "events");
+
+	shoal::Core* old = &HostTest::core(h);
+	long allocs = tAllocs;
+	h.requestRestore(img.bytes, InputRange::Bipolar5);
+	CHECK(tAllocs > allocs, "the restored core is built by the requester");
+	CHECK(engineHeapOps(h, 0.1) == 0, "swapping in a restored core");
+	CHECK(&HostTest::core(h) != old, "the engine runs a new core");
+	CHECK(h.app() == 3, "restored app %d", h.app());
+	long frees = tFrees;
+	h.snapshot(img.bytes, &r);
+	CHECK(tFrees > frees, "the retired core is deleted by snapshot()");
+	CHECK(r == InputRange::Bipolar5, "restored range");
+
+	old = &HostTest::core(h);
+	allocs = tAllocs;
+	CHECK(h.post(ControlEvent{ ControlEvent::Reset, 0, 0 }), "Reset accepted");
+	CHECK(tAllocs > allocs, "the reset core is built by the requester");
+	CHECK(engineHeapOps(h, 0.6) == 0, "swapping in a reset core");
+	CHECK(&HostTest::core(h) != old, "the engine runs a new core after Reset");
+	CHECK(h.app() == 0, "app %d after Reset", h.app());
+	h.snapshot(img.bytes, &r);
+	CHECK(r == InputRange::Bipolar5, "Reset keeps the input range");
+
+	// A replacement that was never picked up is deleted by the next request.
+	frees = tFrees;
+	h.requestRestore(nullptr, InputRange::Hardware);
+	h.requestRestore(nullptr, InputRange::Hardware);
+	CHECK(tFrees > frees, "an unused replacement is deleted");
+	CHECK(engineHeapOps(h, 0.1) == 0, "swapping in the last one");
+}
+
 void testThreads() {
 	Host h(1);
 	h.post(acceleration(false));
 	run(h, 0.05);
-	const int start = CoreTest::menuSetting(HostTest::core(h));
-	CHECK(start >= 0, "a menu cursor on CopierMaschine");
+	// Move the cursor off both ends of the menu: the cursor clamps there,
+	// which would hide a lost or extra detent. (menuSetting is a setting
+	// index, not a menu position, so the ends are found by turning.)
+	shoal::Core& c = HostTest::core(h);
+	const int first = CoreTest::menuSetting(c);
+	h.post(turn(shoal::ENCODER_R, 60));
+	run(h, 0.2);
+	const int last = CoreTest::menuSetting(c);
+	h.post(turn(shoal::ENCODER_R, -60));
+	run(h, 0.2);
+	CHECK(CoreTest::menuSetting(c) == first && first >= 0 && last != first, "menu ends %d, %d", first, last);
+	h.post(turn(shoal::ENCODER_R, 2));
+	run(h, 0.05);
+	const int start = CoreTest::menuSetting(c);
+	CHECK(start != first && start != last, "cursor on %d is off both ends (%d, %d)", start, first, last);
+	for (int dir = -1; dir <= 1; dir += 2) {
+		h.post(turn(shoal::ENCODER_R, dir));
+		run(h, 0.02);
+		const int moved = CoreTest::menuSetting(c);
+		h.post(turn(shoal::ENCODER_R, -dir));
+		run(h, 0.02);
+		CHECK(moved != start && CoreTest::menuSetting(c) == start, "a %+d detent moves the cursor and back", dir);
+	}
 
 	const long n = std::lround(5.0 * kRate);
 	const long pacing = std::lround(0.005 * kRate);  // a detent plays out in 2 ms
@@ -314,7 +452,7 @@ void testThreads() {
 	run(h, 0.1);  // drain the last queued events and detents
 	CHECK(pairs > 100, "only %ld turn pairs posted", pairs);
 	CHECK(reads > 100, "only %ld reads", reads);
-	const int end = CoreTest::menuSetting(HostTest::core(h));
+	const int end = CoreTest::menuSetting(c);
 	CHECK(end == start, "cursor %d after %ld +1/-1 pairs, started at %d", end, pairs, start);
 }
 
@@ -329,6 +467,8 @@ int main() {
 	testSnapshotBeforeProcess();
 	testRestoreRejects();
 	testSaveDoesNotDisturb();
+	testNoEngineAllocation();
+	testEventsWaitForRestore();
 	testThreads();
 	return rkatest::finish("test_host");
 }

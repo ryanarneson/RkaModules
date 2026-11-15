@@ -4,11 +4,15 @@
 // Header-only, Rack-free, C++11; includes no firmware header.
 //
 // Threading: the engine-thread members (setSampleRate .. gateHigh) are the
-// only ones that touch the Core, and never block: they publish with try_lock
-// and retry at the next tick. The UI-thread members (post .. appMenuOpen) may
-// be called from any one other thread; they lock briefly and never touch the
-// Core. Control events travel through a fixed single-producer
-// single-consumer ring. Nothing allocates after construction.
+// only ones that touch the running Core, and never block, allocate or boot
+// firmware: they publish with try_lock and retry at the next tick. The
+// UI-thread members (post .. appMenuOpen) may be called from any one other
+// thread; they lock briefly and never touch the running Core. A restore or
+// reset builds and boots a replacement Core on the UI thread; the engine
+// swaps it in before its next tick, and the Core it retires is deleted on
+// the UI thread later. Control events travel through a fixed single-producer
+// single-consumer ring. Events posted before a restore request are applied
+// after it (on the replacement Core).
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -22,6 +26,7 @@ namespace shoal {
 
 // A control change from the UI thread, applied before the engine's next tick.
 struct ControlEvent {
+	// Reset never reaches the engine: post() turns it into requestReset().
 	enum Type : uint8_t { Turn, SelectApp, Reset, SetInputRange, SetAcceleration };
 	Type type;
 	int8_t index;    // Turn: Encoder
@@ -36,9 +41,9 @@ public:
 
 	// Seeds the core and publishes its frames and its (new core's) state
 	// image, so the UI has both before the engine first runs.
-	explicit Host(uint32_t seed) {
-		core_.seed(seed);
-		core_.save(defaults_);
+	explicit Host(uint32_t seed) : seed_(seed), core_(new Core()) {
+		core_->seed(seed_);
+		core_->save(defaults_);
 		std::memcpy(state_, defaults_, kStateBytes);
 		drawFrames();
 		std::memcpy(menu_, engineMenu_, kFrameBytes);
@@ -46,47 +51,63 @@ public:
 		app_.store(engineApp_);
 		appMenuOpen_.store(engineAppMenuOpen_);
 	}
+	~Host() {
+		delete core_;
+		delete pending_;
+		delete retired_;
+	}
 	Host(const Host&) = delete;
 	Host& operator=(const Host&) = delete;
 
 	// --- Engine thread only. ---
 
 	void setSampleRate(double hz) { clock_.setSampleRate(hz); }
-	void setCv(int ch, float volts) { core_.setCv(ch, volts); }
+	void setCv(int ch, float volts) {
+		if (ch < 0 || ch >= kNumChannels)
+			return;
+		cv_[ch] = volts;
+		core_->setCv(ch, volts);
+	}
 	void setGate(int ch, float volts) {
 		if (ch < 0 || ch >= kNumChannels)
 			return;
 		gates_[ch].process(std::isnan(volts) ? 0.f : volts);
-		core_.setGate(ch, volts);
+		core_->setGate(ch, volts);
 	}
 	// Call every sample or on change; only changes reach the core.
 	void setButton(Button b, bool down) {
 		if (b > BUTTON_R || buttons_[b] == down)
 			return;
 		buttons_[b] = down;
-		core_.setButton(b, down);
+		core_->setButton(b, down);
 	}
 	// One engine sample: the ticks due, after a pending restore and then the
-	// queued control events.
+	// queued control events. If a restore is pending but the UI holds the
+	// lock, the events wait too, so the restore cannot wipe them next time.
 	void process() {
 		const int n = clock_.advance();
 		if (n <= 0)
 			return;
-		applyRestore();
-		applyEvents();
+		if (applyRestore())
+			applyEvents();
 		for (int i = 0; i < n; i++) {
-			core_.tick();
+			core_->tick();
 			afterTick();
 		}
 	}
-	float out(int ch) const { return core_.out(ch); }
+	float out(int ch) const { return core_->out(ch); }
 	// The gate input's level (Schmitt trigger at 0.1 V / 1 V).
 	bool gateHigh(int ch) const { return ch >= 0 && ch < kNumChannels && gates_[ch].high; }
 
-	// --- Any one other thread (the UI thread). None of these touch the Core. ---
+	// --- Any one other thread (the UI thread). None of these touch the running Core. ---
 
-	// False: the queue is full and the event was dropped.
+	// False: the queue is full and the event was dropped. A Reset event is
+	// requestReset() and always succeeds.
 	bool post(ControlEvent e) {
+		if (e.type == ControlEvent::Reset) {
+			requestReset();
+			return true;
+		}
 		const uint32_t tail = eventTail_.load(std::memory_order_relaxed);
 		if (tail - eventHead_.load(std::memory_order_acquire) >= kEventSlots)
 			return false;
@@ -100,34 +121,49 @@ public:
 		std::memcpy(menu, menu_, kFrameBytes);
 		std::memcpy(scope, scope_, kFrameBytes);
 	}
-	// The latest saved image (kStateBytes) and its input range.
+	// The latest saved image (kStateBytes) and its input range. Also deletes
+	// a Core the engine has retired.
 	void snapshot(uint8_t* state, InputRange* range) {
-		std::lock_guard<std::mutex> lock(stateMutex_);
-		std::memcpy(state, state_, kStateBytes);
-		if (range)
-			*range = range_;
+		Core* retired;
+		{
+			std::lock_guard<std::mutex> lock(stateMutex_);
+			std::memcpy(state, state_, kStateBytes);
+			if (range)
+				*range = range_;
+			retired = retired_;
+			retired_ = nullptr;
+		}
+		delete retired;
 	}
 	// Restore `state` (null: a new core's defaults) with input range `range`
-	// before the engine's next tick. The image is the snapshot at once; if
-	// the firmware rejects it, the next save publishes the defaults instead.
+	// before the engine's next tick. Builds and boots the replacement Core
+	// here, on the calling thread. The image is the snapshot at once; if the
+	// firmware rejects it, the next save publishes the defaults instead.
 	void requestRestore(const uint8_t* state, InputRange range) {
-		std::lock_guard<std::mutex> lock(stateMutex_);
-		pendingNull_ = !state;
+		Core* c = new Core();
+		c->seed(seed_);
+		c->setInputRange(range);
 		if (state)
-			std::memcpy(pending_, state, kStateBytes);
-		pendingRange_ = range;
-		std::memcpy(state_, state ? state : defaults_, kStateBytes);
-		range_ = range;
-		restorePending_.store(true, std::memory_order_release);
+			c->restore(state);
+		install(c, state ? state : defaults_, false, range);
+	}
+	// A new core's defaults, keeping the engine's input range: as
+	// requestRestore(nullptr, <current range>).
+	void requestReset() {
+		Core* c = new Core();
+		c->seed(seed_);
+		install(c, defaults_, true, InputRange::Hardware);
 	}
 	// As of the last frame publish.
 	int app() const { return app_.load(); }
 	bool appMenuOpen() const { return appMenuOpen_.load(); }
 
 private:
-	Core core_;
+	const uint32_t seed_;
+	Core* core_;  // the running Core; engine thread only
 	TickClock clock_;
 	Schmitt gates_[kNumChannels];
+	float cv_[kNumChannels] = {};
 	bool buttons_[4] = {};
 	InputRange engineRange_ = InputRange::Hardware;
 	bool saveEnabled_ = true;  // test hook (HostTest)
@@ -139,7 +175,6 @@ private:
 	int engineApp_ = 0;
 	bool engineAppMenuOpen_ = false;
 	uint8_t engineState_[kStateBytes] = {};
-	uint8_t restoreImage_[kStateBytes] = {};
 	uint8_t defaults_[kStateBytes] = {};  // a new core's image; constant after construction
 
 	// Published frames.
@@ -148,12 +183,14 @@ private:
 	std::atomic<int> app_{0};
 	std::atomic<bool> appMenuOpen_{false};
 
-	// Published state and the pending restore, both under stateMutex_.
+	// Published state, the pending replacement Core and the retired one,
+	// all under stateMutex_.
 	std::mutex stateMutex_;
 	uint8_t state_[kStateBytes] = {};
 	InputRange range_ = InputRange::Hardware;
-	uint8_t pending_[kStateBytes] = {};
-	bool pendingNull_ = false;
+	Core* pending_ = nullptr;
+	Core* retired_ = nullptr;
+	bool pendingKeepsRange_ = false;
 	InputRange pendingRange_ = InputRange::Hardware;
 	std::atomic<bool> restorePending_{false};  // written under stateMutex_
 
@@ -163,31 +200,63 @@ private:
 
 	friend struct HostTest;  // test-only hooks (test_host.cpp)
 
-	void drawFrames() {
-		core_.drawMenu(engineMenu_);
-		core_.drawScope(engineScope_);
-		engineApp_ = core_.app();
-		engineAppMenuOpen_ = core_.appMenuOpen();
+	// UI thread: make booted Core c the pending replacement and `image` the
+	// snapshot; delete, outside the lock, a replacement never picked up and
+	// a Core the engine retired.
+	void install(Core* c, const uint8_t* image, bool keepsRange, InputRange range) {
+		Core* unused;
+		Core* retired;
+		{
+			std::lock_guard<std::mutex> lock(stateMutex_);
+			unused = pending_;
+			retired = retired_;
+			retired_ = nullptr;
+			pending_ = c;
+			pendingKeepsRange_ = keepsRange;
+			pendingRange_ = range;
+			std::memcpy(state_, image, kStateBytes);
+			if (!keepsRange)
+				range_ = range;
+			restorePending_.store(true, std::memory_order_release);
+		}
+		delete unused;
+		delete retired;
 	}
 
-	void applyRestore() {
+	void drawFrames() {
+		core_->drawMenu(engineMenu_);
+		core_->drawScope(engineScope_);
+		engineApp_ = core_->app();
+		engineAppMenuOpen_ = core_->appMenuOpen();
+	}
+
+	// Swap in a pending replacement Core. False when one is pending but the
+	// UI holds the lock (try again at the next sample).
+	bool applyRestore() {
 		if (!restorePending_.load(std::memory_order_acquire))
-			return;
+			return true;
 		std::unique_lock<std::mutex> lock(stateMutex_, std::try_to_lock);
-		if (!lock.owns_lock())
-			return;  // the UI holds it: try again at the next sample
-		const bool toDefaults = pendingNull_;
-		if (!toDefaults)
-			std::memcpy(restoreImage_, pending_, kStateBytes);
-		engineRange_ = pendingRange_;
+		// retired_ is always empty here (install() empties it before it sets
+		// pending_); never overwrite it, as that would leak.
+		if (!lock.owns_lock() || retired_)
+			return false;
+		retired_ = core_;
+		core_ = pending_;
+		pending_ = nullptr;
+		if (!pendingKeepsRange_)
+			engineRange_ = pendingRange_;
 		restorePending_.store(false, std::memory_order_relaxed);
 		lock.unlock();
-		core_.setInputRange(engineRange_);
-		if (toDefaults)
-			core_.resetToDefaults();
-		else
-			core_.restore(restoreImage_);
+		// What the host owns carries over; the gates arrive with the next
+		// setGate, encoder acceleration is back at its boot default (on).
+		core_->setInputRange(engineRange_);
+		for (int ch = 0; ch < kNumChannels; ch++)
+			core_->setCv(ch, cv_[ch]);
+		for (int b = BUTTON_UP; b <= BUTTON_R; b++)
+			if (buttons_[b])
+				core_->setButton((Button) b, true);
 		stateDue_ = false;  // an unpublished save predates the restore
+		return true;
 	}
 
 	void applyEvents() {
@@ -202,21 +271,19 @@ private:
 		switch (e.type) {
 			case ControlEvent::Turn:
 				if (e.index >= ENCODER_L && e.index <= ENCODER_R)
-					core_.turnEncoder((Encoder) e.index, e.value);
+					core_->turnEncoder((Encoder) e.index, e.value);
 				break;
 			case ControlEvent::SelectApp:
-				core_.selectApp(e.value);
+				core_->selectApp(e.value);
 				break;
 			case ControlEvent::Reset:
-				core_.resetToDefaults();
-				stateDue_ = false;
-				break;
+				break;  // never queued (post)
 			case ControlEvent::SetInputRange:
 				engineRange_ = e.value == (int16_t) InputRange::Bipolar5 ? InputRange::Bipolar5 : InputRange::Hardware;
-				core_.setInputRange(engineRange_);
+				core_->setInputRange(engineRange_);
 				break;
 			case ControlEvent::SetAcceleration:
-				core_.setEncoderAcceleration(e.value != 0);
+				core_->setEncoderAcceleration(e.value != 0);
 				break;
 		}
 	}
@@ -240,7 +307,7 @@ private:
 		if (--saveCountdown_ <= 0) {
 			saveCountdown_ = kSaveTicks;
 			if (saveEnabled_) {
-				core_.save(engineState_);
+				core_->save(engineState_);
 				stateDue_ = true;
 			}
 		}
