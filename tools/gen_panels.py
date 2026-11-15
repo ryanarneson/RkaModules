@@ -194,6 +194,18 @@ def _fathom_on(r, x):
     return round(column_on_arc(*_FA_O, r, x), 2)
 
 
+# Shoal, ripples from two sources: the encoders, deliberately not level.
+_SH_L, _SH_R = (103.0, 33.0), (126.5, 43.0)
+_SH_PUSH = 16.5                                  # each push button from its encoder's centre
+_SH_TRIG, _SH_CV, _SH_OUT = 100.0, 111.6, 131.4  # the jack field's columns
+_SH_ROWS = [round(80.0 + 10.4 * i, 1) for i in range(4)]
+
+
+def _shoal_push(encoder, deg):
+    """A push button beside its encoder, `deg` from straight below it."""
+    return tuple(round(v, 2) for v in arc_point(*encoder, _SH_PUSH, deg))
+
+
 PANELS = {
     "Sway": dict(
         look="instrument",
@@ -297,52 +309,63 @@ PANELS = {
         # Not in the mockup: as Sway, clear of the nameplate.
         screws=screws_at(10, "tr", "bl"),
     ),
-    # Shoal, the Ornament & Crime emulation. The left 83 mm is three screens
-    # the module draws (output strip, scope, editor); on the right a controls
-    # card (two encoders with push buttons, then UP, DOWN and the UI MODE
-    # latch, which lights itself in friendly mode, at the mirror of UP about
-    # the card's centre) over a jacks card: TRIG / CV / OUT columns, four
-    # rows, a light beside each trigger and output jack.
+    # Shoal, the Ornament & Crime emulation: ripples from two sources. The
+    # two encoders are the sources, not level, and their ripples cross the
+    # whole panel; there is no limb. Each encoder's push button sits beside
+    # it at the same distance, joined by a trace; UP over DOWN stand apart,
+    # on no arc; UI MODE lights its own cap in friendly mode. The left 83 mm
+    # is three windows the module draws in (output strip, scope, editor), the
+    # scope and editor at 0.65 mm per firmware pixel with pixel rulers. Below
+    # the controls, the jack field: TRIG and CV columns, then the outputs,
+    # each on a wide tile with its letter and light.
     "Shoal": dict(
+        look="instrument",
         dir="shoal",
         hp=28,
         title="SHOAL",
+        subtitle="ORNAMENT & CRIME 1.3.6",
+        # In line with the screens' left edge.
+        nameplate=(4.0, 11.0),
         components=[
-            ("widget", "ENC_L", 102.8, 29.0, "ENC L"),
-            ("widget", "ENC_R", 126.4, 29.0, "ENC R"),
-            ("param", "ENC_L_PUSH", 102.8, 43.5, None),
-            ("param", "ENC_R_PUSH", 126.4, 43.5, None),
-            ("param", "UP", 100.0, 55.0, "UP"),
-            ("param", "DOWN", 114.6, 55.0, "DOWN"),
-            ("param", "UI_MODE", 129.2, 55.0, "UI MODE"),
+            ("widget", "ENC_L", *_SH_L, "ENCODER L"),
+            ("widget", "ENC_R", *_SH_R, "ENCODER R"),
+            ("param", "ENC_L_PUSH", *_shoal_push(_SH_L, -35), "PUSH"),
+            ("param", "ENC_R_PUSH", *_shoal_push(_SH_R, 15), "PUSH"),
+            ("param", "UP", 107.0, 56.0, "UP"),
+            ("param", "DOWN", 107.0, 64.6, "DOWN"),
+            ("param", "UI_MODE", 121.5, 65.0, "UI MODE"),
         ]
-        + [("input", f"TR{i + 1}", 99.8, 78.6 + 10.0 * i, None) for i in range(4)]
-        + [("light", f"TR{i + 1}", 106.0, 78.6 + 10.0 * i, None) for i in range(4)]
-        + [("input", f"CV{i + 1}", 112.0, 78.6 + 10.0 * i, None) for i in range(4)]
-        + [("light", n, 124.9, 78.6 + 10.0 * i, None) for i, n in enumerate("ABCD")]
-        + [("output", n, 131.6, 78.6 + 10.0 * i, None) for i, n in enumerate("ABCD")],
-        sizes={"ENC_L_PUSH": "button", "ENC_R_PUSH": "button", "UP": "button", "DOWN": "button",
-               "UI_MODE": "button"},
-        cards=[
-            (91.0, 15.0, 47.2, 47.0, None),
-            # The jacks card and the OUT card inside it (1 mm inset) reach
-            # down so the D jack (y 108.6, sprite radius ~4.2) clears the
-            # OUT border by 1.4 mm.
-            (91.0, 66.0, 47.2, 49.2, None),
-            (119.0, 67.0, 18.0, 47.2, "cyan"),
-        ],
-        # name, x, y, w, h in mm; each is drawn by the module (128x64 at
-        # 0.65 mm per pixel for the scope and editor).
-        screens=[("STRIP", 4.0, 16.0, 83.2, 5.0),
-                 ("SCOPE", 4.0, 21.5, 83.2, 41.6),
-                 ("EDITOR", 4.0, 67.0, 83.2, 41.6)],
-        label_accents={"ENC_L": "ink", "ENC_R": "ink"},
-        label_size={"ENC_L": 2.3, "ENC_R": 2.3, "UP": 2.0, "DOWN": 2.0, "UI_MODE": 2.0},
-        label_gap={"ENC_L": 9.6, "ENC_R": 9.6, "UP": 5.4, "DOWN": 5.4, "UI_MODE": 5.4},
-        notes=[(99.8, 72.2, "TRIG", 2.0, "ink"), (112.0, 72.2, "CV", 2.0, "ink"),
-               (131.6, 72.2, "OUT", 2.0, "cyan")]
-        + [(93.6, 79.4 + 10.0 * i, str(i + 1), 2.2, "label") for i in range(4)]
-        + [(121.4, 79.4 + 10.0 * i, n, 2.2, "cyan") for i, n in enumerate("ABCD")],
+        + [("input", f"TR{i + 1}", _SH_TRIG, y, None) for i, y in enumerate(_SH_ROWS)]
+        + [("light", f"TR{i + 1}", _SH_TRIG + 5.8, y, None) for i, y in enumerate(_SH_ROWS)]
+        + [("input", f"CV{i + 1}", _SH_CV, y, None) for i, y in enumerate(_SH_ROWS)]
+        + [("light", n, _SH_OUT - 5.8, y, None) for n, y in zip("ABCD", _SH_ROWS)]
+        + [("output", n, _SH_OUT, y, n) for n, y in zip("ABCD", _SH_ROWS)],
+        sizes={f"PARAM_{n}": "cap" for n in ("ENC_L_PUSH", "ENC_R_PUSH", "UP", "DOWN", "UI_MODE")},
+        circles=[(*src, r) for src in (_SH_L, _SH_R) for r in range(16, 160, 10)],
+        # One tick per detent, all the way round; no index, no majors.
+        faces={f"WIDGET_ENC_{n}": dict(r=10.4, ticks=24, sweep=360, minor_len=1.3) for n in "LR"},
+        tiles=[dict(port=f"OUTPUT_{n}", light=f"LIGHT_{n}", left=11.0, right=5.0, top=4.6, bottom=4.6,
+                    name_at=(-8.6, 0.75), name_size=2.1) for n in "ABCD"],
+        traces=[["PARAM_ENC_L_PUSH", "WIDGET_ENC_L"], ["PARAM_ENC_R_PUSH", "WIDGET_ENC_R"]],
+        # name, x, y, w, h in mm; the module draws in exactly these. 128 x 64
+        # firmware pixels at 0.65 mm for the scope and the editor.
+        screens=[("STRIP", 4.0, 20.0, 83.2, 5.0),
+                 ("SCOPE", 4.0, 25.5, 83.2, 41.6),
+                 ("EDITOR", 4.0, 71.0, 83.2, 41.6)],
+        rulers={"SCOPE": dict(px=0.65, sides="lb"),
+                "EDITOR": dict(px=0.65, sides="lb", numerals=True)},
+        label_at={"PARAM_ENC_L_PUSH": "below", "PARAM_ENC_R_PUSH": "below", "PARAM_UP": "right",
+                  "PARAM_DOWN": "right"},
+        label_colour={f"PARAM_{n}": "dim" for n in ("ENC_L_PUSH", "ENC_R_PUSH", "UP", "DOWN", "UI_MODE")},
+        # Channel letters over the strip's four cells; column heads and row
+        # numbers for the jack field.
+        notes=[(4.0 + 83.2 * (ch + 0.5) / 4, 18.7, n, 2.0, "dim") for ch, n in enumerate("ABCD")]
+        + [(_SH_TRIG, 72.6, "TRIG", 2.0, "ivory"), (_SH_CV, 72.6, "CV", 2.0, "ivory"),
+           (_SH_OUT, 72.6, "OUT", 2.0, "ivory")]
+        + [(93.2, y + 0.7, str(i + 1), 2.0, "dim") for i, y in enumerate(_SH_ROWS)],
+        preview={"PARAM_UI_MODE": dict(lit=True), "LIGHT_TR1": dict(lit=True), "LIGHT_A": dict(lit=True)},
+        # Not in the mockup: as Sway, clear of the nameplate.
+        screws=screws_at(28, "tr", "bl", "br"),
     ),
 }
 

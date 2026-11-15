@@ -7,7 +7,7 @@
 
 // Shoal: the Ornament & Crime firmware on a fake O&C. shoal::Host runs it;
 // the module only maps jacks, buttons and lights onto the host, and the
-// widget draws the two screens and turns the encoders into host events. The
+// widget draws the screens and turns the encoders into host events. The
 // lower screen is the friendly list (FriendlyList.hpp) or, with UI MODE set
 // to hardware, the firmware's own menu.
 
@@ -72,12 +72,13 @@ struct Shoal : Module {
 		TR2_LIGHT,
 		TR3_LIGHT,
 		TR4_LIGHT,
-		// Two each: positive (cyan), negative (magenta).
+		// Two ids each, as when a pair showed the sign. Only the first is
+		// used now (the voltage's size); the second stays so no id moves.
 		ENUMS(A_LIGHT, 2),
 		ENUMS(B_LIGHT, 2),
 		ENUMS(C_LIGHT, 2),
 		ENUMS(D_LIGHT, 2),
-		// No UI MODE light: the latch lights itself (rka::LatchButton).
+		// No UI MODE light: the latch lights its own cap (rka::CapLatch).
 		LIGHTS_LEN
 	};
 
@@ -169,8 +170,8 @@ struct Shoal : Module {
 		for (int ch = 0; ch < 4; ch++) {
 			const float v = host.out(ch);
 			outputs[A_OUTPUT + ch].setVoltage(v);
-			lights[A_LIGHT + 2 * ch].setBrightness(std::max(v, 0.f) / 5.f);
-			lights[A_LIGHT + 2 * ch + 1].setBrightness(std::max(-v, 0.f) / 5.f);
+			// Full at 5 V of either sign.
+			lights[A_LIGHT + 2 * ch].setBrightness(std::fabs(v) / 5.f);
 			// Smoothed, so a 1 ms trigger still shows.
 			lights[TR1_LIGHT + ch].setBrightnessSmooth(host.gateHigh(ch) ? 1.f : 0.f, args.sampleTime);
 		}
@@ -178,7 +179,8 @@ struct Shoal : Module {
 };
 
 
-// The output voltages over the scope: "A:+1.83V" four times, evenly spaced.
+// The output voltages over the scope: "+1.83V" four times, each under its
+// channel letter on the panel.
 struct OutputStrip : widget::Widget {
 	Shoal* module = nullptr;
 
@@ -188,14 +190,14 @@ struct OutputStrip : widget::Widget {
 			if (font) {
 				nvgFontFaceId(args.vg, font->handle);
 				nvgFontSize(args.vg, box.size.y * 0.85f);
-				nvgFillColor(args.vg, RkaTheme::CYAN);
+				nvgFillColor(args.vg, RkaTheme::SIGNAL);
 				nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 				const float cell = box.size.x / 4.f;
 				for (int ch = 0; ch < 4; ch++) {
 					float v = module ? module->outputs[Shoal::A_OUTPUT + ch].getVoltage() : 0.f;
 					if (std::fabs(v) < 0.005f)
 						v = 0.f;   // no "-0.00V"
-					const std::string s = string::f("%c:%+.2fV", 'A' + ch, v);
+					const std::string s = string::f("%+.2fV", v);
 					nvgText(args.vg, cell * (ch + 0.5f), box.size.y / 2.f, s.c_str(), NULL);
 				}
 			}
@@ -232,10 +234,8 @@ struct ShoalWidget : ModuleWidget {
 				previewHost->process();
 		}
 
-		addChild(createWidget<ThemedScrew>(Vec(RACK_GRID_WIDTH, 0)));
-		addChild(createWidget<ThemedScrew>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, 0)));
-		addChild(createWidget<ThemedScrew>(Vec(RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
-		addChild(createWidget<ThemedScrew>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
+		for (const Vec& screw : SCREWS)
+			addChild(createWidgetCentered<rka::Screw>(mm2px(screw)));
 
 		addScreen(SCREEN_SCOPE, false);
 		menuScreen = addScreen(SCREEN_EDITOR, true);
@@ -255,11 +255,12 @@ struct ShoalWidget : ModuleWidget {
 
 		addEncoder(WIDGET_ENC_L, shoal::ENCODER_L);
 		addEncoder(WIDGET_ENC_R, shoal::ENCODER_R);
-		addParam(createParamCentered<rka::HoldButton>(mm2px(PARAM_ENC_L_PUSH), module, Shoal::ENC_L_PUSH_PARAM));
-		addParam(createParamCentered<rka::HoldButton>(mm2px(PARAM_ENC_R_PUSH), module, Shoal::ENC_R_PUSH_PARAM));
-		addParam(createParamCentered<rka::HoldButton>(mm2px(PARAM_UP), module, Shoal::UP_PARAM));
-		addParam(createParamCentered<rka::HoldButton>(mm2px(PARAM_DOWN), module, Shoal::DOWN_PARAM));
-		rka::LatchButton* uiMode = createParamCentered<rka::LatchButton>(mm2px(PARAM_UI_MODE), module, Shoal::UI_MODE_PARAM);
+		addParam(createParamCentered<rka::CapButton>(mm2px(PARAM_ENC_L_PUSH), module, Shoal::ENC_L_PUSH_PARAM));
+		addParam(createParamCentered<rka::CapButton>(mm2px(PARAM_ENC_R_PUSH), module, Shoal::ENC_R_PUSH_PARAM));
+		addParam(createParamCentered<rka::CapButton>(mm2px(PARAM_UP), module, Shoal::UP_PARAM));
+		addParam(createParamCentered<rka::CapButton>(mm2px(PARAM_DOWN), module, Shoal::DOWN_PARAM));
+		// No light id: the cap is lit from the param itself.
+		rka::CapLatch* uiMode = createParamCentered<rka::CapLatch>(mm2px(PARAM_UI_MODE), module, Shoal::UI_MODE_PARAM);
 		uiMode->litWithoutModule = true;  // the default, friendly mode, as step() shows it
 		addParam(uiMode);
 
@@ -269,11 +270,12 @@ struct ShoalWidget : ModuleWidget {
 		const Vec out[4] = {OUTPUT_A, OUTPUT_B, OUTPUT_C, OUTPUT_D};
 		const Vec outLight[4] = {LIGHT_A, LIGHT_B, LIGHT_C, LIGHT_D};
 		for (int i = 0; i < 4; i++) {
-			addInput(createInputCentered<ThemedPJ301MPort>(mm2px(trIn[i]), module, Shoal::TR1_INPUT + i));
-			addChild(createLightCentered<SmallLight<rka::AmberLight>>(mm2px(trLight[i]), module, Shoal::TR1_LIGHT + i));
-			addInput(createInputCentered<ThemedPJ301MPort>(mm2px(cvIn[i]), module, Shoal::CV1_INPUT + i));
-			addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(out[i]), module, Shoal::A_OUTPUT + i));
-			addChild(createLightCentered<SmallLight<rka::CyanMagentaLight>>(mm2px(outLight[i]), module, Shoal::A_LIGHT + 2 * i));
+			addInput(createInputCentered<rka::BrassPort>(mm2px(trIn[i]), module, Shoal::TR1_INPUT + i));
+			addChild(createLightCentered<rka::JewelLight>(mm2px(trLight[i]), module, Shoal::TR1_LIGHT + i));
+			addInput(createInputCentered<rka::BrassPort>(mm2px(cvIn[i]), module, Shoal::CV1_INPUT + i));
+			addOutput(createOutputCentered<rka::BrassPort>(mm2px(out[i]), module, Shoal::A_OUTPUT + i));
+			// One light per output, on its tile: the first id of its pair.
+			addChild(createLightCentered<rka::JewelLight>(mm2px(outLight[i]), module, Shoal::A_LIGHT + 2 * i));
 		}
 	}
 
@@ -296,7 +298,7 @@ struct ShoalWidget : ModuleWidget {
 	rka::PixelScreen* addScreen(const math::Rect& mm, bool menu) {
 		rka::PixelScreen* s = createWidget<rka::PixelScreen>(mm2px(mm.pos));
 		s->box.size = mm2px(mm.size);
-		s->colour = RkaTheme::CYAN;
+		s->colour = RkaTheme::SIGNAL;
 		s->source = [=](uint8_t* frame) {
 			shoal::Host* h = host();
 			if (!h)
@@ -313,7 +315,7 @@ struct ShoalWidget : ModuleWidget {
 	}
 
 	void addEncoder(const Vec& mm, shoal::Encoder which) {
-		rka::Encoder* e = createWidgetCentered<rka::Encoder>(mm2px(mm));
+		rka::KnurlEncoder* e = createWidgetCentered<rka::KnurlEncoder>(mm2px(mm));
 		e->onTurn = [=](int detents) {
 			Shoal* m = getModule<Shoal>();
 			if (!m)

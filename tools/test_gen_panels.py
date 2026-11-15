@@ -21,10 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # The Nightglow panel sources as committed before the Instrument look
 # existed (1080efe). A module's two entries are deleted in the commit that
 # converts it; until then its output may not change by a byte.
-NIGHTGLOW_SHA256 = {
-    "shoal/Shoal-dark.svg": "ac81d3ef7eb4cf2f185855456269fbd38219cbf6e526b3850144c65e07764f69",
-    "shoal/Shoal.svg": "6f0f8dafb53b168f535263cdd5deee7faa4791b8d5ac35eb25704df1794dade2",
-}
+NIGHTGLOW_SHA256 = {}
 
 # src/RkaTheme.hpp as it was before the Instrument block was added: these
 # lines must stay, in this order, at the head of the file.
@@ -730,6 +727,104 @@ class Artwork(unittest.TestCase):
 
     def test_specimen_is_not_a_module(self):
         self.assertNotIn("Specimen", g.PANELS)
+
+
+class ShoalPanel(unittest.TestCase):
+    """What Shoal's layout promises, whatever its positions are tuned to."""
+
+    def setUp(self):
+        self.spec = g.PANELS["Shoal"]
+        self.by = {c.id: c for c in g.comps_of("Shoal", self.spec)}
+
+    def away(self, a, b):
+        return math.hypot(self.by[a].x - self.by[b].x, self.by[a].y - self.by[b].y)
+
+    def test_screens_keep_their_pixel_size(self):
+        screens = {name: (w, h) for name, _, _, w, h in self.spec["screens"]}
+        self.assertEqual(screens, {"STRIP": (83.2, 5.0), "SCOPE": (83.2, 41.6), "EDITOR": (83.2, 41.6)})
+        self.assertAlmostEqual(128 * 0.65, 83.2)
+        self.assertAlmostEqual(64 * 0.65, 41.6)
+        for name in ("SCOPE", "EDITOR"):
+            self.assertEqual(self.spec["rulers"][name]["px"], 0.65)
+        # Numbered 0 to 128 under the editor only.
+        numerals = [t.s for t in g.instrument_texts("Shoal", self.spec) if "under SCREEN_" in t.what]
+        self.assertEqual(numerals, ["0", "32", "64", "96", "128"])
+        self.assertTrue(all("SCREEN_EDITOR" in t.what for t in g.instrument_texts("Shoal", self.spec)
+                            if "under SCREEN_" in t.what))
+
+    def test_channel_letters_sit_over_the_strips_four_cells(self):
+        _, x, y, w, _ = next(s for s in self.spec["screens"] if s[0] == "STRIP")
+        letters = {n[2]: n for n in self.spec["notes"] if n[2] in "ABCD" and len(n[2]) == 1}
+        for ch, letter in enumerate("ABCD"):
+            self.assertAlmostEqual(letters[letter][0], x + w * (ch + 0.5) / 4, places=6)
+            self.assertLess(letters[letter][1], y)
+
+    def test_each_push_is_the_same_distance_from_its_encoder_and_joined_to_it(self):
+        left, right = self.away("PARAM_ENC_L_PUSH", "WIDGET_ENC_L"), self.away("PARAM_ENC_R_PUSH", "WIDGET_ENC_R")
+        self.assertAlmostEqual(left, right, places=2)
+        self.assertLess(abs(left - 16.5), 1.0)
+        self.assertIn(["PARAM_ENC_L_PUSH", "WIDGET_ENC_L"], self.spec["traces"])
+        self.assertIn(["PARAM_ENC_R_PUSH", "WIDGET_ENC_R"], self.spec["traces"])
+        # Each push is nearer its own encoder than the other one.
+        self.assertGreater(self.away("PARAM_ENC_L_PUSH", "WIDGET_ENC_R"), left + 5)
+        self.assertGreater(self.away("PARAM_ENC_R_PUSH", "WIDGET_ENC_L"), right + 5)
+
+    def test_the_sources_are_not_level_and_ripple_across_the_panel(self):
+        sources = [(self.by[i].x, self.by[i].y) for i in ("WIDGET_ENC_L", "WIDGET_ENC_R")]
+        self.assertNotEqual(sources[0][1], sources[1][1])
+        w = self.spec["hp"] * g.HP
+        far = max(math.hypot(x - cx, y - cy) for cx, cy in sources for x in (0, w) for y in (0, g.PANEL_H))
+        for src in sources:
+            radii = sorted(r for cx, cy, r in self.spec["circles"] if (cx, cy) == src)
+            self.assertEqual(radii[:3], [16, 26, 36])
+            self.assertTrue(all(b - a == 10 for a, b in zip(radii, radii[1:])))
+        self.assertGreaterEqual(max(r for _, _, r in self.spec["circles"]), far - 10)
+        self.assertFalse(self.spec.get("limbs"))
+
+    def test_encoder_faces_have_one_even_tick_per_detent(self):
+        for enc in ("WIDGET_ENC_L", "WIDGET_ENC_R"):
+            ticks = g.face_ticks(self.spec["faces"][enc])
+            self.assertEqual([major for _, major in ticks], [False] * 24)
+            self.assertEqual(self.by[enc].size, "enc")
+
+    def test_up_is_stacked_over_down_on_no_arc_and_apart_from_the_rest(self):
+        up, down = self.by["PARAM_UP"], self.by["PARAM_DOWN"]
+        self.assertEqual(up.x, down.x)
+        self.assertLess(up.y, down.y)
+        self.assertEqual(self.spec["label_at"]["PARAM_UP"], "right")
+        self.assertEqual(self.spec["label_at"]["PARAM_DOWN"], "right")
+        pair = self.away("PARAM_UP", "PARAM_DOWN")
+        for b in ("PARAM_UP", "PARAM_DOWN"):
+            # No ripple runs through the button's centre: it is on no arc.
+            for cx, cy, r in self.spec["circles"]:
+                self.assertGreater(abs(math.hypot(self.by[b].x - cx, self.by[b].y - cy) - r), 1.5, (b, cx, cy, r))
+            # Farther from every encoder and push than from its partner.
+            for other in ("WIDGET_ENC_L", "WIDGET_ENC_R", "PARAM_ENC_L_PUSH", "PARAM_ENC_R_PUSH", "PARAM_UI_MODE"):
+                reach = g.edge_radius(self.spec, self.by[other]) - self.by[other].r
+                self.assertGreater(self.away(b, other) - reach, pair + 1.0, (b, other))
+
+    def test_room_to_click_round_ui_mode(self):
+        # At least 2 mm of ground between UI MODE's cap and every other control.
+        ui = self.by["PARAM_UI_MODE"]
+        for c in self.by.values():
+            if c.id != ui.id and c.kind in ("param", "widget"):
+                self.assertGreaterEqual(self.away(ui.id, c.id) - ui.r - g.edge_radius(self.spec, c), 2.0, c.id)
+
+    def test_every_output_is_on_a_tile_with_its_letter_and_its_light(self):
+        tiles = {t["port"]: t for t in self.spec["tiles"]}
+        for n in "ABCD":
+            self.assertEqual(tiles[f"OUTPUT_{n}"]["light"], f"LIGHT_{n}")
+        names = [t for t in g.instrument_texts("Shoal", self.spec) if t.what in [f'label "{n}"' for n in "ABCD"]]
+        self.assertEqual(len(names), 4)
+        self.assertTrue(all(t.colour == "ink" for t in names))
+
+    def test_component_order_is_the_layout_headers(self):
+        # The widget reads these constants; none may vanish.
+        ids = [c.id for c in g.comps_of("Shoal", self.spec)]
+        want = (["WIDGET_ENC_L", "WIDGET_ENC_R", "PARAM_ENC_L_PUSH", "PARAM_ENC_R_PUSH", "PARAM_UP", "PARAM_DOWN",
+                 "PARAM_UI_MODE"] + [f"INPUT_TR{i}" for i in "1234"] + [f"LIGHT_TR{i}" for i in "1234"]
+                + [f"INPUT_CV{i}" for i in "1234"] + [f"LIGHT_{n}" for n in "ABCD"] + [f"OUTPUT_{n}" for n in "ABCD"])
+        self.assertEqual(sorted(ids), sorted(want))
 
 
 class Committed(unittest.TestCase):

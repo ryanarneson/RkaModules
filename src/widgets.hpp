@@ -643,7 +643,7 @@ struct PixelScreen : widget::Widget {
 	static constexpr int W = 128, H = 64, BYTES = W * H / 8;
 
 	std::function<bool(uint8_t* frame)> source;   // fills BYTES; false: draw nothing
-	NVGcolor colour = RkaTheme::CYAN;
+	NVGcolor colour = RkaTheme::SIGNAL;
 	uint8_t frame[BYTES] = {};
 
 	bool lit(int x, int y) const {

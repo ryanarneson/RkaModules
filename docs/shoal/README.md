@@ -24,13 +24,34 @@ This page covers the module itself. For what each app does, read the
 o_C user manual for v1.3: <http://ornament-and-cri.me/user-manual-v1_3/>.
 A fuller manual comes later.
 
+## The panel
+
+Shoal is drawn as ripples from two sources: the two encoders are the
+sources, set at different heights, and the faint circles spreading from
+each cross the whole panel.
+
+- The three screens are on the left; everything on them is drawn in cyan.
+- **ENCODER L** and **ENCODER R** each sit on a dial ticked once per
+  detent. They have no pointer, since they turn without end; the knurled
+  rim moves as you turn. Each encoder's **PUSH** button is beside it,
+  joined to it by a line.
+- **UP** over **DOWN** stand on their own below the encoders, with
+  **UI MODE** to their right.
+- Below the controls is the jack field: **TRIG** and **CV** inputs in two
+  columns, rows 1 to 4, a light beside each trigger jack, and the outputs
+  **A** to **D**, each on an ivory tile with its letter and its light.
+
 ## Screens
 
 - The **upper screen** is the o_C screen the hardware shows when idle:
   the current app's scope or status view. It is the same in both modes.
 - The **lower screen** is the settings list (friendly mode) or the o_C
   menu screen (hardware mode).
-- The strip above them shows the four output voltages.
+- The strip above them shows the four output voltages, each under its
+  channel's letter.
+- The scales outside the two screens count firmware pixels: a tick every
+  8, a longer one every 32, numbered under the lower screen. They are
+  128 by 64, as on the hardware.
 
 ## Friendly mode
 
@@ -105,7 +126,7 @@ segment selected.
 
 **Click a row's label** to move the firmware's menu cursor to that row
 without changing anything. The row under the cursor is tinted and has a
-bar on its left edge: cyan, or amber while the firmware is editing that
+bar on its left edge: cyan, or brass while the firmware is editing that
 value (an R push on the hardware). Any edit made in the list also leaves
 the cursor on the edited row, so after switching to hardware mode the
 right encoder is on the setting you last touched. The encoders and
@@ -123,7 +144,7 @@ the wheel scrolls the rack as usual.
 
 The app menu (a long press of the right encoder's button) and the apps'
 own editors (below) take over the hardware's controls, and the firmware
-accepts no settings edits until they close. While one is open, an amber
+accepts no settings edits until they close. While one is open, a brass
 banner under the header reads "HARDWARE EDITOR OPEN" and the list is
 dimmed and takes no edits. Click the banner to switch to hardware mode
 and finish there. The app picker in the header still works.
@@ -159,13 +180,13 @@ sub-editors.
 
 ## Controls
 
-- **ENC L / ENC R**: endless encoders. Drag up to turn clockwise, down
+- **ENCODER L / ENCODER R**: endless encoders. Drag up to turn clockwise, down
   to turn anticlockwise: 8 px of mouse travel per detent, or 32 px with
   Ctrl (Cmd on a Mac) held for fine steps. The scroll wheel turns them,
   one detent per notch, only when Rack's "scroll wheel knob control"
   setting is on; with it off the wheel scrolls the rack as usual.
   Encoder acceleration starts on, as on the hardware.
-- The round button under each encoder is that encoder's push; **UP** and
+- The **PUSH** button beside each encoder is that encoder's push; **UP** and
   **DOWN** are the o_C's two buttons. Click to press: the button is down
   for as long as the mouse is held, so a long press is a long click.
   **Shift-click** latches a button down, for the gestures that hold a
@@ -176,13 +197,13 @@ sub-editors.
 ## Inputs and outputs
 
 - **TRIG 1–4**: trigger and gate inputs. A rising edge counts when the
-  voltage passes 1 V; the input reads low again below 0.1 V. The amber
+  voltage passes 1 V; the input reads low again below 0.1 V. The
   light beside each jack shows its state.
 - **CV 1–4**: CV inputs, clamped to −3.33 V to +6.67 V, the hardware's
   input range.
 - **A–D**: outputs, −3.75 V to +6.25 V, the hardware's DAC range. The
-  light beside each is cyan for positive voltages and magenta for
-  negative ones, full at 5 V.
+  light on each output's tile brightens with the size of the voltage,
+  positive or negative, and is full at 5 V.
 - A polyphonic cable into an input uses its first channel; the outputs
   are monophonic.
 - The outputs start at 0 V when the module is added, initialized or
@@ -207,7 +228,7 @@ sub-editors.
 - **Sub-editors are hardware mode.** User scale notes, Sequins steps,
   Acid Curds chords and Automatonnetz cells are edited
   in hardware mode, reached from the row that says so (see "What stays in
-  hardware mode"). While one is open the list shows the amber banner and
+  hardware mode"). While one is open the list shows the brass banner and
   takes no edits.
 - **Harrington 1200, Euclidean rows.** After loading a patch saved with
   Trigger type set to Eucl, the Euclidean rows stay hidden until Trigger

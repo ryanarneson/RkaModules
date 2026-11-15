@@ -39,3 +39,4 @@
   attenuverter trim; panels can carry glowing rings.
 - New module: **Shoal**, 28 HP: the Ornament & Crime v1.3.6 firmware and
   all 13 apps in hardware mode; its settings save with the patch.
+  - Drawn in the "Instrument" look, as ripples from two sources.
