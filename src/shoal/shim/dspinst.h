@@ -5,16 +5,19 @@
 #include <stdint.h>
 
 // computes limit((val >> rshift), 2**bits): signed saturation to `bits` bits.
+// Defined for bits 1..32 and rshift 0..63 (rshift >= 32 shifts out everything
+// but the sign, like an arithmetic shift). Out-of-range arguments are clamped.
 static inline int32_t signed_saturate_rshift(int32_t val, int bits, int rshift) {
-	int32_t out = val >> rshift;
-	int32_t max = (int32_t) (1u << (bits - 1));
-	if (out >= 0) {
-		if (out > max - 1) out = max - 1;
-	}
-	else {
-		if (out < -max) out = -max;
-	}
-	return out;
+	if (bits < 1) bits = 1;
+	if (bits > 32) bits = 32;
+	if (rshift < 0) rshift = 0;
+	if (rshift > 63) rshift = 63;
+	int64_t out = rshift >= 32 ? (val < 0 ? -1 : 0) : (int64_t) (val >> rshift);
+	int64_t max = ((int64_t) 1 << (bits - 1)) - 1;
+	int64_t min = -((int64_t) 1 << (bits - 1));
+	if (out > max) out = max;
+	if (out < min) out = min;
+	return (int32_t) out;
 }
 
 // computes ((a[31:0] * b[15:0]) >> 16); b[15:0] is signed.

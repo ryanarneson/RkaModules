@@ -34,9 +34,26 @@ static void testSchmitt() {
 	CHECK(!s.process(0.5f) && s.high, "0.5 stays high, no new edge");
 	CHECK(!s.process(0.09f) && !s.high, "0.09 goes low");
 	CHECK(!s.process(std::nanf("")) && !s.high, "NaN changes nothing");
+	// Thresholds are strict: exactly 1.0 V does not trigger, exactly 0.1 V does not release.
+	shoal::Schmitt t;
+	CHECK(!t.process(1.f) && !t.high, "exactly 1.0 V stays low");
+	CHECK(t.process(1.0001f) && t.high, "just above 1 V triggers");
+	CHECK(!t.process(0.1f) && t.high, "exactly 0.1 V stays high");
+	CHECK(!t.process(0.0999f) && !t.high, "just below 0.1 V releases");
 }
 
 static void testTickClock() {
+	for (double bad : {0.0, -1.0, -48000.0, (double) std::nan("")}) {
+		shoal::TickClock c;
+		c.setSampleRate(bad);
+		long total = 0;
+		for (int i = 0; i < 48000; i++) {
+			int n = c.advance();
+			CHECK(n >= 0 && n < 10, "bad rate %g gives sane ticks", bad);
+			total += n;
+		}
+		CHECK(total >= 16666 && total <= 16667, "bad rate %g falls back to 48 kHz", bad);
+	}
 	const double rates[] = {8000, 44100, 48000, 96000, 768000};
 	for (double rate : rates) {
 		shoal::TickClock c;
@@ -94,6 +111,19 @@ static void testEncoderPins() {
 		CHECK(sum == -2 && events == 2, "turn(-2): sum %d events %d", sum, events);
 	}
 	{
+		// A hostile turn() is capped, not unbounded.
+		shoal::EncoderPins p;
+		FwEncoder e;
+		p.turn(100000000);
+		int events = 0;
+		for (int i = 0; i < 5000; i++)
+			events += e.read(p) != 0;
+		CHECK(events > 0 && events <= 300, "queue cap: %d events", events);
+		bool a, b;
+		p.poll(a, b);
+		CHECK(a && b, "idle after capped queue drains");
+	}
+	{
 		// Direction changes back to back keep their order.
 		shoal::EncoderPins p;
 		FwEncoder e;
@@ -127,6 +157,20 @@ static void testDspinst() {
 			}
 		}
 	}
+	// Wide bits / rshift ranges against an int64 definition.
+	for (int32_t a : vals) {
+		for (int bits : {1, 16, 31, 32}) {
+			for (int sh : {0, 31, 32, 63}) {
+				int64_t v = sh >= 32 ? (a < 0 ? -1 : 0) : (int64_t) (a >> sh);
+				int64_t hi = ((int64_t) 1 << (bits - 1)) - 1, lo = -((int64_t) 1 << (bits - 1));
+				int64_t want = v > hi ? hi : (v < lo ? lo : v);
+				CHECK(signed_saturate_rshift(a, bits, sh) == (int32_t) want, "ssat a=%d bits=%d sh=%d", a, bits, sh);
+			}
+		}
+	}
+	CHECK(signed_saturate_rshift(INT32_MAX, 32, 0) == INT32_MAX && signed_saturate_rshift(INT32_MIN, 32, 0) == INT32_MIN, "bits 32 passes through");
+	CHECK(signed_saturate_rshift(5, 1, 0) == 0 && signed_saturate_rshift(-5, 1, 0) == -1, "bits 1 is {-1,0}");
+	CHECK(signed_saturate_rshift(-5, 16, 40) == -1 && signed_saturate_rshift(5, 16, 40) == 0, "rshift >= 32 keeps the sign");
 	// Spot values, written by hand.
 	CHECK(signed_multiply_32x16b(65536, 0x4000) == 16384, "65536 * 16384 >> 16");
 	CHECK(signed_multiply_32x16b(65536, 0x8000) == -32768, "low half is signed");

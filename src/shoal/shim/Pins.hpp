@@ -1,6 +1,7 @@
 #pragma once
 // Synthesises the encoder's two quadrature pins for the firmware's
 // Encoder::Poll/Read (UI/ui_encoder.h). Header-only, Rack-free.
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 
