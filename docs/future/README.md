@@ -27,6 +27,28 @@ takes one more instrument and builds its panel geometry from it.
 | [Tackle](tackle.md) | Four attenuverters with offset | Block and tackle | 8 HP |
 | [Spindrift](spindrift.md) | Granular cloud, with a grain window | An anemometer | 10 HP |
 
+## Small utilities, 2 HP
+
+A standard jack is 8 mm across, so anything with a jack needs 2 HP. At
+this width the look reduces to: the name small at the top with a
+crosshair origin beneath it, one trace down the centre line through every
+control (breaking behind each label), outputs on ivory tiles, and the
+mark at the foot shortened to "R K A". These take a nautical name without
+an instrument of their own; there is no room for one.
+
+| Module | What it does |
+|--------|--------------|
+| [Cleat](cleat.md) | Multiple: one input to five outputs |
+| [Splice](splice.md) | Precision adder: four inputs summed at unity |
+| [Reef](reef.md) | Two attenuators |
+| [Lull](lull.md) | Slew limiter with separate rise and fall |
+| [Hold](hold.md) | Sample and hold, with track |
+| [Bell](bell.md) | Manual trigger and gate; gate to trigger |
+
+Two 1 HP ideas were sketched and not kept for now: Telltale, a strip of
+lights showing the outputs of the RKA module on its left, and Batten, a
+blank panel graduated as a ruler.
+
 The mockups are sketches: sizes are approximate and the typeface is a
 stand-in.
 
