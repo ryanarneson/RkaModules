@@ -28,3 +28,7 @@ takes one more instrument and builds its panel geometry from it.
 
 The mockups are sketches: sizes are approximate and the typeface is a
 stand-in.
+
+Rulings from the user that apply to every panel here: the "R K A ·
+INSTRUMENTS" mark sits at the foot, overlapping no knob, button or jack;
+and a dial turns clockwise for more of what it does.

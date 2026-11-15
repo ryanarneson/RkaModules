@@ -138,8 +138,11 @@ Rack, the stock themed port on the same tiles is an acceptable fallback.
 
 **Lettering.** *(proposal)* Engraved capitals: a condensed, DIN-like sans,
 letterspaced. Module name large and ivory at top left with a one-line
-description beneath in dim; control names ivory; secondary names dim; an
-"R K A · INSTRUMENTS" mark small and dim near the foot. Pick one openly
+description beneath in dim; control names ivory; secondary names dim. The
+"R K A · INSTRUMENTS" mark is one small dim line centred at the foot of
+the panel. The user was explicit that it must not overlap any knob,
+button or jack, so it is never tucked between controls, and the bottom
+row of a panel must leave it room. Pick one openly
 licensed face (the panel pipeline converts text to paths, so only the
 build machine needs it).
 
@@ -220,7 +223,7 @@ positive toward the right.
   uncrossed; the attenuverters carry no labels because the traces name
   them.
 - **Outputs** in a straight row at y = 116: SUB in column 0, L and R in
-  columns 3 and 4, with the RKA mark between them.
+  columns 3 and 4.
 - **Sounding line** *(proposal)*: a faint construction radius from the
   origin at −10°, with small brass numerals "10" and "20" where it crosses
   the limb and the filter ping. It gives the pings a depth scale. If it
