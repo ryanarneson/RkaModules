@@ -4,7 +4,7 @@ RACK_DIR ?= ../..
 # One folder per module: code and test_*.cpp tests in src/<module>/,
 # panels in res/<module>/ (generated from res-src/<module>/). src/ itself
 # has the shared plugin entry point and widgets.
-MODULES = sway fathom
+MODULES = sway fathom shoal
 
 # FLAGS will be passed to both the C and C++ compiler
 FLAGS += -Isrc
@@ -48,6 +48,27 @@ TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_
 .PHONY: test
 test: $(TEST_BINS)
 	@for t in $(TEST_BINS); do ./$$t || exit 1; done
+
+SHOAL_FW_FLAGS = -std=c++17 -fwrapv -fno-strict-aliasing -Isrc/shoal/shim -Isrc/shoal/firmware
+SHOAL_TEST_FLAGS = $(SHOAL_FW_FLAGS) -O1 -g -fsanitize=address,undefined \
+	-fno-sanitize=alignment,shift-base -fno-sanitize-recover=all
+SHOAL_DEPS = $(shell find src/shoal -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.ino' -o -name '*.cpp' \) ! -name 'test_*.cpp')
+
+# Firmware.cpp is C++17 inside a C++11 plugin. compile.mk puts -std=c++11 in
+# CXXFLAGS and then appends $(FLAGS), so FLAGS (not CXXFLAGS) lands last.
+build/src/shoal/Firmware.cpp.o: FLAGS += $(SHOAL_FW_FLAGS)
+
+build/test/shoal/Firmware.o: src/shoal/Firmware.cpp $(SHOAL_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) $(SHOAL_TEST_FLAGS) -Isrc -c $< -o $@
+
+build/test/shoal/test_shim: src/shoal/test_shim.cpp $(SHOAL_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) $(SHOAL_TEST_FLAGS) -Isrc $< -o $@
+
+build/test/shoal/test_%: src/shoal/test_%.cpp build/test/shoal/Firmware.o
+	@mkdir -p $(@D)
+	$(CXX) $(SHOAL_TEST_FLAGS) -Isrc $^ -o $@
 
 build/test/%: src/%.cpp $(wildcard src/*.hpp $(MODULES:%=src/%/*.hpp))
 	@mkdir -p $(@D)
