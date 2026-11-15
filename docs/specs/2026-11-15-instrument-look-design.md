@@ -150,6 +150,15 @@ build machine needs it).
 lit button lights its own cap. A screen is a window of dark glass in a
 brass bezel, with pixel rulers engraved outside it.
 
+**Direction.** A dial turns clockwise for more of what it does. The user
+ruled this on two idea panels whose lettered dials first ran the other
+way (`docs/future/fog.md`, `docs/future/squall.md`): no control should
+surprise the hand, however true to the instrument the reverse would be.
+
+**Narrow panels.** At 2 HP the look reduces to a small name, a crosshair
+origin, one trace down the centre line and outputs on tiles, with the
+mark shortened to "R K A". See `docs/future/README.md`.
+
 **Rack's "dark panels" preference.** *(proposal)* Kept as today: the same
 drawing turned down for dim rooms (deeper ground, dimmer ivory and brass),
 not a different design.
@@ -270,6 +279,15 @@ mockup's and are expected to move when the feature work is complete.
   rows, numbered 1 to 4 at the left. A cyan light beside each trigger
   jack. Each output on a wide ivory tile holding its letter, its light
   and its jack.
+
+## Beyond these three
+
+Thirty-seven ideas for further modules, each with a rough panel in this
+look, are noted in `docs/future/` and indexed in its README. They are
+concepts, not designs: none has been through a design conversation, and
+this document does not cover them. They did test the look, though, and it
+held across voices, effects, utilities, panels with windows and panels
+2 HP wide.
 
 ## Constraints
 
