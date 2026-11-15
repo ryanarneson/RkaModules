@@ -35,8 +35,9 @@ namespace piqued {
 
 enum { kSegments = kExtraId };
 
-// Trigger input 0..6: the table's TR1..TR4 (trigger_input_names has only
-// those four), then the other three channels' end of cycle in letter order
+// Trigger input 0..6: the table's TR1..TR4 (the first four entries mirror
+// the firmware's OC::Strings::trigger_input_names in OC_strings.cpp, which
+// has only those four), then the other three channels' end of cycle in letter order
 // (trigger_setting_to_channel_index skips the channel itself), which the
 // menu draws as "B EOC" and so on.
 constexpr const char* kTriggerNames[4][7] = {
@@ -172,6 +173,10 @@ constexpr Adapter kAdapter = { &header, &rows, &selectTab, &edit, &accepting, kN
 // person making the edit would be and where the list's cursor row is.
 
 constexpr int kPageListMax = 64;
+// A page lists at most every setting once: a list longer than kPageListMax
+// would be clamped silently by readList.
+static_assert(SEQ_CHANNEL_SETTING_LAST <= kPageListMax, "a Sequins page list fits a PageList");
+static_assert(CHORDS_SETTING_LAST <= kPageListMax, "an Acid Curds page list fits a PageList");
 struct PageList {
 	int n;
 	int16_t setting[kPageListMax];
@@ -192,7 +197,12 @@ inline void readList(const T& obj, PageList& out) {
 // builder (update_enabled_settings), which reads only the settings and the
 // page and writes only the list. The copy is a byte copy in local storage
 // (the settings objects hold a braids::Quantizer, which cannot be copied
-// as an object), never destroyed; obj is not written.
+// as an object), never destroyed; obj is not written. This relies on the two
+// builders it is used with reading only setting values and the menu page:
+// SEQ_Channel::update_enabled_settings (APP_A_SEQ.ino) and
+// Chords::update_enabled_settings (APP_CHORDS.ino). A firmware change to
+// either (reading other members, or anything through a pointer the copy
+// shares) needs this re-checked.
 template <class T, class Build>
 inline void otherPageList(const T& obj, int page, PageList& out, Build build) {
 	alignas(T) unsigned char bytes[sizeof(T)];
@@ -441,6 +451,10 @@ bool edit(const FriendlyEdit& e, const Row& row) {
 		default:
 			break;
 	}
+	// A cursor left editing on an editor row leaves edit mode first, before
+	// showRow reads the menu row (as quantizerEdit does).
+	if (editingOnEditorRow(c, &kMenu))
+		suspendAndResume();
 	const int menuRow = showRow(row.id, &shownPage, &selectedList, [](int s) { return idOf(selected(), s); });
 	if (menuRow < 0)
 		return false;
@@ -579,6 +593,8 @@ bool edit(const FriendlyEdit& e, const Row& row) {
 			button(OC::CONTROL_BUTTON_DOWN, true);
 		return e.type == FriendlyEdit::Press || e.type == FriendlyEdit::Focus;
 	}
+	if (editingOnEditorRow(c, &kMenu))  // before showRow reads the menu row
+		suspendAndResume();
 	const int menuRow = showRow(row.id, &shownPage, &pageList, &idOf);
 	if (menuRow < 0)
 		return false;
