@@ -608,9 +608,16 @@ Do in stage 3:
 Left open by stage 3 (friendly mode):
 
 - Mouse versions of the sub-editors: user scale notes, Sequins steps,
-  Acid Curds chords, Piqued segments, Automatonnetz cells (and the
-  References autotuner). They are reached from the list and edited in
-  hardware mode.
+  Acid Curds chords, Automatonnetz cells (and the References autotuner).
+  They are reached from the list and edited in hardware mode. (Piqued's
+  segment values became list rows in the final review's fixes.)
+- For anyone bisecting: commits 2375d9a to fa68873 do not build on Linux
+  or Windows (a missing `#include <cstring>`, added in d3e545d); macOS
+  builds them.
+- g++'s `-Wstringop-overflow` false alarm in `Text::digits`
+  (`Friendly.inc`), seen in the cross-builds up to d3e545d, is silenced
+  by an explicit bound on the write index; the warning was never a real
+  overflow (at most 28 of the buffer's 32 bytes are written).
 - Stage 4 as planned: the right-click menu, the References meters and
   the full manual (`docs/shoal/README.md` covers friendly mode, not each
   app).

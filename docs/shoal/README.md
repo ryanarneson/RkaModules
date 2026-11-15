@@ -58,16 +58,26 @@ Each row is a label on the left and a control on the right. The rows are
 the app's menu, in the firmware's order and with the firmware's names,
 plus rows for the things the hardware does with the left encoder, the
 buttons and long presses (CopierMaschine's Hold / Freeze, Harrington
-1200's Reset, Automatonnetz's Clock, and so on). Rows appear and
-disappear as on the hardware: when a setting hides or shows others, the
-list follows.
+1200's Reset all settings, Automatonnetz's Clock, and so on). Rows appear
+and disappear as on the hardware: when a setting hides or shows others,
+the list follows. Where the firmware labels a row with an arrow, the list
+names it instead: "Active notes" for a scale's note mask (the firmware's
+"--> edit" or "scale  -->"), "Steps" for Sequins' step mask, "Chords" for
+Acid Curds' "chords -->" and "Autotune" for References' "--> autotune".
+
+Piqued lists its envelope's segment values first: Attack, Decay,
+Sustain/Level and Release, as the envelope page names them, as many as
+the envelope type has (two for AD, ASR and ADL2). An edit goes through the
+envelope page as you would on the hardware and leaves it on the settings
+page; clicking a segment's label shows the envelope page with that
+segment selected.
 
 - **Slider** (a number): drag left or right on the bar. The drag moves the
   value from where it is, so a click on its own changes nothing; the bar's
   width is the whole range. Hold **Ctrl** (Cmd on a Mac) for a quarter of
   the speed, **Ctrl+Shift** (Cmd+Shift) for a sixteenth, to reach single
   steps on a wide range. **Double-click** sets the default. The value is
-  printed on the bar; a range that runs below zero fills from zero.
+  printed on the bar; a range that spans zero fills from zero.
 - **Dropdown** (a named value): click to open a menu of the values, with
   the current one ticked, and pick one. A value the firmware has no name
   for shows its number.
@@ -80,12 +90,18 @@ list follows.
   mask, the last cell will not go dark.
 - **Button** (a row that is all one button): click it to do what it says
   ("Reset", "Clock", "Copy scale to other channels", "Reset mask", and so
-  on). These are the hardware's button presses and long presses.
+  on). These are the hardware's button presses and long presses. The ones
+  that undo work ask first: Harrington 1200's "Reset all settings",
+  Automatonnetz's "Clear grid", Meta-Q's "Copy scale to all slots, both
+  channels" and the "Clear CV mapping" rows of Sequins and Acid Curds open
+  a small menu with the row's name; nothing happens unless you click
+  **Confirm**.
 - **Heading**: Sequins and Acid Curds have two menu pages on the
   hardware, parameters and CV mapping; the list shows both, each under a
   heading.
 - **"edit in hardware mode"**: a row whose editor is only in hardware
-  mode (see below). Clicking it switches UI MODE to hardware.
+  mode (see below). Clicking it moves the firmware's cursor to that row
+  and switches UI MODE to hardware, so hardware mode opens on it.
 
 **Click a row's label** to move the firmware's menu cursor to that row
 without changing anything. The row under the cursor is tinted and has a
@@ -115,7 +131,7 @@ and finish there. The app picker in the header still works.
 ## UI MODE
 
 The **UI MODE** button beside UP and DOWN switches the lower screen
-between friendly mode (its light on) and hardware mode (light off). The
+between friendly mode (the button lit cyan) and hardware mode (dark). The
 switch is saved with the patch and can be undone with Edit > Undo, like
 any switch. A patch saved before friendly mode existed opens in friendly
 mode, with its app and settings as saved. Both modes are views of the
@@ -128,12 +144,11 @@ shown, then worked as the o_C manual describes:
 
 | Editor | App | How to reach it |
 | --- | --- | --- |
-| User scale notes (and the scale editor's rotate, invert and other pages) | CopierMaschine, Quantermain, Meta-Q, Sequins, Acid Curds | Click the label of the note mask row, switch to hardware mode, press R on that row (notes can be edited with a user scale selected). |
-| Sequence steps (pitches, lengths, copy and paste) | Sequins | Click the label of the second "--> edit" row (the step mask), switch to hardware mode, press R. |
-| Chords and progressions | Acid Curds | The "chords -->" row: click its label, then the row's control, and press R. |
-| Envelope segments (S1 to S4) | Piqued | The "Envelope segments" row: click its label (the hardware goes to the envelope page), then the row's control; select a segment with the right encoder and press R to edit it. |
+| User scale notes (and the scale editor's rotate, invert and other pages) | CopierMaschine, Quantermain, Meta-Q, Sequins, Acid Curds | Click the label of the note mask row ("Active notes"; "mask" in CopierMaschine), switch to hardware mode, press R on that row (notes can be edited with a user scale selected). |
+| Sequence steps (pitches, lengths, copy and paste) | Sequins | Click the label of the "Steps" row, switch to hardware mode, press R. |
+| Chords and progressions | Acid Curds | Click the "Chords" row's control (hardware mode opens on that row) and press R. |
 | Cells | Automatonnetz | The "Cells" row switches mode; press L (the left encoder's button) for the cell view. |
-| Autotune | References | The "--> autotune" row: click its label, then the row's control, and press R. |
+| Autotune | References | Click the "Autotune" row's control (hardware mode opens on that row) and press R. |
 
 ## Hardware mode
 
@@ -190,7 +205,7 @@ sub-editors.
 ## Good to know
 
 - **Sub-editors are hardware mode.** User scale notes, Sequins steps,
-  Acid Curds chords, Piqued segments and Automatonnetz cells are edited
+  Acid Curds chords and Automatonnetz cells are edited
   in hardware mode, reached from the row that says so (see "What stays in
   hardware mode"). While one is open the list shows the amber banner and
   takes no edits.
@@ -201,9 +216,11 @@ sub-editors.
   that had no scale shows its Root and mask rows only once one of its
   settings is edited (Scale, CV Source or Trigger source, for example).
   The firmware's own menu behaves the same.
-- **Meta-Q's mask row** is labelled "--> edit" by the firmware. It belongs
+- **Meta-Q's "Active notes" row** (the firmware's "--> edit") belongs
   to the scale slot chosen by "scale #", not to the slot the header shows
   playing (the scale sequencer or the aux CV can move that one).
+- **Quadraturia, Coarse and Fine** do nothing while Tap tempo is on: the
+  firmware ignores the left encoder then, as on the hardware.
 - **References, "Mod range oct".** Negative values are lost when the
   patch is saved: a bug in the firmware itself, kept as the hardware has
   it.
@@ -223,7 +240,7 @@ sub-editors.
 ## Not there yet
 
 - Mouse versions of the sub-editors (user scale notes, Sequins steps,
-  Acid Curds chords, Piqued segments, Automatonnetz cells).
+  Acid Curds chords, Automatonnetz cells).
 - Right-click options: the ±5 V input range, encoder acceleration on/off
   and the app choice. The input range is already saved with the patch, so
   patches keep it when the option arrives.

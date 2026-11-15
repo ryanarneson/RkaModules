@@ -48,6 +48,9 @@ layout.
 - The Shoal module (`src/shoal/Shoal.cpp`) only maps jacks, buttons,
   lights and the patch data onto `shoal::Host`; only the engine thread
   touches the running core (restore and reset build a new one off it).
+- Shoal's friendly mode (`src/shoal/Friendly*.inc`): one adapter per app
+  in `FriendlyAdapters<n>.inc`; every edit replays the app's own encoder
+  and button handlers, never `setSettingRaw` or `apply_value`.
 - Voltage standards: audio ±5 V, bipolar CV ±5 V, unipolar CV 0–10 V,
   gates/triggers 0/10 V, V/OCT 1 V per octave; triggers detect with
   `SchmittTrigger` at 0.1 V / 1 V.
