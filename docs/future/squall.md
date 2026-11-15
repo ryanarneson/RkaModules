@@ -7,11 +7,15 @@ Status: idea, 2026-11-15. Not designed.
 **What it is.** A source of random voltages and gates with one control
 for how much is going on.
 
-**The instrument.** An aneroid barometer. Its dial is lettered the way
-real ones are, Stormy / Rain / Change / Fair / Calm. Turn Pressure down
-toward Stormy and more happens: denser noise, more steps, more gates.
+**The instrument.** An aneroid barometer. Its dial is lettered with a
+real barometer's words, running clockwise from Calm through Fair, Change
+and Rain to Stormy. Turn it up toward Stormy and more happens: denser
+noise, more steps, more gates. This is the reverse of a real barometer,
+where clockwise is fair weather, and it is deliberate: the user ruled
+that a dial turns clockwise for more. For the same reason the control is
+called Weather, not Pressure, since rising pressure would mean calm.
 
-**Sketched controls.** Pressure (the hero) with CV and attenuverter traced
+**Sketched controls.** Weather (the hero) with CV and attenuverter traced
 straight down from the dial, Gust (how bursty) and Slew (how smooth) on a
 graduated arc beneath it. Clock in and Freeze in. Outputs: Noise, Step
 (stepped random), Swell (smooth random) and Gate.
