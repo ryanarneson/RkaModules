@@ -442,6 +442,23 @@ void CoreTest::fixChecksum(uint8_t* image, bool appData) {
 		PageProbe<OC::GlobalSettingsStorage, OC::GlobalSettings>::fix(image + EEPROM_GLOBALSETTINGS_START);
 }
 
+void CoreTest::userScaleImageOffsets(int slot, size_t& span, size_t& numNotes, size_t& notes) {
+	size_t pageOff, dataOff, dataSize;
+	pageLayout(false, pageOff, dataOff, dataSize);
+	const size_t base = dataOff + offsetof(OC::GlobalSettings, user_scales) + slot * sizeof(OC::Scale);
+	span = base + offsetof(OC::Scale, span);
+	numNotes = base + offsetof(OC::Scale, num_notes);
+	notes = base + offsetof(OC::Scale, notes);
+}
+
+void CoreTest::inputMapRun(int numSlots, int range, const int32_t* inputs, int n, int8_t* slots) {
+	OC::Input_Map map;
+	map.Init();
+	map.Configure(OC::InputMaps::GetInputMap(numSlots), (uint8_t) range);
+	for (int i = 0; i < n; i++)
+		slots[i] = map.Process(inputs[i]);
+}
+
 int CoreTest::userScaleSlots() { return OC::Scales::SCALE_USER_LAST; }
 int CoreTest::userPatternSlots() { return OC::Patterns::PATTERN_USER_ALL; }
 int CoreTest::userChordSlots() { return OC::Chords::CHORDS_USER_LAST; }

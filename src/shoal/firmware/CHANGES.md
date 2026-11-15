@@ -184,9 +184,11 @@ is marked `// SHOAL:`.
   or more from every code word, and `codebook_[q - 1]` / `codebook_[q + 1]`
   ran off either end of the 16-entry array (index -2, -1 and 16; reachable
   from in-range settings, e.g. Sequins or Acid Curds on a CV input). The
-  neighbour indices are clamped to 0..15.
+  neighbour reads are now the values the Teensy build read: indices 16 and -1
+  alias the members next to `codebook_` (same layout on both), index -2 is 0.
 - `OC_apps.ino` (`sanitize_global_settings`, new, called after a good global
-  settings load): user scales, patterns and chords, the DAC scaling bytes
+  settings load): user scales (note count 4..16, as the scale editor keeps
+  it), patterns and chords, the DAC scaling bytes
   are brought into the ranges their editors allow, since a patch file can
   carry any bytes with a valid checksum.
 - `OC_apps.ino` (`restore_app_data`): `used` is clamped to the data size; the
@@ -197,9 +199,11 @@ is marked `// SHOAL:`.
   with `length_` 32 (in range for every app that uses it) shifts by the type's
   width, which is undefined; it now returns the whole register, as the
   Teensy's shift does.
-- `bjorklund.cpp` (`EuclideanFilter`): `num_steps` is clamped to 1..31, the
-  rows the pattern table has; H1200's Euclidean length reaches 32 (in range),
-  which read past the 1023-entry table.
+- `bjorklund.cpp` (`EuclideanFilter`, `EuclideanPattern`, new `bjorklund_row`):
+  only the table index is clamped (rows 1..31, beat columns 0..32); H1200's
+  Euclidean length reaches 32 (in range), which read past the 1023-entry
+  table. The cycle length `num_steps + 1` and the rotation keep the caller's
+  value, and position 32 reads as a rest, as the Teensy's shift gives.
 - `OC_input_maps.h` (`InputMaps::GetInputMap`): the index is clamped to the
   18 rows of the table; Sequins passes its sequence length (up to 32), which
   read past the table. Row 17 is the empty map.
@@ -208,7 +212,7 @@ is marked `// SHOAL:`.
   table, as `OC::Chords::GetChord` already does; the screensaver and the
   update counted slots past it.
 - `peaks_bytebeat.cpp` (`ByteBeat::ProcessSingleSample`, equations 2, 3, 5, 6,
-  8, 9, 10, 11, 13, 14): divisions, remainders and variable shifts go through
+  8, 9, 10, 11, 13, 14, 15): divisions, remainders and variable shifts go through
   `bb_div`, `bb_mod`, `bb_shr`, which give the Teensy's results where C++ is
   undefined (division by zero is a crash on x86; x/0 = 0, x%0 = x, a shift by
   32 or more empties the register). All are reachable from in-range

@@ -1328,35 +1328,35 @@ const uint32_t bjorklund_patterns[] = {
 4294967295 ,
 };
 
+// SHOAL: the pattern table has rows for num_steps 1..31 and 33 beat columns
+// (0..32). H1200's length reaches 32 and Piqued's 0 is guarded by its caller,
+// which read past either end of the table. Only the table index is clamped;
+// the cycle length (num_steps + 1) and the rotation keep the caller's value,
+// and a position of 32 (the 33rd step of a length-32 cycle) shifts out, as the
+// Teensy's shift does.
+static uint32_t bjorklund_row(uint8_t num_steps, uint8_t num_beats) {
+  const int row = num_steps < 1 ? 0 : (num_steps > 31 ? 30 : num_steps - 1);
+  return bjorklund_patterns[row * 33 + (num_beats > 32 ? 32 : num_beats)];
+}
+
 bool EuclideanFilter(uint8_t num_steps, uint8_t num_beats, uint8_t rotation, uint32_t clock) {
-  // SHOAL: the table has rows for num_steps 1..31, and H1200's length goes up
-  // to 32 (CONSTRAIN(..., 2, 32)), which read past the table (and 0 read
-  // before it). Clamped to the rows that exist.
-  if (num_steps < 1) num_steps = 1;
-  else if (num_steps > 31) num_steps = 31;
   if (num_beats > (num_steps + 1)) {
     num_beats = num_steps + 1;
   }
-  uint32_t pattern = bjorklund_patterns[((num_steps - 1) * 33) + num_beats]; 
+  uint32_t pattern = bjorklund_row(num_steps, num_beats);
   if (rotation) {
-    // Serial.print(pattern);
-    // Serial.print("\n");
     rotation = rotation % (num_steps + 1);
     pattern = rotl32(pattern, num_steps, rotation) ;
-    // Serial.print(pattern);
-    // Serial.print("\n------\n");
   }
   uint8_t position = clock % (num_steps + 1) ;
-  return static_cast<bool>(pattern & (0x01u << (position & 31))) ; // SHOAL: position <= 31 after the clamp; unsigned shift
+  return position < 32 && static_cast<bool>(pattern & (0x01u << position)) ;
 }
 
 uint32_t EuclideanPattern(uint8_t num_steps, uint8_t num_beats, uint8_t rotation) {
-  if (num_steps < 1) num_steps = 1; // SHOAL: the table's rows, as in EuclideanFilter
-  else if (num_steps > 31) num_steps = 31;
   if (num_beats > (num_steps + 1)) {
     num_beats = num_steps + 1;
   }
-  uint32_t pattern = bjorklund_patterns[((num_steps - 1) * 33) + num_beats]; 
+  uint32_t pattern = bjorklund_row(num_steps, num_beats); // SHOAL: clamped table index
   if (rotation) {
     rotation = rotation % (num_steps + 1);
     pattern = rotl32(pattern, num_steps, rotation) ;

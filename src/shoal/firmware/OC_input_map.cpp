@@ -94,14 +94,27 @@ int8_t Input_Map::Process(int32_t input) {
 
     // Enlarge the current voronoi cell a bit for hysteresis.
     // SHOAL: q is -1 when the input is 512 or more from every code word, and
-    // the neighbours q - 1 and q + 1 run off either end of the codebook at
-    // its first and last words; upstream read the memory around the array.
-    // Clamped, the read stays inside it.
+    // q - 1 and q + 1 reach index -2, -1 and 16 of codebook_, outside the
+    // array. Upstream read the neighbouring members. The layout is the same on
+    // the Teensy and here (see the class: bool enabled_, bool update_, int16_t
+    // codebook_[16], int8_t code_index_, int8_t num_slots_, no padding before
+    // codebook_ since int16_t aligns to 2, little-endian both), so codebook_[16]
+    // is the int16 of bytes code_index_ (low) and num_slots_ (high), and
+    // codebook_[-1] is enabled_ (low) and update_ (high). Both are read here as
+    // they were; only codebook_[-2] (the 2 bytes before the object) was
+    // whatever happened to precede it, and is 0 here.
+    auto word = [this](int i) -> int32_t {
+      if (i >= 0 && i < 16) return codebook_[i];
+      if (i == 16)
+        return static_cast<int16_t>(static_cast<uint16_t>(static_cast<uint8_t>(code_index_) | (static_cast<uint8_t>(num_slots_) << 8)));
+      if (i == -1)
+        return static_cast<int16_t>(static_cast<uint16_t>((enabled_ ? 1 : 0) | ((update_ ? 1 : 0) << 8)));
+      return 0;
+    };
+    previous_boundary_ = (9 * word(q - 1) + 7 * word(q)) >> 4;
+    next_boundary_ = (9 * word(q + 1) + 7 * word(q)) >> 4;
     if (q < 0) q = 0;
-    previous_boundary_ = (9 * codebook_[q > 0 ? q - 1 : 0] + 7 * codebook_[q]) >> 4;
-    next_boundary_ = (9 * codebook_[q < 15 ? q + 1 : 15] + 7 * codebook_[q]) >> 4;
-
-    if (q > num_slots_) q = num_slots_;
+    else if (q > num_slots_) q = num_slots_;
     code_index_ = _slot = q;
     update_ = false;
   }

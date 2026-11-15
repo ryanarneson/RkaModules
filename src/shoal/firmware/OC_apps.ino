@@ -138,7 +138,11 @@ static void sanitize_global_settings() {
   for (auto &scale : global_settings.user_scales) {
     if (scale.span < 1)
       scale.span = 1;
-    if (scale.num_notes > (uint32_t) kMaxScaleLength)
+    // The editor keeps 4..16 (OC_scale_edit.h:378); 0 divides (RotateMask's
+    // amount % num_notes), more than 16 runs off the notes array.
+    if (scale.num_notes < (uint32_t) kMinScaleLength)
+      scale.num_notes = kMinScaleLength;
+    else if (scale.num_notes > (uint32_t) kMaxScaleLength)
       scale.num_notes = kMaxScaleLength;
     for (auto &note : scale.notes) // the scale editor keeps 0 <= note <= span
       note = note < 0 ? 0 : (note > scale.span ? scale.span : note);

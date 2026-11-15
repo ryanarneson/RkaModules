@@ -193,7 +193,7 @@ uint16_t ByteBeat::ProcessSingleSample(uint8_t control) {
           break;        
         case 15: // Orac
           // Abducted, from Equation Composer Ptah bank
-          sample = (p0+(t_*pitch)>>p1%12)|((last_sample_%(p0+(t_*pitch)>>p0%4))+11+p2^t_)>>(p2>>12);
+          sample = (p0+(t_*pitch)>>p1%12)|((bb_mod(last_sample_, p0+(t_*pitch)>>p0%4))+11+p2^t_)>>(p2>>12);
           break;
         default:
           sample = 0 ;

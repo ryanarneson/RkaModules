@@ -35,6 +35,13 @@ struct CoreTest {
 	static void fixChecksum(uint8_t* image, bool appData);
 	// User data the firmware keeps outside the apps' settings (slot indices
 	// as the firmware's: 4 user scales, 4 patterns, 8 x 4 chords).
+	// Image offsets of user scale `slot`'s span (int16), note count (uint32)
+	// and first note (int16), for forging a global settings page.
+	static void userScaleImageOffsets(int slot, size_t& span, size_t& numNotes, size_t& notes);
+	// Feed `inputs` (ADC codes) in turn to a fresh OC::Input_Map set up with
+	// the firmware's map for `numSlots` slots and `range` (0: 5 V, 1: 10 V);
+	// slots[i] receives the slot chosen for inputs[i].
+	static void inputMapRun(int numSlots, int range, const int32_t* inputs, int n, int8_t* slots);
 	static int userScaleSlots();
 	static int userPatternSlots();
 	static int userChordSlots();

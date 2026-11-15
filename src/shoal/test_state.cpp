@@ -396,9 +396,25 @@ void testForgedImage() {
 			const int edits = n % 3 == 2 ? 300 : 1 + (int) (g.next() >> 8) % 30;
 			for (int j = 0; j < edits; j++)
 				img[dataOff + (g.next() >> 8) % dataSize] = (uint8_t) (g.next() >> 24);
+			// A known value in a field the firmware keeps as it is: user scale 1
+			// (span 1536, 12 notes, note 2 = 291). Read back after the restore, it
+			// proves the forged page was loaded, not rejected into defaults.
+			if (!appData) {
+				size_t span, numNotes, notes;
+				CoreTest::userScaleImageOffsets(1, span, numNotes, notes);
+				const int16_t spanV = 1536, noteV = 291;
+				const uint32_t countV = 12;
+				memcpy(&img[span], &spanV, sizeof(spanV));
+				memcpy(&img[numNotes], &countV, sizeof(countV));
+				memcpy(&img[notes + 2 * sizeof(int16_t)], &noteV, sizeof(noteV));
+			}
 			CoreTest::fixChecksum(img.data(), appData);
 			if (c.restore(img.data()))
 				accepted[page]++;
+			if (!appData)
+				CHECK(CoreTest::userScaleNote(c, 1, 2) == 291 && CoreTest::userScaleNumNotes(c, 1) == 12,
+					"global forged %d: marker note %d, %u notes", n, (int) CoreTest::userScaleNote(c, 1, 2),
+					(unsigned) CoreTest::userScaleNumNotes(c, 1));
 			for (int app = 0; app < shoal::kNumApps; app++) {
 				c.selectApp(app);
 				for (int ch = 0; ch < 4; ch++) {
@@ -425,6 +441,112 @@ void testForgedImage() {
 		accepted[0], accepted[1], kPerPage);
 }
 
+// Set every setting called `name` (all channels) to `value`.
+void setByName(Core& c, const char* name, int value) {
+	for (int i = 0; i < c.settingCount(); i++)
+		if (std::strcmp(c.settingInfo(i).name, name) == 0)
+			for (int ch = 0; ch < c.channels(); ch++)
+				c.setSettingRaw(ch, i, value);
+}
+
+// A forged user scale with a note count the scale editor never produces (it
+// keeps 4..16), then each app that rotates scale masks on that scale with a
+// mask-rotate CV applied: RotateMask divides by the note count.
+void testForgedUserScale() {
+	Core a;
+	std::vector<uint8_t> valid(kImage);
+	a.save(valid.data());
+	const uint32_t counts[] = { 0, 1, 3, 17, 0xFFFFFFFFu };
+	const int apps[] = { 0, 3, 4, 8, 11 };
+	Core c;
+	for (int slot = 0; slot < CoreTest::userScaleSlots(); slot++)
+		for (uint32_t count : counts) {
+			std::vector<uint8_t> img = valid;
+			size_t span, numNotes, notes;
+			CoreTest::userScaleImageOffsets(slot, span, numNotes, notes);
+			memcpy(&img[numNotes], &count, sizeof(count));
+			CoreTest::fixChecksum(img.data(), false);
+			CHECK(c.restore(img.data()), "slot %d, %u notes: forged page rejected", slot, (unsigned) count);
+			const uint32_t got = CoreTest::userScaleNumNotes(c, slot);
+			CHECK(got >= 4 && got <= 16, "slot %d, %u notes: restored %u", slot, (unsigned) count, (unsigned) got);
+			for (int app : apps) {
+				c.selectApp(app);
+				for (int i = 0; i < c.settingCount(); i++) {
+					const shoal::SettingInfo si = c.settingInfo(i);
+					const bool isScale = std::strcmp(si.name, "Scale") == 0 || std::strcmp(si.name, "scale") == 0;
+					for (int ch = 0; ch < c.channels(); ch++) {
+						if (isScale)
+							c.setSettingRaw(ch, i, slot);
+						// The mask-rotate CV, as each app has it (CopierMaschine rotates by
+						// CV3 with no setting): the aux CV destination "mask" is the last
+						// entry (Quantermain "CV aux >", Meta-Q "CV aux."); Sequins and
+						// Acid Curds pick a CV input.
+						if (std::strcmp(si.name, "CV aux >") == 0 || std::strcmp(si.name, "CV aux.") == 0)
+							c.setSettingRaw(ch, i, si.max);
+						if (std::strcmp(si.name, "mask rotate ->") == 0 || std::strcmp(si.name, "mask CV      >") == 0)
+							c.setSettingRaw(ch, i, 1 + ch % 4);
+					}
+				}
+				for (int ch = 0; ch < 4; ch++)
+					c.setCv(ch, 2.f + ch);
+				run(c, 0.2);
+				CHECK(allFinite(c), "slot %d, %u notes, app %d: outputs finite", slot, (unsigned) count, app);
+			}
+		}
+}
+
+// Viznutcracker sweet (app 10), equation 15: its divisor is 0 when t * pitch
+// is 0 and parameter 0 is 0..3 (step mode before the first gate, and after a
+// loop wrap to 0). Undefined in C++, a crash on x86.
+void testBytebeatEquation15() {
+	for (int p0 = 0; p0 < 4; p0++) {
+		for (int mode = 0; mode < 3; mode++) {
+			Core c;
+			c.selectApp(10);
+			setByName(c, "Equation", 15);
+			setByName(c, "Parameter 0", p0);
+			setByName(c, "Step mode", mode < 2 ? 1 : 0);
+			setByName(c, "Loop mode", mode >= 1 ? 1 : 0);
+			setByName(c, "Loop end", 2);   // wraps back to the loop begin (0) quickly
+			setByName(c, "Loop end +", 0);
+			setByName(c, "Loop end ++", 0);
+			setByName(c, "Speed", 255);
+			run(c, 0.1);   // before any gate: t is 0
+			for (int k = 0; k < 8; k++) {   // gates step t past the loop end, and wrap
+				pulse(c, 0);
+				run(c, 0.01);
+			}
+			run(c, 0.1);
+			CHECK(allFinite(c), "equation 15, p0 %d, mode %d: outputs finite", p0, mode);
+		}
+	}
+}
+
+// Input_Map on the Teensy read codebook_[16] and codebook_[-1] as the members
+// beside the array: the class is bool enabled_, bool update_, int16_t
+// codebook_[16], int8_t code_index_, int8_t num_slots_ (both builds, little
+// endian), so codebook_[16] = code_index_ | num_slots_ << 8. With the 16-slot
+// map on the 5 V range, codewords are 128 * i. Arriving at slot 15 from slot
+// 14, the next boundary is (9 * cb16 + 7 * cb15) >> 4 with cb16 =
+// 14 | 15 << 8 = 3854 (14 was the code index when the codeword was found):
+// 3007. Up to there the input stays in slot 15, though it is more than 512
+// from every codeword above 1920 + 512 (a clamped read would give a boundary
+// of 1920 and the search, finding no codeword, would drop to slot 0).
+void testInputMapUpperBoundary() {
+	const int cb15 = 128 * 15;
+	const int cb16 = 14 | (15 << 8);
+	const int nextBoundary = (9 * cb16 + 7 * cb15) >> 4;
+	CHECK(nextBoundary == 3007, "derived boundary %d", nextBoundary);
+	const int32_t in[] = { 128 * 14, cb15, cb15 + 600, 2432 + 100, nextBoundary - 1, nextBoundary, nextBoundary + 1 };
+	int8_t slot[7];
+	CoreTest::inputMapRun(16, 0, in, 7, slot);
+	CHECK(slot[0] == 14 && slot[1] == 15, "arrived at slots %d, %d", slot[0], slot[1]);
+	CHECK(slot[2] == 15, "%d: slot %d, want 15 (inside the boundary)", (int) in[2], slot[2]);
+	CHECK(slot[3] == 15, "%d: slot %d, want 15", (int) in[3], slot[3]);
+	CHECK(slot[4] == 15 && slot[5] == 15, "up to the boundary %d: slots %d, %d, want 15", nextBoundary, slot[4], slot[5]);
+	CHECK(slot[6] == 0, "past the boundary: slot %d, want 0 (no codeword within 512)", slot[6]);
+}
+
 } // namespace
 
 int main() {
@@ -436,6 +558,9 @@ int main() {
 	testSequencerPositionResets();
 	testUserDataRoundTrip();
 	testForgedImage();
+	testForgedUserScale();
+	testBytebeatEquation15();
+	testInputMapUpperBoundary();
 	testResetToDefaults();
 	testInputRangeSurvives();
 	testRestoreClosesAppMenu();
