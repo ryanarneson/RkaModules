@@ -14,7 +14,7 @@ takes one more instrument and builds its panel geometry from it.
 | Module | What it does | The instrument | Width |
 |--------|--------------|----------------|-------|
 | [Wake](wake.md) | Comprehensive stereo tap delay | A ship's wake | 18 HP |
-| [Eddy](eddy.md) | Small stereo delay and diffusion | An eddy (panel still to be redrawn) | 10 HP |
+| [Eddy](eddy.md) | Tape loop (reworked from a small delay) | An eddy, drawn as a spiral | 10 HP |
 | [Neap](neap.md) | Very slow, layered modulation | A tide-predicting machine | 12 HP |
 | [Bearing](bearing.md) | Quantiser | A compass rose | 10 HP |
 | [Squall](squall.md) | Random source | An aneroid barometer | 8 HP |
@@ -44,6 +44,36 @@ name: it is what the module does.
 | [Signal](signal.md) | Morse rhythm from a word | A signalling lamp | 12 HP |
 | [Watch](watch.md) | Long-form timer in eight bells | The ship's watch | 10 HP |
 | [Log](log.md) | CV recorder | A barograph | 12 HP |
+
+## For dark, space and horror ambient
+
+The user makes dark, space and horror ambient, in VCV Rack, in Eurorack
+and in Ableton. Asked which of the collection fits that work, the
+designer's reading was:
+
+- **Core.** Sound: Fathom, Foghorn, Ping, Buoy. Space and texture: Fog,
+  Spindrift, Wake. Slow movement: Sway, Neap, Reckoner, Squall.
+  Long-form structure: Watch, Log, Shoal. Mixing and safety: Ballast,
+  Plimsoll, Thermocline. Glue: Tackle, Splice, Lull, Hold, Cleat.
+- **Matters less for beatless music.** Knot, Sounding, Bearing (Shoal
+  covers all three), Seastate, and Beacon, Sextant and Signal, which are
+  useful in places but not central.
+
+These nine were added to fill what was missing. The designer's first four
+are Doldrums, Rigging, Hadal and Sluice.
+
+| Module | What it does | The instrument | Width |
+|--------|--------------|----------------|-------|
+| [Doldrums](doldrums.md) | Spectral freeze and stretch | A ship becalmed | 10 HP |
+| [Rigging](rigging.md) | Resonator bank | Wind in the rigging | 12 HP |
+| [Hadal](hadal.md) | Rumble and noise bed | The deepest ocean zone | 8 HP |
+| [Sluice](sluice.md) | Four VCAs | A sluice gate | 8 HP |
+| [Doppler](doppler.md) | Frequency shifter | The Doppler effect | 8 HP |
+| [Rust](rust.md) | Decay and wear | Rust | 8 HP |
+| [Helm](helm.md) | Scene morph: eight scenes, six outputs | A ship's wheel | 12 HP |
+| [Lee](lee.md) | Ducker and envelope follower | The sheltered side | 8 HP |
+
+Eddy, in the first table, was reworked into a tape loop as part of this.
 
 ## Small utilities, 2 HP
 
