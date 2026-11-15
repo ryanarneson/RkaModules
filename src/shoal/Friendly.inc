@@ -31,8 +31,14 @@ typedef menu::ScreenCursor<menu::kScreenLines> Cursor;
 constexpr int kExtraId = 256;    // ids of extra rows start here (Row::id)
 constexpr int kHeadingId = 512;  // ids of headings start here
 
-// A settings table's name array that is shorter than the setting's range.
-struct NameCount { int16_t setting, count; };
+// A settings table's name array that is shorter than the setting's range:
+// `count` names. With `names` given, the row's names are that array's first
+// `count` entries instead of the table's (a firmware array that names the
+// whole range); static storage.
+struct NameCount {
+	int16_t setting, count;
+	const char* const* names;
+};
 // A label in place of the settings table's, allowed where the table's name
 // is a one- or two-letter abbreviation.
 struct Label { int16_t setting; const char* text; };
@@ -59,7 +65,8 @@ struct Adapter {
 	// sequence, chord, segment, cell) has the controls: the model is then
 	// kModelBusy and every edit is dropped. Null: always (no sub-editor).
 	bool (*accepting)();
-	// Name arrays shorter than their range, for addSetting(). May be null.
+	// Name arrays shorter than their range, or replacing the table's, for
+	// addSetting(). May be null.
 	const NameCount* nameCounts;
 	int numNameCounts;
 	// Labels replacing the table's, for addSetting(). May be null.
@@ -205,8 +212,11 @@ inline Row& addSettingRow(FriendlyModel& m, int setting, const settings::value_a
 		r.names = attr.value_names;
 		int count = attr.max_ - attr.min_ + 1;
 		for (int i = 0; i < a.numNameCounts; i++)
-			if (a.nameCounts[i].setting == setting)
+			if (a.nameCounts[i].setting == setting) {
 				count = a.nameCounts[i].count;
+				if (a.nameCounts[i].names)
+					r.names = a.nameCounts[i].names;
+			}
 		r.nameCount = (int16_t) count;
 		if (value - attr.min_ >= count)
 			setNumberText(r);
@@ -304,9 +314,10 @@ inline void moveCursor(Cursor& c, int menuRow) {
 // the R encoder turned by `delta` (target - current), R push to leave. The
 // cursor ends on the row, not editing. unitSteps: the turn goes as |delta|
 // events of one step, for handlers whose guard looks at single steps only;
-// otherwise as one event. False, with no encoder event sent, if the cursor
-// cannot reach the row (the menu's end is short of it: References after a
-// patch load) or the R push did not put the cursor in edit mode.
+// otherwise as one event. False, with no edit made, if the cursor cannot
+// reach the row (the menu's end is short of it: References after a patch
+// load) or the R push did not put the cursor in edit mode; the cursor may
+// have moved on the way (and left edit mode on another row).
 inline bool replaySet(Cursor& c, int menuRow, int delta, bool unitSteps = false) {
 	moveCursor(c, menuRow);
 	if (c.cursor_pos() != menuRow)
@@ -362,28 +373,26 @@ constexpr Adapter generic(void (*rows)(FriendlyModel&, int), const NameCount* na
 
 #include "FriendlyAdapters1.inc"
 #include "FriendlyAdapters2.inc"
+#include "FriendlyAdapters3.inc"
 
 // ---- The table --------------------------------------------------------------
 
 // Name arrays shorter than their range (survey: "Value names shorter than
 // the setting's range"); counts as declared in the firmware source.
-constexpr NameCount kMetaQNames[] = {
-	{ DQ_CHANNEL_SETTING_SOURCE, 4 },    // 0..4 over OC::Strings::cv_input_names[4]
-};
 constexpr NameCount kPiquedNames[] = {
-	{ ENV_SETTING_TRIGGER_INPUT, 4 },    // 0..6 over OC::Strings::trigger_input_names[4]
+	{ ENV_SETTING_TRIGGER_INPUT, 4, nullptr },    // 0..6 over OC::Strings::trigger_input_names[4]
 };
 constexpr NameCount kAcidCurdsNames[] = {
-	{ CHORDS_SETTING_CHORD_SLOT, 8 },    // 0..CHORDS_USER_LAST - 1 over chords_slots, 8 names
+	{ CHORDS_SETTING_CHORD_SLOT, 8, nullptr },    // 0..CHORDS_USER_LAST - 1 over chords_slots, 8 names
 };
 
 // One adapter per app, in available_apps order (as kAppSettings).
 constexpr Adapter kAdapters[] = {
-	generic(&GenericEnabled<ASR, ASR_SETTING_LAST, &asrObj>::rows),
+	copier::kAdapter,
 	harrington::kAdapter,
 	automaton::kAdapter,
-	generic(&GenericEnabled<QuantizerChannel, CHANNEL_SETTING_LAST, &qqObj>::rows),
-	generic(&GenericEnabled<DQ_QuantizerChannel, DQ_CHANNEL_SETTING_LAST, &dqObj>::rows, kMetaQNames, 1),
+	quantermain::kAdapter,
+	metaq::kAdapter,
 	quadraturia::kAdapter,
 	lowrents::kAdapter,
 	generic(&GenericEnabled<EnvelopeGenerator, ENV_SETTING_LAST, &envObj>::rows, kPiquedNames, 1),
@@ -514,6 +523,11 @@ void twoTabs(FriendlyModel& m) {
 	m.tabLabel[1] = "2";
 }
 void selectNothing(int) { }
+// Asks replaySet for the row after the menu's last, which the cursor cannot
+// reach.
+bool pastTheEnd(const FriendlyEdit& e, const Row& row) {
+	return replaySet(lorenz_generator_state.cursor, LORENZ_SETTING_LAST, e.value - row.value);
+}
 void tooManyRows(FriendlyModel& m, int) {
 	for (int i = 0; i < kMaxRows + 5; i++)
 		addExtra(m, RowKind::Action, kExtraId + i, "row");
@@ -524,6 +538,7 @@ constexpr Adapter kFakes[] = {
 	{ &twoTabs, &lowrents::rows, nullptr, &lowrents::edit, nullptr, nullptr, 0, nullptr, 0 },            // TabsNoSelect
 	{ &twoTabs, &lowrents::rows, &selectNothing, &lowrents::edit, nullptr, nullptr, 0, nullptr, 0 },     // SelectFails
 	{ nullptr, &tooManyRows, nullptr, &lowrents::edit, nullptr, nullptr, 0, nullptr, 0 },                // TooManyRows
+	{ &lowrents::header, &lowrents::rows, nullptr, &pastTheEnd, nullptr, nullptr, 0, nullptr, 0 },       // ReachFails
 };
 
 } // namespace fake

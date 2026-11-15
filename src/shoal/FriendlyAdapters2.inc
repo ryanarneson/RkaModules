@@ -186,6 +186,8 @@ void rows(FriendlyModel& m, int) {
 
 bool edit(const FriendlyEdit& e, const Row& row) {
 	if (e.type == FriendlyEdit::Press) {
+		if (row.id != kReset)
+			return false;
 		button(OC::CONTROL_BUTTON_L, true);
 		return true;
 	}

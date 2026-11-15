@@ -46,7 +46,7 @@ src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   Friendly.hpp           friendly mode's row model and edits (FriendlyModel, FriendlyEdit)
   SettingsAccess.inc     raw settings table for every app
   Friendly.inc           friendly mode's framework: helpers, the table of adapters, the edit checks
-  FriendlyAdapters<n>.inc  the per-app adapters, a file per group of apps (1: Quadraturia, Low-rents; 2: Harrington 1200, Automatonnetz, Dialectic Ping Pong, Viznutcracker sweet, References)
+  FriendlyAdapters<n>.inc  the per-app adapters, a file per group of apps (1: Quadraturia, Low-rents; 2: Harrington 1200, Automatonnetz, Dialectic Ping Pong, Viznutcracker sweet, References; 3: CopierMaschine, Quantermain, Meta-Q)
   CoreImpl.inc           shoal::Core's implementation
   CoreTest.hpp           test-only hooks into the core
   test_util.hpp          helpers shared by the Shoal tests

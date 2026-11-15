@@ -434,10 +434,6 @@ uint32_t CoreTest::smoothedCode(Core& c, int ch) {
 
 int CoreTest::menuSetting(Core& c) {
 	Scope scope(c.impl_->ctx.get());
-	if (c.app() == 0)
-		return asr.enabled_setting_at(asr_state.cursor_pos());
-	if (c.app() == 3)
-		return quantizer_channels[qq_state.selected_channel].enabled_setting_at(qq_state.cursor_pos());
 	if (c.app() == 5)
 		return poly_lfo_state.cursor.cursor_pos();
 	if (c.app() == 6)
@@ -459,6 +455,7 @@ int CoreTest::menuRow(Core& c) {
 		case 1: return h1200_state.cursor.cursor_pos();
 		case 2: return automatonnetz_state.ui.grid_cursor.cursor_pos();
 		case 3: return qq_state.cursor_pos();
+		case 4: return dq_state.cursor.cursor_pos();
 		case 5: return poly_lfo_state.cursor.cursor_pos();
 		case 6: return lorenz_generator_state.cursor.cursor_pos();
 		case 9: return bbgen.ui.cursor.cursor_pos();
@@ -472,6 +469,7 @@ int CoreTest::selectedChannel(Core& c) {
 	Scope scope(c.impl_->ctx.get());
 	switch (c.app()) {
 		case 3: return qq_state.selected_channel;
+		case 4: return dq_state.selected_channel;
 		case 9: return bbgen.ui.selected_channel;
 		case 10: return bytebeatgen.ui.selected_channel;
 		case 12: return references_app.ui.selected_channel;
@@ -493,8 +491,11 @@ int CoreTest::enabledSettings(Core& c, int* out, int max) {
 			out[i] = i;
 	};
 	switch (c.app()) {
+		case 0: list(asr); break;
 		case 1: list(h1200_settings); break;
 		case 2: table(GRID_SETTING_LAST); break;
+		case 3: list(quantizer_channels[qq_state.selected_channel]); break;
+		case 4: list(dq_quantizer_channels[dq_state.selected_channel]); break;
 		case 9: table(BB_SETTING_LAST); break;
 		case 10: list(bytebeatgen.selected()); break;
 		case 12: list(references_app.selected_channel()); break;

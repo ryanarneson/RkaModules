@@ -22,10 +22,11 @@ using shoal::RowKind;
 
 namespace {
 
-constexpr int kH1200 = 1, kAutomatonnetz = 2, kQuantermain = 3, kQuadraturia = 5, kLowRents = 6;
+constexpr int kCopier = 0, kH1200 = 1, kAutomatonnetz = 2, kQuantermain = 3, kMetaQ = 4, kQuadraturia = 5, kLowRents = 6;
 constexpr int kPingPong = 9, kViznutcracker = 10, kReferences = 12;
-// The apps with an adapter of their own (Tasks 1 and 2).
-constexpr int kAdapted[] = { kH1200, kAutomatonnetz, kQuadraturia, kLowRents, kPingPong, kViznutcracker, kReferences };
+// The apps with an adapter of their own (Tasks 1 to 3).
+constexpr int kAdapted[] = { kCopier, kH1200, kAutomatonnetz, kQuantermain, kMetaQ, kQuadraturia, kLowRents, kPingPong,
+	kViznutcracker, kReferences };
 
 bool adapted(int app) {
 	for (int a : kAdapted)
@@ -40,7 +41,6 @@ constexpr int kExtraId = 256;
 // of the array in the firmware source.
 struct ShortNames { int app; const char* label; int count; };
 const ShortNames kShortNames[] = {
-	{ 4, "CV source", 4 },       // OC_strings.cpp:25 cv_input_names[4], range 0..4
 	{ 7, "Trigger input", 4 },   // OC_strings.cpp:21 trigger_input_names[4], range 0..6
 	{ 11, "chord:", 8 },         // APP_CHORDS.ino:984 chords_slots, 8 names, range 0..CHORDS_USER_LAST - 1
 };
@@ -53,6 +53,13 @@ const LabelOverride kLabelOverrides[] = {
 	{ 5, 1, "F", "Fine" },
 	{ 2, 0, "dx", "Step X" },
 	{ 2, 1, "dy", "Step Y" },
+};
+
+// Choice rows whose names an adapter gives in place of the table's (a
+// firmware array naming the whole range, where the table's is short).
+struct NameOverride { int app, setting; const char* last; };
+const NameOverride kNameOverrides[] = {
+	{ 4, 14, "Turing" },   // Meta-Q CV source 0..4: cv_input_names has 4; channel_input_sources (APP_QQ.ino) has these 5 first
 };
 
 const ShortNames* shortNamesFor(int app, const char* label) {
@@ -323,8 +330,20 @@ void testGenericModel() {
 				const RowKind want = s.valueNames ? RowKind::Choice
 					: s.min == 0 && s.max == 1 ? RowKind::Toggle : RowKind::Number;
 				CHECK(r.kind == want, "%s row %d (%s): kind %d, want %d", an, i, r.label, (int) r.kind, (int) want);
-				if (r.kind == RowKind::Choice)
+				const NameOverride* names = nullptr;
+				for (const NameOverride& o : kNameOverrides)
+					if (o.app == app && o.setting == r.id)
+						names = &o;
+				if (r.kind == RowKind::Choice && !names)
 					CHECK(r.names == s.valueNames, "%s row %d (%s): names", an, i, r.label);
+				if (names) {
+					// The table's names first, then the one it lacks.
+					bool same = r.kind == RowKind::Choice && r.names != s.valueNames && r.nameCount == r.max - r.min + 1;
+					for (int k = 0; same && k < r.nameCount - 1; k++)
+						same = std::strcmp(r.names[k], s.valueNames[k]) == 0;
+					CHECK(same && std::strcmp(r.names[r.nameCount - 1], names->last) == 0, "%s row %d (%s): names do not end in '%s'",
+						an, i, r.label, names->last);
+				}
 			}
 		}
 		// The apps with an adapter have the cursor on a listed row in a new core.
@@ -672,6 +691,17 @@ void testFrameworkDrops() {
 	CHECK(m.flags == shoal::kModelTruncated && m.rows == shoal::kMaxRows, "too many rows: flags %d, %d rows", m.flags, m.rows);
 	for (int i = 0; i < m.rows; i++)
 		CHECK(m.row[i].id == kExtraId + i && m.row[i].label != nullptr, "too many rows: row %d has id %d", i, m.row[i].id);
+	// replaySet refuses a menu row the cursor cannot reach: no edit made, and
+	// the cursor is not left editing.
+	{
+		const Snapshot s = snapshot(c);
+		const FriendlyEdit far = makeEdit(FriendlyEdit::SetValue, kLowRents, 0, 4, c.setting(0, 4) == 7 ? 9 : 7);
+		CHECK(!CoreTest::friendlyFake(c, CoreTest::ReachFails, &far, nullptr), "past the menu's end: SetValue reported done");
+		CHECK(sameSnapshot(s, snapshot(c)), "past the menu's end: a setting changed");
+		const FriendlyModel after = model(c);
+		for (int i = 0; i < after.rows; i++)
+			CHECK(!(after.row[i].flags & shoal::kRowEditing), "past the menu's end: row %d left editing", i);
+	}
 	// The app menu makes a real model busy, and it clears when the menu closes.
 	c.setButton(shoal::BUTTON_R, true);
 	run(c, 1.1);
@@ -864,13 +894,33 @@ int menuRowOf(Core& c, int setting) {
 	return -1;
 }
 
+// Quantermain's and Meta-Q's CV source and trigger: the firmware's guard
+// against an internal source with a continuous trigger looks at one encoder
+// event at a time, so a person turning one detent at a time is stopped where
+// one event of several steps would jump past.
+bool guardedRow(int app, int id) {
+	return (app == kQuantermain && (id == 3 || id == 5)) || (app == kMetaQ && (id == 14 || id == 15));
+}
+
+// Settings the list shows that the firmware's menu does not (CopierMaschine's
+// scale: the L encoder and the L push).
+bool outsideMenu(int app, int id) {
+	return app == kCopier && id == 0;
+}
+
 // The hardware gesture for a setting of the selected channel's menu, in apps
-// whose R push toggles edit mode: scroll to its row, push, turn, push.
+// whose R push toggles edit mode: scroll to its row, push, turn, push. The
+// turn goes one detent at a time on a guarded row.
 void listGesture(Core& c, int setting, int target) {
 	const int ch = CoreTest::selectedChannel(c);
 	CoreTest::encoderEvent(c, shoal::ENCODER_R, menuRowOf(c, setting) - CoreTest::menuRow(c));
 	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
-	CoreTest::encoderEvent(c, shoal::ENCODER_R, target - c.setting(ch, setting));
+	const int delta = target - c.setting(ch, setting);
+	if (guardedRow(c.app(), setting))
+		for (int i = 0; i < std::abs(delta); i++)
+			CoreTest::encoderEvent(c, shoal::ENCODER_R, delta > 0 ? 1 : -1);
+	else
+		CoreTest::encoderEvent(c, shoal::ENCODER_R, delta);
 	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
 }
 
@@ -901,14 +951,14 @@ bool rowsAreMenu(Core& c, const FriendlyModel& m) {
 			seen = seen || list[j] == list[i];
 		if (seen || (c.app() == kReferences && list[i] == 9))
 			continue;
-		while (k < m.rows && m.row[k].id >= kExtraId)
+		while (k < m.rows && (m.row[k].id >= kExtraId || outsideMenu(c.app(), m.row[k].id)))
 			k++;
 		if (k >= m.rows || m.row[k].id != list[i])
 			return false;
 		k++;
 	}
 	for (; k < m.rows; k++)
-		if (m.row[k].id < kExtraId)
+		if (m.row[k].id < kExtraId && !outsideMenu(c.app(), m.row[k].id))
 			return false;
 	return true;
 }
@@ -916,8 +966,11 @@ bool rowsAreMenu(Core& c, const FriendlyModel& m) {
 // Every value row of every tab, six targets each, from the last row up (so
 // that rows a visibility switch shows are edited while it is still on).
 // `prepare` runs on each tab first. A row a visibility switch has hidden
-// meanwhile must be dropped.
-void listEquivalence(int app, void (*prepare)(Pair&, int tab)) {
+// meanwhile must be dropped. `special`, if given, makes the hardware gesture
+// on core b for a row the menu does not have, and says whether it did.
+// A guarded row (guardedRow) ends where the gesture ends, not always on the
+// target.
+void listEquivalence(int app, void (*prepare)(Pair&, int tab), bool (*special)(Core& b, const Row& row, int target) = nullptr) {
 	Pair p(app);
 	const char* an = Core::appName(app);
 	const int tabs = model(p.a).tabs;
@@ -945,11 +998,16 @@ void listEquivalence(int app, void (*prepare)(Pair&, int tab)) {
 				CHECK(taken == listed, "%s tab %d %s -> %d: %s", an, tab, row.label, target, listed ? "dropped" : "taken while hidden");
 				if (!listed)
 					continue;
-				listGesture(p.b, row.id, target);
-				CHECK(p.a.setting(tab, row.id) == target, "%s tab %d %s: %d, want %d", an, tab, row.label, p.a.setting(tab, row.id), target);
+				const bool inMenu = !(special && special(p.b, row, target));
+				if (inMenu)
+					listGesture(p.b, row.id, target);
+				const int want = guardedRow(app, row.id) ? p.b.setting(tab, row.id) : target;
+				if (row.id < kExtraId)
+					CHECK(p.a.setting(tab, row.id) == want, "%s tab %d %s: %d, want %d", an, tab, row.label, p.a.setting(tab, row.id), want);
 				const FriendlyModel after = model(p.a);
 				const Row* r = findRow(after, row.id);
-				CHECK(r && r->value == target && (r->flags & (shoal::kRowCursor | shoal::kRowEditing)) == shoal::kRowCursor,
+				const int flags = inMenu ? shoal::kRowCursor : 0;
+				CHECK(r && r->value == want && (r->flags & (shoal::kRowCursor | shoal::kRowEditing)) == flags,
 					"%s tab %d %s: the model shows %d, flags %d", an, tab, row.label, r ? (int) r->value : -1, r ? r->flags : -1);
 				p.checkSame("edit", row.label, target);
 				edits++;
@@ -1239,7 +1297,7 @@ void testReferencesAfterRestore() {
 // Focus on each row of the new adapters: the cursor goes to a menu row; an
 // extra row leaves it.
 void testFocusNewApps() {
-	for (int app : { kH1200, kAutomatonnetz, kPingPong, kViznutcracker, kReferences }) {
+	for (int app : { kH1200, kAutomatonnetz, kPingPong, kViznutcracker, kReferences, kCopier, kQuantermain, kMetaQ }) {
 		const char* an = Core::appName(app);
 		Core c;
 		c.selectApp(app);
@@ -1251,7 +1309,7 @@ void testFocusNewApps() {
 			const Snapshot settings = snapshot(c);
 			CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::Focus, app, first.tab, row.id, 0)), "%s: Focus on '%s' dropped", an, row.label);
 			CHECK(sameSnapshot(settings, snapshot(c)), "%s: Focus on '%s' changed a setting", an, row.label);
-			const int want = row.id < kExtraId ? row.id : before;
+			const int want = menuRowOf(c, row.id) >= 0 ? row.id : before;  // a row the menu does not have: the cursor stays
 			CHECK(CoreTest::menuSetting(c) == want, "%s: Focus on '%s': cursor on %d, want %d", an, row.label, CoreTest::menuSetting(c), want);
 			checkWellFormed(c, model(c), "focus");
 		}
@@ -1299,6 +1357,439 @@ void testStatusAndText() {
 	}
 }
 
+// ---- Task 3: CopierMaschine, Quantermain, Meta-Q ----------------------------
+
+constexpr int kHold = kExtraId, kDelayType = kExtraId + 1;    // CopierMaschine's extra rows
+constexpr int kCopyScale = kExtraId, kResetMask = kExtraId + 1;  // Quantermain's and Meta-Q's
+
+// CopierMaschine's rows the menu does not have, as the hardware does them on
+// core b: the scale (the L encoder from the scale it shows, then L push),
+// Hold / Freeze (DOWN) and Delay type (DOWN long press).
+bool copierGesture(Core& b, const Row& row, int target) {
+	if (row.id == 0) {  // no preview pending in these tests: the L encoder shows the committed scale
+		CoreTest::encoderEvent(b, shoal::ENCODER_L, target - b.setting(0, 0));
+		CoreTest::buttonEvent(b, shoal::BUTTON_L, false);
+		return true;
+	}
+	if (row.id == kHold || row.id == kDelayType) {
+		const FriendlyModel m = model(b);
+		const Row* r = findRow(m, row.id);
+		if (r && r->value != target)
+			CoreTest::buttonEvent(b, shoal::BUTTON_DOWN, row.id == kDelayType);
+		return true;
+	}
+	return false;
+}
+
+void testCopierEquivalence() {
+	{
+		Core c;
+		c.selectApp(kCopier);
+		const FriendlyModel m = model(c);
+		// The extra rows first, as on the reference: Scale, Hold / Freeze, Delay type.
+		CHECK(m.rows == 3 + 9 && m.row[0].id == 0 && m.row[0].kind == RowKind::Choice && m.row[0].value == 5
+			&& m.row[1].id == kHold && m.row[1].kind == RowKind::Toggle && std::strcmp(m.row[1].label, "Hold / Freeze") == 0
+			&& m.row[2].id == kDelayType && m.row[2].kind == RowKind::Choice && std::strcmp(m.row[2].label, "Delay type") == 0
+			&& m.row[2].nameCount == 2 && std::strcmp(m.row[2].names[0], "multiplying") == 0 && std::strcmp(m.row[2].names[1], "basic") == 0,
+			"CopierMaschine: %d rows; first rows %d %d %d", m.rows, m.row[0].id, m.row[1].id, m.row[2].id);
+		const Row* mask = findRow(m, 3);
+		CHECK(mask && mask->kind == RowKind::Mask && mask->max == 12 && mask->value == 65535, "CopierMaschine: mask row");
+	}
+	// Each CV source shows its rows; CV1 shows none.
+	listEquivalence(kCopier, [](Pair& p, int) { setBoth(p, kCopier, 0, 8, 1); }, &copierGesture);
+	listEquivalence(kCopier, [](Pair& p, int) { setBoth(p, kCopier, 0, 8, 2); }, &copierGesture);
+	listEquivalence(kCopier, [](Pair& p, int) { setBoth(p, kCopier, 0, 8, 3); }, &copierGesture);
+}
+
+void testQuantermainEquivalence() {
+	// A: CV2 (the aux row shows), B: Turing, C: ByteB, D: IntSq.
+	listEquivalence(kQuantermain, [](Pair& p, int tab) {
+		static const int source[4] = { 1, 4, 6, 7 };
+		setBoth(p, kQuantermain, tab, 3, source[tab]);
+	});
+	listEquivalence(kQuantermain, [](Pair& p, int tab) { setBoth(p, kQuantermain, tab, 3, 5); });  // Lgstc
+}
+
+void testMetaQEquivalence() {
+	// A: Turing (its rows show), B: aux output "copy" (aux +/- shows).
+	listEquivalence(kMetaQ, [](Pair& p, int tab) {
+		if (tab == 0)
+			setBoth(p, kMetaQ, 0, 14, 4);
+		else
+			setBoth(p, kMetaQ, 1, 22, 1);
+	});
+	// Every slot's scale, root and transpose, reached through "scale #" (its
+	// reset_scale shows in the outputs once seq_mode runs the sequence).
+	Pair p(kMetaQ);
+	for (int tab = 0; tab < 2; tab++) {
+		setBoth(p, kMetaQ, tab, 13, 1 + tab);  // seq_mode TR+1, TR+2
+		p.checkSame("seq_mode", "seq_mode", 1 + tab);
+		for (int slot = 0; slot < 4; slot++) {
+			setBoth(p, kMetaQ, tab, 8, slot);
+			p.checkSame("scale #", "scale #", slot);
+			const FriendlyModel m = model(p.a);
+			CHECK(findRow(m, slot) && findRow(m, 4 + slot) && findRow(m, 17 + slot) && findRow(m, 9 + slot)
+				&& findRow(m, 9 + slot)->kind == RowKind::Mask, "Meta-Q tab %d slot %d: the slot's rows are not listed", tab, slot);
+			setBoth(p, kMetaQ, tab, slot, 6 + slot);
+			p.checkSame("slot scale", "scale", 6 + slot);
+			setBoth(p, kMetaQ, tab, 4 + slot, 2 + slot);
+			p.checkSame("slot root", "root", 2 + slot);
+			setBoth(p, kMetaQ, tab, 17 + slot, slot - 2);
+			p.checkSame("slot transpose", "transpose", slot - 2);
+		}
+	}
+}
+
+// Sets the scale on both cores: the friendly Scale row on a, the hardware
+// gesture on b (CopierMaschine: the L encoder and L push; the others: the
+// menu's scale row, slot 1 for Meta-Q).
+void setScaleBoth(Pair& p, int app, int scale) {
+	const int id = 0;  // ASR_SETTING_SCALE, CHANNEL_SETTING_SCALE, DQ_CHANNEL_SETTING_SCALE1
+	if (app == kCopier) {
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, 0, id, scale)), "%s: scale %d dropped", Core::appName(app), scale);
+		const Row r = { RowKind::Choice, 0, 0, "", 0, 0, 0, 0, nullptr, 0, "" };
+		copierGesture(p.b, r, scale);
+	} else {
+		setBoth(p, app, 0, id, scale);
+	}
+}
+
+// The scale editor's own toggle of note `bit`, as a person does it: cursor to
+// the mask row, R push (the editor opens, its cursor on the first note), the
+// L encoder to the note, L push, R push (it closes).
+void editorToggle(Core& c, int maskSetting, int bit) {
+	CoreTest::encoderEvent(c, shoal::ENCODER_R, menuRowOf(c, maskSetting) - CoreTest::menuRow(c));
+	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+	CHECK(!CoreTest::friendlyAccepting(c), "%s: the scale editor did not open", Core::appName(c.app()));
+	CoreTest::encoderEvent(c, shoal::ENCODER_L, bit);
+	CoreTest::buttonEvent(c, shoal::BUTTON_L, false);
+	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+	CHECK(CoreTest::friendlyAccepting(c), "%s: the scale editor did not close", Core::appName(c.app()));
+}
+
+// The editor's rule, written out here: a note toggles, but the last active
+// one stays.
+uint16_t expectToggle(uint16_t mask, int bit, int cells) {
+	const uint16_t m = (uint16_t) (1u << bit), used = (uint16_t) (cells >= 16 ? 0xffff : (1u << cells) - 1);
+	if (!(mask & m))
+		return (uint16_t) (mask | m);
+	return (mask & used) == m ? mask : (uint16_t) (mask & ~m);
+}
+
+// A mask row has one cell per note of its scale, follows a scale change at
+// once, and a ToggleBit is the scale editor's toggle (mask and outputs).
+void testMaskCells() {
+	struct Case { int scale, userNotes, cells; const char* what; };
+	const Case cases[] = {
+		{ 4, 0, 0, "Off" }, { 5, 0, 12, "Semitone" }, { 15, 0, 5, "Pentatonic major" }, { 6, 0, 7, "Ionian" },
+		{ 0, 4, 4, "user scale, 4 notes" }, { 0, 16, 16, "user scale, 16 notes" }, { 4, 0, 0, "Off again" },
+	};
+	struct App { int app, mask; };
+	for (const App& k : { App{ kCopier, 3 }, App{ kQuantermain, 2 }, App{ kMetaQ, 9 } }) {
+		const char* an = Core::appName(k.app);
+		Pair p(k.app);
+		for (const Case& cs : cases) {
+			if (cs.userNotes)
+				for (Core* c : { &p.a, &p.b }) {
+					CoreTest::userScaleNumNotes(*c, 0) = (uint32_t) cs.userNotes;
+					for (int i = 0; i < 16; i++)
+						CoreTest::userScaleNote(*c, 0, i) = (int16_t) (96 * i);
+				}
+			setScaleBoth(p, k.app, cs.scale);
+			p.checkSame("scale", cs.what, cs.scale);
+			const FriendlyModel m = model(p.a);
+			const Row* row = findRow(m, k.mask);
+			// Off: Quantermain and Meta-Q hide the row; CopierMaschine shows it with no cells.
+			if (cs.cells == 0 && k.app != kCopier) {
+				CHECK(!row, "%s %s: a mask row is listed", an, cs.what);
+				continue;
+			}
+			CHECK(row && row->kind == RowKind::Mask && row->max == cs.cells && row->value == p.a.setting(0, k.mask),
+				"%s %s: mask row of %d cells, want %d", an, cs.what, row ? (int) row->max : -1, cs.cells);
+			if (cs.cells == 0) {
+				CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, k.app, 0, k.mask, 0)), "%s %s: a cell toggled", an, cs.what);
+				continue;
+			}
+			CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, k.app, 0, k.mask, cs.cells)), "%s %s: the cell past the last toggled",
+				an, cs.what);
+			// Each cell toggled on both paths, then all but one cleared, then
+			// the last one (refused), then all on again.
+			auto toggle = [&](int bit, const char* what) {
+				const uint16_t want = expectToggle((uint16_t) p.a.setting(0, k.mask), bit, cs.cells);
+				CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, k.app, 0, k.mask, bit)), "%s %s: cell %d dropped", an, cs.what, bit);
+				editorToggle(p.b, k.mask, bit);
+				CHECK(p.a.setting(0, k.mask) == want, "%s %s %s: cell %d: mask %04x, want %04x", an, cs.what, what, bit,
+					p.a.setting(0, k.mask), want);
+				const FriendlyModel after = model(p.a);
+				const Row* r = findRow(after, k.mask);
+				CHECK(r && r->value == want && (r->flags & shoal::kRowCursor), "%s %s: cell %d: the model shows %04x", an, cs.what, bit,
+					r ? (int) r->value : -1);
+				p.checkSame(what, cs.what, bit);
+			};
+			for (int bit = 0; bit < cs.cells; bit++)
+				toggle(bit, "each");
+			const uint16_t used = (uint16_t) (cs.cells >= 16 ? 0xffff : (1u << cs.cells) - 1);
+			for (int bit = 0; bit < cs.cells; bit++)
+				if ((p.a.setting(0, k.mask) & (1 << bit)) && __builtin_popcount(p.a.setting(0, k.mask) & used) > 1)
+					toggle(bit, "clear");
+			int last = -1;
+			for (int bit = 0; bit < cs.cells; bit++)
+				if (p.a.setting(0, k.mask) & (1 << bit))
+					last = bit;
+			CHECK(last >= 0 && __builtin_popcount(p.a.setting(0, k.mask) & used) == 1, "%s %s: %04x is not one note", an, cs.what,
+				p.a.setting(0, k.mask));
+			const int single = p.a.setting(0, k.mask);
+			if (last >= 0)
+				toggle(last, "last note");
+			CHECK(p.a.setting(0, k.mask) == single, "%s %s: the last note was cleared", an, cs.what);
+			for (int bit = 0; bit < cs.cells; bit++)
+				if (!(p.a.setting(0, k.mask) & (1 << bit)))
+					toggle(bit, "on again");
+			CHECK((p.a.setting(0, k.mask) & used) == used, "%s %s: not all notes on: %04x", an, cs.what, p.a.setting(0, k.mask));
+		}
+		// A user scale's length is shared: changed while it is selected, the
+		// row follows without an edit.
+		setScaleBoth(p, k.app, 1);
+		for (int n : { 9, 4, 16 }) {
+			CoreTest::userScaleNumNotes(p.a, 1) = (uint32_t) n;
+			const FriendlyModel m = model(p.a);
+			const Row* r = findRow(m, k.mask);
+			CHECK(r && r->max == n, "%s: user scale of %d notes: %d cells", an, n, r ? (int) r->max : -1);
+		}
+	}
+}
+
+struct Frame3 {
+	uint8_t bytes[shoal::kFrameBytes];
+};
+
+bool sameFrame(Core& a, Core& b) {
+	Frame3 fa, fb;
+	a.drawMenu(fa.bytes);
+	b.drawMenu(fb.bytes);
+	return std::memcmp(fa.bytes, fb.bytes, sizeof(fa.bytes)) == 0;
+}
+
+// CopierMaschine's Scale row is the L encoder's preview and the L push's
+// commit (set_scale): the setting, the mask's fix-up and the title bar.
+void testCopierScaleCommit() {
+	Pair p(kCopier);
+	auto set = [&](int target, int preview) {  // preview: the scale B's L encoder shows
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kCopier, 0, 0, target)), "Scale %d dropped", target);
+		CoreTest::encoderEvent(p.b, shoal::ENCODER_L, target - preview);
+		CoreTest::buttonEvent(p.b, shoal::BUTTON_L, false);
+		CHECK(p.a.setting(0, 0) == target, "Scale is %d, want %d", p.a.setting(0, 0), target);
+		CHECK(sameFrame(p.a, p.b), "Scale %d: the menu (title bar) differs from the gesture's", target);
+		CHECK(std::strcmp(model(p.a).status, model(p.b).status) == 0, "Scale %d: status", target);
+		p.checkSame("scale", "Scale", target);
+	};
+	CHECK(std::strcmp(model(p.a).status, "Semitone") == 0, "CopierMaschine status '%s'", model(p.a).status);
+	set(6, 5);
+	CHECK(std::strcmp(model(p.a).status, "Ionian") == 0, "CopierMaschine status '%s'", model(p.a).status);
+	// A preview pending from the panel: the row shows the committed scale,
+	// the status the previewed one; the edit turns from the preview.
+	for (Core* c : { &p.a, &p.b })
+		CoreTest::encoderEvent(*c, shoal::ENCODER_L, 3);  // Lydian (9), not committed
+	{
+		const FriendlyModel m = model(p.a);
+		CHECK(m.row[0].value == 6 && std::strcmp(m.status, "Next: Lydian") == 0, "pending preview: row %d, status '%s'",
+			(int) m.row[0].value, m.status);
+	}
+	set(15, 9);
+	// To the committed scale with a preview pending: the preview goes back, nothing else.
+	for (Core* c : { &p.a, &p.b })
+		CoreTest::encoderEvent(*c, shoal::ENCODER_L, -2);
+	set(15, 13);
+	CHECK(std::strcmp(model(p.a).status, "Pentatonic maj") == 0, "status '%s' after the preview went back", model(p.a).status);
+	// set_scale keeps a note active: a mask with only note 11 (of Semitone)
+	// has none of a five-note scale's, so note 1 comes on with the commit.
+	set(5, 15);
+	for (int bit = 0; bit < 11; bit++)
+		for (Core* c : { &p.a, &p.b })
+			CHECK(c->friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, kCopier, 0, 3, bit)), "toggle %d dropped", bit);
+	CHECK(p.a.setting(0, 3) == 0xf800, "mask %04x before the commit", p.a.setting(0, 3));
+	set(15, 5);
+	CHECK(p.a.setting(0, 3) == 0xf801 && p.b.setting(0, 3) == 0xf801, "mask %04x after the commit, want f801", p.a.setting(0, 3));
+	// The L long press is the same commit and opens the scale editor: the
+	// model is busy until it closes.
+	CoreTest::encoderEvent(p.a, shoal::ENCODER_L, 1);
+	CoreTest::buttonEvent(p.a, shoal::BUTTON_L, true);
+	CHECK(p.a.setting(0, 0) == 16 && (model(p.a).flags & shoal::kModelBusy), "L long press: scale %d, flags %d", p.a.setting(0, 0),
+		model(p.a).flags);
+	CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kCopier, 0, 0, 5)), "Scale taken with the scale editor open");
+	CoreTest::buttonEvent(p.a, shoal::BUTTON_R, false);
+	CHECK(!(model(p.a).flags & shoal::kModelBusy), "the scale editor did not close");
+}
+
+// The firmware's guard against an internal CV source with a continuous
+// trigger looks at one encoder event: a person turning one detent at a time
+// is stopped at TR4 or CV4, one event of several steps is not. The list is
+// stopped where the person is.
+void testTriggerSourceGuard() {
+	struct App { int app, source, trigger, internal; };
+	for (const App& k : { App{ kQuantermain, 3, 5, 7 }, App{ kMetaQ, 14, 15, 4 } }) {
+		const char* an = Core::appName(k.app);
+		Pair p(k.app);
+		Core single;  // the same edits, as one encoder event each
+		single.selectApp(k.app);
+		auto oneEvent = [&](int setting, int target) {
+			CoreTest::encoderEvent(single, shoal::ENCODER_R, menuRowOf(single, setting) - CoreTest::menuRow(single));
+			CoreTest::buttonEvent(single, shoal::BUTTON_R, false);
+			CoreTest::encoderEvent(single, shoal::ENCODER_R, target - single.setting(0, setting));
+			CoreTest::buttonEvent(single, shoal::BUTTON_R, false);
+		};
+		// An internal source: the trigger stops at TR4, from TR1 and from TR3.
+		for (int from : { 0, 2 }) {
+			setBoth(p, k.app, 0, k.trigger, from);
+			oneEvent(k.trigger, from);
+			setBoth(p, k.app, 0, k.source, 4);  // Turing
+			oneEvent(k.source, 4);
+			setBoth(p, k.app, 0, k.trigger, 5);  // cnt-
+			oneEvent(k.trigger, 5);
+			CHECK(p.a.setting(0, k.trigger) == 3 && p.b.setting(0, k.trigger) == 3, "%s: trigger from %d to cnt- with Turing: %d and %d, want TR4",
+				an, from, p.a.setting(0, k.trigger), p.b.setting(0, k.trigger));
+			CHECK(single.setting(0, k.trigger) == 5, "%s: one event from %d gave %d (the guard is per event)", an, from, single.setting(0, k.trigger));
+			p.checkSame("guard", "trigger", 5);
+			setBoth(p, k.app, 0, k.source, 0);
+			oneEvent(k.source, 0);
+		}
+		// A continuous trigger: the source stops at CV4.
+		setBoth(p, k.app, 0, k.trigger, 4);  // cnt+
+		oneEvent(k.trigger, 4);
+		CHECK(p.a.setting(0, k.trigger) == 4, "%s: trigger cnt+ with CV1: %d", an, p.a.setting(0, k.trigger));
+		setBoth(p, k.app, 0, k.source, k.internal);
+		oneEvent(k.source, k.internal);
+		CHECK(p.a.setting(0, k.source) == 3 && p.b.setting(0, k.source) == 3, "%s: source to %d with cnt+: %d and %d, want CV4", an,
+			k.internal, p.a.setting(0, k.source), p.b.setting(0, k.source));
+		CHECK(single.setting(0, k.source) == k.internal, "%s: one event gave source %d", an, single.setting(0, k.source));
+		p.checkSame("guard", "source", k.internal);
+		const FriendlyModel m = model(p.a);
+		const Row* r = findRow(m, k.source);
+		CHECK(r && r->value == 3, "%s: the list shows source %d", an, r ? (int) r->value : -1);
+	}
+}
+
+// Quantermain's and Meta-Q's Action rows are their long presses.
+void testQuantizerActions() {
+	struct Case { int app; int id; const char* label; shoal::Button button; };
+	const Case cases[] = {
+		{ kQuantermain, kCopyScale, "Copy scale to other channels", shoal::BUTTON_L },
+		{ kQuantermain, kResetMask, "Reset mask", shoal::BUTTON_DOWN },
+		{ kMetaQ, kCopyScale, "Copy scale to all slots", shoal::BUTTON_L },
+		{ kMetaQ, kResetMask, "Reset mask", shoal::BUTTON_DOWN },
+	};
+	for (const Case& k : cases) {
+		const char* an = Core::appName(k.app);
+		const int mask = k.app == kQuantermain ? 2 : 9;
+		Pair p(k.app), idle(k.app);
+		for (Pair* q : { &p, &idle }) {
+			setBoth(*q, k.app, 0, 0, 6);   // Ionian
+			setBoth(*q, k.app, 0, k.app == kQuantermain ? 1 : 4, 2);  // root D
+			for (int bit : { 1, 3, 4 })
+				for (Core* c : { &q->a, &q->b })
+					CHECK(c->friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, k.app, 0, mask, bit)), "%s: toggle dropped", an);
+			q->checkSame("before", k.label, 0);
+		}
+		const FriendlyModel m = model(p.a);
+		const Row* action = findRow(m, k.id);
+		CHECK(action && action->kind == RowKind::Action && std::strcmp(action->label, k.label) == 0, "%s: no Action row '%s'", an, k.label);
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Press, k.app, 0, k.id, 0)), "%s %s: dropped", an, k.label);
+		CoreTest::buttonEvent(p.b, k.button, true);
+		CHECK(sameSettings(p.a, p.b) && modelDiff(model(p.a), model(p.b)) < 0, "%s %s: differs from the gesture", an, k.label);
+		if (k.id == kResetMask)
+			CHECK(p.a.setting(0, mask) == 0xffff, "%s %s: mask %04x", an, k.label, p.a.setting(0, mask));
+		else
+			CHECK(p.a.setting(1, 0) == 6 && p.a.setting(k.app == kQuantermain ? 3 : 1, 0) == 6, "%s %s: not copied", an, k.label);
+		bool same = false, differs = false;
+		runThree(p.a, p.b, idle.a, p.rng, 20000, same, differs);
+		CHECK(same, "%s %s: the row and the gesture give different outputs", an, k.label);
+		CHECK(differs, "%s %s: the outputs are those of a core that was not pressed", an, k.label);
+	}
+}
+
+// The scale editor takes every event while it is open: the model is busy and
+// every edit dropped. And an edit mode carried onto a mask row by a channel
+// switch, where an R push opens the editor: edits that would move the cursor
+// are dropped.
+void testQuantizerBusy() {
+	struct App { int app, mask; };
+	for (const App& k : { App{ kCopier, 3 }, App{ kQuantermain, 2 }, App{ kMetaQ, 9 } }) {
+		const char* an = Core::appName(k.app);
+		Core c;
+		c.selectApp(k.app);
+		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::Focus, k.app, 0, k.mask, 0)) && CoreTest::menuSetting(c) == k.mask, "%s: Focus on the mask", an);
+		CHECK(CoreTest::friendlyAccepting(c) && !(model(c).flags & shoal::kModelBusy), "%s: busy with the cursor on the mask row", an);
+		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);  // opens the scale editor
+		const Snapshot before = snapshot(c);
+		const FriendlyModel m = model(c);
+		CHECK((m.flags & shoal::kModelBusy) && !CoreTest::friendlyAccepting(c), "%s: not busy with the scale editor open", an);
+		checkWellFormed(c, m, "scale editor");
+		const int other = k.app == kCopier ? 4 : k.app == kQuantermain ? 9 : 21;  // buf.index, Octave, octave
+		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, k.app, 0, other, 2)), "%s: SetValue taken", an);
+		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, k.app, 0, k.mask, 3)), "%s: ToggleBit taken", an);
+		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::Focus, k.app, 0, other, 0)), "%s: Focus taken", an);
+		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::Press, k.app, 0, kExtraId, 0)), "%s: Press taken", an);
+		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, k.app, 0, 0, 1)), "%s: SelectTab taken", an);
+		CHECK(sameSnapshot(before, snapshot(c)), "%s: a dropped edit changed a setting", an);
+		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);  // closes it
+		CHECK(!(model(c).flags & shoal::kModelBusy), "%s: busy after the editor closed", an);
+		if (k.app == kCopier)
+			continue;
+		// Channel A on scale Off, the cursor editing its row 2 (Quantermain:
+		// Trigger source) or 1 (Meta-Q: octave); the L encoder to B, where
+		// that row is the mask.
+		const int row = k.app == kQuantermain ? 2 : 1;
+		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, k.app, 0, 0, 4)), "%s: scale Off dropped", an);
+		CoreTest::encoderEvent(c, shoal::ENCODER_R, row - CoreTest::menuRow(c));
+		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+		CoreTest::encoderEvent(c, shoal::ENCODER_L, 1);
+		CHECK(CoreTest::menuSetting(c) == k.mask, "%s: the cursor is on setting %d", an, CoreTest::menuSetting(c));
+		const FriendlyModel stuck = model(c);
+		const Row* r = findRow(stuck, k.mask);
+		CHECK(r && (r->flags & shoal::kRowEditing) && !(stuck.flags & shoal::kModelBusy), "%s: editing on the mask row: flags %d", an,
+			r ? r->flags : -1);
+		const Snapshot held = snapshot(c);
+		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, k.app, 1, other, 2)), "%s: SetValue taken while editing on the mask", an);
+		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::Focus, k.app, 1, other, 0)), "%s: Focus taken while editing on the mask", an);
+		CHECK(sameSnapshot(held, snapshot(c)) && CoreTest::friendlyAccepting(c), "%s: a dropped edit changed the app", an);
+		// On the mask row itself the cursor need not move: a cell toggles.
+		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, k.app, 1, k.mask, 0)) && c.setting(1, k.mask) == 0xfffe,
+			"%s: ToggleBit on the mask row being edited: mask %04x", an, c.setting(1, k.mask));
+		// Why: there an R push opens the scale editor, not edit mode's end.
+		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+		CHECK(!CoreTest::friendlyAccepting(c), "%s: R push on the mask row did not open the editor", an);
+	}
+}
+
+// Title-bar status lines, as QQ_menu, DQ_menu and ASR_menu draw them.
+void testQuantizerStatus() {
+	{
+		Core c;
+		c.selectApp(kQuantermain);
+		CHECK(std::strcmp(model(c).status, "A  B  C  D") == 0, "Quantermain status '%s'", model(c).status);
+		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kQuantermain, 1, 9, 1)), "Octave dropped");
+		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kQuantermain, 3, 9, -2)), "Octave dropped");
+		CHECK(std::strcmp(model(c).status, "A  B +1  C  D -2") == 0, "Quantermain status '%s'", model(c).status);
+	}
+	{
+		Core c;
+		c.selectApp(kMetaQ);
+		run(c, 0.2);
+		CHECK(std::strcmp(model(c).status, "A #1 C  B #1 C") == 0, "Meta-Q status '%s'", model(c).status);
+		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kMetaQ, 1, 4, 4)), "root dropped");
+		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kMetaQ, 0, 21, 2)), "octave dropped");
+		CHECK(std::strcmp(model(c).status, "A #1 C +2  B #1 E") == 0, "Meta-Q status '%s'", model(c).status);
+	}
+	{
+		Core c;
+		c.selectApp(kCopier);
+		CoreTest::encoderEvent(c, shoal::ENCODER_L, -1);
+		CHECK(std::strcmp(model(c).status, "Next: Off ") == 0, "CopierMaschine status '%s'", model(c).status);
+		CoreTest::buttonEvent(c, shoal::BUTTON_L, false);
+		CHECK(std::strcmp(model(c).status, "Off ") == 0 && model(c).row[0].value == 4, "CopierMaschine status '%s'", model(c).status);
+	}
+}
+
 } // namespace
 
 int main() {
@@ -1323,6 +1814,15 @@ int main() {
 	testReferencesAfterRestore();
 	testFocusNewApps();
 	testStatusAndText();
+	testCopierEquivalence();
+	testQuantermainEquivalence();
+	testMetaQEquivalence();
+	testMaskCells();
+	testCopierScaleCommit();
+	testTriggerSourceGuard();
+	testQuantizerActions();
+	testQuantizerBusy();
+	testQuantizerStatus();
 	testEditStorm();
 	return rkatest::finish("test_friendly");
 }

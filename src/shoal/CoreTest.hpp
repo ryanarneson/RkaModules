@@ -25,7 +25,7 @@ struct CoreTest {
 	static uint32_t smoothedCode(Core& c, int ch);
 	// The setting index (as in Core::setting) under the menu cursor of
 	// CopierMaschine (app 0), Harrington 1200 (1), Automatonnetz (2, grid
-	// view; -1 in the cell view), Quantermain (3), Quadraturia (5),
+	// view; -1 in the cell view), Quantermain (3), Meta-Q (4), Quadraturia (5),
 	// Low-rents (6), Dialectic Ping Pong (9), Viznutcracker sweet (10) or
 	// References (12), on the selected channel; -1 for any other app, or when
 	// the cursor's row is past the end of the list.
@@ -35,9 +35,9 @@ struct CoreTest {
 	// The firmware's selected channel (0 for an app with one).
 	static int selectedChannel(Core& c);
 	// The firmware's menu, as settings in row order, for the selected channel
-	// of Harrington 1200, Automatonnetz (grid view), Dialectic Ping Pong,
-	// Viznutcracker sweet or References: up to `max` into out; the count, or
-	// -1 for another app.
+	// of CopierMaschine, Harrington 1200, Automatonnetz (grid view),
+	// Quantermain, Meta-Q, Dialectic Ping Pong, Viznutcracker sweet or
+	// References: up to `max` into out; the count, or -1 for another app.
 	static int enabledSettings(Core& c, int* out, int max);
 	// Whether the current app's friendly adapter is on its settings menu
 	// (its accepting(); true for an adapter without one).
@@ -59,7 +59,8 @@ struct CoreTest {
 		NotAccepting,   // its accepting() is false: as with a sub-editor open
 		TabsNoSelect,   // reports two tabs, has no selectTab
 		SelectFails,    // reports two tabs (the first selected); its selectTab does nothing
-		TooManyRows     // lists kMaxRows + 5 action rows
+		TooManyRows,    // lists kMaxRows + 5 action rows
+		ReachFails      // its edit asks replaySet for a menu row past the menu's end
 	};
 	static bool friendlyFake(Core& c, FriendlyFake fake, const FriendlyEdit* e, FriendlyModel* out);
 	// friendly::Text::fixed, the status texts' printf("%*.*f") stand-in.
