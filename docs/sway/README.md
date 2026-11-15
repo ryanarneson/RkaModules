@@ -37,7 +37,8 @@ Sway is drawn as a pendulum swinging from a pivot at the top right.
   half of each cycle and dark for the second, so it blinks at the LFO's
   rate (clocked or free); above 10 Hz it glows steadily at half
   brightness. It stays still while HOLD is high and goes dark when a
-  one-shot cycle has finished.
+  one-shot cycle has finished. It follows the cycle as EOC counts it, so
+  PHASE does not move it.
 - **FM** jack and attenuverter: exponential FM added to RATE, 1 V/oct at
   full clockwise, inverted counter-clockwise, off at centre.
 - **CLOCK**: once two clock edges have arrived, RATE becomes a ratio of

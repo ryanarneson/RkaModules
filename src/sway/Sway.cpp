@@ -208,12 +208,10 @@ struct Sway : Module {
 		bank.tick(voiceInputs, clockConnected, oneShot, args.sampleTime, args.sampleRate);
 		clocked = clockConnected && bank.voices[0].clock.locked();
 
-		// The rate light follows channel 1 at the rate it really runs, free
-		// or clocked; held, or a finished one-shot, it has stopped.
+		// The rate light follows channel 1 (rka::rateLightHz).
 		const rka::Voice& first = bank.voices[0];
-		const bool stopped = voiceInputs[0].hold || first.phasor.parked;
-		lights[RATE_LIGHT].setBrightnessSmooth(rateLight.process(first.phasor.phase, stopped ? 0.0 : first.freq),
-			args.sampleTime);
+		lights[RATE_LIGHT].setBrightnessSmooth(
+			rateLight.process(first.phasor.phase, rka::rateLightHz(first, voiceInputs[0].hold)), args.sampleTime);
 
 		for (int c = 0; c < channels; c++) {
 			const rka::Voice& voice = bank.voices[c];

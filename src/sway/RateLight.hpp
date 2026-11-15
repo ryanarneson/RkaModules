@@ -1,4 +1,5 @@
 #pragma once
+#include "Voice.hpp"
 
 // Rack-independent brightness for Sway's rate light, which follows one
 // channel's cycle: lit for the first half of each cycle, dark for the
@@ -20,5 +21,14 @@ struct RateLight {
 		return phase01 < 0.5 ? 1.f : 0.f;
 	}
 };
+
+// The rate the light is given for one channel: 0 Hz while it has stopped
+// (HOLD high, or a one-shot that has finished its cycle), so the light stays
+// as its phase left it; otherwise the rate the voice really ran at this
+// sample, clocked or free. Read with the voice's own phase (the cycle EOC
+// counts), not the PHASE-shifted one the waves read.
+inline double rateLightHz(const Voice& voice, bool hold) {
+	return hold || voice.phasor.parked ? 0.0 : voice.freq;
+}
 
 } // namespace rka
