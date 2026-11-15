@@ -24,9 +24,24 @@ struct CoreTest {
 	// OC::ADC::smoothed_raw_value(ch): the firmware's smoothed 12-bit code.
 	static uint32_t smoothedCode(Core& c, int ch);
 	// The setting index (as in Core::setting) under the menu cursor of
-	// CopierMaschine (app 0), Quantermain (app 3, its selected channel),
-	// Quadraturia (app 5) or Low-rents (app 6); -1 for any other app.
+	// CopierMaschine (app 0), Harrington 1200 (1), Automatonnetz (2, grid
+	// view; -1 in the cell view), Quantermain (3), Quadraturia (5),
+	// Low-rents (6), Dialectic Ping Pong (9), Viznutcracker sweet (10) or
+	// References (12), on the selected channel; -1 for any other app, or when
+	// the cursor's row is past the end of the list.
 	static int menuSetting(Core& c);
+	// The menu cursor's row (cursor_pos) of the apps above; -1 for others.
+	static int menuRow(Core& c);
+	// The firmware's selected channel (0 for an app with one).
+	static int selectedChannel(Core& c);
+	// The firmware's menu, as settings in row order, for the selected channel
+	// of Harrington 1200, Automatonnetz (grid view), Dialectic Ping Pong,
+	// Viznutcracker sweet or References: up to `max` into out; the count, or
+	// -1 for another app.
+	static int enabledSettings(Core& c, int* out, int max);
+	// Whether the current app's friendly adapter is on its settings menu
+	// (its accepting(); true for an adapter without one).
+	static bool friendlyAccepting(Core& c);
 	// Hand one event straight to the current app's handler, with no debounce
 	// and no acceleration (what OC::Ui::DispatchEvents would send it): an
 	// encoder event carrying `delta` (nothing for 0), or a short or long

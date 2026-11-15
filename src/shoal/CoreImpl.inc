@@ -442,7 +442,71 @@ int CoreTest::menuSetting(Core& c) {
 		return poly_lfo_state.cursor.cursor_pos();
 	if (c.app() == 6)
 		return lorenz_generator_state.cursor.cursor_pos();
-	return -1;
+	if (c.app() == 2 && automatonnetz_state.ui.edit_cell)
+		return -1;  // the cell view: its cursor is on a cell setting
+	// The others (enabledSettings knows them): the setting at the cursor's
+	// menu row, -1 when that row is past the end of the list (a stale cursor).
+	int list[128];
+	const int n = enabledSettings(c, list, 128);
+	const int row = menuRow(c);
+	return n >= 0 && row >= 0 && row < n ? list[row] : -1;
+}
+
+int CoreTest::menuRow(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	switch (c.app()) {
+		case 0: return asr_state.cursor_pos();
+		case 1: return h1200_state.cursor.cursor_pos();
+		case 2: return automatonnetz_state.ui.grid_cursor.cursor_pos();
+		case 3: return qq_state.cursor_pos();
+		case 5: return poly_lfo_state.cursor.cursor_pos();
+		case 6: return lorenz_generator_state.cursor.cursor_pos();
+		case 9: return bbgen.ui.cursor.cursor_pos();
+		case 10: return bytebeatgen.ui.cursor.cursor_pos();
+		case 12: return references_app.ui.cursor.cursor_pos();
+		default: return -1;
+	}
+}
+
+int CoreTest::selectedChannel(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	switch (c.app()) {
+		case 3: return qq_state.selected_channel;
+		case 9: return bbgen.ui.selected_channel;
+		case 10: return bytebeatgen.ui.selected_channel;
+		case 12: return references_app.ui.selected_channel;
+		default: return 0;
+	}
+}
+
+int CoreTest::enabledSettings(Core& c, int* out, int max) {
+	Scope scope(c.impl_->ctx.get());
+	int n = -1;
+	auto list = [&](const auto& obj) {
+		n = obj.num_enabled_settings();
+		for (int i = 0; i < n && i < max; i++)
+			out[i] = (int) obj.enabled_setting_at(i);
+	};
+	auto table = [&](int count) {
+		n = count;
+		for (int i = 0; i < n && i < max; i++)
+			out[i] = i;
+	};
+	switch (c.app()) {
+		case 1: list(h1200_settings); break;
+		case 2: table(GRID_SETTING_LAST); break;
+		case 9: table(BB_SETTING_LAST); break;
+		case 10: list(bytebeatgen.selected()); break;
+		case 12: list(references_app.selected_channel()); break;
+		default: break;
+	}
+	return n < max ? n : max;
+}
+
+bool CoreTest::friendlyAccepting(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	const friendly::Adapter& a = friendly::adapterFor(c.app());
+	return !a.accepting || a.accepting();
 }
 
 bool CoreTest::friendlyHasAdapter(int app) {

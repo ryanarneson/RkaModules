@@ -22,7 +22,17 @@ using shoal::RowKind;
 
 namespace {
 
-constexpr int kQuantermain = 3, kQuadraturia = 5, kLowRents = 6;
+constexpr int kH1200 = 1, kAutomatonnetz = 2, kQuantermain = 3, kQuadraturia = 5, kLowRents = 6;
+constexpr int kPingPong = 9, kViznutcracker = 10, kReferences = 12;
+// The apps with an adapter of their own (Tasks 1 and 2).
+constexpr int kAdapted[] = { kH1200, kAutomatonnetz, kQuadraturia, kLowRents, kPingPong, kViznutcracker, kReferences };
+
+bool adapted(int app) {
+	for (int a : kAdapted)
+		if (a == app)
+			return true;
+	return false;
+}
 constexpr int kExtraId = 256;
 
 // The settings whose value-name array is shorter than their range (the
@@ -41,6 +51,8 @@ struct LabelOverride { int app, setting; const char* table; const char* label; }
 const LabelOverride kLabelOverrides[] = {
 	{ 5, 0, "C", "Coarse" },
 	{ 5, 1, "F", "Fine" },
+	{ 2, 0, "dx", "Step X" },
+	{ 2, 1, "dy", "Step Y" },
 };
 
 const ShortNames* shortNamesFor(int app, const char* label) {
@@ -82,8 +94,11 @@ int checkWellFormed(const Core& c, const FriendlyModel& m, const char* what) {
 	CHECK(m.tabs <= shoal::kMaxTabs, "%s %s: %d tabs", what, an, m.tabs);
 	CHECK(m.tab < (m.tabs ? m.tabs : 1), "%s %s: tab %d of %d", what, an, m.tab, m.tabs);
 	CHECK((m.flags & ~shoal::kModelBusy) == 0, "%s %s: model flags %d (2: rows were cut off)", what, an, m.flags);
-	CHECK(((m.flags & shoal::kModelBusy) != 0) == c.appMenuOpen(), "%s %s: model flags %d, app menu %s", what, an, m.flags,
-		c.appMenuOpen() ? "open" : "closed");
+	// Busy while the app menu is open, and otherwise only while the adapter
+	// is off its settings menu (a sub-editor has the controls).
+	const bool busy = (m.flags & shoal::kModelBusy) != 0;
+	CHECK(!c.appMenuOpen() || busy, "%s %s: app menu open, model flags %d", what, an, m.flags);
+	CHECK(!busy || c.appMenuOpen() || !CoreTest::friendlyAccepting(const_cast<Core&>(c)), "%s %s: busy on its settings menu", what, an);
 	for (int t = 0; m.tabs > 1 && t < m.tabs && t < shoal::kMaxTabs; t++)  // one tab: no tab bar, no label
 		CHECK(m.tabLabel[t] != nullptr && std::strlen(m.tabLabel[t]) > 0, "%s %s: tab %d has no label", what, an, t);
 	CHECK(terminated(m.status, shoal::kStatusText), "%s %s: status not terminated", what, an);
@@ -312,10 +327,9 @@ void testGenericModel() {
 					CHECK(r.names == s.valueNames, "%s row %d (%s): names", an, i, r.label);
 			}
 		}
-		// The two apps with an adapter always have the cursor on a listed row.
-		CHECK(CoreTest::friendlyHasAdapter(app) == (app == kQuadraturia || app == kLowRents), "%s: adapter %d", an,
-			CoreTest::friendlyHasAdapter(app));
-		if (app == kQuadraturia || app == kLowRents)
+		// The apps with an adapter have the cursor on a listed row in a new core.
+		CHECK(CoreTest::friendlyHasAdapter(app) == adapted(app), "%s: adapter %d", an, CoreTest::friendlyHasAdapter(app));
+		if (adapted(app))
 			CHECK(cursors == 1, "%s: %d rows under the cursor", an, cursors);
 		// A list is never cut short: the largest table plus its extras fits.
 		CHECK(c.settingCount() + 8 <= shoal::kMaxRows, "%s: %d settings do not leave room in %d rows", an,
@@ -827,9 +841,462 @@ void testEditStorm() {
 		}
 		CHECK(allFinite(c), "%s: an output is not finite after the storm", Core::appName(app));
 	}
-	// The storm reached the adapters: most edits on the two adapted apps land.
+	// The storm reached the adapters: most edits on the two one-tab apps
+	// without a sub-editor land, and many on every other adapted app (fewer:
+	// edits for another tab, sub-editors opened by the panel's presses).
 	CHECK(applied[kQuadraturia] > 10000 && applied[kLowRents] > 10000, "storm: %d and %d edits applied",
 		applied[kQuadraturia], applied[kLowRents]);
+	for (int app : kAdapted)
+		CHECK(applied[app] > 2000, "storm: %s: %d edits applied", Core::appName(app), applied[app]);
+}
+
+
+// ---- Task 2: Dialectic Ping Pong, Viznutcracker sweet, References,
+// Harrington 1200, Automatonnetz -------------------------------------------
+
+// The firmware's menu row of `setting` on the selected channel; -1: hidden.
+int menuRowOf(Core& c, int setting) {
+	int list[128];
+	const int n = CoreTest::enabledSettings(c, list, 128);
+	for (int i = 0; i < n; i++)
+		if (list[i] == setting)
+			return i;
+	return -1;
+}
+
+// The hardware gesture for a setting of the selected channel's menu, in apps
+// whose R push toggles edit mode: scroll to its row, push, turn, push.
+void listGesture(Core& c, int setting, int target) {
+	const int ch = CoreTest::selectedChannel(c);
+	CoreTest::encoderEvent(c, shoal::ENCODER_R, menuRowOf(c, setting) - CoreTest::menuRow(c));
+	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+	CoreTest::encoderEvent(c, shoal::ENCODER_R, target - c.setting(ch, setting));
+	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+}
+
+// The channel control of Dialectic Ping Pong, Viznutcracker sweet and
+// References: the L encoder.
+void tabGesture(Core& c, int tab) {
+	CoreTest::encoderEvent(c, shoal::ENCODER_L, tab - CoreTest::selectedChannel(c));
+}
+
+// A friendly SetValue on core A and the hardware gesture on core B.
+void setBoth(Pair& p, int app, int tab, int id, int target) {
+	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, tab, id, target)), "%s: setting %d -> %d on tab %d dropped",
+		Core::appName(app), id, target, tab);
+	tabGesture(p.b, tab);
+	listGesture(p.b, id, target);
+}
+
+// Whether the model's setting rows are the firmware's menu, in its order
+// (a setting the menu repeats listed once; References' placeholder rows
+// "-" left out).
+bool rowsAreMenu(Core& c, const FriendlyModel& m) {
+	int list[128];
+	const int n = CoreTest::enabledSettings(c, list, 128);
+	int k = 0;
+	for (int i = 0; i < n; i++) {
+		bool seen = false;
+		for (int j = 0; j < i; j++)
+			seen = seen || list[j] == list[i];
+		if (seen || (c.app() == kReferences && list[i] == 9))
+			continue;
+		while (k < m.rows && m.row[k].id >= kExtraId)
+			k++;
+		if (k >= m.rows || m.row[k].id != list[i])
+			return false;
+		k++;
+	}
+	for (; k < m.rows; k++)
+		if (m.row[k].id < kExtraId)
+			return false;
+	return true;
+}
+
+// Every value row of every tab, six targets each, from the last row up (so
+// that rows a visibility switch shows are edited while it is still on).
+// `prepare` runs on each tab first. A row a visibility switch has hidden
+// meanwhile must be dropped.
+void listEquivalence(int app, void (*prepare)(Pair&, int tab)) {
+	Pair p(app);
+	const char* an = Core::appName(app);
+	const int tabs = model(p.a).tabs;
+	int edits = 0;
+	for (int tab = 0; tab < tabs; tab++) {
+		if (tabs > 1) {
+			CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, app, model(p.a).tab, 0, tab)), "%s: SelectTab %d dropped", an, tab);
+			tabGesture(p.b, tab);
+			p.checkSame("select tab", "tab", tab);
+		}
+		if (prepare)
+			prepare(p, tab);
+		const FriendlyModel first = model(p.a);
+		CHECK(first.tab == tab, "%s: on tab %d, want %d", an, first.tab, tab);
+		CHECK(rowsAreMenu(p.a, first), "%s tab %d: the rows are not the firmware's menu", an, tab);
+		for (int n = first.rows - 1; n >= 0; n--) {
+			const Row row = first.row[n];
+			if (!isValueRow(row))
+				continue;
+			int targets[6];
+			targetsFor(row, targets);
+			for (int target : targets) {
+				const bool listed = findRow(model(p.a), row.id) != nullptr;
+				const bool taken = p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, tab, row.id, target));
+				CHECK(taken == listed, "%s tab %d %s -> %d: %s", an, tab, row.label, target, listed ? "dropped" : "taken while hidden");
+				if (!listed)
+					continue;
+				listGesture(p.b, row.id, target);
+				CHECK(p.a.setting(tab, row.id) == target, "%s tab %d %s: %d, want %d", an, tab, row.label, p.a.setting(tab, row.id), target);
+				const FriendlyModel after = model(p.a);
+				const Row* r = findRow(after, row.id);
+				CHECK(r && r->value == target && (r->flags & (shoal::kRowCursor | shoal::kRowEditing)) == shoal::kRowCursor,
+					"%s tab %d %s: the model shows %d, flags %d", an, tab, row.label, r ? (int) r->value : -1, r ? r->flags : -1);
+				p.checkSame("edit", row.label, target);
+				edits++;
+			}
+		}
+	}
+	CHECK(edits >= 4 * 6 * tabs, "%s: only %d edits", an, edits);  // References A-C: four value rows
+}
+
+void testPingPongEquivalence() {
+	listEquivalence(kPingPong, nullptr);
+}
+
+void testViznutcrackerEquivalence() {
+	// Loop mode on, so that the six loop rows are listed and edited.
+	listEquivalence(kViznutcracker, [](Pair& p, int tab) { setBoth(p, kViznutcracker, tab, 6, 1); });
+}
+
+void testReferencesEquivalence() {
+	listEquivalence(kReferences, nullptr);
+}
+
+void testH1200Equivalence() {
+	// Trigger type Eucl, so that the Euclidean rows are listed and edited;
+	// Root mode's follow-up (the chord's mode at the next trigger) shows in
+	// the outputs.
+	listEquivalence(kH1200, [](Pair& p, int) { setBoth(p, kH1200, 0, 14, 2); });
+}
+
+void testAutomatonnetzEquivalence() {
+	listEquivalence(kAutomatonnetz, nullptr);
+}
+
+// Tabs are the firmware's channels: a SelectTab is the L encoder, the L
+// encoder shows in model.tab, and an edit for another tab selects it first.
+void testTabsFollowFirmware() {
+	for (int app : { kPingPong, kViznutcracker, kReferences }) {
+		const char* an = Core::appName(app);
+		Pair p(app);
+		FriendlyModel m = model(p.a);
+		CHECK(m.tabs == 4 && m.tab == CoreTest::selectedChannel(p.a), "%s: %d tabs, tab %d, firmware's %d", an, m.tabs, m.tab,
+			CoreTest::selectedChannel(p.a));
+		for (int t = 0; t < 4 && m.tabs == 4; t++)
+			CHECK(m.tabLabel[t] && m.tabLabel[t][0] == 'A' + t && m.tabLabel[t][1] == 0, "%s: tab %d label '%s'", an, t,
+				m.tabLabel[t] ? m.tabLabel[t] : "(null)");
+		for (int tab : { 3, 0, 2, 1, 1, 3 }) {
+			CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, app, model(p.a).tab, 0, tab)), "%s: SelectTab %d dropped", an, tab);
+			tabGesture(p.b, tab);
+			CHECK(CoreTest::selectedChannel(p.a) == tab && model(p.a).tab == tab, "%s: SelectTab %d: firmware on %d, model on %d", an, tab,
+				CoreTest::selectedChannel(p.a), model(p.a).tab);
+			Frame fa, fb;
+			p.a.drawMenu(fa.bytes);
+			p.b.drawMenu(fb.bytes);
+			CHECK(std::memcmp(fa.bytes, fb.bytes, sizeof(fa.bytes)) == 0, "%s: SelectTab %d: the menu differs from the L encoder's", an, tab);
+			p.checkSame("select tab", "tab", tab);
+		}
+		// The L encoder on the panel: the model follows.
+		for (int delta : { -1, -2, 3, -7 }) {
+			CoreTest::encoderEvent(p.a, shoal::ENCODER_L, delta);
+			CHECK(model(p.a).tab == CoreTest::selectedChannel(p.a), "%s: L encoder %d: model tab %d, firmware's %d", an, delta,
+				model(p.a).tab, CoreTest::selectedChannel(p.a));
+		}
+		// An edit for a tab that is not selected selects it, as a person would.
+		Pair q(app);
+		const int from = CoreTest::selectedChannel(q.a), to = from == 1 ? 2 : 1;
+		CHECK(q.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, to, 3, 17)), "%s: edit for tab %d dropped", an, to);
+		tabGesture(q.b, to);
+		listGesture(q.b, 3, 17);
+		CHECK(model(q.a).tab == to && q.a.setting(to, 3) == 17 && q.a.setting(from, 3) == q.b.setting(from, 3),
+			"%s: edit for tab %d: model on %d, value %d", an, to, model(q.a).tab, q.a.setting(to, 3));
+		q.checkSame("edit on another tab", "setting 3", 17);
+		CHECK(!q.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, app, model(q.a).tab, 0, 4)), "%s: SelectTab 4 taken", an);
+	}
+	// Per-channel trigger defaults (TR1..TR4 for A..D, from Init): a row's
+	// default is the table's, TR1, on every tab, and setting it gives TR1.
+	for (int app : { kPingPong, kViznutcracker }) {
+		const int trigger = app == kPingPong ? 4 : 13;
+		Core c;
+		c.selectApp(app);
+		for (int tab = 0; tab < 4; tab++) {
+			CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, app, model(c).tab, 0, tab)), "SelectTab %d dropped", tab);
+			const FriendlyModel m = model(c);
+			const Row* r = findRow(m, trigger);
+			CHECK(r && r->value == tab && r->def == 0, "%s tab %d: trigger input %d, default %d", Core::appName(app), tab,
+				r ? (int) r->value : -1, r ? (int) r->def : -1);
+			if (r)
+				CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, tab, trigger, r->def)) && c.setting(tab, trigger) == 0,
+					"%s tab %d: trigger input %d after setting the default", Core::appName(app), tab, c.setting(tab, trigger));
+		}
+	}
+}
+
+// A visibility switch: after the edit, the model's rows are the firmware's
+// menu, on both paths.
+void testVisibilityFollows() {
+	struct Case { int app, tab, setting, value, rows; };
+	const Case cases[] = {
+		{ kViznutcracker, 2, 6, 1, 19 }, { kViznutcracker, 2, 6, 0, 13 }, { kViznutcracker, 0, 6, 1, 19 },
+		{ kH1200, 0, 14, 2, 37 + 1 }, { kH1200, 0, 14, 0, 15 + 1 }, { kH1200, 0, 14, 2, 37 + 1 }, { kH1200, 0, 14, 1, 15 + 1 },
+	};
+	Pair viz(kViznutcracker), h(kH1200);
+	for (const Case& k : cases) {
+		Pair& p = k.app == kH1200 ? h : viz;
+		const char* an = Core::appName(k.app);
+		setBoth(p, k.app, k.tab, k.setting, k.value);
+		const FriendlyModel m = model(p.a);
+		CHECK(m.rows == k.rows, "%s: setting %d = %d: %d rows, want %d", an, k.setting, k.value, m.rows, k.rows);
+		CHECK(rowsAreMenu(p.a, m), "%s: setting %d = %d: the rows are not the firmware's menu", an, k.setting, k.value);
+		p.checkSame("visibility", "switch", k.value);
+	}
+	// Viznutcracker: each channel keeps its own list; the model shows the
+	// selected one's.
+	CHECK(viz.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, kViznutcracker, model(viz.a).tab, 0, 2)), "SelectTab 2 dropped");
+	CHECK(model(viz.a).rows == 13 && rowsAreMenu(viz.a, model(viz.a)), "Viznutcracker tab C: %d rows", model(viz.a).rows);
+	// References: channel D has the tuning rows, A to C two placeholder rows
+	// ("-", R push does nothing), which are left out.
+	Core r;
+	r.selectApp(kReferences);
+	for (int tab : { 3, 0, 1, 2 }) {
+		CHECK(r.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, kReferences, model(r).tab, 0, tab)), "References: SelectTab %d dropped", tab);
+		const FriendlyModel m = model(r);
+		CHECK(m.rows == (tab == 3 ? 9 : 5) && rowsAreMenu(r, m), "References tab %d: %d rows", tab, m.rows);
+	}
+}
+
+// Ticks a and b (one edited, one by gesture) and `idle` (neither) on the same
+// inputs. same: a and b agree throughout; differs: a and idle do not.
+void runThree(Core& a, Core& b, Core& idle, Lcg rng, int ticks, bool& same, bool& differs) {
+	same = true;
+	differs = false;
+	for (int i = 0; i < ticks; i++) {
+		if (i % 50 == 0)
+			for (int ch = 0; ch < shoal::kNumChannels; ch++) {
+				const float v = rng.volts(-3.f, 6.f);
+				for (Core* c : { &a, &b, &idle })
+					c->setCv(ch, v);
+			}
+		if (i % 97 == 0) {
+			const int ch = (int) (rng.next() >> 30);
+			const float g = (rng.next() & 0x10000) ? 10.f : 0.f;
+			for (Core* c : { &a, &b, &idle })
+				c->setGate(ch, g);
+		}
+		for (Core* c : { &a, &b, &idle })
+			c->tick();
+		for (int ch = 0; ch < shoal::kNumChannels; ch++) {
+			same = same && a.outCode(ch) == b.outCode(ch);
+			differs = differs || a.outCode(ch) != idle.outCode(ch);
+		}
+	}
+}
+
+// Each Action row is its hardware gesture.
+void testActions() {
+	struct Case { int app; const char* label; shoal::Button button; bool longPress; };
+	const Case cases[] = {
+		{ kH1200, "Reset", shoal::BUTTON_L, true },
+		{ kAutomatonnetz, "Reset", shoal::BUTTON_UP, false },
+		{ kAutomatonnetz, "Clock", shoal::BUTTON_DOWN, false },
+		{ kAutomatonnetz, "Clear grid", shoal::BUTTON_L, true },
+	};
+	for (const Case& k : cases) {
+		const char* an = Core::appName(k.app);
+		Pair p(k.app), idle(k.app);  // idle: the same cores, never pressed
+		// Some settings off their defaults first, on all four cores.
+		for (Pair* q : { &p, &idle }) {
+			if (k.app == kH1200) {
+				setBoth(*q, k.app, 0, 14, 2);   // Trigger type Eucl
+				setBoth(*q, k.app, 0, 0, 5);    // Transpose
+				setBoth(*q, k.app, 0, 4, 1);    // Root mode Min
+			} else {
+				setBoth(*q, k.app, 0, 6, 0);    // Clr: zero, for Clear grid
+				setBoth(*q, k.app, 0, 0, 13);   // dx
+			}
+			q->checkSame("before", k.label, 0);
+		}
+		const FriendlyModel m = model(p.a);
+		const Row* action = nullptr;
+		for (int i = 0; i < m.rows; i++)
+			if (std::strcmp(m.row[i].label, k.label) == 0)
+				action = &m.row[i];
+		CHECK(action && action->kind == RowKind::Action && (action->flags & shoal::kRowExtra), "%s: no Action row '%s'", an, k.label);
+		if (!action)
+			continue;
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Press, k.app, 0, action->id, 0)), "%s %s: dropped", an, k.label);
+		CoreTest::buttonEvent(p.b, k.button, k.longPress);
+		CHECK(sameSettings(p.a, p.b) && modelDiff(model(p.a), model(p.b)) < 0, "%s %s: differs from the gesture", an, k.label);
+		bool same = false, differs = false;
+		runThree(p.a, p.b, idle.a, p.rng, 4000, same, differs);
+		CHECK(same, "%s %s: the row and the gesture give different outputs", an, k.label);
+		CHECK(differs, "%s %s: the outputs are those of a core that was not pressed", an, k.label);
+		CHECK(modelDiff(model(p.a), model(p.b)) < 0, "%s %s: models differ after running", an, k.label);
+		if (k.app == kH1200) {
+			// All settings back to their defaults; the firmware does not rebuild
+			// its menu, so the Euclidean rows stay listed, as on the hardware.
+			for (int i = 0; i < p.a.settingCount(); i++)
+				CHECK(p.a.setting(0, i) == p.a.settingInfo(i).def, "%s Reset: setting %d is %d", an, i, p.a.setting(0, i));
+			CHECK(model(p.a).rows == 37 + 1 && rowsAreMenu(p.a, model(p.a)), "%s Reset: %d rows", an, model(p.a).rows);
+		}
+	}
+	// Automatonnetz "Cells" is the cell editor, edited in hardware mode only.
+	Core c;
+	c.selectApp(kAutomatonnetz);
+	const FriendlyModel m = model(c);
+	const Row* cells = nullptr;
+	for (int i = 0; i < m.rows; i++)
+		if (std::strcmp(m.row[i].label, "Cells") == 0)
+			cells = &m.row[i];
+	CHECK(cells && cells->kind == RowKind::SubEditor && (cells->flags & shoal::kRowExtra), "Automatonnetz: no Cells row");
+	CHECK(m.rows == 7 + 4, "Automatonnetz: %d rows", m.rows);
+}
+
+// Automatonnetz's cell view and References' autotuner take the controls:
+// the model is busy and every edit is dropped until they close.
+void testSubEditorsBusy() {
+	{
+		Pair p(kAutomatonnetz);
+		CoreTest::buttonEvent(p.a, shoal::BUTTON_L, false);  // the cell view
+		const Snapshot before = snapshot(p.a);
+		const FriendlyModel m = model(p.a);
+		CHECK((m.flags & shoal::kModelBusy) && !CoreTest::friendlyAccepting(p.a), "Automatonnetz cell view: flags %d", m.flags);
+		CHECK(std::strcmp(m.status, "CELL 1,1") == 0, "Automatonnetz cell view: status '%s'", m.status);
+		// The cell view shows the cell's own cursor: no row of the list has it.
+		CHECK(checkWellFormed(p.a, m, "cell view") == 0, "Automatonnetz cell view: a row carries the cursor");
+		CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kAutomatonnetz, 0, 3, 2)), "cell view: SetValue taken");
+		CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, kAutomatonnetz, 0, 4, 0)), "cell view: Focus taken");
+		CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::Press, kAutomatonnetz, 0, kExtraId, 0)), "cell view: Press taken");
+		CHECK(sameSnapshot(before, snapshot(p.a)), "cell view: a dropped edit changed a setting");
+		CoreTest::buttonEvent(p.a, shoal::BUTTON_L, false);  // back to the grid
+		CHECK(!(model(p.a).flags & shoal::kModelBusy), "Automatonnetz grid view: busy");
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kAutomatonnetz, 0, 3, 2)) && p.a.setting(0, 3) == 2, "grid view: dropped");
+		const Row* cells = nullptr;
+		const FriendlyModel g = model(p.a);
+		for (int i = 0; i < g.rows; i++)
+			if (g.row[i].kind == RowKind::SubEditor)
+				cells = &g.row[i];
+		CHECK(cells && !p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kAutomatonnetz, 0, cells->id, 1)), "Cells: SetValue taken");
+	}
+	{
+		Pair p(kReferences);
+		const FriendlyModel m = model(p.a);
+		const Row* tune = findRow(m, 8);
+		CHECK(tune && tune->kind == RowKind::SubEditor && std::strcmp(tune->label, "--> autotune") == 0, "References: no autotune row");
+		CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kReferences, m.tab, 8, 0)), "autotune: SetValue taken");
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, kReferences, m.tab, 8, 0)) && CoreTest::menuSetting(p.a) == 8,
+			"autotune: Focus did not move the cursor there");
+		CHECK(!(model(p.a).flags & shoal::kModelBusy), "References: busy with the cursor on autotune");
+		CoreTest::buttonEvent(p.a, shoal::BUTTON_R, false);  // opens the autotuner
+		CHECK((model(p.a).flags & shoal::kModelBusy) && !CoreTest::friendlyAccepting(p.a), "References autotuner: not busy");
+		checkWellFormed(p.a, model(p.a), "autotuner");
+		CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kReferences, m.tab, 0, 2)) && p.a.setting(3, 0) == 0,
+			"autotuner: SetValue taken");
+		CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, kReferences, m.tab, 0, 0)), "autotuner: SelectTab taken");
+		CoreTest::buttonEvent(p.a, shoal::BUTTON_R, false);  // closes it
+		CHECK(!(model(p.a).flags & shoal::kModelBusy), "References: busy after the autotuner closed");
+	}
+}
+
+// After a patch load References lists channel D's last two rows, which the
+// firmware's cursor cannot reach (REFS_restore sets the menu's end from
+// channel A) until the L encoder moves. An edit there turns the L encoder
+// away and back first, as a person must.
+void testReferencesAfterRestore() {
+	Pair p(kReferences);
+	static uint8_t image[shoal::kStateBytes];
+	p.a.save(image);
+	CHECK(p.a.restore(image) && p.b.restore(image), "References: restore failed");
+	CHECK(model(p.a).tab == 3, "References after restore: tab %d", model(p.a).tab);
+	// PPQN (setting 7, menu row 8) and the A mantissa (6, menu row 7).
+	for (int setting : { 7, 6 }) {
+		const int target = setting == 7 ? 5 : 33;
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kReferences, 3, setting, target)), "References: setting %d dropped", setting);
+		if (setting == 7) {
+			// On B: the person scrolls, the list stops two rows short, so they
+			// turn the L encoder away and back, then scroll on.
+			CoreTest::encoderEvent(p.b, shoal::ENCODER_R, menuRowOf(p.b, setting) - CoreTest::menuRow(p.b));
+			CHECK(CoreTest::menuRow(p.b) == 6, "References after restore: the cursor reached row %d", CoreTest::menuRow(p.b));
+			CoreTest::encoderEvent(p.b, shoal::ENCODER_L, -1);
+			CoreTest::encoderEvent(p.b, shoal::ENCODER_L, 1);
+		}
+		listGesture(p.b, setting, target);
+		CHECK(p.a.setting(3, setting) == target, "References: setting %d is %d, want %d", setting, p.a.setting(3, setting), target);
+		p.checkSame("after restore", "tuning", target);
+	}
+}
+
+// Focus on each row of the new adapters: the cursor goes to a menu row; an
+// extra row leaves it.
+void testFocusNewApps() {
+	for (int app : { kH1200, kAutomatonnetz, kPingPong, kViznutcracker, kReferences }) {
+		const char* an = Core::appName(app);
+		Core c;
+		c.selectApp(app);
+		const FriendlyModel first = model(c);
+		for (int pass = 0; pass < 2 * first.rows; pass++) {
+			const int n = pass < first.rows ? pass : 2 * first.rows - 1 - pass;
+			const Row row = first.row[n];
+			const int before = CoreTest::menuSetting(c);
+			const Snapshot settings = snapshot(c);
+			CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::Focus, app, first.tab, row.id, 0)), "%s: Focus on '%s' dropped", an, row.label);
+			CHECK(sameSnapshot(settings, snapshot(c)), "%s: Focus on '%s' changed a setting", an, row.label);
+			const int want = row.id < kExtraId ? row.id : before;
+			CHECK(CoreTest::menuSetting(c) == want, "%s: Focus on '%s': cursor on %d, want %d", an, row.label, CoreTest::menuSetting(c), want);
+			checkWellFormed(c, model(c), "focus");
+		}
+	}
+}
+
+// Text the adapters write themselves: title-bar status lines (as the
+// firmware's own title bars draw them) and Automatonnetz's dx/dy values.
+void testStatusAndText() {
+	{
+		Core c;
+		c.selectApp(kH1200);
+		run(c, 0.5);
+		// A fresh core: the C major chord, notes shown as names (L push: numbers).
+		CHECK(std::strcmp(model(c).status, "C  Maj  C  E  G ") == 0, "Harrington 1200 status '%s'", model(c).status);
+		CoreTest::buttonEvent(c, shoal::BUTTON_L, false);
+		CHECK(std::strcmp(model(c).status, "C  Maj   0 +4 +7") == 0, "Harrington 1200 status with numbers '%s'", model(c).status);
+		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kH1200, 0, 4, 1)), "Root mode dropped");
+		CHECK(std::strncmp(model(c).status, "C  Min", 6) == 0, "Harrington 1200 status after Root mode '%s'", model(c).status);
+	}
+	{
+		Core c;
+		c.selectApp(kAutomatonnetz);
+		run(c, 0.5);
+		// Three note names (two characters and a space each) and the chord's mode.
+		const FriendlyModel m = model(c);
+		CHECK(std::strlen(m.status) == 10 && (m.status[9] == '+' || m.status[9] == '-') && m.status[2] == ' ' && m.status[5] == ' ',
+			"Automatonnetz status '%s'", m.status);
+		// The cell view's title: the selected cell, row and column from 1.
+		CoreTest::buttonEvent(c, shoal::BUTTON_L, false);
+		CoreTest::encoderEvent(c, shoal::ENCODER_L, 7);
+		CHECK(std::strcmp(model(c).status, "CELL 2,3") == 0, "Automatonnetz cell view status '%s'", model(c).status);
+		CoreTest::buttonEvent(c, shoal::BUTTON_L, false);
+		// dx and dy: whole cells and a fraction, as draw_grid_menu prints them.
+		struct Step { int value; const char* text; };
+		const Step steps[] = { { 0, "0" }, { 3, "1/6" }, { 8, "1" }, { 12, "1 1/5" }, { 39, "4 1/2" }, { 1, "1/8" } };
+		for (int id : { 0, 1 })
+			for (const Step& st : steps) {
+				CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kAutomatonnetz, 0, id, st.value)), "dx/dy dropped");
+				const FriendlyModel g = model(c);
+				const Row* r = findRow(g, id);
+				CHECK(r && r->value == st.value && std::strcmp(r->text, st.text) == 0, "Automatonnetz %s = %d: text '%s', want '%s'",
+					id ? "dy" : "dx", st.value, r ? r->text : "?", st.text);
+			}
+	}
 }
 
 } // namespace
@@ -844,6 +1311,18 @@ int main() {
 	testFrameworkDrops();
 	testFixedText();
 	testStaleEditDropped();
+	testPingPongEquivalence();
+	testViznutcrackerEquivalence();
+	testReferencesEquivalence();
+	testH1200Equivalence();
+	testAutomatonnetzEquivalence();
+	testTabsFollowFirmware();
+	testVisibilityFollows();
+	testActions();
+	testSubEditorsBusy();
+	testReferencesAfterRestore();
+	testFocusNewApps();
+	testStatusAndText();
 	testEditStorm();
 	return rkatest::finish("test_friendly");
 }

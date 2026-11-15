@@ -304,10 +304,13 @@ inline void moveCursor(Cursor& c, int menuRow) {
 // the R encoder turned by `delta` (target - current), R push to leave. The
 // cursor ends on the row, not editing. unitSteps: the turn goes as |delta|
 // events of one step, for handlers whose guard looks at single steps only;
-// otherwise as one event. False, with no encoder event sent, if the R push
-// did not put the cursor in edit mode.
+// otherwise as one event. False, with no encoder event sent, if the cursor
+// cannot reach the row (the menu's end is short of it: References after a
+// patch load) or the R push did not put the cursor in edit mode.
 inline bool replaySet(Cursor& c, int menuRow, int delta, bool unitSteps = false) {
 	moveCursor(c, menuRow);
+	if (c.cursor_pos() != menuRow)
+		return false;
 	if (!c.editing())
 		button(OC::CONTROL_BUTTON_R);
 	if (!c.editing())
@@ -321,16 +324,27 @@ inline bool replaySet(Cursor& c, int menuRow, int delta, bool unitSteps = false)
 	return true;
 }
 
+// SetValue and Focus on a row of a plain settings menu (every row's R push
+// toggles edit mode), at menu row `menuRow`: -1 for a row the menu does not
+// have (an extra row, or a setting the app keeps elsewhere), on which Focus
+// does nothing and SetValue is dropped. Other edit types are dropped.
+inline bool menuEdit(const FriendlyEdit& e, const Row& row, Cursor& c, int menuRow) {
+	switch (e.type) {
+		case FriendlyEdit::SetValue:
+			return menuRow >= 0 && replaySet(c, menuRow, e.value - row.value);
+		case FriendlyEdit::Focus:
+			if (menuRow >= 0)
+				moveCursor(c, menuRow);
+			return true;
+		default:
+			return false;
+	}
+}
+
 // ---- The generic adapter ----------------------------------------------------
 // For an app without an adapter of its own yet: the first channel's settings
 // (its enabled list if the app keeps one), read-only. It knows neither the
 // app's cursor nor its handlers, so it marks no row and drops every edit.
-
-template <class T, int N, T& (*Obj)(int)>
-struct GenericTable {
-	static_assert(N + 8 <= kMaxRows, "kMaxRows holds the whole table and its extra rows");
-	static void rows(FriendlyModel& m, int) { addTable(m, Obj(0), 0, N - 1, nullptr); }
-};
 
 template <class T, int N, T& (*Obj)(int)>
 struct GenericEnabled {
@@ -347,6 +361,7 @@ constexpr Adapter generic(void (*rows)(FriendlyModel&, int), const NameCount* na
 // namespace named after its app, for the table below.
 
 #include "FriendlyAdapters1.inc"
+#include "FriendlyAdapters2.inc"
 
 // ---- The table --------------------------------------------------------------
 
@@ -365,18 +380,18 @@ constexpr NameCount kAcidCurdsNames[] = {
 // One adapter per app, in available_apps order (as kAppSettings).
 constexpr Adapter kAdapters[] = {
 	generic(&GenericEnabled<ASR, ASR_SETTING_LAST, &asrObj>::rows),
-	generic(&GenericEnabled<H1200Settings, H1200_SETTING_LAST, &h1200Obj>::rows),
-	generic(&GenericTable<AutomatonnetzState, GRID_SETTING_LAST, &automatonnetzObj>::rows),
+	harrington::kAdapter,
+	automaton::kAdapter,
 	generic(&GenericEnabled<QuantizerChannel, CHANNEL_SETTING_LAST, &qqObj>::rows),
 	generic(&GenericEnabled<DQ_QuantizerChannel, DQ_CHANNEL_SETTING_LAST, &dqObj>::rows, kMetaQNames, 1),
 	quadraturia::kAdapter,
 	lowrents::kAdapter,
 	generic(&GenericEnabled<EnvelopeGenerator, ENV_SETTING_LAST, &envObj>::rows, kPiquedNames, 1),
 	generic(&GenericEnabled<SEQ_Channel, SEQ_CHANNEL_SETTING_LAST, &seqObj>::rows),
-	generic(&GenericTable<BouncingBall, BB_SETTING_LAST, &bbObj>::rows),
-	generic(&GenericEnabled<ByteBeat, BYTEBEAT_SETTING_LAST, &bytebeatObj>::rows),
+	pingpong::kAdapter,
+	viznut::kAdapter,
 	generic(&GenericEnabled<Chords, CHORDS_SETTING_LAST, &chordsObj>::rows, kAcidCurdsNames, 1),
-	generic(&GenericEnabled<ReferenceChannel, REF_SETTING_LAST, &refsObj>::rows),
+	references::kAdapter,
 };
 static_assert(sizeof(kAdapters) / sizeof(kAdapters[0]) == NUM_AVAILABLE_APPS, "one friendly adapter per app");
 
