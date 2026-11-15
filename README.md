@@ -5,7 +5,7 @@ VCV Rack 2 modules.
 | Module | HP | Description |
 |---|---|---|
 | [**Sway**](docs/sway/README.md) | 18 | Polyphonic LFO: classic and morphing waves, random, EOC, clock sync, phase spread, one-shot |
-| [**Fathom**](docs/fathom/README.md) | 10 | Deep bass drone voice: sub sine, 7-saw supersaw, drift, low-pass |
+| [**Fathom**](docs/fathom/README.md) | 10 | Deep bass drone voice: sub sine, 7-saw supersaw, drift, ladder filter |
 
 Each module's manual is in its own folder.
 
@@ -31,8 +31,10 @@ src/sway/                the Sway module
   test_*.cpp             offline unit tests, one per DSP unit
   SwayLayout.hpp         component positions, generated, do not edit
 src/fathom/              the Fathom drone voice, same shape: Fathom.cpp,
-                         Svf.hpp, SuperSaw.hpp, Drift.hpp, DroneVoice.hpp,
-                         test_*.cpp, FathomLayout.hpp
+                         Svf.hpp, SuperSaw.hpp, Drift.hpp, Ladder.hpp,
+                         Halfband.hpp, DroneVoice.hpp, test_*.cpp,
+                         FathomLayout.hpp
+res/components/          the plugin's own knob SVGs (the trim), generated
 res/<module>/            final panels, text as paths (what Rack loads)
 res-src/<module>/        generated SVGs with live text (input to Inkscape)
 docs/<module>/           the module's manual and panel image
@@ -74,8 +76,12 @@ green). Outputs are colour-coded by accent. The palette lives in
 `ACCENTS`/`THEMES` in `tools/gen_panels.py`; the default panel and Rack's
 "dark panels" variant are the same design, the dark one dimmer. Rack can't
 blur, so glows are a faint wide stroke under a thin bright one. Use the
-widgets in `src/widgets.hpp` (`rka::BigKnob`, `rka::SmallKnob`,
-`rka::CyanMagentaLight`) rather than stock ones so modules match.
+widgets in `src/widgets.hpp` (`rka::BigKnob`, `rka::MidKnob`,
+`rka::SmallKnob`, `rka::Trim`, `rka::CyanMagentaLight`) rather than stock
+ones so modules match. `rka::Trim` is the plugin's own 4.6 mm
+attenuverter; `gen_panels.py` draws its SVGs into `res/components/` from
+the palette, and its `RADII` table keeps components clear of each other
+and draws ticks edge to edge.
 
 ### Changing a panel
 

@@ -17,8 +17,8 @@ layout.
   released module.
 - One shared look ("Nightglow", see README): palette in
   `tools/gen_panels.py`, shared knobs/lights in `src/widgets.hpp`. Don't use
-  stock knobs or ad-hoc colours in a module. `src/RkaTheme.hpp` is
-  generated.
+  stock knobs or ad-hoc colours in a module. `src/RkaTheme.hpp` and
+  `res/components/` (the trim's SVGs) are generated.
 - `RACK_DIR` is set in `~/.bashrc` (`~/ws/sdk/Rack-SDK`, 2.6.6). Non-login
   shells may not have it; pass `RACK_DIR=$HOME/ws/sdk/Rack-SDK` to make.
   On the Mac (arm64) it's in `~/.zshrc`:
