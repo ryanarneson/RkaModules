@@ -400,13 +400,21 @@ take the same queue into the firmware's event queue.
 
 ## Saving
 
-Nothing is saved by gesture. About twice a second, if anything changed,
-the engine thread runs the firmware's own save for all apps and global
-settings (user scales, patterns and chords) into a snapshot. `dataToJson`
-writes the latest snapshot as a base64 string, with the current app, the
-UI mode, the screen colour and the CV input range. `dataFromJson` hands the bytes back to the
-engine thread, which runs the firmware's restore. The firmware's intended
-pause while saving does not apply: its save is a small copy.
+Nothing is saved by gesture. Twice a second, whether or not anything
+changed, the engine thread runs the firmware's own save for all apps and
+global settings (user scales, patterns and chords) into a snapshot (with
+nothing changed the firmware writes nothing, so the image is the same).
+`dataToJson` writes, as built in stage 2, `{ "version": 1, "state":
+"<base64 of the 2048-byte image>", "inputRange": 0 or 1 }`; the current
+app is inside the image. The rules for those fields are in
+`src/shoal/PatchState.hpp`, and `src/shoal/testdata/GoldenStateV1.hpp`
+is an image an earlier build saved that every later build must load.
+Later stages add keys beside these, never changing them: the UI mode
+with the friendly mode (stage 3) and the screen colour with the
+right-click menu (stage 4). `dataFromJson` builds and boots a new core
+with the restored image off the engine thread; the engine swaps it in.
+The firmware's intended pause while saving does not apply: its save is a
+small copy.
 
 What is saved is what the hardware saves: settings, not running state. A
 reloaded patch starts sequences from the top and the shift register empty,
@@ -507,8 +515,9 @@ plan (`docs/plans/2026-11-15-shoal-hardware-mode.md`).
 Decide when planning stage 2:
 
 - **Done (stage 2)** Power-on outputs. The stage 1 core held the DAC
-  power-on code (about +6.17 V on all four outputs) until the app first
-  wrote, and `out()` read -3.75 V before the first tick. Decided by the
+  power-on codes (channel A about +6.17 V, code about 64980, written by
+  Automatonnetz's `Init`; B to D at 0xffff, about +6.25 V; see
+  `src/shoal/firmware/CHANGES.md`) until the app first wrote, and `out()` read -3.75 V before the first tick. Decided by the
   user on 2026-11-15: the outputs start at 0 V after boot, reset and
   patch load, and `out()` reads 0 V before the first tick. This is a
   deliberate deviation from the hardware, logged in
@@ -543,7 +552,9 @@ Do in stage 2:
   committed random sweep is light. Give `testQuantizerFarPitch` a value
   assertion.
 - Judge by feel once there is a UI: the Meta-Q slot-switch gate lasts
-  about 0.5 s; held buttons forget their press state on restore.
+  about 0.5 s. (Held buttons no longer forget their press state on
+  restore: through `shoal::Host` the new core gets them pressed again,
+  and the module releases its button params on patch load.)
 - Confirm the first real `ubuntu-latest` run of `make -f tests.mk test`;
   it has only run in an emulated x86 container.
 - **Done (stage 2)** `bjorklund_row` maps every length above 31 to the

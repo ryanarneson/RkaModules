@@ -1,5 +1,6 @@
 #include "plugin.hpp"
 #include "Host.hpp"
+#include "PatchState.hpp"
 #include "ShoalLayout.hpp"
 #include "widgets.hpp"
 
@@ -9,19 +10,17 @@
 
 static_assert(shoal::kFrameBytes == rka::PixelScreen::BYTES, "PixelScreen draws a Shoal frame");
 
-// The firmware state in the patch ("data"), version 1:
-//   { "version": 1, "state": "<base64 of kStateBytes bytes>", "inputRange": 0 }
-// state is the firmware's EEPROM image; inputRange is 0 (Hardware) or 1 (±5 V).
-static const int STATE_VERSION = 1;
+// The firmware state in the patch ("data"): the format and the rules for its
+// fields are in PatchState.hpp; this reads and writes the JSON and base64.
 
-// A patch's state image: true, with `state` and `range` set, only for version
-// 1 with a state that decodes to exactly kStateBytes. Anything else (a field
-// missing, another version, bad base64, the wrong length) is false: the
-// caller restores the defaults. An inputRange other than 1 reads as Hardware.
+// A patch's state image: true, with `state` and `range` set, only for a
+// version and a decoded state that PatchState.hpp accepts. Anything else is
+// false: the caller restores the defaults.
 static bool decodeState(json_t* rootJ, std::vector<uint8_t>& state, shoal::InputRange& range) {
 	json_t* versionJ = json_object_get(rootJ, "version");
 	json_t* stateJ = json_object_get(rootJ, "state");
-	if (!json_is_integer(versionJ) || json_integer_value(versionJ) != STATE_VERSION || !json_is_string(stateJ))
+	const bool versionIsInt = json_is_integer(versionJ);
+	if (!shoal::patchVersionOk(versionIsInt, versionIsInt ? (long long) json_integer_value(versionJ) : 0) || !json_is_string(stateJ))
 		return false;
 	try {
 		state = string::fromBase64(std::string(json_string_value(stateJ), json_string_length(stateJ)));
@@ -29,11 +28,11 @@ static bool decodeState(json_t* rootJ, std::vector<uint8_t>& state, shoal::Input
 	catch (std::exception&) {
 		return false;
 	}
-	if (state.size() != (size_t) shoal::kStateBytes)
+	if (!shoal::patchStateSizeOk(state.size()))
 		return false;
 	json_t* rangeJ = json_object_get(rootJ, "inputRange");
-	const bool bipolar = json_is_integer(rangeJ) && json_integer_value(rangeJ) == 1;
-	range = bipolar ? shoal::InputRange::Bipolar5 : shoal::InputRange::Hardware;
+	const bool rangeIsInt = json_is_integer(rangeJ);
+	range = shoal::patchInputRange(rangeIsInt, rangeIsInt ? (long long) json_integer_value(rangeJ) : 0);
 	return true;
 }
 
@@ -106,9 +105,9 @@ struct Shoal : Module {
 		shoal::InputRange range = shoal::InputRange::Hardware;
 		host.snapshot(state, &range);
 		json_t* rootJ = json_object();
-		json_object_set_new(rootJ, "version", json_integer(STATE_VERSION));
+		json_object_set_new(rootJ, "version", json_integer(shoal::kPatchVersion));
 		json_object_set_new(rootJ, "state", json_string(string::toBase64(state, sizeof(state)).c_str()));
-		json_object_set_new(rootJ, "inputRange", json_integer(range == shoal::InputRange::Bipolar5 ? 1 : 0));
+		json_object_set_new(rootJ, "inputRange", json_integer(shoal::patchInputRangeValue(range)));
 		return rootJ;
 	}
 
@@ -124,21 +123,25 @@ struct Shoal : Module {
 
 	// Initialize: a new core's defaults (CopierMaschine), outputs at 0 V.
 	void onReset(const ResetEvent& e) override {
+		Module::onReset(e);
+		releaseButtons();
 		shoal::ControlEvent ev;
 		ev.type = shoal::ControlEvent::Reset;
 		ev.index = 0;
 		ev.value = 0;
 		host.post(ev);
-		releaseButtons();
 	}
 
 	// Randomize leaves the firmware alone (and the buttons are not randomisable).
 	void onRandomize(const RandomizeEvent& e) override {}
 
 	// A button latched when the patch was saved is not held on load or reset.
+	// Only the four buttons: any other param keeps its value.
 	void releaseButtons() {
-		for (int i = 0; i < PARAMS_LEN; i++)
-			params[i].setValue(0.f);
+		params[ENC_L_PUSH_PARAM].setValue(0.f);
+		params[ENC_R_PUSH_PARAM].setValue(0.f);
+		params[UP_PARAM].setValue(0.f);
+		params[DOWN_PARAM].setValue(0.f);
 	}
 
 	void process(const ProcessArgs& args) override {
@@ -159,7 +162,8 @@ struct Shoal : Module {
 			outputs[A_OUTPUT + ch].setVoltage(v);
 			lights[A_LIGHT + 2 * ch].setBrightness(std::max(v, 0.f) / 5.f);
 			lights[A_LIGHT + 2 * ch + 1].setBrightness(std::max(-v, 0.f) / 5.f);
-			lights[TR1_LIGHT + ch].setBrightness(host.gateHigh(ch) ? 1.f : 0.f);
+			// Smoothed, so a 1 ms trigger still shows.
+			lights[TR1_LIGHT + ch].setBrightnessSmooth(host.gateHigh(ch) ? 1.f : 0.f, args.sampleTime);
 		}
 	}
 };

@@ -19,7 +19,7 @@ SHOAL_FW_FLAGS = -std=c++17 -fwrapv -fno-strict-aliasing -fno-unsafe-math-optimi
 	-funsigned-char -Isrc/shoal/shim -Isrc/shoal/firmware
 SHOAL_TEST_FLAGS = $(SHOAL_FW_FLAGS) -O1 -g -fsanitize=address,undefined \
 	-fno-sanitize=alignment,shift-base -fno-sanitize-recover=all
-SHOAL_DEPS := $(shell find src/shoal -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.ino' -o -name '*.cpp' \) ! -name 'test_*.cpp')
+SHOAL_DEPS := $(shell find src/shoal -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.ino' -o -name '*.cpp' \) ! -name 'test_*.cpp' ! -path 'src/shoal/testdata/*')
 
 # Other modules' tests (header-only cores). CI adds -Werror.
 TEST_WERROR ?=
@@ -55,6 +55,8 @@ build/test/shoal/test_shim: src/shoal/test_shim.cpp src/testing.hpp $(SHOAL_DEPS
 
 # The encoder's detent arithmetic (src/Detents.hpp, shared by every module).
 build/test/shoal/test_detents: src/Detents.hpp
+# The checked-in state image an earlier build saved (never regenerated).
+build/test/shoal/test_state: src/shoal/testdata/GoldenStateV1.hpp
 
 build/test/shoal/test_%: src/shoal/test_%.cpp build/test/shoal/Firmware.o src/testing.hpp
 	@mkdir -p $(@D)

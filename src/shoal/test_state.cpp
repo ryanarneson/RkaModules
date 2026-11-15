@@ -9,6 +9,7 @@
 #include "CoreTest.hpp"
 #include "testing.hpp"
 #include "test_util.hpp"
+#include "testdata/GoldenStateV1.hpp"
 
 using shoal::Core;
 using shoal::CoreTest;
@@ -495,6 +496,54 @@ void testUserDataRoundTrip() {
 	CHECK(CoreTest::userScaleNote(fresh, 1, 3) != CoreTest::userScaleNote(b, 1, 3), "edited scale differs from default");
 }
 
+// The checked-in image an earlier build saved (testdata/GoldenStateV1.hpp)
+// still loads, with every value it holds: patches users have saved keep
+// working. Every other test saves and restores with the same binary, so
+// only this one notices a change to the firmware, the settings tables or
+// the build flags that moves the stored layout.
+void testGoldenImageV1() {
+	static_assert(sizeof(kGoldenStateV1) == (size_t) shoal::kStateBytes, "golden image size");
+	struct Saved { int channel, index; const char* name; int value; };
+	const Saved saved[] = {
+		{ 0, 0, "Scale", 12 }, { 0, 1, "Root", 7 }, { 0, 8, "Transpose", 3 }, { 0, 9, "Octave", -2 },
+		{ 1, 6, "Clock div", 4 }, { 1, 10, "Fine", -250 },
+		{ 2, 11, "LFSR length", 24 },
+	};
+	const int16_t scale0[7] = { 0, 200, 350, 500, 700, 900, 1100 };
+
+	Core c;
+	CHECK(c.restore(kGoldenStateV1), "golden image restores");
+	CHECK(c.app() == 3, "app %d (%s), expected Quantermain", c.app(), Core::appName(c.app()));
+	CHECK(std::strcmp(Core::appName(c.app()), "Quantermain") == 0, "app name %s", Core::appName(c.app()));
+	Core fresh;
+	fresh.selectApp(3);
+	for (const Saved& s : saved) {
+		CHECK(std::strcmp(c.settingInfo(s.index).name, s.name) == 0, "setting %d is '%s', expected '%s'",
+			s.index, c.settingInfo(s.index).name, s.name);
+		CHECK(c.setting(s.channel, s.index) == s.value, "ch %d '%s': %d, saved %d",
+			s.channel, s.name, c.setting(s.channel, s.index), s.value);
+		CHECK(fresh.setting(s.channel, s.index) != s.value, "ch %d '%s': saved value is a default", s.channel, s.name);
+	}
+	// Everything else on the four channels is a fresh core's.
+	for (int ch = 0; ch < c.channels(); ch++)
+		for (int i = 0; i < c.settingCount(); i++) {
+			bool changed = false;
+			for (const Saved& s : saved)
+				changed = changed || (s.channel == ch && s.index == i);
+			if (!changed)
+				CHECK(c.setting(ch, i) == fresh.setting(ch, i), "ch %d '%s': %d, default %d",
+					ch, c.settingInfo(i).name, c.setting(ch, i), fresh.setting(ch, i));
+		}
+	CHECK(CoreTest::userScaleNumNotes(c, 0) == 7, "user scale 0: %u notes", (unsigned) CoreTest::userScaleNumNotes(c, 0));
+	for (int n = 0; n < 7; n++)
+		CHECK(CoreTest::userScaleNote(c, 0, n) == scale0[n], "user scale 0 note %d: %d, saved %d",
+			n, (int) CoreTest::userScaleNote(c, 0, n), (int) scale0[n]);
+	CHECK(CoreTest::userScaleNumNotes(fresh, 0) != 7, "user scale 0's saved count is the default");
+	// It runs.
+	run(c, 0.1);
+	CHECK(allFinite(c), "outputs finite");
+}
+
 // A patch file can carry any bytes, with a correct checksum. Edit bytes of
 // the app data page, and (separately) of the global settings page, fix the
 // checksum with the firmware's own, restore, and run every app on random
@@ -737,6 +786,7 @@ int main() {
 	testRunningStateResets();
 	testSequencerPositionResets();
 	testUserDataRoundTrip();
+	testGoldenImageV1();
 	testForgedImage();
 	testForgedUserScale();
 	testUserScaleMaskRotates();

@@ -232,6 +232,13 @@ void testRestoreRejects() {
 	InputRange r;
 	fresh.snapshot(want.bytes, &r);
 
+	// A new core's image: the snapshot as soon as the request is made.
+	Image boot;
+	{
+		shoal::Core c;
+		c.save(boot.bytes);
+	}
+
 	// The rejected image, a null image and a Reset each replace a core that
 	// has moved away from the defaults (app 3, a setting changed).
 	const char* const how[3] = { "junk", "null", "Reset" };
@@ -251,9 +258,13 @@ void testRestoreRejects() {
 			h.post(ControlEvent{ ControlEvent::Reset, 0, 0 });
 		else
 			h.requestRestore(mode == 1 ? nullptr : junk.bytes, InputRange::Hardware);
+		Image got;
+		// Before any process(): the defaults, never the rejected bytes.
+		h.snapshot(got.bytes, &r);
+		CHECK(std::memcmp(got.bytes, boot.bytes, shoal::kStateBytes) == 0, "%s: defaults snapshot at once", how[mode]);
+		CHECK(std::memcmp(got.bytes, junk.bytes, shoal::kStateBytes) != 0, "%s: not the rejected image", how[mode]);
 		run(h, 1.0);
 		CHECK(h.app() == 0, "%s: app %d", how[mode], h.app());
-		Image got;
 		h.snapshot(got.bytes, &r);
 		CHECK(std::memcmp(got.bytes, want.bytes, shoal::kStateBytes) == 0, "%s: snapshot is a fresh host's", how[mode]);
 		CHECK(r == InputRange::Hardware, "range");
@@ -268,9 +279,7 @@ void testRestoreRejects() {
 	run(h, 0.6);
 	CHECK(h.app() == 3, "app 3 before the null request");
 	h.requestRestore(nullptr, InputRange::Bipolar5);
-	Image got, boot;
-	shoal::Core c;
-	c.save(boot.bytes);
+	Image got;
 	h.snapshot(got.bytes, &r);
 	CHECK(std::memcmp(got.bytes, boot.bytes, shoal::kStateBytes) == 0, "null: a new core's image at once");
 	CHECK(r == InputRange::Bipolar5, "null: the requested range");

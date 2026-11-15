@@ -35,7 +35,7 @@ Conditions the spec implies that are most likely to bite in real patches. Each i
 2. **Save requested before the engine has run** (duplicate module, preset save straight after load): the snapshot is the restored image, not an empty one. Task 2 (`testSnapshotBeforeProcess`).
 3. **Sample rate changes and odd rates** (44.1 kHz, 192 kHz, a change mid-run): the tick rate stays exact and nothing is lost. Task 2 (`testTickRate`).
 4. **A UI thread drawing and sending encoder turns while the engine runs**: no data race, no lost or duplicated detents, engine never blocks. Task 2 (`testThreads`).
-5. **A button held down when the patch was saved**: after load the firmware does not see a long press. Task 5 (button params cleared on load; manual check).
+5. **A button held down when the patch was saved**: after load the firmware does not see a long press. Task 5 (button params cleared on load; manual check 8 at the end of this plan).
 
 ---
 
@@ -475,3 +475,4 @@ These need hands on a mouse in a real Rack, so they are handed to the user rathe
 5. Save the patch, reopen it: same app, same settings, outputs at 0 V until clocked.
 6. Duplicate the module: the copy has the same settings and then runs independently.
 7. Two Shoals with random sources (Low-rents, or Quantermain with Turing): different values.
+8. Shift-click ENC R's button to hold it, save the patch, reopen it: the button is released and the app menu does not open.

@@ -137,15 +137,15 @@ public:
 	}
 	// Restore `state` (null: a new core's defaults) with input range `range`
 	// before the engine's next tick. Builds and boots the replacement Core
-	// here, on the calling thread. The image is the snapshot at once; if the
-	// firmware rejects it, the next save publishes the defaults instead.
+	// here, on the calling thread. The image is the snapshot at once; an
+	// image the firmware rejects boots a new core's defaults, and the
+	// defaults image is the snapshot at once instead.
 	void requestRestore(const uint8_t* state, InputRange range) {
 		Core* c = new Core();
 		c->seed(seed_);
 		c->setInputRange(range);
-		if (state)
-			c->restore(state);
-		install(c, state ? state : defaults_, false, range);
+		const bool restored = state && c->restore(state);
+		install(c, restored ? state : defaults_, false, range);
 	}
 	// A new core's defaults, keeping the engine's input range: as
 	// requestRestore(nullptr, <current range>).
@@ -247,8 +247,16 @@ private:
 			engineRange_ = pendingRange_;
 		restorePending_.store(false, std::memory_order_relaxed);
 		lock.unlock();
-		// What the host owns carries over; the gates arrive with the next
-		// setGate, encoder acceleration is back at its boot default (on).
+		// The replacement is a new Core (requestRestore, requestReset), not
+		// the running one rebooted, so only what the host re-applies here
+		// carries over: the input range, the CV levels and the held buttons
+		// (a held button is pressed again on the new Core). Everything else
+		// starts as on a new Core: the random sources restart from the
+		// Host's original seed, the clocks (millis, ticks) at 0, the gates
+		// low (the next setGate brings them back; a gate held high counts as
+		// one rising edge), and encoder acceleration is what the restored
+		// image's global settings hold (on for the defaults), as the app's
+		// resume then leaves it (Automatonnetz turns its L encoder's off).
 		core_->setInputRange(engineRange_);
 		for (int ch = 0; ch < kNumChannels; ch++)
 			core_->setCv(ch, cv_[ch]);
