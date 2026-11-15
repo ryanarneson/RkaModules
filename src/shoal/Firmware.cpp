@@ -5,7 +5,8 @@
 // Arduino builds concatenate the .ino files and generate prototypes; this file
 // does both by hand: shim headers, then the prototypes header, then the
 // firmware .cpp files, then the .ino files in LC_ALL=C name order, then the
-// per-instance state (shoal::Context), then the Core implementation.
+// per-instance state (shoal::Context), the settings and friendly-mode access,
+// then the Core implementation.
 
 // Shim headers.
 #include "shim/Context.hpp" // path from here: Rack has its own context.hpp
@@ -66,6 +67,10 @@
 
 // Raw settings access for every app.
 #include "SettingsAccess.inc"
+
+// Friendly mode: the row model and the edits, one adapter per app
+// (Friendly.inc includes the FriendlyAdapters<n>.inc files).
+#include "Friendly.inc"
 
 // shoal::Core.
 #include "CoreImpl.inc"

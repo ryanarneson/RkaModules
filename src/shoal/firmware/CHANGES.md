@@ -61,6 +61,9 @@ Each change is marked `// SHOAL:` in the file.
   press (which now does nothing), and `APP_EVENT_SCREENSAVER_ON/OFF` are
   never sent. Shoal draws the screensaver view on its own screen
   (`Core::drawScope`).
+- `OC_ui.h` (stage 3): `Ui::events_queued()` added, whether the UI event
+  queue holds events for the next `DispatchEvents`
+  (`Core::encodersPending`). Test: `test_ui` `testTurnBehindAppMenuOpen`.
 - `OC_apps.ino`: `Ui::ConfirmReset()` returns false. `::FOURCC` qualified
   in `GlobalSettings` and `AppData` (clang: the member name hides the
   template).

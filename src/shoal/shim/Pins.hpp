@@ -25,6 +25,7 @@ struct EncoderPins {
 		}
 	}
 	void clear() { head = tail = 0; }
+	bool idle() const { return head == tail; }  // no sample left to play
 	void poll(bool& a, bool& b) {
 		uint8_t s = kIdle;
 		if (head != tail) {

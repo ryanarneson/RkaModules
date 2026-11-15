@@ -23,10 +23,64 @@ struct CoreTest {
 	static int32_t pitchIn(Core& c, int ch);
 	// OC::ADC::smoothed_raw_value(ch): the firmware's smoothed 12-bit code.
 	static uint32_t smoothedCode(Core& c, int ch);
-	// The setting index (as in Core::setting) under the menu cursor of
-	// CopierMaschine (app 0) or of Quantermain (app 3, its selected channel);
-	// -1 for any other app.
+	// The setting index (as in Core::setting) under the menu cursor of the
+	// current app, on the selected channel and the page shown: -1 when the
+	// cursor's row is past the end of the list and in Automatonnetz's cell
+	// view. On Piqued's envelope page: the selected segment's value (S1..S4).
 	static int menuSetting(Core& c);
+	// The menu cursor's row (cursor_pos).
+	static int menuRow(Core& c);
+	// Whether that cursor is in edit mode (on Piqued's envelope page: whether
+	// the selected segment is being edited).
+	static bool menuEditing(Core& c);
+	// The firmware's selected channel (0 for an app with one).
+	static int selectedChannel(Core& c);
+	// The firmware's menu, as settings in row order, for the selected channel
+	// and the page shown, of every app but Quadraturia and Low-rents (whose
+	// cursor is a setting index): up to `max` into out; the count, or -1 for
+	// those two.
+	static int enabledSettings(Core& c, int* out, int max);
+	// The menu page shown: Piqued 0 (envelope segments) or 1 (settings);
+	// Sequins and Acid Curds 0 (parameters) or 1 (CV mapping), of the
+	// selected channel; -1 for the other apps.
+	static int menuPage(Core& c);
+	// Piqued's Euclidean editor: whether its L encoder edits the length
+	// (true) or the fill.
+	static bool piquedEuclidLength(Core& c);
+	// One UI timer pass (the encoders' quadrature and OC::Ui::Poll) with no
+	// main pass: what the panel did is queued, not yet handed to the app.
+	static void pollUi(Core& c);
+	// Whether the current app's friendly adapter is on its settings menu
+	// (its accepting(); true for an adapter without one).
+	static bool friendlyAccepting(Core& c);
+	// Hand one event straight to the current app's handler, with no debounce
+	// and no acceleration (what OC::Ui::DispatchEvents would send it): an
+	// encoder event carrying `delta` (nothing for 0), or a short or long
+	// press. The friendly-mode tests use these as "what the encoders would
+	// do". Unlike the hardware, an R or UP long press reaches the app too.
+	static void encoderEvent(Core& c, Encoder e, int delta);
+	// Whether app `app` has a friendly-mode adapter of its own (one that
+	// takes edits); every app has one.
+	static bool friendlyHasAdapter(int app);
+	// Friendly mode through a stand-in for the Low-rents adapter with one
+	// thing wrong (Friendly.inc, namespace fake); c must be on Low-rents.
+	// Applies *e if given (the result; false without one), then builds the
+	// stand-in's model into *out if given.
+	enum FriendlyFake {
+		NotAccepting,   // its accepting() is false: as with a sub-editor open
+		TabsNoSelect,   // reports two tabs, has no selectTab
+		SelectFails,    // reports two tabs (the first selected); its selectTab does nothing
+		TooManyRows,    // lists kMaxRows + 5 action rows
+		ReachFails      // its edit asks replaySet for a menu row past the menu's end
+	};
+	static bool friendlyFake(Core& c, FriendlyFake fake, const FriendlyEdit* e, FriendlyModel* out);
+	// friendly::Text::fixed, the status texts' printf("%*.*f") stand-in.
+	static void fixedText(double value, int decimals, int width, char (&out)[24]);
+	static void buttonEvent(Core& c, Button b, bool longPress);
+	// The app menu round trip as OC::Ui handles the events: an R long press
+	// (DispatchEvents opens the app menu; the app gets SUSPEND), then an R
+	// push to the menu (AppMenuHandle closes it on the same app; RESUME).
+	static void appMenuEvents(Core& c);
 	// The firmware's storage pages inside a state image: the global settings
 	// page or the app data page (page 0 of each, where a first save puts it).
 	// pageOffset: the page header; dataOffset, dataSize: the stored data.

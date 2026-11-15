@@ -66,13 +66,13 @@ CLEARANCE = 0.3
 def component_size(spec, name, kind, cname):
     """Which RADII entry a component uses: the panel's `sizes`, else a trim
     for `*_ATT` params, a small knob for other params, a jack for ports."""
+    if kind == "light":
+        return "light"   # before `sizes`: a light may share its param's name
     sizes = spec.get("sizes", {})
     if cname in sizes:
         return sizes[cname]
     if kind == "widget":
         return "encoder"
-    if kind == "light":
-        return "light"
     if (name, cname) in BIG_KNOBS:
         return "big"
     if kind == "param":
@@ -201,9 +201,10 @@ PANELS = {
     ),
     # Shoal, the Ornament & Crime emulation. The left 83 mm is three screens
     # the module draws (output strip, scope, editor); on the right a controls
-    # card (two encoders with push buttons, UP / DOWN, and a free slot for
-    # the stage 3 UI MODE latch) over a jacks card: TRIG / CV / OUT columns,
-    # four rows, a light beside each trigger and output jack.
+    # card (two encoders with push buttons, then UP, DOWN and the UI MODE
+    # latch, which lights itself in friendly mode, at the mirror of UP about
+    # the card's centre) over a jacks card: TRIG / CV / OUT columns, four
+    # rows, a light beside each trigger and output jack.
     "Shoal": dict(
         dir="shoal",
         hp=28,
@@ -215,13 +216,15 @@ PANELS = {
             ("param", "ENC_R_PUSH", 126.4, 43.5, None),
             ("param", "UP", 100.0, 55.0, "UP"),
             ("param", "DOWN", 114.6, 55.0, "DOWN"),
+            ("param", "UI_MODE", 129.2, 55.0, "UI MODE"),
         ]
         + [("input", f"TR{i + 1}", 99.8, 78.6 + 10.0 * i, None) for i in range(4)]
         + [("light", f"TR{i + 1}", 106.0, 78.6 + 10.0 * i, None) for i in range(4)]
         + [("input", f"CV{i + 1}", 112.0, 78.6 + 10.0 * i, None) for i in range(4)]
         + [("light", n, 124.9, 78.6 + 10.0 * i, None) for i, n in enumerate("ABCD")]
         + [("output", n, 131.6, 78.6 + 10.0 * i, None) for i, n in enumerate("ABCD")],
-        sizes={"ENC_L_PUSH": "button", "ENC_R_PUSH": "button", "UP": "button", "DOWN": "button"},
+        sizes={"ENC_L_PUSH": "button", "ENC_R_PUSH": "button", "UP": "button", "DOWN": "button",
+               "UI_MODE": "button"},
         cards=[
             (91.0, 15.0, 47.2, 47.0, None),
             # The jacks card and the OUT card inside it (1 mm inset) reach
@@ -236,8 +239,8 @@ PANELS = {
                  ("SCOPE", 4.0, 21.5, 83.2, 41.6),
                  ("EDITOR", 4.0, 67.0, 83.2, 41.6)],
         label_accents={"ENC_L": "ink", "ENC_R": "ink"},
-        label_size={"ENC_L": 2.3, "ENC_R": 2.3, "UP": 2.0, "DOWN": 2.0},
-        label_gap={"ENC_L": 9.6, "ENC_R": 9.6, "UP": 5.4, "DOWN": 5.4},
+        label_size={"ENC_L": 2.3, "ENC_R": 2.3, "UP": 2.0, "DOWN": 2.0, "UI_MODE": 2.0},
+        label_gap={"ENC_L": 9.6, "ENC_R": 9.6, "UP": 5.4, "DOWN": 5.4, "UI_MODE": 5.4},
         notes=[(99.8, 72.2, "TRIG", 2.0, "ink"), (112.0, 72.2, "CV", 2.0, "ink"),
                (131.6, 72.2, "OUT", 2.0, "cyan")]
         + [(93.6, 79.4 + 10.0 * i, str(i + 1), 2.2, "label") for i in range(4)]

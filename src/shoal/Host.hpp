@@ -1,6 +1,7 @@
 #pragma once
 // Shoal host: one shoal::Core driven from an audio engine, with the screens,
-// the app and a saved state image published for one other thread (the UI).
+// the friendly model, the app and a saved state image published for one
+// other thread (the UI).
 // Header-only, Rack-free, C++11; includes no firmware header.
 //
 // Threading: the engine-thread members (setSampleRate .. gateHigh) are the
@@ -10,9 +11,10 @@
 // thread; they lock briefly and never touch the running Core. A restore or
 // reset builds and boots a replacement Core on the UI thread; the engine
 // swaps it in before its next tick, and the Core it retires is deleted on
-// the UI thread later. Control events travel through a fixed single-producer
-// single-consumer ring. Events posted before a restore request are applied
-// after it (on the replacement Core).
+// the UI thread later. Control events and friendly edits travel, in posting
+// order, through one fixed single-producer single-consumer ring. Events
+// posted before a restore request are applied after it (on the replacement
+// Core).
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -35,12 +37,13 @@ struct ControlEvent {
 
 class Host {
 public:
-	static constexpr int kFrameTicks = 278;   // frames published at 60 Hz
+	static constexpr int kFrameTicks = 278;   // frames and the model published at 60 Hz
 	static constexpr int kSaveTicks = 8333;   // state saved and published at 2 Hz
 	static constexpr uint32_t kEventSlots = 64;
 
-	// Seeds the core and publishes its frames and its (new core's) state
-	// image, so the UI has both before the engine first runs.
+	// Seeds the core and publishes its frames, its friendly model and its
+	// (new core's) state image, so the UI has them before the engine first
+	// runs.
 	explicit Host(uint32_t seed) : seed_(seed), core_(new Core()) {
 		core_->seed(seed_);
 		core_->save(defaults_);
@@ -48,6 +51,7 @@ public:
 		drawFrames();
 		std::memcpy(menu_, engineMenu_, kFrameBytes);
 		std::memcpy(scope_, engineScope_, kFrameBytes);
+		model_ = engineModel_;
 		app_.store(engineApp_);
 		appMenuOpen_.store(engineAppMenuOpen_);
 	}
@@ -108,18 +112,36 @@ public:
 			requestReset();
 			return true;
 		}
-		const uint32_t tail = eventTail_.load(std::memory_order_relaxed);
-		if (tail - eventHead_.load(std::memory_order_acquire) >= kEventSlots)
-			return false;
-		events_[tail % kEventSlots] = e;
-		eventTail_.store(tail + 1, std::memory_order_release);
-		return true;
+		Queued q = {};  // no indeterminate bytes are copied into the ring
+		q.isEdit = false;
+		q.control = e;
+		return push(q);
+	}
+	// A friendly edit (Friendly.hpp), queued with the control events in
+	// posting order. False: the queue is full and the edit was dropped. The
+	// engine applies it before a tick once every encoder turn posted before
+	// it has reached the app (Core::encodersPending), so a Turn, an edit and
+	// a Turn act in that order. The core drops an edit whose app is not the
+	// current one by then (an app change or a restore posted or requested
+	// before it), or that the app is not ready for (the model's kModelBusy);
+	// otherwise its result is in the next model published, normally within
+	// one frame period (kFrameTicks).
+	bool postEdit(const FriendlyEdit& e) {
+		Queued q = {};  // no indeterminate bytes are copied into the ring
+		q.isEdit = true;
+		q.edit = e;
+		return push(q);
 	}
 	// The latest published frames; kFrameBytes each.
 	void frames(uint8_t* menu, uint8_t* scope) {
 		std::lock_guard<std::mutex> lock(frameMutex_);
 		std::memcpy(menu, menu_, kFrameBytes);
 		std::memcpy(scope, scope_, kFrameBytes);
+	}
+	// The friendly model published with the latest frames.
+	void model(FriendlyModel& out) {
+		std::lock_guard<std::mutex> lock(frameMutex_);
+		out = model_;
 	}
 	// The latest saved image (kStateBytes) and its input range. Also deletes
 	// a Core the engine has retired.
@@ -172,14 +194,16 @@ private:
 	int frameCountdown_ = kFrameTicks, saveCountdown_ = kSaveTicks;
 	bool framesDue_ = false, stateDue_ = false;
 	uint8_t engineMenu_[kFrameBytes] = {}, engineScope_[kFrameBytes] = {};
+	FriendlyModel engineModel_ = {};
 	int engineApp_ = 0;
 	bool engineAppMenuOpen_ = false;
 	uint8_t engineState_[kStateBytes] = {};
 	uint8_t defaults_[kStateBytes] = {};  // a new core's image; constant after construction
 
-	// Published frames.
+	// Published frames and model.
 	std::mutex frameMutex_;
 	uint8_t menu_[kFrameBytes] = {}, scope_[kFrameBytes] = {};
+	FriendlyModel model_ = {};
 	std::atomic<int> app_{0};
 	std::atomic<bool> appMenuOpen_{false};
 
@@ -194,9 +218,25 @@ private:
 	InputRange pendingRange_ = InputRange::Hardware;
 	std::atomic<bool> restorePending_{false};  // written under stateMutex_
 
-	// Control events: UI thread writes the tail, engine thread the head.
-	ControlEvent events_[kEventSlots] = {};
+	// Control events and friendly edits: UI thread writes the tail, engine
+	// thread the head.
+	struct Queued {
+		bool isEdit;
+		ControlEvent control;  // !isEdit
+		FriendlyEdit edit;     // isEdit
+	};
+	Queued events_[kEventSlots] = {};
 	std::atomic<uint32_t> eventHead_{0}, eventTail_{0};
+
+	// UI thread.
+	bool push(const Queued& q) {
+		const uint32_t tail = eventTail_.load(std::memory_order_relaxed);
+		if (tail - eventHead_.load(std::memory_order_acquire) >= kEventSlots)
+			return false;
+		events_[tail % kEventSlots] = q;
+		eventTail_.store(tail + 1, std::memory_order_release);
+		return true;
+	}
 
 	friend struct HostTest;  // test-only hooks (test_host.cpp)
 
@@ -226,6 +266,7 @@ private:
 	void drawFrames() {
 		core_->drawMenu(engineMenu_);
 		core_->drawScope(engineScope_);
+		core_->friendlyModel(engineModel_);
 		engineApp_ = core_->app();
 		engineAppMenuOpen_ = core_->appMenuOpen();
 	}
@@ -264,14 +305,29 @@ private:
 			if (buttons_[b])
 				core_->setButton((Button) b, true);
 		stateDue_ = false;  // an unpublished save predates the restore
+		// Unpublished frames and model are the retired core's: drop them and
+		// draw the new core's at the next tick, so the next published model
+		// is the new core's.
+		framesDue_ = false;
+		frameCountdown_ = 1;
 		return true;
 	}
 
+	// Apply the queued events in order. An edit waits, with everything after
+	// it, while turns handed to the core earlier have not reached the app.
 	void applyEvents() {
 		uint32_t head = eventHead_.load(std::memory_order_relaxed);
 		const uint32_t tail = eventTail_.load(std::memory_order_acquire);
-		for (; head != tail; head++)
-			apply(events_[head % kEventSlots]);
+		for (; head != tail; head++) {
+			const Queued& q = events_[head % kEventSlots];
+			if (!q.isEdit) {
+				apply(q.control);
+				continue;
+			}
+			if (core_->encodersPending())
+				break;
+			core_->friendlyEdit(q.edit);
+		}
 		eventHead_.store(head, std::memory_order_release);
 	}
 
@@ -307,6 +363,7 @@ private:
 		if (framesDue_ && frameMutex_.try_lock()) {
 			std::memcpy(menu_, engineMenu_, kFrameBytes);
 			std::memcpy(scope_, engineScope_, kFrameBytes);
+			model_ = engineModel_;
 			frameMutex_.unlock();
 			app_.store(engineApp_);
 			appMenuOpen_.store(engineAppMenuOpen_);

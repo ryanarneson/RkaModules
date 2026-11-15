@@ -1,6 +1,7 @@
 # Shoal: design
 
-Date: 2026-11-14. Status: approved 2026-11-14.
+Date: 2026-11-14. Status: approved 2026-11-14. Stages 1 to 3 are done
+(stage 3, friendly mode, on 2026-11-15); stage 4 is next.
 
 Shoal is an emulation of the Ornament & Crime (o_C) eurorack module for
 VCV Rack: four trigger inputs, four CV inputs, four CV outputs, a small
@@ -328,6 +329,39 @@ little: the sanitizer run is what stands in for the other CPUs.
 
 ## Friendly mode
 
+### Revised 2026-11-15, after stage 2
+
+The user tried hardware mode in Rack and re-watched the reference stream:
+the mouse-driven list is how the module should be used day to day, and
+hardware mode is the alternative, not the other way round. Three changes
+follow, and where the text below disagrees with them, these win.
+
+1. **Friendly mode is the default.** A new module, and a patch saved before
+   the UI MODE control existed, open in friendly mode. Hardware mode is one
+   click away on the panel.
+2. **Encoder-only functions get rows.** Things the hardware puts on the
+   left encoder, the buttons and long presses rather than in the settings
+   menu (CopierMaschine's scale and freeze, Quadraturia's coarse and fine
+   frequency, Automatonnetz's reset and clock, and so on) appear in the
+   list as rows of their own, so friendly mode rarely needs the encoders.
+   Each app's adapter declares them. Left out: the sub-editors (still
+   hardware mode), view toggles, and shortcuts to a setting that already
+   has a row. `docs/specs/2026-11-15-shoal-app-survey.md` lists every such
+   function per app, read from the firmware source.
+3. **Edits replay the firmware's own handlers.** The survey found that in
+   eight apps a direct write to a setting leaves the firmware's menu or its
+   derived state stale, and that the guards differ per setting. So a
+   friendly edit is not a write plus a hand-copied follow-up: the adapter
+   puts the firmware's cursor on the row and sends the app's own encoder
+   and button handlers the events a person would have made. The guards and
+   follow-ups then run because the firmware runs them. Only what no
+   handler can express (toggling one bit of a note mask from outside its
+   sub-editor) calls the app's functions directly, and those are the same
+   functions the sub-editor calls.
+
+UI mode is a panel control, so Rack saves it with the patch as it saves any
+control; it needs no key in the module's own patch data.
+
 ### The settings list
 
 Every app declares its settings in a table (`SETTINGS_DECLARE`): name,
@@ -409,8 +443,8 @@ nothing changed the firmware writes nothing, so the image is the same).
 app is inside the image. The rules for those fields are in
 `src/shoal/PatchState.hpp`, and `src/shoal/testdata/GoldenStateV1.hpp`
 is an image an earlier build saved that every later build must load.
-Later stages add keys beside these, never changing them: the UI mode
-with the friendly mode (stage 3) and the screen colour with the
+Later stages add keys beside these, never changing them: the UI mode is a
+panel control that Rack saves itself (stage 3); the screen colour comes with the
 right-click menu (stage 4). `dataFromJson` builds and boots a new core
 with the restored image off the engine thread; the engine swaps it in.
 The firmware's intended pause while saving does not apply: its save is a
@@ -472,7 +506,8 @@ Each stage is usable on its own and gets its own implementation plan.
 2. **Shoal in hardware mode.** Panel, jacks, both screens, encoders and
    buttons, saving. At this point the module is usable for patching with
    the manual open.
-3. **Friendly mode.** Adapters, settings list, app picker, channel tabs,
+3. **Friendly mode** (done 2026-11-15,
+   `docs/plans/2026-11-15-shoal-friendly-mode.md`). Adapters, settings list, app picker, channel tabs,
    note masks, the equivalence tests.
 4. **Finish.** Right-click menu, the References meters, manual in
    `docs/shoal/`, README and changelog entries, CPU check.
@@ -562,8 +597,44 @@ Do in stage 2:
 
 Do in stage 3:
 
-- `setSettingRaw` returns true when the value is unchanged.
-- Check the settings enum coverage against the firmware menus.
+- `setSettingRaw` returns true when the value is unchanged. Still open:
+  friendly mode does not use `setSettingRaw` (its edits replay the app's
+  handlers), so nothing in stage 3 needed it; decide in stage 4.
+- **Done (stage 3)** Check the settings enum coverage against the
+  firmware menus: every app's equivalence test in `test_friendly.cpp`
+  checks that the list's setting rows are the firmware's menu, in its
+  order (`rowsAreMenu`).
+
+Left open by stage 3 (friendly mode):
+
+- Mouse versions of the sub-editors: user scale notes, Sequins steps,
+  Acid Curds chords, Automatonnetz cells (and the References autotuner).
+  They are reached from the list and edited in hardware mode. (Piqued's
+  segment values became list rows in the final review's fixes.)
+- For anyone bisecting: commits 2375d9a to fa68873 do not build on Linux
+  or Windows (a missing `#include <cstring>`, added in d3e545d); macOS
+  builds them.
+- g++'s `-Wstringop-overflow` false alarm in `Text::digits`
+  (`Friendly.inc`), seen in the cross-builds up to d3e545d, is silenced
+  by an unsigned, explicitly bounded write index (with `-fwrapv`, g++ took
+  the signed index as able to wrap negative); the warning was never a real
+  overflow (at most 28 of the buffer's 32 bytes are written).
+- Stage 4 as planned: the right-click menu, the References meters and
+  the full manual (`docs/shoal/README.md` covers friendly mode, not each
+  app).
+- A panel button held at the moment a friendly edit has to recover the
+  app's menu (the RESUME sequence) loses its press: `scale_editor.Close`
+  sets the button ignore mask. Inherent to RESUME; rare.
+- No mouse gesture on the list (drags, double click, menus, wheel,
+  scrollbar, mask painting, UI MODE and its undo) had been tried in a
+  live Rack when stage 3 closed: the offline tests cover the geometry and
+  bookkeeping, the screenshots the drawing. The user's checks at the end
+  of `docs/plans/2026-11-15-shoal-friendly-mode.md` are the first.
+- Firmware behaviour friendly mode shows as the hardware has it, noted in
+  the manual's "Good to know": References "Mod range oct" loses negative
+  values on save; Harrington 1200's Euclidean rows stay hidden after a
+  patch saved with Trigger type Eucl loads; Quantermain's "Copy scale to
+  other channels" leaves a channel's list stale until an edit rebuilds it.
 
 Before any public release:
 

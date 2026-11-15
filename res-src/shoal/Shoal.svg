@@ -20,6 +20,7 @@
 <text x="126.40" y="19.40" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#e6f4ff">ENC R</text>
 <text x="100.00" y="49.60" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#9fb3c8">UP</text>
 <text x="114.60" y="49.60" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#9fb3c8">DOWN</text>
+<text x="129.20" y="49.60" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#9fb3c8">UI MODE</text>
 <text x="99.80" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#e6f4ff">TRIG</text>
 <text x="112.00" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#e6f4ff">CV</text>
 <text x="131.60" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="1.0">OUT</text>
@@ -39,6 +40,7 @@
 <circle id="param-ENC_R_PUSH" cx="126.4" cy="43.5" r="1" fill="#ff0000"/>
 <circle id="param-UP" cx="100.0" cy="55.0" r="1" fill="#ff0000"/>
 <circle id="param-DOWN" cx="114.6" cy="55.0" r="1" fill="#ff0000"/>
+<circle id="param-UI_MODE" cx="129.2" cy="55.0" r="1" fill="#ff0000"/>
 <circle id="input-TR1" cx="99.8" cy="78.6" r="1" fill="#00ff00"/>
 <circle id="input-TR2" cx="99.8" cy="88.6" r="1" fill="#00ff00"/>
 <circle id="input-TR3" cx="99.8" cy="98.6" r="1" fill="#00ff00"/>

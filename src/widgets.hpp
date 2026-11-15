@@ -44,6 +44,14 @@ struct TAmberLight : componentlibrary::TGrayModuleLightWidget<TBase> {
 };
 using AmberLight = TAmberLight<>;
 
+template <typename TBase = app::ModuleLightWidget>
+struct TCyanLight : componentlibrary::TGrayModuleLightWidget<TBase> {
+	TCyanLight() {
+		this->addBaseColor(RkaTheme::CYAN);
+	}
+};
+using CyanLight = TCyanLight<>;
+
 // Latching push button with an amber light inside (mode switches).
 using AmberLatch = componentlibrary::VCVLightLatch<componentlibrary::MediumSimpleLight<AmberLight>>;
 
@@ -129,26 +137,105 @@ struct HoldButton : app::ParamWidget {
 	}
 };
 
+// Sets a param the way a click on a stock switch does: Edit > Undo puts it
+// back. Nothing is recorded when the value does not change.
+inline void setParamUndoable(ParamQuantity* pq, float value, const std::string& action) {
+	if (!pq || !pq->module)
+		return;
+	const float oldValue = pq->getValue();
+	pq->setValue(value);
+	const float newValue = pq->getValue();
+	if (newValue == oldValue)
+		return;
+	history::ParamChange* h = new history::ParamChange;
+	h->name = action;
+	h->moduleId = pq->module->id;
+	h->paramId = pq->paramId;
+	h->oldValue = oldValue;
+	h->newValue = newValue;
+	APP->history->push(h);
+}
+
+// A latch in the HoldButton's shape: each click flips the param between its
+// minimum and its maximum, undoably. It lights itself while the param is at
+// its maximum: the whole lens cyan, with a halo, on the light layer (full
+// brightness in a dimmed room); off, the lens is dark. Configure the param
+// with configSwitch().
+struct LatchButton : HoldButton {
+	// Lit with no module (the module browser): the param's default.
+	bool litWithoutModule = false;
+
+	bool lit() {
+		ParamQuantity* pq = getParamQuantity();
+		return pq ? pq->getValue() > 0.5f * (pq->getMinValue() + pq->getMaxValue()) : litWithoutModule;
+	}
+
+	void onDragStart(const DragStartEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		ParamQuantity* pq = getParamQuantity();
+		if (!pq)
+			return;
+		setParamUndoable(pq, isDown() ? pq->getMinValue() : pq->getMaxValue(), "move switch");
+	}
+
+	void onDragEnd(const DragEndEvent& e) override {}
+
+	void drawLayer(const DrawArgs& args, int layer) override {
+		if (layer == 1 && lit()) {
+			const Vec c = box.size.div(2.f);
+			const float r = box.size.x / 2.f;
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, c.x, c.y, r * 0.7f);
+			nvgFillColor(args.vg, RkaTheme::CYAN);
+			nvgFill(args.vg);
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, c.x, c.y, r * 1.45f);
+			nvgFillPaint(args.vg, nvgRadialGradient(args.vg, c.x, c.y, r * 0.6f, r * 1.45f,
+				nvgTransRGBAf(RkaTheme::CYAN, 0.4f), nvgTransRGBAf(RkaTheme::CYAN, 0.f)));
+			nvgFill(args.vg);
+		}
+		ParamWidget::drawLayer(args, layer);
+	}
+};
+
 // An endless 13.4 mm encoder; not a Rack param, so nothing is saved or
 // randomised. Vertical drag: one detent per 8 px of mouse travel, upward is
 // clockwise (Ctrl/Cmd: 32 px). Scroll wheel over it: one detent per notch,
 // only when Rack's "scroll wheel knob control" setting is on (as Rack's
 // knobs); otherwise the rack scrolls. The pointer turns 1/24 turn per detent
-// that onTurn takes.
+// that onTurn takes; detents it refuses are kept and offered again.
 struct Encoder : widget::OpaqueWidget {
-	// > 0 clockwise. Returns false if the turn was dropped (the pointer stays).
+	// > 0 clockwise. Returns false if the turn was not taken: the pointer
+	// stays and the detents are offered again (TurnBacklog).
 	std::function<bool(int detents)> onTurn;
 
 	int position = 0;   // detents taken since creation, for the pointer
 	DetentCounter drag, scroll;
+	TurnBacklog backlog;
 
 	Encoder() {
 		box.size = mm2px(Vec(13.4f, 13.4f));
 	}
 
+	// A turn onTurn refuses waits in the backlog, added to by later turns,
+	// and is offered again with them and every frame (step) until taken.
 	void turn(int detents) {
-		if (detents != 0 && onTurn && onTurn(detents))
-			position += detents;
+		backlog.add(detents);
+		offer();
+	}
+
+	void offer() {
+		const int n = backlog.unsent;
+		if (n != 0 && onTurn && onTurn(n)) {
+			position += n;
+			backlog.clear();
+		}
+	}
+
+	void step() override {
+		offer();
+		OpaqueWidget::step();
 	}
 
 	void onDragStart(const DragStartEvent& e) override {

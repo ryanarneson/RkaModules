@@ -87,6 +87,19 @@ static const uint8_t kButtonPins[] = { but_top, but_bot, butL, butR };
 static const uint8_t kEncoderPins[][2] = { { encL1, encL2 }, { encR1, encR2 } };
 static const uint8_t kTriggerPins[kNumChannels] = { TR1, TR2, TR3, TR4 };
 
+// One UI timer pass: a quadrature sample per encoder (a detent takes two
+// passes), then OC::Ui::Poll, which queues the events the main pass's
+// DispatchEvents hands to the app.
+static void pollUi() {
+	for (int e = 0; e < 2; e++) {
+		bool a, b;
+		hw::state().encoders[e].poll(a, b);
+		hw::state().pins[kEncoderPins[e][0]] = a ? HIGH : LOW;
+		hw::state().pins[kEncoderPins[e][1]] = b ? HIGH : LOW;
+	}
+	OC::g_ui.Poll();
+}
+
 struct Core::Impl {
 	// Value-initialised: zeroed first, like the globals it replaces.
 	std::unique_ptr<Context> ctx{ new Context() };
@@ -224,19 +237,24 @@ void Core::tick() {
 	impl_->uiMicros += OC_CORE_TIMER_RATE;
 	if (impl_->uiMicros >= OC_UI_TIMER_RATE) {
 		impl_->uiMicros -= OC_UI_TIMER_RATE;
-		// One quadrature sample per encoder per poll: a detent takes two polls.
-		for (int e = 0; e < 2; e++) {
-			bool a, b;
-			hw::state().encoders[e].poll(a, b);
-			hw::state().pins[kEncoderPins[e][0]] = a ? HIGH : LOW;
-			hw::state().pins[kEncoderPins[e][1]] = b ? HIGH : LOW;
-		}
-		OC::g_ui.Poll();
+		pollUi();
 	}
 	if (++impl_->mainTicks >= 17) {
 		impl_->mainTicks = 0;
 		shoal_main_pass();
 	}
+}
+
+bool Core::encodersPending() const {
+	Scope scope(impl_->ctx.get());
+	// A detent's event is queued by the UI poll that plays its last sample.
+	// A main pass usually empties the firmware's queue, but not always: the
+	// R long press that opens the app menu ends the dispatch, and what is
+	// queued behind it goes to the app menu at the next pass. (Closing the
+	// app menu flushes the queue, as on the hardware.) So ask the queue; a
+	// queued button event counts too, which only delays an edit by a pass.
+	return OC::g_ui.events_queued() || !hw::state().encoders[ENCODER_L].idle()
+		|| !hw::state().encoders[ENCODER_R].idle();
 }
 
 float Core::out(int ch) const {
@@ -364,6 +382,16 @@ bool Core::setSettingRaw(int channel, int index, int value) {
 	return a->set(channel, index, value);
 }
 
+void Core::friendlyModel(FriendlyModel& out) const {
+	Scope scope(impl_->ctx.get());
+	friendly::model(friendly::adapterFor(OC::apps::index_of(OC::global_settings.current_app_id)), out);
+}
+
+bool Core::friendlyEdit(const FriendlyEdit& e) {
+	Scope scope(impl_->ctx.get());
+	return friendly::edit(friendly::adapterFor(OC::apps::index_of(OC::global_settings.current_app_id)), e);
+}
+
 void Core::save(uint8_t* out) {
 	Scope scope(impl_->ctx.get());
 	// The firmware's own save: each rewrites its page only if the contents
@@ -424,11 +452,167 @@ uint32_t CoreTest::smoothedCode(Core& c, int ch) {
 
 int CoreTest::menuSetting(Core& c) {
 	Scope scope(c.impl_->ctx.get());
-	if (c.app() == 0)
-		return asr.enabled_setting_at(asr_state.cursor_pos());
-	if (c.app() == 3)
-		return quantizer_channels[qq_state.selected_channel].enabled_setting_at(qq_state.cursor_pos());
-	return -1;
+	if (c.app() == 5)
+		return poly_lfo_state.cursor.cursor_pos();
+	if (c.app() == 6)
+		return lorenz_generator_state.cursor.cursor_pos();
+	if (c.app() == 2 && automatonnetz_state.ui.edit_cell)
+		return -1;  // the cell view: its cursor is on a cell setting
+	if (c.app() == 7 && envgen.ui.edit_mode == QuadEnvelopeGenerator::MODE_EDIT_SEGMENTS)
+		return ENV_SETTING_SEG1_VALUE + envgen.ui.selected_segment;  // the envelope page: the selected segment
+	// The others (enabledSettings knows them): the setting at the cursor's
+	// menu row, -1 when that row is past the end of the list (a stale cursor).
+	int list[128];
+	const int n = enabledSettings(c, list, 128);
+	const int row = menuRow(c);
+	return n >= 0 && row >= 0 && row < n ? list[row] : -1;
+}
+
+int CoreTest::menuRow(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	switch (c.app()) {
+		case 0: return asr_state.cursor_pos();
+		case 1: return h1200_state.cursor.cursor_pos();
+		case 2: return automatonnetz_state.ui.grid_cursor.cursor_pos();
+		case 3: return qq_state.cursor_pos();
+		case 4: return dq_state.cursor.cursor_pos();
+		case 5: return poly_lfo_state.cursor.cursor_pos();
+		case 6: return lorenz_generator_state.cursor.cursor_pos();
+		case 7: return envgen.ui.cursor.cursor_pos();
+		case 8: return seq_state.cursor_pos();
+		case 9: return bbgen.ui.cursor.cursor_pos();
+		case 10: return bytebeatgen.ui.cursor.cursor_pos();
+		case 11: return chords_state.cursor_pos();
+		case 12: return references_app.ui.cursor.cursor_pos();
+		default: return -1;
+	}
+}
+
+bool CoreTest::menuEditing(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	switch (c.app()) {
+		case 0: return asr_state.cursor.editing();
+		case 1: return h1200_state.cursor.editing();
+		case 2: return automatonnetz_state.ui.grid_cursor.editing();
+		case 3: return qq_state.cursor.editing();
+		case 4: return dq_state.cursor.editing();
+		case 5: return poly_lfo_state.cursor.editing();
+		case 6: return lorenz_generator_state.cursor.editing();
+		case 7: return envgen.ui.edit_mode == QuadEnvelopeGenerator::MODE_EDIT_SEGMENTS ? envgen.ui.segment_editing : envgen.ui.cursor.editing();
+		case 8: return seq_state.cursor.editing();
+		case 9: return bbgen.ui.cursor.editing();
+		case 10: return bytebeatgen.ui.cursor.editing();
+		case 11: return chords_state.cursor.editing();
+		case 12: return references_app.ui.cursor.editing();
+		default: return false;
+	}
+}
+
+int CoreTest::selectedChannel(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	switch (c.app()) {
+		case 3: return qq_state.selected_channel;
+		case 4: return dq_state.selected_channel;
+		case 7: return envgen.ui.selected_channel;
+		case 8: return seq_state.selected_channel;
+		case 9: return bbgen.ui.selected_channel;
+		case 10: return bytebeatgen.ui.selected_channel;
+		case 12: return references_app.ui.selected_channel;
+		default: return 0;
+	}
+}
+
+int CoreTest::enabledSettings(Core& c, int* out, int max) {
+	Scope scope(c.impl_->ctx.get());
+	int n = -1;
+	auto list = [&](const auto& obj) {
+		n = obj.num_enabled_settings();
+		for (int i = 0; i < n && i < max; i++)
+			out[i] = (int) obj.enabled_setting_at(i);
+	};
+	auto table = [&](int count) {
+		n = count;
+		for (int i = 0; i < n && i < max; i++)
+			out[i] = i;
+	};
+	switch (c.app()) {
+		case 0: list(asr); break;
+		case 1: list(h1200_settings); break;
+		case 2: table(GRID_SETTING_LAST); break;
+		case 3: list(quantizer_channels[qq_state.selected_channel]); break;
+		case 4: list(dq_quantizer_channels[dq_state.selected_channel]); break;
+		case 7: list(envgen.selected()); break;
+		case 8: list(seq_channel[seq_state.selected_channel]); break;
+		case 9: table(BB_SETTING_LAST); break;
+		case 10: list(bytebeatgen.selected()); break;
+		case 11: list(chords); break;
+		case 12: list(references_app.selected_channel()); break;
+		default: break;
+	}
+	return n < max ? n : max;
+}
+
+int CoreTest::menuPage(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	switch (c.app()) {
+		case 7: return envgen.ui.edit_mode == QuadEnvelopeGenerator::MODE_EDIT_SETTINGS ? 1 : 0;
+		case 8: return seq_channel[seq_state.selected_channel].get_menu_page();
+		case 11: return chords.get_menu_page();
+		default: return -1;
+	}
+}
+
+bool CoreTest::piquedEuclidLength(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	return envgen.ui.euclidean_edit_length;
+}
+
+void CoreTest::pollUi(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	shoal::pollUi();
+}
+
+bool CoreTest::friendlyAccepting(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	const friendly::Adapter& a = friendly::adapterFor(c.app());
+	return !a.accepting || a.accepting();
+}
+
+bool CoreTest::friendlyHasAdapter(int app) {
+	return app >= 0 && app < kNumApps && friendly::adapterFor(app).edit != nullptr;
+}
+
+bool CoreTest::friendlyFake(Core& c, FriendlyFake fake, const FriendlyEdit* e, FriendlyModel* out) {
+	Scope scope(c.impl_->ctx.get());
+	const friendly::Adapter& a = friendly::fake::kFakes[fake];
+	const bool taken = e && friendly::edit(a, *e);
+	if (out)
+		friendly::model(a, *out);
+	return taken;
+}
+
+void CoreTest::fixedText(double value, int decimals, int width, char (&out)[24]) {
+	friendly::Text(out).fixed(value, decimals, width);
+}
+
+void CoreTest::encoderEvent(Core& c, Encoder e, int delta) {
+	Scope scope(c.impl_->ctx.get());
+	if (delta)
+		OC::apps::current_app->HandleEncoderEvent(UI::Event(UI::EVENT_ENCODER,
+			e == ENCODER_L ? OC::CONTROL_ENCODER_L : OC::CONTROL_ENCODER_R, (int16_t) delta, 0));
+}
+
+void CoreTest::appMenuEvents(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	OC::g_ui.AppMenuOpen();
+	OC::g_ui.AppMenuHandle(UI::Event(UI::EVENT_BUTTON_PRESS, OC::CONTROL_BUTTON_R, 0, 0));
+}
+
+void CoreTest::buttonEvent(Core& c, Button b, bool longPress) {
+	static const uint16_t kControls[] = { OC::CONTROL_BUTTON_UP, OC::CONTROL_BUTTON_DOWN, OC::CONTROL_BUTTON_L, OC::CONTROL_BUTTON_R };
+	Scope scope(c.impl_->ctx.get());
+	OC::apps::current_app->HandleButtonEvent(UI::Event(
+		longPress ? UI::EVENT_BUTTON_LONG_PRESS : UI::EVENT_BUTTON_PRESS, kControls[b & 3], 0, 0));
 }
 
 } // namespace shoal

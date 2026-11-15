@@ -280,6 +280,9 @@ struct Context {
 	// layout), so neither screen disturbs the other.
 	alignas(4) uint8_t menu_frame[kFrameBytes];
 	alignas(4) uint8_t scope_frame[kFrameBytes];
+	// Where friendly mode writes a row that does not fit in a model
+	// (Friendly.inc, addRow); never read.
+	Row friendly_scratch;
 };
 
 Context*& current() {

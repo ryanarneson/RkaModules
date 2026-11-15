@@ -1,4 +1,5 @@
 #include "plugin.hpp"
+#include "FriendlyList.hpp"
 #include "Host.hpp"
 #include "PatchState.hpp"
 #include "ShoalLayout.hpp"
@@ -6,7 +7,9 @@
 
 // Shoal: the Ornament & Crime firmware on a fake O&C. shoal::Host runs it;
 // the module only maps jacks, buttons and lights onto the host, and the
-// widget draws the two screens and turns the encoders into host events.
+// widget draws the two screens and turns the encoders into host events. The
+// lower screen is the friendly list (FriendlyList.hpp) or, with UI MODE set
+// to hardware, the firmware's own menu.
 
 static_assert(shoal::kFrameBytes == rka::PixelScreen::BYTES, "PixelScreen draws a Shoal frame");
 
@@ -43,6 +46,7 @@ struct Shoal : Module {
 		ENC_R_PUSH_PARAM,
 		UP_PARAM,
 		DOWN_PARAM,
+		UI_MODE_PARAM,   // 1: friendly (the list), 0: hardware (the firmware's menu)
 		PARAMS_LEN
 	};
 	enum InputId {
@@ -73,6 +77,7 @@ struct Shoal : Module {
 		ENUMS(B_LIGHT, 2),
 		ENUMS(C_LIGHT, 2),
 		ENUMS(D_LIGHT, 2),
+		// No UI MODE light: the latch lights itself (rka::LatchButton).
 		LIGHTS_LEN
 	};
 
@@ -84,6 +89,10 @@ struct Shoal : Module {
 		configButton(ENC_R_PUSH_PARAM, "Right encoder push (shift-click to hold)");
 		configButton(UP_PARAM, "Up (shift-click to hold)");
 		configButton(DOWN_PARAM, "Down (shift-click to hold)");
+		// Saved with the patch as any param; a patch from before it existed
+		// has no value for it and gets the default, the list.
+		configSwitch(UI_MODE_PARAM, 0.f, 1.f, 1.f, "UI mode", {"Hardware (the firmware's menu)", "Friendly (the mouse list)"});
+		paramQuantities[UI_MODE_PARAM]->randomizeEnabled = false;
 		for (int i = 0; i < 4; i++) {
 			configInput(TR1_INPUT + i, string::f("Trigger %d", i + 1));
 			configInput(CV1_INPUT + i, string::f("CV %d", i + 1));
@@ -200,6 +209,10 @@ struct ShoalWidget : ModuleWidget {
 	// With no module (module browser, screenshots): a host of our own, run
 	// for a moment so the screens show the firmware.
 	std::unique_ptr<shoal::Host> previewHost;
+	// The lower screen: the firmware's menu (hardware mode) and the friendly
+	// list over it; step() shows one of them.
+	rka::PixelScreen* menuScreen = nullptr;
+	shoal::FriendlyList* friendlyList = nullptr;
 
 	shoal::Host* host() {
 		Shoal* m = getModule<Shoal>();
@@ -225,7 +238,16 @@ struct ShoalWidget : ModuleWidget {
 		addChild(createWidget<ThemedScrew>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
 
 		addScreen(SCREEN_SCOPE, false);
-		addScreen(SCREEN_EDITOR, true);
+		menuScreen = addScreen(SCREEN_EDITOR, true);
+		friendlyList = createWidget<shoal::FriendlyList>(mm2px(SCREEN_EDITOR.pos));
+		friendlyList->box.size = mm2px(SCREEN_EDITOR.size);
+		friendlyList->host = host();
+		friendlyList->live = module != nullptr;
+		friendlyList->onHardwareMode = [=]() {
+			if (module)
+				rka::setParamUndoable(module->paramQuantities[Shoal::UI_MODE_PARAM], 0.f, "move switch");
+		};
+		addChild(friendlyList);
 		OutputStrip* strip = createWidget<OutputStrip>(mm2px(SCREEN_STRIP.pos));
 		strip->box.size = mm2px(SCREEN_STRIP.size);
 		strip->module = module;
@@ -237,6 +259,9 @@ struct ShoalWidget : ModuleWidget {
 		addParam(createParamCentered<rka::HoldButton>(mm2px(PARAM_ENC_R_PUSH), module, Shoal::ENC_R_PUSH_PARAM));
 		addParam(createParamCentered<rka::HoldButton>(mm2px(PARAM_UP), module, Shoal::UP_PARAM));
 		addParam(createParamCentered<rka::HoldButton>(mm2px(PARAM_DOWN), module, Shoal::DOWN_PARAM));
+		rka::LatchButton* uiMode = createParamCentered<rka::LatchButton>(mm2px(PARAM_UI_MODE), module, Shoal::UI_MODE_PARAM);
+		uiMode->litWithoutModule = true;  // the default, friendly mode, as step() shows it
+		addParam(uiMode);
 
 		const Vec trIn[4] = {INPUT_TR1, INPUT_TR2, INPUT_TR3, INPUT_TR4};
 		const Vec trLight[4] = {LIGHT_TR1, LIGHT_TR2, LIGHT_TR3, LIGHT_TR4};
@@ -252,8 +277,23 @@ struct ShoalWidget : ModuleWidget {
 		}
 	}
 
+	// Friendly mode (and the module browser) shows the list on the lower
+	// screen; hardware mode the firmware's menu. Set here rather than in
+	// process(), so it follows a click (or an undo) while the engine is
+	// paused; the UI MODE latch draws its own lit state from the param.
+	void step() override {
+		Shoal* m = getModule<Shoal>();
+		const bool friendly = !m || m->params[Shoal::UI_MODE_PARAM].getValue() > 0.5f;
+		friendlyList->setVisible(friendly);
+		menuScreen->setVisible(!friendly);
+		// A hidden widget is not stepped: edits the host refused before the
+		// switch to hardware mode are offered here every frame as well.
+		friendlyList->flush();
+		ModuleWidget::step();
+	}
+
 	// The scope frame, or the menu (editor) frame, of whichever host is live.
-	void addScreen(const math::Rect& mm, bool menu) {
+	rka::PixelScreen* addScreen(const math::Rect& mm, bool menu) {
 		rka::PixelScreen* s = createWidget<rka::PixelScreen>(mm2px(mm.pos));
 		s->box.size = mm2px(mm.size);
 		s->colour = RkaTheme::CYAN;
@@ -269,6 +309,7 @@ struct ShoalWidget : ModuleWidget {
 			return true;
 		};
 		addChild(s);
+		return s;
 	}
 
 	void addEncoder(const Vec& mm, shoal::Encoder which) {
@@ -276,12 +317,12 @@ struct ShoalWidget : ModuleWidget {
 		e->onTurn = [=](int detents) {
 			Shoal* m = getModule<Shoal>();
 			if (!m)
-				return false;
+				return true;   // no module (browser): nothing to turn, nothing to keep
 			shoal::ControlEvent ev;
 			ev.type = shoal::ControlEvent::Turn;
 			ev.index = (int8_t) which;
 			ev.value = (int16_t) clamp(detents, -32768, 32767);
-			return m->host.post(ev);   // false: the queue was full, the turn is dropped
+			return m->host.post(ev);   // false: the queue was full; the encoder offers the turn again
 		};
 		addChild(e);
 	}

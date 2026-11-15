@@ -42,9 +42,13 @@ struct HostTest {
 
 using shoal::ControlEvent;
 using shoal::CoreTest;
+using shoal::FriendlyEdit;
+using shoal::FriendlyModel;
 using shoal::Host;
 using shoal::HostTest;
 using shoal::InputRange;
+using shoal::Row;
+using shoal::RowKind;
 
 namespace {
 
@@ -80,6 +84,52 @@ struct Frames {
 	uint8_t menu[shoal::kFrameBytes];
 	uint8_t scope[shoal::kFrameBytes];
 };
+
+constexpr int kQuantermain = 3, kLowRents = 6, kSequins = 8;
+
+// Engine time for `frames` frame periods.
+double framePeriods(int frames) {
+	return frames * Host::kFrameTicks / shoal::kTickHz;
+}
+
+FriendlyEdit makeEdit(FriendlyEdit::Type type, int app, int tab, int id, int value) {
+	FriendlyEdit e;
+	e.type = type;
+	e.app = (uint8_t) app;
+	e.tab = (uint8_t) tab;
+	e.id = (int16_t) id;
+	e.value = value;
+	return e;
+}
+
+const Row* findRow(const FriendlyModel& m, int id) {
+	for (int i = 0; i < m.rows; i++)
+		if (m.row[i].id == id)
+			return &m.row[i];
+	return nullptr;
+}
+
+// The first row of kind k at or after model row `from` with at least
+// `span` + 1 values; null if none.
+const Row* findKind(const FriendlyModel& m, RowKind k, int span = 0, int from = 0) {
+	for (int i = from; i < m.rows; i++)
+		if (m.row[i].kind == k && m.row[i].max - m.row[i].min >= span)
+			return &m.row[i];
+	return nullptr;
+}
+
+// The model row under the firmware's cursor; -1 if none.
+int cursorRow(const FriendlyModel& m) {
+	for (int i = 0; i < m.rows; i++)
+		if (m.row[i].flags & shoal::kRowCursor)
+			return i;
+	return -1;
+}
+
+// A value of r other than its current one.
+int otherValue(const Row& r) {
+	return r.value == r.min ? r.max : r.min;
+}
 
 bool blank(const uint8_t* frame) {
 	for (int i = 0; i < shoal::kFrameBytes; i++)
@@ -338,6 +388,194 @@ void testEventsWaitForRestore() {
 	CHECK(h.app() == 3, "app %d: SelectApp applied after the restore", h.app());
 }
 
+// A new Host has a model before the engine runs; the model follows the app.
+void testModelPublished() {
+	Host h(1);
+	FriendlyModel m;
+	std::memset(&m, 0xa5, sizeof m);
+	h.model(m);
+	CHECK(m.app == 0 && m.rows > 0, "a model for app %d with %d rows before the first process()", m.app, m.rows);
+	CHECK(!(m.flags & shoal::kModelTruncated), "not truncated");
+	h.post(selectApp(kQuantermain));
+	run(h, framePeriods(2));
+	h.model(m);
+	CHECK(m.app == kQuantermain && m.tabs == 4, "model for app %d with %d tabs after SelectApp", m.app, m.tabs);
+	FriendlyModel direct;
+	HostTest::core(h).friendlyModel(direct);
+	CHECK(m.rows == direct.rows, "published %d rows, the core has %d", m.rows, direct.rows);
+}
+
+// A posted SetValue shows in the published model within two frame periods.
+void testEditsApplied() {
+	Host h(1);
+	h.post(selectApp(kQuantermain));
+	run(h, 0.1);
+	FriendlyModel m;
+	h.model(m);
+	const Row* r = findKind(m, RowKind::Number, 2);
+	CHECK(r != nullptr, "Quantermain has a Number row");
+	if (!r)
+		return;
+	const int id = r->id, target = otherValue(*r);
+	CHECK(h.postEdit(makeEdit(FriendlyEdit::SetValue, kQuantermain, m.tab, id, target)), "edit accepted");
+	h.model(m);
+	CHECK(findRow(m, id)->value != target, "not shown before the engine runs");
+	run(h, framePeriods(2));
+	h.model(m);
+	CHECK(findRow(m, id)->value == target, "row %d shows %d, want %d", id, findRow(m, id)->value, target);
+
+	const Row* mask = findKind(m, RowKind::Mask);
+	CHECK(mask && mask->max > 1, "Quantermain has a mask row with cells");
+	if (!mask)
+		return;
+	const int maskId = mask->id, before = mask->value;
+	CHECK(h.postEdit(makeEdit(FriendlyEdit::ToggleBit, kQuantermain, m.tab, maskId, 1)), "toggle accepted");
+	run(h, framePeriods(2));
+	h.model(m);
+	CHECK(findRow(m, maskId)->value == (before ^ 2), "mask %#x, want %#x", findRow(m, maskId)->value, before ^ 2);
+
+	// The edit queue is the control event queue: 64 slots between them.
+	int accepted = 0;
+	for (int i = 0; i < 40; i++)
+		accepted += h.post(turn(shoal::ENCODER_L, 0)) ? 1 : 0;
+	for (int i = 0; i < 24; i++)
+		accepted += h.postEdit(makeEdit(FriendlyEdit::Focus, kQuantermain, m.tab, id, 0)) ? 1 : 0;
+	CHECK(accepted == 64, "%d of 64 posts accepted", accepted);
+	CHECK(!h.postEdit(makeEdit(FriendlyEdit::Focus, kQuantermain, m.tab, id, 0)), "the 65th is refused");
+	run(h, 0.01);
+	CHECK(h.postEdit(makeEdit(FriendlyEdit::Focus, kQuantermain, m.tab, id, 0)), "accepted again once drained");
+}
+
+// A Turn, an edit and a Turn are applied in posting order: the edit waits
+// for the first turn to reach the app, and the second turn follows it.
+void testEditOrder() {
+	Host h(1);
+	h.post(acceleration(false));
+	h.post(selectApp(kQuantermain));
+	run(h, 0.1);
+	FriendlyModel m;
+	h.model(m);
+	// The rows the R encoder walks through, in menu order.
+	int menu[shoal::kMaxRows], n = 0;
+	for (int i = 0; i < m.rows; i++)
+		if (!(m.row[i].flags & shoal::kRowExtra) && m.row[i].kind != RowKind::Heading)
+			menu[n++] = i;
+	CHECK(n >= 7 && cursorRow(m) == menu[0], "%d menu rows, cursor on row %d", n, cursorRow(m));
+	if (n < 7)
+		return;
+	h.post(turn(shoal::ENCODER_R, 1));
+	h.postEdit(makeEdit(FriendlyEdit::Focus, kQuantermain, m.tab, m.row[menu[4]].id, 0));
+	h.post(turn(shoal::ENCODER_R, 1));
+	run(h, 0.1);
+	h.model(m);
+	// In order: row 1, then 4, then 5. The edit first: 4, then 6. The edit last: 2, then 4.
+	CHECK(cursorRow(m) == menu[5], "cursor on model row %d, want %d (menu row 5)", cursorRow(m), menu[5]);
+}
+
+// An edit posted for the old app before a restore to another app is dropped:
+// the restore runs first, and the edit names the old app.
+void testEditAfterRestore() {
+	Host lowRents(1);
+	lowRents.post(selectApp(kLowRents));
+	run(lowRents, 1.0);
+	Image img;
+	InputRange r;
+	lowRents.snapshot(img.bytes, &r);
+	FriendlyModel want;
+	lowRents.model(want);
+	const Row* row = findKind(want, RowKind::Number, 2);
+	CHECK(row != nullptr, "Low-rents has a Number row");
+	if (!row)
+		return;
+	const int id = row->id, target = otherValue(*row);
+
+	Host h(1);
+	h.post(selectApp(kQuantermain));
+	run(h, 0.1);
+	CHECK(h.postEdit(makeEdit(FriendlyEdit::SetValue, kQuantermain, 0, id, target)), "old-app edit accepted");
+	h.requestRestore(img.bytes, InputRange::Hardware);
+	FriendlyModel m;
+	run(h, 0.1);
+	h.model(m);
+	CHECK(m.app == kLowRents, "model for app %d after the restore", m.app);
+	CHECK(findRow(m, id) && findRow(m, id)->value == row->value, "row %d is %d, want %d (the edit dropped)",
+		id, findRow(m, id) ? findRow(m, id)->value : -1, row->value);
+
+	// The same edit drawn for the restored app is applied.
+	CHECK(h.postEdit(makeEdit(FriendlyEdit::SetValue, kLowRents, 0, id, target)), "new-app edit accepted");
+	run(h, framePeriods(2));
+	h.model(m);
+	CHECK(findRow(m, id)->value == target, "row %d is %d, want %d", id, findRow(m, id)->value, target);
+
+	// An edit for the app the image holds, posted before the restore, is
+	// applied to the restored core (events posted before a restore are
+	// applied after it).
+	{
+		Host same(1);
+		same.post(selectApp(kQuantermain));
+		run(same, 0.1);
+		CHECK(same.postEdit(makeEdit(FriendlyEdit::SetValue, kLowRents, 0, id, target)), "same-app edit accepted");
+		same.requestRestore(img.bytes, InputRange::Hardware);
+		run(same, 0.1);
+		same.model(m);
+		CHECK(m.app == kLowRents, "model for app %d after the restore", m.app);
+		CHECK(findRow(m, id) && findRow(m, id)->value == target, "row %d is %d, want %d (the edit applied to the restored core)",
+			id, findRow(m, id) ? findRow(m, id)->value : -1, target);
+	}
+
+	// The next model published after the swap is the new core's, at its
+	// first tick, wherever the frame schedule was (two phases half a frame
+	// apart).
+	for (int half = 0; half < 2; half++) {
+		Host g(1);
+		g.post(selectApp(kQuantermain));
+		run(g, 0.1 + half * framePeriods(1) / 2);
+		g.requestRestore(img.bytes, InputRange::Hardware);
+		run(g, 3.0 / shoal::kTickHz);
+		g.model(m);
+		CHECK(m.app == kLowRents, "phase %d: model for app %d straight after the swap", half, m.app);
+	}
+}
+
+// Encoder turns and an R push show in the model: the cursor row, edit mode
+// and the value.
+void testModelFollowsEncoders() {
+	Host h(1);
+	h.post(acceleration(false));
+	h.post(selectApp(kQuantermain));
+	run(h, 0.1);
+	FriendlyModel m;
+	h.model(m);
+	int menu[shoal::kMaxRows], n = 0;
+	for (int i = 0; i < m.rows; i++)
+		if (!(m.row[i].flags & shoal::kRowExtra) && m.row[i].kind != RowKind::Heading)
+			menu[n++] = i;
+	// A Number row past the first menu row, below its maximum.
+	int k = -1;
+	for (int i = 1; i < n && k < 0; i++)
+		if (m.row[menu[i]].kind == RowKind::Number && m.row[menu[i]].value < m.row[menu[i]].max)
+			k = i;
+	CHECK(k > 0 && cursorRow(m) == menu[0], "a Number row at menu row %d; cursor on %d", k, cursorRow(m));
+	if (k <= 0)
+		return;
+	const int id = m.row[menu[k]].id, before = m.row[menu[k]].value;
+	h.post(turn(shoal::ENCODER_R, k));
+	run(h, 0.05);
+	h.model(m);
+	CHECK(cursorRow(m) == menu[k], "cursor on model row %d after %d detents, want %d", cursorRow(m), k, menu[k]);
+	CHECK(!(m.row[menu[k]].flags & shoal::kRowEditing), "not editing yet");
+	h.setButton(shoal::BUTTON_R, true);
+	run(h, 0.05);
+	h.setButton(shoal::BUTTON_R, false);
+	run(h, 0.05);
+	h.model(m);
+	CHECK(m.row[menu[k]].flags & shoal::kRowEditing, "editing after an R push");
+	h.post(turn(shoal::ENCODER_R, 1));
+	run(h, 0.05);
+	h.model(m);
+	CHECK(findRow(m, id)->value == before + 1, "row %d is %d after a detent, want %d", id, findRow(m, id)->value, before + 1);
+}
+
 // Heap operations on this thread while running `seconds` of samples.
 long engineHeapOps(Host& h, double seconds) {
 	const long before = tAllocs + tFrees;
@@ -391,6 +629,46 @@ void testNoEngineAllocation() {
 	h.requestRestore(nullptr, InputRange::Hardware);
 	CHECK(tFrees > frees, "an unused replacement is deleted");
 	CHECK(engineHeapOps(h, 0.1) == 0, "swapping in the last one");
+
+	// Models built and published, and edits applied: Quantermain (tabs, a
+	// mask) and Sequins (two pages: a row of the other page builds its list
+	// on a copy of the channel, and switches page).
+	FriendlyModel m;
+	h.post(selectApp(kQuantermain));
+	CHECK(engineHeapOps(h, 0.1) == 0, "Quantermain models");
+	h.model(m);
+	CHECK(m.app == kQuantermain, "Quantermain's model");
+	const Row* num = findKind(m, RowKind::Number, 2);
+	const Row* mask = findKind(m, RowKind::Mask);
+	CHECK(num && mask, "Quantermain has a Number and a Mask row");
+	if (!num || !mask)
+		return;
+	h.postEdit(makeEdit(FriendlyEdit::SetValue, kQuantermain, m.tab, num->id, otherValue(*num)));
+	h.postEdit(makeEdit(FriendlyEdit::ToggleBit, kQuantermain, m.tab, mask->id, 0));
+	h.postEdit(makeEdit(FriendlyEdit::SelectTab, kQuantermain, m.tab, 0, 2));
+	h.postEdit(makeEdit(FriendlyEdit::Focus, kQuantermain, 2, num->id, 0));
+	CHECK(engineHeapOps(h, 0.1) == 0, "Quantermain edits");
+	h.model(m);
+	CHECK(m.tab == 2, "the edits ran (tab %d)", m.tab);
+
+	h.post(selectApp(kSequins));
+	CHECK(engineHeapOps(h, 0.1) == 0, "Sequins models");
+	h.model(m);
+	int heading = -1;
+	for (int i = 0, seen = 0; i < m.rows && heading < 0; i++)
+		if (m.row[i].kind == RowKind::Heading && ++seen == 2)
+			heading = i;
+	const Row* other = heading < 0 ? nullptr : findKind(m, RowKind::Choice, 1, heading);
+	const Row* steps = findKind(m, RowKind::Mask, 1);
+	CHECK(m.app == kSequins && other && steps, "Sequins has a second page with a Choice row, and a mask");
+	if (!other || !steps)
+		return;
+	const int otherId = other->id, target = otherValue(*other);
+	h.postEdit(makeEdit(FriendlyEdit::SetValue, kSequins, m.tab, otherId, target));
+	h.postEdit(makeEdit(FriendlyEdit::ToggleBit, kSequins, m.tab, steps->id, 0));
+	CHECK(engineHeapOps(h, 0.1) == 0, "Sequins edits");
+	h.model(m);
+	CHECK(findRow(m, otherId)->value == target, "the Sequins edit ran");
 }
 
 void testThreads() {
@@ -465,6 +743,66 @@ void testThreads() {
 	CHECK(end == start, "cursor %d after %ld +1/-1 pairs, started at %d", end, pairs, start);
 }
 
+// A UI thread posting edits and reading models for a second while the
+// engine runs: no race, no torn model, and the row ends on the last value
+// the queue accepted.
+void testEditsFromUiThread() {
+	Host h(1);
+	h.post(selectApp(kQuantermain));
+	run(h, 0.1);
+	FriendlyModel start;
+	h.model(start);
+	const Row* row = findKind(start, RowKind::Number, 2);
+	CHECK(row != nullptr, "Quantermain has a Number row");
+	if (!row)
+		return;
+	const int id = row->id, lo = row->min, span = row->max - row->min + 1;
+
+	const long n = std::lround(1.0 * kRate);
+	std::atomic<bool> done(false), uiFinished(false);
+	long posted = 0, refused = 0, reads = 0, bad = 0;
+	int last = row->value;
+	std::thread ui([&] {
+		FriendlyModel m;
+		Frames f;
+		uint32_t rng = 12345;
+		while (!done.load()) {
+			h.model(m);
+			h.frames(f.menu, f.scope);
+			reads++;
+			const Row* r = findRow(m, id);
+			if (m.app != kQuantermain || m.rows <= 0 || m.rows > shoal::kMaxRows || (m.flags & shoal::kModelTruncated)
+					|| !r || r->value < r->min || r->value > r->max)
+				bad++;
+			rng = rng * 1664525u + 1013904223u;
+			const int target = lo + (int) ((rng >> 8) % (uint32_t) span);
+			if (h.postEdit(makeEdit(FriendlyEdit::SetValue, kQuantermain, m.tab, id, target))) {
+				last = target;
+				posted++;
+			} else {
+				refused++;
+			}
+		}
+		uiFinished.store(true);
+	});
+	long i = 0;
+	for (; i < n || !uiFinished.load(); i++) {
+		if (i == n)
+			done.store(true);
+		h.setGate(0, i % 480 < 24 ? 10.f : 0.f);
+		h.setCv(0, (float) (i % 4800) / 1000.f);
+		h.process();
+	}
+	ui.join();
+	run(h, framePeriods(2));
+	FriendlyModel m;
+	h.model(m);
+	CHECK(posted > 100 && reads > 100, "%ld edits posted (%ld refused), %ld reads", posted, refused, reads);
+	CHECK(bad == 0, "%ld malformed models read", bad);
+	CHECK(findRow(m, id) && findRow(m, id)->value == last, "row %d ends on %d, the last accepted is %d",
+		id, findRow(m, id) ? findRow(m, id)->value : -1, last);
+}
+
 } // namespace
 
 int main() {
@@ -479,5 +817,11 @@ int main() {
 	testNoEngineAllocation();
 	testEventsWaitForRestore();
 	testThreads();
+	testModelPublished();
+	testEditsApplied();
+	testEditOrder();
+	testEditAfterRestore();
+	testModelFollowsEncoders();
+	testEditsFromUiThread();
 	return rkatest::finish("test_host");
 }
