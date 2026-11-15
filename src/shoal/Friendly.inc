@@ -20,7 +20,7 @@
 //   models and edits run on the engine thread, and all state is the
 //   firmware's, in the current Context.
 
-#include <cstring>   // std::memcpy (FriendlyAdapters4.inc)
+#include <cstring>   // memcpy (FriendlyAdapters2.inc, Automatonnetz; FriendlyAdapters4.inc, the page copy)
 
 #include "Friendly.hpp"
 
@@ -142,14 +142,17 @@ struct Text {
 private:
 	Text& digits(bool negative, uint64_t magnitude, int decimals, int width) {
 		char buf[32];  // filled from the end
+		// 20 digits, a point and a sign need 22; the explicit bound on n is
+		// for the compiler (g++'s -Wstringop-overflow cannot see that).
+		const int last = (int) sizeof(buf) - 1;
 		int n = 0;
 		do {
 			buf[n++] = (char) ('0' + magnitude % 10);
 			magnitude /= 10;
-			if (n == decimals)
+			if (n == decimals && n < last)
 				buf[n++] = '.';
-		} while (magnitude || n < (decimals ? decimals + 2 : 1));  // at least one digit before the point
-		if (negative)
+		} while (n < last && (magnitude || n < (decimals ? decimals + 2 : 1)));  // at least one digit before the point
+		if (negative && n < last)
 			buf[n++] = '-';
 		for (int i = n; i < width; i++)
 			ch(' ');

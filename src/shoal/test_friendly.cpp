@@ -2722,7 +2722,21 @@ void testAcidCurdsEquivalence() {
 // The section of the page shown is that page's menu, and the other section
 // is what the other page shows once switched to.
 void testSectionsLeaveMenuAlone() {
-	for (int app : { kSequins, kAcidCurds }) {
+	// The settings states: what the lists' builders look at. Sequins: aux
+	// mode, direction, playmode, sequence; Acid Curds: direction, playmode.
+	struct Set { int id, value; };
+	struct State { int app; Set set[4]; };
+	const State states[] = {
+		{ kSequins, { { -1, 0 } } },                                                                   // defaults
+		{ kSequins, { { kSqMode, 3 }, { kSqDirection, 5 }, { -1, 0 } } },                              // aux ADR, Brownian
+		{ kSequins, { { kSqPlaymode, 7 }, { kSqMode, 4 }, { kSqSequence, 2 }, { -1, 0 } } },           // ARP, ADSR, sequence 3
+		{ kSequins, { { kSqPlaymode, 9 }, { kSqMode, 2 }, { -1, 0 } } },                               // S+H, aux AD
+		{ kAcidCurds, { { -1, 0 } } },
+		{ kAcidCurds, { { kAcDirection, 5 }, { -1, 0 } } },                                            // Brownian
+		{ kAcidCurds, { { kAcDirection, 5 }, { kAcPlaymode, 9 }, { -1, 0 } } },                        // Brownian, then S+H (hides it)
+	};
+	for (const State& state : states) {
+		const int app = state.app;
 		const char* an = Core::appName(app);
 		const int tabs = app == kSequins ? 2 : 1;
 		for (int tab = 0; tab < tabs; tab++)
@@ -2731,14 +2745,24 @@ void testSectionsLeaveMenuAlone() {
 					Core c;
 					c.selectApp(app);
 					run(c, 0.1);
-					// Rows that differ between the pages: aux ADR, direction Brownian.
-					if (app == kSequins)
-						CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, tab, kSqMode, 3)), "%s: aux mode dropped", an);
-					CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, tab, app == kSequins ? kSqDirection : kAcDirection, 5)),
-						"%s: direction dropped", an);
+					if (tab)
+						CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, app, 0, 0, tab)), "%s: tab %d not selected", an, tab);
+					for (int k = 0; state.set[k].id >= 0; k++)
+						CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, tab, state.set[k].id, state.set[k].value)),
+							"%s: setting %d dropped", an, state.set[k].id);
 					if (page)
 						CoreTest::buttonEvent(c, shoal::BUTTON_DOWN, false);
-					CoreTest::encoderEvent(c, shoal::ENCODER_R, 5 - CoreTest::menuRow(c));
+					// The cursor on a plain value row (from row 5 up), whose R
+					// push is an edit toggle.
+					for (int to = 5; to >= 0; to--) {
+						CoreTest::encoderEvent(c, shoal::ENCODER_R, to - CoreTest::menuRow(c));
+						const FriendlyModel here = model(c);
+						bool plain = false;
+						for (int i = 0; i < here.rows; i++)
+							plain = plain || ((here.row[i].flags & shoal::kRowCursor) && isValueRow(here.row[i]));
+						if (plain)
+							break;
+					}
 					if (editing)
 						CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
 					CHECK(CoreTest::menuPage(c) == page && CoreTest::selectedChannel(c) == tab && CoreTest::menuEditing(c) == (editing != 0),
