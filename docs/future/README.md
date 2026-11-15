@@ -13,7 +13,8 @@ takes one more instrument and builds its panel geometry from it.
 
 | Module | What it does | The instrument | Width |
 |--------|--------------|----------------|-------|
-| [Wake](wake.md) | Stereo delay and diffusion | A ship's wake | 10 HP |
+| [Wake](wake.md) | Comprehensive stereo tap delay | A ship's wake | 18 HP |
+| [Eddy](eddy.md) | Small stereo delay and diffusion | An eddy (panel still to be redrawn) | 10 HP |
 | [Neap](neap.md) | Very slow, layered modulation | A tide-predicting machine | 12 HP |
 | [Bearing](bearing.md) | Quantiser | A compass rose | 10 HP |
 | [Squall](squall.md) | Random source | An aneroid barometer | 8 HP |

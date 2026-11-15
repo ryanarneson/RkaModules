@@ -1,24 +1,39 @@
-# Wake: stereo delay and diffusion
+# Wake: a comprehensive stereo tap delay
 
-Status: idea, 2026-11-15. Not designed.
+Status: idea, 2026-11-15. Not designed. The user asked for "a
+comprehensive delay. stereo/tap. good functionality."
 
 ![mockup](wake-mockup.svg)
 
-**What it is.** The trail a sound leaves: a stereo delay that can smear
-into diffusion. The natural partner for Fathom, whose design
-(`docs/specs/2026-10-24-fathom-design.md`) puts effects in later phases; a
-drone voice wants a tail.
+**What it is.** A full-featured stereo delay, 18 HP: tap tempo and clock
+sync, four taps with their own levels and outputs, a feedback path that
+can be shaped and patched into, and controls for stereo movement and
+texture. "Stereo/tap" was read as both tap tempo and multiple taps; if
+only one was meant, the panel can shrink.
 
 **The instrument.** A ship's wake. A Kelvin wake opens at 19.47° either
 side of the ship's track whatever its speed, so the two arms are drawn at
-exactly that angle from the origin and labelled with it. Controls sit on
-the arms; graduated arcs between the arms are the wave crests.
+exactly that angle from the Time dial and labelled with it. Behind the
+arms run the crests, and each crest is a tap. The four taps alternate
+down the left and right arms, which is also how they sit in the stereo
+field.
 
-**Sketched controls.** Time (the hero, on an enamel face), Feedback and
-Tone on the first crest, Diffuse and Mix on the second. CV inputs with
-attenuverters for Diffuse, Time and Mix, each traced straight up its
-column. Stereo in, stereo out.
+**Sketched controls.**
 
-**Open questions.** Whether it is a separate module or Fathom's effects
-phase; delay ranges and whether Time syncs to a clock; what Diffuse does
-(allpass smear, reverb, or both); freeze or hold; mono-in behaviour.
+- Time, the hero, scaled 10 ms to 4 s, with CV and attenuverter.
+- Tempo, down the left: a lit Tap button, Divide for clock divisions, and
+  a Clock input.
+- Four taps: a level knob and a light each, on the four crests.
+- The repeats, fanning out to the right on arcs from the Time dial:
+  Feedback (with CV and attenuverter), Tone and Drive.
+- Stereo and texture: Spread, Diffuse, and Mod with Depth.
+- Three lit buttons: Ping (ping-pong), Reverse, Freeze.
+- Mix, with CV and attenuverter.
+- Send and Return, to patch other modules into the feedback loop.
+- Stereo in; outputs for each tap and for L and R.
+
+**Open questions.** Tap spacing (even divisions of Time, or adjustable);
+tap panning (fixed alternate, as drawn, or per tap); whether Send and
+Return are mono or stereo; gate inputs for Freeze and Reverse; maximum
+delay time and what happens to pitch when Time moves; whether Diffuse
+overlaps Fog; how much of this Eddy should keep.
