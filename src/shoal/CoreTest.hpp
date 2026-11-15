@@ -25,12 +25,13 @@ struct CoreTest {
 	static uint32_t smoothedCode(Core& c, int ch);
 	// The setting index (as in Core::setting) under the menu cursor of the
 	// current app, on the selected channel and the page shown: -1 when the
-	// cursor's row is past the end of the list, in Automatonnetz's cell view
-	// and on Piqued's envelope page.
+	// cursor's row is past the end of the list and in Automatonnetz's cell
+	// view. On Piqued's envelope page: the selected segment's value (S1..S4).
 	static int menuSetting(Core& c);
 	// The menu cursor's row (cursor_pos).
 	static int menuRow(Core& c);
-	// Whether that cursor is in edit mode.
+	// Whether that cursor is in edit mode (on Piqued's envelope page: whether
+	// the selected segment is being edited).
 	static bool menuEditing(Core& c);
 	// The firmware's selected channel (0 for an app with one).
 	static int selectedChannel(Core& c);

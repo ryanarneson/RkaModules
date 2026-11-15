@@ -459,7 +459,7 @@ int CoreTest::menuSetting(Core& c) {
 	if (c.app() == 2 && automatonnetz_state.ui.edit_cell)
 		return -1;  // the cell view: its cursor is on a cell setting
 	if (c.app() == 7 && envgen.ui.edit_mode == QuadEnvelopeGenerator::MODE_EDIT_SEGMENTS)
-		return -1;  // the envelope page: the settings cursor is not shown
+		return ENV_SETTING_SEG1_VALUE + envgen.ui.selected_segment;  // the envelope page: the selected segment
 	// The others (enabledSettings knows them): the setting at the cursor's
 	// menu row, -1 when that row is past the end of the list (a stale cursor).
 	int list[128];
@@ -498,7 +498,7 @@ bool CoreTest::menuEditing(Core& c) {
 		case 4: return dq_state.cursor.editing();
 		case 5: return poly_lfo_state.cursor.editing();
 		case 6: return lorenz_generator_state.cursor.editing();
-		case 7: return envgen.ui.cursor.editing();
+		case 7: return envgen.ui.edit_mode == QuadEnvelopeGenerator::MODE_EDIT_SEGMENTS ? envgen.ui.segment_editing : envgen.ui.cursor.editing();
 		case 8: return seq_state.cursor.editing();
 		case 9: return bbgen.ui.cursor.editing();
 		case 10: return bytebeatgen.ui.cursor.editing();

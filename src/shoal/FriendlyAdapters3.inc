@@ -90,7 +90,8 @@ void header(FriendlyModel& m) {
 }
 
 void rows(FriendlyModel& m, int) {
-	addSetting(m, asr, ASR_SETTING_SCALE);
+	Row& scale = addSetting(m, asr, ASR_SETTING_SCALE);
+	scale.names = OC::scale_names + scale.min;  // as the title bar prints it; the table has the short names
 	Row& hold = addExtra(m, RowKind::Toggle, kHold, "Hold / Freeze");
 	hold.value = asr.freeze_state() ? 1 : 0;
 	hold.max = 1;
@@ -324,7 +325,9 @@ void rows(FriendlyModel& m, int tab) {
 	addEnabled(m, channel, tab == m.tab ? &dq_state.cursor : nullptr);
 	const int slot = channel.get_scale_select();
 	makeMaskRow(m, DQ_CHANNEL_SETTING_MASK1 + slot, channel.get_scale((uint8_t) slot));
-	addExtra(m, RowKind::Action, kCopyScale, "Copy scale to all slots");  // L long press
+	// L long press: the shown slot to all four slots of both channels
+	// (DQ_leftButtonLong), so the list asks first.
+	addExtra(m, RowKind::Action, kCopyScale, "Copy scale to all slots, both channels").flags |= kRowConfirm;
 	addExtra(m, RowKind::Action, kResetMask, "Reset mask");               // DOWN long press
 }
 
@@ -365,6 +368,14 @@ constexpr NameCount kNames[] = {
 	{ DQ_CHANNEL_SETTING_SOURCE, 5, channel_input_sources },
 };
 
-constexpr Adapter kAdapter = { &header, &rows, &selectTab, &edit, &accepting, kNames, 1, nullptr, 0 };
+// The table's "--> edit" is the slot's mask, which opens the scale editor.
+constexpr Label kLabels[] = {
+	{ DQ_CHANNEL_SETTING_MASK1, "Active notes" },
+	{ DQ_CHANNEL_SETTING_MASK2, "Active notes" },
+	{ DQ_CHANNEL_SETTING_MASK3, "Active notes" },
+	{ DQ_CHANNEL_SETTING_MASK4, "Active notes" },
+};
+
+constexpr Adapter kAdapter = { &header, &rows, &selectTab, &edit, &accepting, kNames, 1, kLabels, 4 };
 
 } // namespace metaq

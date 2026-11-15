@@ -21,7 +21,12 @@ enum class RowKind : uint8_t {
 	SubEditor,  // edited in hardware mode only
 	Heading     // a section title, no control
 };
-enum : uint8_t { kRowCursor = 1, kRowEditing = 2, kRowExtra = 4 };
+enum : uint8_t {
+	kRowCursor = 1,   // the firmware's menu cursor is on the row
+	kRowEditing = 2,  // ... and editing its value
+	kRowExtra = 4,    // not a setting of the table (id >= 256)
+	kRowConfirm = 8   // an Action that undoes work (every setting, the grid): the list asks before it posts the Press
+};
 struct Row {
 	RowKind kind;
 	uint8_t flags;

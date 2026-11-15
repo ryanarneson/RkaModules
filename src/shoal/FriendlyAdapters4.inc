@@ -8,13 +8,21 @@
 // ---- Piqued (APP_ENVGEN.ino) ------------------------------------------------
 // Four channels A to D; the L encoder selects one, except while the
 // Euclidean editor is open (below). Two pages: the envelope page (a new
-// core's) edits the segment values S1-S4, and is a sub-editor here (the
-// "Envelope segments" row, which carries the cursor while that page shows);
-// the settings page has an enabled list per channel (Tr delay mode and Eucl
-// length show their rows; the R-encoder handler rebuilds it). L push
-// switches page, so an edit on a settings row from the envelope page starts
-// with one. R push on the envelope page starts and ends segment editing,
-// during which the R encoder edits a segment: the list is busy then.
+// core's) edits the segment values S1-S4, and the settings page has an
+// enabled list per channel (Tr delay mode and Eucl length show their rows;
+// the R-encoder handler rebuilds it). L push switches page, so an edit on a
+// settings row from the envelope page starts with one.
+//
+// The envelope page: the R encoder selects a segment (as many as the type
+// has, num_editable_segments), R push starts and ends editing it, during
+// which the R encoder edits its value: the list is busy then. Its segments
+// are the first rows, Numbers named as the page names them (segment_names),
+// the selected one under the cursor while the page shows. A SetValue is the
+// page's gesture: L push to the page (from the settings page), the R encoder
+// to the segment, R push, the R encoder, R push, and L push back to the
+// settings page, where every other edit leaves the app. A Focus shows the
+// page with the segment selected. Nothing else is on the page but the
+// envelope's picture, so it has no hardware-only row.
 //
 // The Euclidean editor is edit mode on the Offset row: the R encoder edits
 // the offset (its guard keeps it <= length, one event at a time), the L
@@ -33,7 +41,9 @@
 
 namespace piqued {
 
-enum { kSegments = kExtraId };
+bool isSegment(int setting) {
+	return setting >= ENV_SETTING_SEG1_VALUE && setting <= ENV_SETTING_SEG4_VALUE;
+}
 
 // Trigger input 0..6: the table's TR1..TR4 (the first four entries mirror
 // the firmware's OC::Strings::trigger_input_names in OC_strings.cpp, which
@@ -58,9 +68,12 @@ void header(FriendlyModel& m) {
 void rows(FriendlyModel& m, int tab) {
 	const EnvelopeGenerator& env = envgen.envelopes_[tab];
 	const bool shown = tab == m.tab;
-	Row& segments = addExtra(m, RowKind::SubEditor, kSegments, "Envelope segments");
-	if (shown && onEnvelopePage())
-		segments.flags |= envgen.ui.segment_editing ? kRowCursor | kRowEditing : kRowCursor;
+	for (int s = 0; s < env.num_editable_segments(); s++) {
+		Row& r = addSetting(m, env, ENV_SETTING_SEG1_VALUE + s);
+		r.label = segment_names[s];  // the table's are "S1" to "S4"
+		if (shown && onEnvelopePage() && envgen.ui.selected_segment == s)
+			r.flags |= envgen.ui.segment_editing ? kRowCursor | kRowEditing : kRowCursor;
+	}
 	const Cursor* cursor = shown && !onEnvelopePage() ? &envgen.ui.cursor : nullptr;
 	const int n = env.num_enabled_settings();
 	for (int i = 0; i < n; i++) {
@@ -112,12 +125,17 @@ bool edit(const FriendlyEdit& e, const Row& row) {
 	Cursor& c = envgen.ui.cursor;
 	if (e.type != FriendlyEdit::SetValue && e.type != FriendlyEdit::Focus)
 		return false;
-	if (row.id == kSegments) {  // a SubEditor row: Focus shows the envelope page
-		if (e.type != FriendlyEdit::Focus)
-			return false;
+	if (isSegment(row.id)) {  // the envelope page's gesture
 		closeEuclidean();
 		if (!onEnvelopePage())
 			button(OC::CONTROL_BUTTON_L);
+		encoder(OC::CONTROL_ENCODER_R, row.id - ENV_SETTING_SEG1_VALUE - envgen.ui.selected_segment);  // not editing: selects
+		if (e.type == FriendlyEdit::SetValue) {
+			button(OC::CONTROL_BUTTON_R);  // segment editing on
+			encoder(OC::CONTROL_ENCODER_R, e.value - row.value);
+			button(OC::CONTROL_BUTTON_R);  // and off
+			button(OC::CONTROL_BUTTON_L);  // back to the settings page
+		}
 		return true;
 	}
 	if (onEnvelopePage())
@@ -348,7 +366,7 @@ void header(FriendlyModel& m) {
 void addRowOf(FriendlyModel& m, const SEQ_Channel& ch, int id) {
 	Row& r = addSetting(m, ch, id);
 	if (id == SEQ_CHANNEL_SETTING_SCALE) {
-		r.names = OC::scale_names;  // as the menu row draws it; the table has the short names
+		r.names = OC::scale_names + r.min;  // as the menu row draws it; the table has the short names
 	} else if (id == SEQ_CHANNEL_SETTING_SCALE_MASK) {
 		makeMaskRow(m, id, ch.get_scale(DUMMY));
 	} else if (isStepMask(id)) {
@@ -379,7 +397,7 @@ void rows(FriendlyModel& m, int tab) {
 			eos.value = ch.get_value(SEQ_CHANNEL_SETTING_DUMMY);
 			eos.max = 1;
 		} else {
-			addExtra(m, RowKind::Action, kClearCv, "Clear CV mapping");  // DOWN long press
+			addExtra(m, RowKind::Action, kClearCv, "Clear CV mapping").flags |= kRowConfirm;  // DOWN long press
 		}
 	}
 	const Cursor& c = seq_state.cursor;
@@ -476,7 +494,17 @@ bool edit(const FriendlyEdit& e, const Row& row) {
 	}
 }
 
-constexpr Adapter kAdapter = { &header, &rows, &selectTab, &edit, &accepting, nullptr, 0, nullptr, 0 };
+// The table's two "--> edit": the scale mask (the scale editor) and the
+// step mask of each sequence (the pattern editor).
+constexpr Label kLabels[] = {
+	{ SEQ_CHANNEL_SETTING_SCALE_MASK, "Active notes" },
+	{ SEQ_CHANNEL_SETTING_MASK1, "Steps" },
+	{ SEQ_CHANNEL_SETTING_MASK2, "Steps" },
+	{ SEQ_CHANNEL_SETTING_MASK3, "Steps" },
+	{ SEQ_CHANNEL_SETTING_MASK4, "Steps" },
+};
+
+constexpr Adapter kAdapter = { &header, &rows, &selectTab, &edit, &accepting, nullptr, 0, kLabels, 5 };
 
 } // namespace sequins
 
@@ -553,7 +581,7 @@ void rows(FriendlyModel& m, int) {
 			if (!placeholder(list.setting[i]) && !hasRow(m, list.setting[i]))
 				addRowOf(m, list.setting[i]);
 		if (page == MENU_CV_MAPPING)
-			addExtra(m, RowKind::Action, kClearCv, "Clear CV mapping");  // DOWN long press
+			addExtra(m, RowKind::Action, kClearCv, "Clear CV mapping").flags |= kRowConfirm;  // DOWN long press
 	}
 	const Cursor& c = chords_state.cursor;
 	if (c.cursor_pos() < chords.num_enabled_settings() && !placeholder(chords.enabled_setting_at(c.cursor_pos())))
@@ -620,6 +648,13 @@ constexpr NameCount kNames[] = {
 	{ CHORDS_SETTING_CHORD_SLOT, 8, nullptr },
 };
 
-constexpr Adapter kAdapter = { &header, &rows, nullptr, &edit, &accepting, kNames, 1, nullptr, 0 };
+// The table's "scale  -->" is the scale mask (the scale editor), and
+// "chords -->" the chord editor.
+constexpr Label kLabels[] = {
+	{ CHORDS_SETTING_MASK, "Active notes" },
+	{ CHORDS_SETTING_CHORD_EDIT, "Chords" },
+};
+
+constexpr Adapter kAdapter = { &header, &rows, nullptr, &edit, &accepting, kNames, 1, kLabels, 2 };
 
 } // namespace acidcurds

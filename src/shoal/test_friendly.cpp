@@ -45,14 +45,38 @@ const ShortNames kShortNames[] = {
 };
 
 // Labels an adapter gives in place of the settings table's (allowed where
-// the table's name is a one- or two-letter abbreviation).
+// the table's name is a one- or two-letter abbreviation, or an arrow to an
+// editor, "--> edit": see arrowLabel).
 struct LabelOverride { int app, setting; const char* table; const char* label; };
 const LabelOverride kLabelOverrides[] = {
 	{ 5, 0, "C", "Coarse" },
 	{ 5, 1, "F", "Fine" },
 	{ 2, 0, "dx", "Step X" },
 	{ 2, 1, "dy", "Step Y" },
+	{ 8, 10, "--> edit", "Active notes" },    // Sequins: the scale mask (the scale editor)
+	{ 8, 11, "--> edit", "Steps" },           // Sequins: the step masks of sequences 1-4 (the pattern editor)
+	{ 8, 12, "--> edit", "Steps" },
+	{ 8, 13, "--> edit", "Steps" },
+	{ 8, 14, "--> edit", "Steps" },
+	{ 4, 9, "--> edit", "Active notes" },     // Meta-Q: the masks of scale slots 1-4 (the scale editor)
+	{ 4, 10, "--> edit", "Active notes" },
+	{ 4, 11, "--> edit", "Active notes" },
+	{ 4, 12, "--> edit", "Active notes" },
+	{ 11, 3, "scale  -->", "Active notes" },  // Acid Curds: the scale mask (the scale editor)
+	{ 11, 17, "chords -->", "Chords" },       // Acid Curds: the chord editor
+	{ 12, 8, "--> autotune", "Autotune" },    // References: the autotuner
+	{ 7, 1, "S1", "Attack" },                 // Piqued: the envelope page's segment_names
+	{ 7, 2, "S2", "Decay" },
+	{ 7, 3, "S3", "Sustain/Level" },
+	{ 7, 4, "S4", "Release" },
 };
+
+// A table label that is an arrow to an editor or a page: "-->" at its
+// start or end.
+bool arrowLabel(const char* s) {
+	const size_t n = std::strlen(s);
+	return n > 3 && (std::strncmp(s, "-->", 3) == 0 || std::strcmp(s + n - 3, "-->") == 0);
+}
 
 // Choice rows whose names an adapter gives in place of the table's: an
 // array naming the whole range where the table's is short (the table's
@@ -64,7 +88,40 @@ const NameOverride kNameOverrides[] = {
 	{ 4, 14, "Turing", -1, -1 },          // Meta-Q CV source 0..4: cv_input_names has 4; channel_input_sources (APP_QQ.ino) has these 5 first
 	{ 7, 5, "D end of cycle", -1, -1 },   // Piqued trigger input 0..6: trigger_input_names has 4; 4-6 are the other channels' EOC
 	{ 8, 6, nullptr, 11, 0 },             // Sequins scale: the table's short names; its menu row draws OC::scale_names (Acid Curds' table)
+	{ 0, 0, nullptr, 11, 0 },             // CopierMaschine scale: the same; its title bar prints OC::scale_names (APP_ASR.ino, ASR_menu)
 };
+
+// Setting `setting` of app `app`'s settings table: its value names (read
+// once per app, from a core of its own).
+const char* const* tableNames(int app, int setting) {
+	static const char* const* names[shoal::kNumApps][128];
+	static bool read[shoal::kNumApps];
+	if (!read[app]) {
+		Core c;
+		c.selectApp(app);
+		for (int i = 0; i < c.settingCount() && i < 128; i++)
+			names[app][i] = c.settingInfo(i).valueNames;
+		read[app] = true;
+	}
+	return setting >= 0 && setting < 128 ? names[app][setting] : nullptr;
+}
+
+// The firmware's names for setting `setting` (table info `s`) of app `app`,
+// indexed by value as the firmware indexes them, and in `known` how many
+// values from s.min on it names (left as it came where the row's own count
+// is right). A setting in kNameOverrides: the other table's names (sameAs),
+// or the table's own four (an array that names more).
+const char* const* firmwareNames(int app, int setting, const shoal::SettingInfo& s, int& known) {
+	for (const NameOverride& o : kNameOverrides)
+		if (o.app == app && o.setting == setting) {
+			if (o.last) {
+				known = 4 - s.min;  // both short tables have four names
+				return s.valueNames;
+			}
+			return tableNames(o.sameAsApp, o.sameAsSetting);
+		}
+	return s.valueNames;
+}
 
 const ShortNames* shortNamesFor(int app, const char* label) {
 	for (const ShortNames& s : kShortNames)
@@ -117,8 +174,10 @@ int checkWellFormed(const Core& c, const FriendlyModel& m, const char* what) {
 	for (int i = 0; i < m.rows && i < shoal::kMaxRows; i++) {
 		const Row& r = m.row[i];
 		CHECK((int) r.kind <= (int) RowKind::Heading, "%s %s row %d: kind %d", what, an, i, (int) r.kind);
-		CHECK((r.flags & ~(shoal::kRowCursor | shoal::kRowEditing | shoal::kRowExtra)) == 0,
+		CHECK((r.flags & ~(shoal::kRowCursor | shoal::kRowEditing | shoal::kRowExtra | shoal::kRowConfirm)) == 0,
 			"%s %s row %d: flags %d", what, an, i, r.flags);
+		if (r.flags & shoal::kRowConfirm)
+			CHECK(r.kind == RowKind::Action, "%s %s row %d (%s): asks for confirmation, kind %d", what, an, i, r.label, (int) r.kind);
 		CHECK(r.label != nullptr, "%s %s row %d: null label", what, an, i);
 		CHECK(terminated(r.text, shoal::kRowText), "%s %s row %d: text not terminated", what, an, i);
 		CHECK(((r.flags & shoal::kRowExtra) != 0) == (r.id >= kExtraId), "%s %s row %d: id %d, flags %d",
@@ -151,6 +210,17 @@ int checkWellFormed(const Core& c, const FriendlyModel& m, const char* what) {
 			// on a count past the end of the firmware's array).
 			for (int k = 0; r.names && k < r.nameCount && k < range; k++)
 				CHECK(r.names[k] != nullptr && std::strlen(r.names[k]) < 64, "%s %s row %d: name %d", what, an, i, k);
+			// A row of a settings table names each value as the firmware does,
+			// value_names[value] (OC_menus.h, SettingsListItem::DrawDefault),
+			// while the list reads names[value - min].
+			if (!(r.flags & shoal::kRowExtra) && r.id >= 0 && r.id < c.settingCount()) {
+				const shoal::SettingInfo s = c.settingInfo(r.id);
+				int known = r.nameCount;  // the values the firmware's own table names
+				const char* const* firmware = firmwareNames(app, r.id, s, known);
+				for (int v = r.min; firmware && r.names && v - r.min < r.nameCount && v - r.min < known; v++)
+					CHECK(std::strcmp(r.names[v - r.min], firmware[v]) == 0, "%s %s row %d (%s): value %d shows '%s', the firmware '%s'",
+						what, an, i, r.label, v, r.names[v - r.min], firmware[v]);
+			}
 			// A value without a name shows as its number.
 			if (r.value - r.min >= r.nameCount)
 				CHECK(std::atoi(r.text) == r.value && r.text[0] != 0, "%s %s row %d (%s): value %d has no name; text '%s'",
@@ -328,7 +398,7 @@ void testGenericModel() {
 				if (o.app == app && o.setting == r.id)
 					over = &o;
 			if (over)
-				CHECK(std::strcmp(s.name, over->table) == 0 && std::strlen(s.name) <= 2 && std::strcmp(r.label, over->label) == 0,
+				CHECK(std::strcmp(s.name, over->table) == 0 && (std::strlen(s.name) <= 2 || arrowLabel(s.name)) && std::strcmp(r.label, over->label) == 0,
 					"%s row %d: label '%s' for the table's '%s', want '%s' for '%s'", an, i, r.label, s.name, over->label, over->table);
 			else
 				CHECK(r.label == s.name, "%s row %d: label '%s', table '%s'", an, i, r.label, s.name);
@@ -344,7 +414,7 @@ void testGenericModel() {
 					if (o.app == app && o.setting == r.id)
 						names = &o;
 				if (r.kind == RowKind::Choice && !names)
-					CHECK(r.names == s.valueNames, "%s row %d (%s): names", an, i, r.label);
+					CHECK(r.names == s.valueNames + s.min, "%s row %d (%s): names", an, i, r.label);
 				if (names && names->last) {
 					// The table's names first, then the ones it lacks.
 					bool same = r.kind == RowKind::Choice && r.names != s.valueNames && r.nameCount == r.max - r.min + 1;
@@ -356,7 +426,7 @@ void testGenericModel() {
 					Core other;
 					other.selectApp(names->sameAsApp);
 					const shoal::SettingInfo o = other.settingInfo(names->sameAsSetting);
-					CHECK(r.kind == RowKind::Choice && r.names == o.valueNames && r.names != s.valueNames && o.max == s.max
+					CHECK(r.kind == RowKind::Choice && r.names == o.valueNames + s.min && r.names != s.valueNames + s.min && o.max == s.max
 						&& r.nameCount == r.max - r.min + 1, "%s row %d (%s): not %s's names", an, i, r.label, Core::appName(names->sameAsApp));
 				}
 			}
@@ -939,6 +1009,12 @@ bool outsideMenu(int app, int id) {
 	return ((app == kCopier || app == kAcidCurds) && id == 0) || (app == kPiqued && id == 11);
 }
 
+// Piqued's segment values S1..S4: the envelope page's, not the settings
+// page's menu; its cursor is the selected segment.
+bool piquedSegment(int app, int id) {
+	return app == kPiqued && id >= 1 && id <= 4;
+}
+
 // The hardware gesture for a setting of the selected channel's menu, in apps
 // whose R push toggles edit mode: scroll to its row, push, turn, push. The
 // turn goes one detent at a time on a guarded row.
@@ -982,14 +1058,14 @@ bool rowsAreMenu(Core& c, const FriendlyModel& m) {
 			seen = seen || list[j] == list[i];
 		if (seen || (c.app() == kReferences && list[i] == 9))
 			continue;
-		while (k < m.rows && (m.row[k].id >= kExtraId || outsideMenu(c.app(), m.row[k].id)))
+		while (k < m.rows && (m.row[k].id >= kExtraId || outsideMenu(c.app(), m.row[k].id) || piquedSegment(c.app(), m.row[k].id)))
 			k++;
 		if (k >= m.rows || m.row[k].id != list[i])
 			return false;
 		k++;
 	}
 	for (; k < m.rows; k++)
-		if (m.row[k].id < kExtraId && !outsideMenu(c.app(), m.row[k].id))
+		if (m.row[k].id < kExtraId && !outsideMenu(c.app(), m.row[k].id) && !piquedSegment(c.app(), m.row[k].id))
 			return false;
 	return true;
 }
@@ -1203,7 +1279,7 @@ void runThree(Core& a, Core& b, Core& idle, Lcg rng, int ticks, bool& same, bool
 void testActions() {
 	struct Case { int app; const char* label; shoal::Button button; bool longPress; };
 	const Case cases[] = {
-		{ kH1200, "Reset", shoal::BUTTON_L, true },
+		{ kH1200, "Reset all settings", shoal::BUTTON_L, true },
 		{ kAutomatonnetz, "Reset", shoal::BUTTON_UP, false },
 		{ kAutomatonnetz, "Clock", shoal::BUTTON_DOWN, false },
 		{ kAutomatonnetz, "Clear grid", shoal::BUTTON_L, true },
@@ -1261,6 +1337,46 @@ void testActions() {
 
 // Automatonnetz's cell view and References' autotuner take the controls:
 // the model is busy and every edit is dropped until they close.
+// The Action rows that undo work with one click ask for confirmation first
+// (kRowConfirm), and no other row does: in every app, on every tab, on both
+// pages of the paged apps.
+void testConfirmRows() {
+	struct Want { int app; const char* label; };
+	const Want want[] = {
+		{ kH1200, "Reset all settings" },                     // InitDefaults and a chord reset (APP_H1200.ino)
+		{ kAutomatonnetz, "Clear grid" },                     // all 25 cells
+		{ kMetaQ, "Copy scale to all slots, both channels" }, // DQ_leftButtonLong: 4 slots of both channels
+		{ kSequins, "Clear CV mapping" },
+		{ kAcidCurds, "Clear CV mapping" },
+	};
+	for (int app = 0; app < shoal::kNumApps; app++) {
+		const char* an = Core::appName(app);
+		Core c;
+		c.selectApp(app);
+		const int tabs = model(c).tabs;
+		for (int tab = 0; tab < (tabs ? tabs : 1); tab++) {
+			if (tab)
+				CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, app, 0, 0, tab)), "%s: tab %d not selected", an, tab);
+			const FriendlyModel m = model(c);
+			checkWellFormed(c, m, "confirm rows");
+			int found = 0, wanted = 0;
+			for (const Want& w : want)
+				if (w.app == app)
+					wanted++;
+			for (int i = 0; i < m.rows; i++) {
+				const Row& r = m.row[i];
+				bool listed = false;
+				for (const Want& w : want)
+					listed = listed || (w.app == app && std::strcmp(w.label, r.label) == 0);
+				CHECK(((r.flags & shoal::kRowConfirm) != 0) == listed, "%s tab %d row %d (%s): flags %d", an, tab, i, r.label, r.flags);
+				if (listed && r.kind == RowKind::Action)
+					found++;
+			}
+			CHECK(found == wanted, "%s tab %d: %d of %d confirmation rows", an, tab, found, wanted);
+		}
+	}
+}
+
 void testSubEditorsBusy() {
 	{
 		Pair p(kAutomatonnetz);
@@ -1289,7 +1405,7 @@ void testSubEditorsBusy() {
 		Pair p(kReferences);
 		const FriendlyModel m = model(p.a);
 		const Row* tune = findRow(m, 8);
-		CHECK(tune && tune->kind == RowKind::SubEditor && std::strcmp(tune->label, "--> autotune") == 0, "References: no autotune row");
+		CHECK(tune && tune->kind == RowKind::SubEditor && std::strcmp(tune->label, "Autotune") == 0, "References: no autotune row");
 		CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kReferences, m.tab, 8, 0)), "autotune: SetValue taken");
 		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, kReferences, m.tab, 8, 0)) && CoreTest::menuSetting(p.a) == 8,
 			"autotune: Focus did not move the cursor there");
@@ -1715,7 +1831,7 @@ void testQuantizerActions() {
 	const Case cases[] = {
 		{ kQuantermain, kCopyScale, "Copy scale to other channels", shoal::BUTTON_L },
 		{ kQuantermain, kResetMask, "Reset mask", shoal::BUTTON_DOWN },
-		{ kMetaQ, kCopyScale, "Copy scale to all slots", shoal::BUTTON_L },
+		{ kMetaQ, kCopyScale, "Copy scale to all slots, both channels", shoal::BUTTON_L },
 		{ kMetaQ, kResetMask, "Reset mask", shoal::BUTTON_DOWN },
 	};
 	for (const Case& k : cases) {
@@ -2002,7 +2118,16 @@ void testMetaQSlotMask() {
 
 // Piqued's settings (APP_ENVGEN.ino).
 constexpr int kPqTrigger = 5, kPqDelayMode = 6, kPqLength = 10, kPqFill = 11, kPqOffset = 12;
-constexpr int kPqSegments = kExtraId;  // the envelope page, edited in hardware mode only
+constexpr int kPqType = 0, kPqSeg1 = 1;  // the envelope type; S1..S4, the envelope page's segment values
+
+// The segments an envelope type has on the envelope page (APP_ENVGEN.ino,
+// num_editable_segments): AD, AR (drawn "ASR") and ADL2 two, the others four.
+int piquedSegmentCount(int type) {
+	return type == 0 || type == 3 || type == 6 ? 2 : 4;
+}
+// The firmware's names for them (segment_names), as the envelope page draws
+// the selected one.
+const char* const kPqSegmentNames[4] = { "Attack", "Decay", "Sustain/Level", "Release" };
 
 // Piqued: to the settings page, as a person does (L push on the envelope page).
 void piquedSettingsPage(Core& c) {
@@ -2033,8 +2158,27 @@ void euclidGesture(Core& c, bool length, int target) {
 // editor), and a length from one length to another (the Euclidean editor's
 // length, which pulls fill and offset down with it; the cursor is turned
 // back to the Length row). A length to or from Off is the menu row.
+// A segment value: L push to the envelope page (from the settings page),
+// the R encoder to the segment (all the way back, then forward), R push,
+// the R encoder to the value, R push, and L push back to the settings page.
+void piquedSegmentGesture(Core& b, int segment, int target) {
+	const int ch = CoreTest::selectedChannel(b);
+	if (CoreTest::menuPage(b) == 1)
+		CoreTest::buttonEvent(b, shoal::BUTTON_L, false);
+	CoreTest::encoderEvent(b, shoal::ENCODER_R, -3);
+	CoreTest::encoderEvent(b, shoal::ENCODER_R, segment);
+	CoreTest::buttonEvent(b, shoal::BUTTON_R, false);
+	CoreTest::encoderEvent(b, shoal::ENCODER_R, target - b.setting(ch, kPqSeg1 + segment));
+	CoreTest::buttonEvent(b, shoal::BUTTON_R, false);
+	CoreTest::buttonEvent(b, shoal::BUTTON_L, false);
+}
+
 int piquedGesture(Core& b, const Row& row, int target) {
 	const int ch = CoreTest::selectedChannel(b);
+	if (piquedSegment(kPiqued, row.id)) {
+		piquedSegmentGesture(b, row.id - kPqSeg1, target);
+		return kOffMenu;
+	}
 	piquedSettingsPage(b);
 	if (row.id == kPqFill) {
 		euclidGesture(b, false, target);
@@ -2114,17 +2258,84 @@ void testPiquedEuclidBounds() {
 	CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, 0, kPqFill, 2)), "Piqued: fill taken with the length Off");
 }
 
-// Piqued's two pages: the envelope page (a new core's, the Segments row) and
+// Piqued's segment values: one Number row per segment the envelope type has,
+// named as the envelope page names them, first in the list, edited as the
+// envelope page's gesture; afterwards the app is on its settings page and
+// not editing. Every envelope type, on every tab, against a core driven by
+// events; Focus shows the envelope page with that segment selected.
+void testPiquedSegments() {
+	Pair p(kPiqued);
+	int edits = 0;
+	for (int tab = 0; tab < 4; tab++) {
+		if (tab) {
+			CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, kPiqued, model(p.a).tab, 0, tab)), "Piqued: SelectTab %d dropped", tab);
+			tabGesture(p.b, tab);
+			p.checkSame("select tab", "tab", tab);
+		}
+		for (int type = 10; type >= 0; type--) {
+			// The type through the list on a, the menu on b (settings page).
+			CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, tab, kPqType, type)), "Piqued tab %d: type %d dropped", tab, type);
+			piquedSettingsPage(p.b);
+			listGesture(p.b, kPqType, type);
+			p.checkSame("type", "TYPE", type);
+			const int count = piquedSegmentCount(type);
+			const FriendlyModel m = model(p.a);
+			for (int s = 0; s < 4; s++) {
+				const Row* r = findRow(m, kPqSeg1 + s);
+				if (s >= count) {
+					CHECK(!r, "Piqued tab %d type %d: segment %d listed", tab, type, s + 1);
+					CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, tab, kPqSeg1 + s, 7)), "Piqued tab %d type %d: hidden segment %d taken",
+						tab, type, s + 1);
+					continue;
+				}
+				CHECK(r && r == &m.row[s] && r->kind == RowKind::Number && r->min == 0 && r->max == 255 && std::strcmp(r->label, kPqSegmentNames[s]) == 0
+					&& r->value == p.a.setting(tab, kPqSeg1 + s), "Piqued tab %d type %d: segment %d row", tab, type, s + 1);
+				if (!r)
+					continue;
+				const int target = (37 * (tab + 1) + 23 * type + 61 * s) % 256;
+				CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, tab, r->id, target)), "Piqued tab %d type %d: segment %d dropped",
+					tab, type, s + 1);
+				piquedSegmentGesture(p.b, s, target);
+				CHECK(p.a.setting(tab, kPqSeg1 + s) == target && CoreTest::menuPage(p.a) == 1, "Piqued tab %d type %d segment %d: %d (want %d), page %d",
+					tab, type, s + 1, p.a.setting(tab, kPqSeg1 + s), target, CoreTest::menuPage(p.a));
+				checkSettled(p.a, "segment");
+				p.checkSame("segment", r->label, target);
+				edits++;
+			}
+			// Focus on the last segment: the envelope page, that segment selected.
+			CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, kPiqued, tab, kPqSeg1 + count - 1, 0)), "Piqued tab %d: Focus dropped", tab);
+			CoreTest::buttonEvent(p.b, shoal::BUTTON_L, false);
+			CoreTest::encoderEvent(p.b, shoal::ENCODER_R, -3);
+			CoreTest::encoderEvent(p.b, shoal::ENCODER_R, count - 1);
+			const FriendlyModel f = model(p.a);
+			const Row* r = findRow(f, kPqSeg1 + count - 1);
+			CHECK(CoreTest::menuPage(p.a) == 0 && r && (r->flags & (shoal::kRowCursor | shoal::kRowEditing)) == shoal::kRowCursor,
+				"Piqued tab %d type %d: Focus on segment %d: page %d", tab, type, count, CoreTest::menuPage(p.a));
+			checkSettled(p.a, "segment focus");
+			p.checkSame("focus", "segment", count);
+			// A segment edit from the envelope page ends on the settings page too.
+			CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, tab, kPqSeg1, 200 - type)), "Piqued tab %d: segment 1 dropped", tab);
+			piquedSegmentGesture(p.b, 0, 200 - type);
+			CHECK(CoreTest::menuPage(p.a) == 1 && p.a.setting(tab, kPqSeg1) == 200 - type, "Piqued tab %d: from the envelope page: page %d",
+				tab, CoreTest::menuPage(p.a));
+			checkSettled(p.a, "segment from the envelope page");
+			p.checkSame("from the envelope page", "segment 1", 200 - type);
+		}
+	}
+	CHECK(edits == 4 * (3 * 2 + 8 * 4), "Piqued: %d segment edits", edits);
+	CHECK(runTogether(p.a, p.b, p.rng, 2000), "Piqued: outputs differ after the segment edits");
+}
+
+// Piqued's two pages: the envelope page (a new core's, the segment rows) and
 // the settings page. An edit on a settings row switches page as L push does;
 // segment editing (R push on the envelope page) makes the list busy.
 void testPiquedPages() {
 	Pair p(kPiqued);
 	{
 		const FriendlyModel m = model(p.a);
-		const Row* seg = findRow(m, kPqSegments);
-		CHECK(CoreTest::menuPage(p.a) == 0 && seg && seg->kind == RowKind::SubEditor && (seg->flags & shoal::kRowCursor) && m.row[0].id == kPqSegments,
-			"Piqued: a new core is not on the envelope page with the Segments row first");
-		CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, 0, kPqSegments, 1)), "Piqued: SetValue on Segments taken");
+		const Row* seg = findRow(m, kPqSeg1);
+		CHECK(CoreTest::menuPage(p.a) == 0 && seg && seg->kind == RowKind::Number && (seg->flags & shoal::kRowCursor) && m.row[0].id == kPqSeg1,
+			"Piqued: a new core is not on the envelope page with the first segment's row first and under the cursor");
 	}
 	// From the envelope page: SetValue switches page (L push) and edits.
 	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, 0, 26, 3)), "Piqued: Attack mult dropped on the envelope page");
@@ -2132,9 +2343,11 @@ void testPiquedPages() {
 	listGesture(p.b, 26, 3);
 	CHECK(CoreTest::menuPage(p.a) == 1 && p.a.setting(0, 26) == 3, "Piqued: page %d, Attack mult %d", CoreTest::menuPage(p.a), p.a.setting(0, 26));
 	p.checkSame("from the envelope page", "Attack mult", 3);
-	// Focus on Segments: back to the envelope page, as L push; on a settings row: to it.
-	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, kPiqued, 0, kPqSegments, 0)), "Piqued: Focus on Segments dropped");
+	// Focus on a segment: back to the envelope page, as L push, and the R
+	// encoder to the segment; on a settings row: to it.
+	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, kPiqued, 0, kPqSeg1 + 1, 0)), "Piqued: Focus on Decay dropped");
 	CoreTest::buttonEvent(p.b, shoal::BUTTON_L, false);
+	CoreTest::encoderEvent(p.b, shoal::ENCODER_R, 1);
 	CHECK(CoreTest::menuPage(p.a) == 0, "Piqued: Focus on Segments left page %d", CoreTest::menuPage(p.a));
 	p.checkSame("focus", "Segments", 0);
 	CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, kPiqued, 0, 30, 0)), "Piqued: Focus on Sampled Ampl dropped");
@@ -2179,12 +2392,12 @@ void testPiquedPages() {
 	CoreTest::buttonEvent(p.a, shoal::BUTTON_R, false);
 	const Snapshot before = snapshot(p.a);
 	const FriendlyModel busy = model(p.a);
-	const Row* seg = findRow(busy, kPqSegments);
+	const Row* seg = findRow(busy, kPqSeg1 + 1);  // Decay, selected by the Focus above
 	CHECK((busy.flags & shoal::kModelBusy) && !CoreTest::friendlyAccepting(p.a) && seg
 		&& (seg->flags & (shoal::kRowCursor | shoal::kRowEditing)) == (shoal::kRowCursor | shoal::kRowEditing),
 		"Piqued segment editing: flags %d", busy.flags);
 	CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kPiqued, 2, 26, 1)), "Piqued segment editing: SetValue taken");
-	CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, kPiqued, 2, kPqSegments, 0)), "Piqued segment editing: Focus taken");
+	CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, kPiqued, 2, kPqSeg1, 0)), "Piqued segment editing: Focus taken");
 	CHECK(!p.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, kPiqued, 2, 0, 1)), "Piqued segment editing: SelectTab taken");
 	CHECK(sameSnapshot(before, snapshot(p.a)) && CoreTest::menuPage(p.a) == 0, "Piqued segment editing: a dropped edit changed the app");
 	CoreTest::buttonEvent(p.a, shoal::BUTTON_R, false);
@@ -2404,7 +2617,7 @@ void testSequinsMask() {
 					const int id = kSqMask1 + seq;
 					const FriendlyModel m = model(p.a);
 					const Row* r = findRow(m, id);
-					CHECK(r && r->kind == RowKind::Mask && r->max == length && r->value == p.a.setting(tab, id) && std::strcmp(r->label, "--> edit") == 0,
+					CHECK(r && r->kind == RowKind::Mask && r->max == length && r->value == p.a.setting(tab, id) && std::strcmp(r->label, "Steps") == 0,
 						"Sequins tab %d seq %d: mask row of %d cells (want %d)", tab, seq, r ? (int) r->max : -1, length);
 					for (int other = 0; other < 4; other++)
 						CHECK(other == seq || !findRow(m, kSqMask1 + other), "Sequins tab %d: sequence %d's mask row listed", tab, other + 1);
@@ -2694,8 +2907,7 @@ void testFocusPagedApps() {
 				continue;
 			}
 			if (row.id >= kExtraId || outsideMenu(app, row.id)) {
-				if (!(app == kPiqued && row.id == kPqSegments))
-					CHECK(CoreTest::menuPage(c) == page && CoreTest::menuSetting(c) == before, "%s: Focus on '%s' moved the cursor", an, row.label);
+				CHECK(CoreTest::menuPage(c) == page && CoreTest::menuSetting(c) == before, "%s: Focus on '%s' moved the cursor", an, row.label);
 				continue;
 			}
 			CHECK(CoreTest::menuSetting(c) == row.id && !CoreTest::menuEditing(c), "%s: Focus on '%s': cursor on %d (page %d)", an, row.label,
@@ -2822,6 +3034,7 @@ int main() {
 	testTabsFollowFirmware();
 	testVisibilityFollows();
 	testActions();
+	testConfirmRows();
 	testSubEditorsBusy();
 	testReferencesAfterRestore();
 	testFocusNewApps();
@@ -2840,6 +3053,7 @@ int main() {
 	testMetaQSlotMask();
 	testPiquedEquivalence();
 	testPiquedEuclidBounds();
+	testPiquedSegments();
 	testPiquedPages();
 	testSequinsEquivalence();
 	testSequinsMask();

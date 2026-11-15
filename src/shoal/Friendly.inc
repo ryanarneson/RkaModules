@@ -34,15 +34,15 @@ constexpr int kExtraId = 256;    // ids of extra rows start here (Row::id)
 constexpr int kHeadingId = 512;  // ids of headings start here
 
 // A settings table's name array that is shorter than the setting's range:
-// `count` names. With `names` given, the row's names are that array's first
-// `count` entries instead of the table's (a firmware array that names the
-// whole range); static storage.
+// `count` names from the minimum on. With `names` given, the row's names
+// are that array's instead of the table's (a firmware array that names the
+// whole range), indexed by value as the table's are; static storage.
 struct NameCount {
 	int16_t setting, count;
 	const char* const* names;
 };
 // A label in place of the settings table's, allowed where the table's name
-// is a one- or two-letter abbreviation.
+// is a one- or two-letter abbreviation or an arrow to an editor ("--> edit").
 struct Label { int16_t setting; const char* text; };
 
 // One app's adapter. Every function runs with the core's Context current and
@@ -202,14 +202,18 @@ inline Row& addSettingRow(FriendlyModel& m, int setting, const settings::value_a
 	r.max = attr.max_;
 	r.def = attr.default_;
 	if (kind == RowKind::Choice) {
-		r.names = attr.value_names;
+		// The firmware names value v value_names[v] (OC_menus.h,
+		// SettingsListItem::DrawDefault), whatever the minimum; the row
+		// reads names[v - min]. No named setting has a minimum below 0.
+		const char* const* names = attr.value_names;
 		int count = attr.max_ - attr.min_ + 1;
 		for (int i = 0; i < a.numNameCounts; i++)
 			if (a.nameCounts[i].setting == setting) {
 				count = a.nameCounts[i].count;
 				if (a.nameCounts[i].names)
-					r.names = a.nameCounts[i].names;
+					names = a.nameCounts[i].names;
 			}
+		r.names = names + attr.min_;
 		r.nameCount = (int16_t) count;
 		if (value - attr.min_ >= count)
 			setNumberText(r);

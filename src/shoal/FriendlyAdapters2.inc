@@ -142,7 +142,10 @@ bool edit(const FriendlyEdit& e, const Row& row) {
 	return menuEdit(e, row, cursor, menuRow);
 }
 
-constexpr Adapter kAdapter = { &header, &rows, &selectTab, &edit, &accepting, nullptr, 0, nullptr, 0 };
+// The table's "--> autotune" opens the DAC autotuner.
+constexpr Label kLabels[] = { { REF_SETTING_AUTOTUNE, "Autotune" } };
+
+constexpr Adapter kAdapter = { &header, &rows, &selectTab, &edit, &accepting, nullptr, 0, kLabels, 1 };
 
 } // namespace references
 
@@ -154,7 +157,7 @@ constexpr Adapter kAdapter = { &header, &rows, &selectTab, &edit, &accepting, nu
 // mode_change(true) after a Root mode edit, so replaying the gesture does
 // both. The L encoder (Inversion) and UP/DOWN (Octave +-1) are shortcuts to
 // rows; L push switches the title bar between note names and numbers (a
-// view toggle, followed by the status). Extra row: Reset (L long press:
+// view toggle, followed by the status). Extra row: "Reset all settings" (L long press:
 // every setting to its default and a chord reset; the firmware does not
 // rebuild its menu then, so the list keeps whatever rows it had). No
 // sub-editor.
@@ -181,7 +184,9 @@ void header(FriendlyModel& m) {
 
 void rows(FriendlyModel& m, int) {
 	addEnabled(m, h1200_settings, &h1200_state.cursor);
-	addExtra(m, RowKind::Action, kReset, "Reset");  // L long press
+	// L long press: every setting to its default (InitDefaults) and a chord
+	// reset, so the list asks first.
+	addExtra(m, RowKind::Action, kReset, "Reset all settings").flags |= kRowConfirm;
 }
 
 bool edit(const FriendlyEdit& e, const Row& row) {
@@ -254,7 +259,7 @@ void rows(FriendlyModel& m, int) {
 	}
 	addExtra(m, RowKind::Action, kReset, "Reset");          // UP
 	addExtra(m, RowKind::Action, kClock, "Clock");          // DOWN
-	addExtra(m, RowKind::Action, kClearGrid, "Clear grid"); // L long press
+	addExtra(m, RowKind::Action, kClearGrid, "Clear grid").flags |= kRowConfirm;  // L long press: all 25 cells
 	addExtra(m, RowKind::SubEditor, kCells, "Cells");       // L push, L encoder
 }
 
