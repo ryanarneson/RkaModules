@@ -32,7 +32,10 @@ layout.
   gtimeout fallback, `readlink -f`), and check `uname -s` before using a
   platform path.
 - Before calling a change done: `make test`, `make`, `make smoke`, and look
-  at `build/screenshots/*.png` for panel changes.
+  at `build/screenshots/*.png` for panel changes. `TESTING.md` has the
+  testing rules every module follows (a test must be shown to fail,
+  independent-path comparisons, sanitizers, golden saved state, no
+  allocation on the audio path, Linux and Windows builds before merge).
 - Panels come from `tools/gen_panels.py`; never hand-edit `res/`, `res-src/`
   or `src/<folder>/*Layout.hpp`. `make panels` regenerates
   all three.
