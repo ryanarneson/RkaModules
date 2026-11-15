@@ -33,3 +33,4 @@
 - "Nightglow" look shared by all modules: navy panels, glowing cards,
   colour-coded outputs, white knobs, and the plugin's own small
   attenuverter trim; panels can carry glowing rings.
+- Shoal: firmware core (no module yet).

@@ -4,7 +4,7 @@ RACK_DIR ?= ../..
 # One folder per module: code and test_*.cpp tests in src/<module>/,
 # panels in res/<module>/ (generated from res-src/<module>/). src/ itself
 # has the shared plugin entry point and widgets.
-MODULES = sway fathom
+MODULES = sway fathom shoal
 
 # FLAGS will be passed to both the C and C++ compiler
 FLAGS += -Isrc
@@ -42,16 +42,19 @@ panels:
 		$(INKSCAPE) "$$f" --export-text-to-path --export-plain-svg --export-filename="$$out/$$(basename $$f)" || exit 1; \
 	done
 
-# Offline unit tests of the DSP core; no Rack or libRack needed.
-# Each src/<module>/test_*.cpp builds to build/test/<module>/test_*.
-TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_*.cpp)))
-.PHONY: test
-test: $(TEST_BINS)
-	@for t in $(TEST_BINS); do ./$$t || exit 1; done
+# Offline unit tests (`make test`) and the Shoal test flags; tests.mk also
+# runs on its own, without the Rack SDK (CI does).
+include tests.mk
 
-build/test/%: src/%.cpp $(wildcard src/*.hpp $(MODULES:%=src/%/*.hpp))
-	@mkdir -p $(@D)
-	$(CXX) -std=c++17 -O2 -Wall -Wextra -Isrc -I$(<D) $< -o $@
+# Firmware.cpp is C++17 inside a C++11 plugin. compile.mk puts -std=c++11 in
+# CXXFLAGS and then appends $(FLAGS), so FLAGS (not CXXFLAGS) lands last.
+build/src/shoal/Firmware.cpp.o: FLAGS += $(SHOAL_FW_FLAGS)
+
+.PHONY: shoal-bench
+shoal-bench:
+	@mkdir -p build/test/shoal
+	$(CXX) $(SHOAL_FW_FLAGS) -O2 -Isrc src/shoal/bench/bench_core.cpp src/shoal/Firmware.cpp -o build/test/shoal/bench_core
+	build/test/shoal/bench_core
 
 # Load the installed plugin in a real (headless) Rack and render module
 # screenshots. See tools/rack_smoke.sh.
