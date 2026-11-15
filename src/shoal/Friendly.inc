@@ -20,6 +20,8 @@
 //   models and edits run on the engine thread, and all state is the
 //   firmware's, in the current Context.
 
+#include <cstring>   // std::memcpy (FriendlyAdapters4.inc)
+
 #include "Friendly.hpp"
 
 namespace shoal {
