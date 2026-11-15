@@ -199,6 +199,7 @@ _SH_L, _SH_R = (103.0, 33.0), (126.5, 43.0)
 _SH_PUSH = 16.5                                  # each push button from its encoder's centre
 _SH_TRIG, _SH_CV, _SH_OUT = 100.0, 111.6, 131.4  # the jack field's columns
 _SH_ROWS = [round(80.0 + 10.4 * i, 1) for i in range(4)]
+_SH_LIGHT = 5.8                                  # each jack's light, right of a TRIG jack, left of an output
 
 
 def _shoal_push(encoder, deg):
@@ -281,8 +282,8 @@ PANELS = {
         + [("output", "SUBOUT", _FA_X[0], 116.0, "SUB"),
            ("output", "LEFT", _FA_X[3], 116.0, "L"),
            ("output", "RIGHT", _FA_X[4], 116.0, "R")],
-        # The smaller main dial: its 13.4 mm face is the mockup's, and the
-        # hero knob would leave the scale no room on it.
+        # The smaller main dial: on its 13.0 mm face (the mockup's is 13.4)
+        # the hero knob would leave the scale no room.
         sizes={"PARAM_PITCH": "dial", "PARAM_CUTOFF": "face"},
         origins=[_FA_O],
         circles=[(*_FA_O, r) for r in (_FA_FILTER, _FA_ATT, 72, 86, 100)],
@@ -336,9 +337,9 @@ PANELS = {
             ("param", "UI_MODE", 121.5, 65.0, "UI MODE"),
         ]
         + [("input", f"TR{i + 1}", _SH_TRIG, y, None) for i, y in enumerate(_SH_ROWS)]
-        + [("light", f"TR{i + 1}", _SH_TRIG + 5.8, y, None) for i, y in enumerate(_SH_ROWS)]
+        + [("light", f"TR{i + 1}", round(_SH_TRIG + _SH_LIGHT, 2), y, None) for i, y in enumerate(_SH_ROWS)]
         + [("input", f"CV{i + 1}", _SH_CV, y, None) for i, y in enumerate(_SH_ROWS)]
-        + [("light", n, _SH_OUT - 5.8, y, None) for n, y in zip("ABCD", _SH_ROWS)]
+        + [("light", n, round(_SH_OUT - _SH_LIGHT, 2), y, None) for n, y in zip("ABCD", _SH_ROWS)]
         + [("output", n, _SH_OUT, y, n) for n, y in zip("ABCD", _SH_ROWS)],
         sizes={f"PARAM_{n}": "cap" for n in ("ENC_L_PUSH", "ENC_R_PUSH", "UP", "DOWN", "UI_MODE")},
         circles=[(*src, r) for src in (_SH_L, _SH_R) for r in range(16, 160, 10)],
@@ -348,8 +349,9 @@ PANELS = {
                     name_at=(-8.6, 0.75), name_size=2.1) for n in "ABCD"],
         traces=[["PARAM_ENC_L_PUSH", "WIDGET_ENC_L"], ["PARAM_ENC_R_PUSH", "WIDGET_ENC_R"]],
         # name, x, y, w, h in mm; the module draws in exactly these. 128 x 64
-        # firmware pixels at 0.65 mm for the scope and the editor.
-        screens=[("STRIP", 4.0, 20.0, 83.2, 5.0),
+        # firmware pixels at 0.65 mm for the scope and the editor. The strip
+        # stands clear of the scope, so their bezels stay two bars.
+        screens=[("STRIP", 4.0, 19.2, 83.2, 5.0),
                  ("SCOPE", 4.0, 25.5, 83.2, 41.6),
                  ("EDITOR", 4.0, 71.0, 83.2, 41.6)],
         rulers={"SCOPE": dict(px=0.65, sides="lb"),
@@ -359,7 +361,7 @@ PANELS = {
         label_colour={f"PARAM_{n}": "dim" for n in ("ENC_L_PUSH", "ENC_R_PUSH", "UP", "DOWN", "UI_MODE")},
         # Channel letters over the strip's four cells; column heads and row
         # numbers for the jack field.
-        notes=[(4.0 + 83.2 * (ch + 0.5) / 4, 18.7, n, 2.0, "dim") for ch, n in enumerate("ABCD")]
+        notes=[(4.0 + 83.2 * (ch + 0.5) / 4, 17.9, n, 2.0, "dim") for ch, n in enumerate("ABCD")]
         + [(_SH_TRIG, 72.6, "TRIG", 2.0, "ivory"), (_SH_CV, 72.6, "CV", 2.0, "ivory"),
            (_SH_OUT, 72.6, "OUT", 2.0, "ivory")]
         + [(93.2, y + 0.7, str(i + 1), 2.0, "dim") for i, y in enumerate(_SH_ROWS)],
@@ -588,10 +590,18 @@ def check_clearance(name, spec):
 
 
 def check_screens(name, spec):
-    """Fail if a screen leaves the panel or a component comes within
-    CLEARANCE of one."""
+    """Fail if a screen leaves the panel, a component comes within CLEARANCE
+    of one, or two screens' bezels (with their rulers) come within CLEARANCE
+    of each other: side by side they would read as one heavy bar."""
     w = spec["hp"] * HP
-    for sname, sx, sy, sw, sh in spec.get("screens", []):
+    screens = spec.get("screens", [])
+    if is_instrument(spec):
+        for i, a in enumerate(screens):
+            for b in screens[i + 1:]:
+                if rect_distance(screen_keepout(spec, a), screen_keepout(spec, b)) < CLEARANCE:
+                    sys.exit(f"{name}: the bezels of SCREEN_{a[0]} and SCREEN_{b[0]} touch "
+                             f"(need {CLEARANCE} mm between them)")
+    for sname, sx, sy, sw, sh in screens:
         if sx < 0 or sy < 0 or sx + sw > w or sy + sh > PANEL_H:
             sys.exit(f"{name}: screen SCREEN_{sname} is outside the panel")
         x0, y0, x1, y1 = sx, sy, sx + sw, sy + sh

@@ -50,7 +50,7 @@
 <circle cx="111.6" cy="90.4" r="4.3" fill="#15171c"/>
 <circle cx="111.6" cy="100.8" r="4.3" fill="#15171c"/>
 <circle cx="111.6" cy="111.2" r="4.3" fill="#15171c"/>
-<rect x="3.775" y="19.775" width="83.65" height="5.45" rx="0.8" fill="#05080c" stroke="#c9a46a" stroke-width="0.45"/>
+<rect x="3.775" y="18.975" width="83.65" height="5.45" rx="0.8" fill="#05080c" stroke="#c9a46a" stroke-width="0.45"/>
 <rect x="3.775" y="25.275" width="83.65" height="42.05" rx="0.8" fill="#05080c" stroke="#c9a46a" stroke-width="0.45"/>
 <path d="M9.2 67.95L9.2 68.55 M14.4 67.95L14.4 68.55 M19.6 67.95L19.6 68.55 M30 67.95L30 68.55 M35.2 67.95L35.2 68.55 M40.4 67.95L40.4 68.55 M50.8 67.95L50.8 68.55 M56 67.95L56 68.55 M61.2 67.95L61.2 68.55 M71.6 67.95L71.6 68.55 M76.8 67.95L76.8 68.55 M82 67.95L82 68.55 M3.15 30.7L2.55 30.7 M3.15 35.9L2.55 35.9 M3.15 41.1L2.55 41.1 M3.15 51.5L2.55 51.5 M3.15 56.7L2.55 56.7 M3.15 61.9L2.55 61.9" fill="none" stroke="#c9a46a" stroke-width="0.15"/>
 <path d="M4 67.95L4 69.25 M24.8 67.95L24.8 69.25 M45.6 67.95L45.6 69.25 M66.4 67.95L66.4 69.25 M87.2 67.95L87.2 69.25 M3.15 25.5L1.85 25.5 M3.15 46.3L1.85 46.3 M3.15 67.1L1.85 67.1" fill="none" stroke="#c9a46a" stroke-width="0.25"/>
@@ -78,10 +78,10 @@
 <text x="122.93" y="91.15" font-family="D-DIN Condensed" font-size="2.1" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">B</text>
 <text x="122.93" y="101.55" font-family="D-DIN Condensed" font-size="2.1" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">C</text>
 <text x="122.93" y="111.95" font-family="D-DIN Condensed" font-size="2.1" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">D</text>
-<text x="14.53" y="18.70" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">A</text>
-<text x="35.33" y="18.70" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">B</text>
-<text x="56.12" y="18.70" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">C</text>
-<text x="76.92" y="18.70" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">D</text>
+<text x="14.53" y="17.90" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">A</text>
+<text x="35.33" y="17.90" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">B</text>
+<text x="56.12" y="17.90" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">C</text>
+<text x="76.92" y="17.90" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">D</text>
 <text x="100.12" y="72.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">TRIG</text>
 <text x="111.72" y="72.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">CV</text>
 <text x="131.53" y="72.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">OUT</text>
@@ -115,10 +115,10 @@
 <circle id="input-CV2" cx="111.6" cy="90.4" r="1" fill="#00ff00"/>
 <circle id="input-CV3" cx="111.6" cy="100.8" r="1" fill="#00ff00"/>
 <circle id="input-CV4" cx="111.6" cy="111.2" r="1" fill="#00ff00"/>
-<circle id="light-A" cx="125.60000000000001" cy="80.0" r="1" fill="#ff00ff"/>
-<circle id="light-B" cx="125.60000000000001" cy="90.4" r="1" fill="#ff00ff"/>
-<circle id="light-C" cx="125.60000000000001" cy="100.8" r="1" fill="#ff00ff"/>
-<circle id="light-D" cx="125.60000000000001" cy="111.2" r="1" fill="#ff00ff"/>
+<circle id="light-A" cx="125.6" cy="80.0" r="1" fill="#ff00ff"/>
+<circle id="light-B" cx="125.6" cy="90.4" r="1" fill="#ff00ff"/>
+<circle id="light-C" cx="125.6" cy="100.8" r="1" fill="#ff00ff"/>
+<circle id="light-D" cx="125.6" cy="111.2" r="1" fill="#ff00ff"/>
 <circle id="output-A" cx="131.4" cy="80.0" r="1" fill="#0000ff"/>
 <circle id="output-B" cx="131.4" cy="90.4" r="1" fill="#0000ff"/>
 <circle id="output-C" cx="131.4" cy="100.8" r="1" fill="#0000ff"/>

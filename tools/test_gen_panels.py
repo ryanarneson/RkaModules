@@ -528,6 +528,23 @@ class Areas(unittest.TestCase):
         self.assertIn("PARAM_R", msg)
         self.assertIn("SCREEN_S", msg)
 
+    def test_screens_whose_bezels_touch_fail(self):
+        # Two bezels side by side would read as one heavy brass bar.
+        def pair(gap):
+            top = ("A", 10.0, 20.0, 40.0, 5.0)
+            y = 20.0 + 5.0 + 2 * g.SCREEN_BEZEL + gap
+            return spec(screens=[top, ("B", 10.0, y, 40.0, 10.0)])
+        g.check_panel("T", pair(g.CLEARANCE + 0.01))
+        for gap in (-0.4, 0.0, g.CLEARANCE - 0.01):
+            msg = failure(self, "T", pair(gap))
+            for part in ("SCREEN_A", "SCREEN_B", "bezel"):
+                self.assertIn(part, msg)
+        # Side by side, and counting a ruler as part of its screen.
+        g.check_panel("T", spec(screens=[("A", 10.0, 20.0, 10.0, 10.0), ("B", 22.0, 20.0, 10.0, 10.0)]))
+        msg = failure(self, "T", spec(screens=[("A", 10.0, 20.0, 10.0, 10.0), ("B", 22.0, 20.0, 10.0, 10.0)],
+                                      rulers={"B": dict(px=0.65, sides="l")}))
+        self.assertIn("SCREEN_B", msg)
+
     def test_tile_over_a_screen_fails(self):
         def tiled(y):
             return spec(components=[("output", "X", 30.0, y, "X")], tiles=[dict(port="OUTPUT_X")],
@@ -682,7 +699,7 @@ class Artwork(unittest.TestCase):
         self.assertEqual([major for _, major in g.face_ticks(face)], [False] * 24)
 
     def test_fathoms_pitch_scale_is_as_long_as_sways(self):
-        # On the dial-size knob the 13.4 mm face holds the default scale:
+        # On the dial-size knob the 13.0 mm face holds the default scale:
         # the same tick lengths and numeral size as Sway's Rate.
         pitch, rate = g.PANELS["Fathom"]["faces"]["PARAM_PITCH"], g.PANELS["Sway"]["faces"]["PARAM_RATE"]
         self.assertEqual(g.component_size(g.PANELS["Fathom"], "Fathom", "param", "PITCH"), "dial")
@@ -861,6 +878,12 @@ class Committed(unittest.TestCase):
             self.assertEqual(len(re.findall(rf"NVGcolor {const} = ", hpp)), 1, const)
             self.assertEqual(len(re.findall(rf"NVGcolor {const}_DARK = ", hpp)), 1, const)
         self.assertIn("static const NVGcolor BRASS = nvgRGB(0xc9, 0xa4, 0x6a);", hpp)
+
+    def test_layout_headers_carry_no_float_noise(self):
+        # A position is a few decimals of a millimetre, never 125.60000000000001.
+        for name, s in g.PANELS.items():
+            for value in re.findall(r"([-\d.]+)f\b", g.layout_hpp(name, s)):
+                self.assertLessEqual(len(value.partition(".")[2]), 3, f"{name}: {value}")
 
     def test_component_artwork_is_current(self):
         files = g.component_files()

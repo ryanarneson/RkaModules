@@ -30,7 +30,10 @@ Shoal is drawn as ripples from two sources: the two encoders are the
 sources, set at different heights, and the faint circles spreading from
 each cross the whole panel.
 
-- The three screens are on the left; everything on them is drawn in cyan.
+- The three screens are on the left. What the firmware draws on them is
+  cyan; the friendly-mode list adds brass and ivory where it points at
+  hardware mode (the "hardware editor open" banner, the "edit in
+  hardware mode" rows) and for the bar of a value being edited.
 - **ENCODER L** and **ENCODER R** each sit on a dial ticked once per
   detent. They have no pointer, since they turn without end; the knurled
   rim moves as you turn. Each encoder's **PUSH** button is beside it,
