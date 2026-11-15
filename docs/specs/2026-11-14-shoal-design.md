@@ -1,6 +1,7 @@
 # Shoal: design
 
-Date: 2026-11-14. Status: approved 2026-11-14.
+Date: 2026-11-14. Status: approved 2026-11-14. Stages 1 to 3 are done
+(stage 3, friendly mode, on 2026-11-15); stage 4 is next.
 
 Shoal is an emulation of the Ornament & Crime (o_C) eurorack module for
 VCV Rack: four trigger inputs, four CV inputs, four CV outputs, a small
@@ -505,7 +506,8 @@ Each stage is usable on its own and gets its own implementation plan.
 2. **Shoal in hardware mode.** Panel, jacks, both screens, encoders and
    buttons, saving. At this point the module is usable for patching with
    the manual open.
-3. **Friendly mode.** Adapters, settings list, app picker, channel tabs,
+3. **Friendly mode** (done 2026-11-15,
+   `docs/plans/2026-11-15-shoal-friendly-mode.md`). Adapters, settings list, app picker, channel tabs,
    note masks, the equivalence tests.
 4. **Finish.** Right-click menu, the References meters, manual in
    `docs/shoal/`, README and changelog entries, CPU check.
@@ -595,8 +597,36 @@ Do in stage 2:
 
 Do in stage 3:
 
-- `setSettingRaw` returns true when the value is unchanged.
-- Check the settings enum coverage against the firmware menus.
+- `setSettingRaw` returns true when the value is unchanged. Still open:
+  friendly mode does not use `setSettingRaw` (its edits replay the app's
+  handlers), so nothing in stage 3 needed it; decide in stage 4.
+- **Done (stage 3)** Check the settings enum coverage against the
+  firmware menus: every app's equivalence test in `test_friendly.cpp`
+  checks that the list's setting rows are the firmware's menu, in its
+  order (`rowsAreMenu`).
+
+Left open by stage 3 (friendly mode):
+
+- Mouse versions of the sub-editors: user scale notes, Sequins steps,
+  Acid Curds chords, Piqued segments, Automatonnetz cells (and the
+  References autotuner). They are reached from the list and edited in
+  hardware mode.
+- Stage 4 as planned: the right-click menu, the References meters and
+  the full manual (`docs/shoal/README.md` covers friendly mode, not each
+  app).
+- A panel button held at the moment a friendly edit has to recover the
+  app's menu (the RESUME sequence) loses its press: `scale_editor.Close`
+  sets the button ignore mask. Inherent to RESUME; rare.
+- No mouse gesture on the list (drags, double click, menus, wheel,
+  scrollbar, mask painting, UI MODE and its undo) had been tried in a
+  live Rack when stage 3 closed: the offline tests cover the geometry and
+  bookkeeping, the screenshots the drawing. The user's checks at the end
+  of `docs/plans/2026-11-15-shoal-friendly-mode.md` are the first.
+- Firmware behaviour friendly mode shows as the hardware has it, noted in
+  the manual's "Good to know": References "Mod range oct" loses negative
+  values on save; Harrington 1200's Euclidean rows stay hidden after a
+  patch saved with Trigger type Eucl loads; Quantermain's "Copy scale to
+  other channels" leaves a channel's list stale until an edit rebuilds it.
 
 Before any public release:
 

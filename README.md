@@ -6,7 +6,7 @@ VCV Rack 2 modules.
 |---|---|---|
 | [**Sway**](docs/sway/README.md) | 18 | Polyphonic LFO: classic and morphing waves, random, EOC, clock sync, phase spread, one-shot |
 | [**Fathom**](docs/fathom/README.md) | 10 | Deep bass drone voice: sub sine, 7-saw supersaw, drift, ladder filter |
-| [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware |
+| [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware, with a mouse-driven settings list |
 
 Each module's manual is in its own folder.
 
@@ -38,6 +38,8 @@ src/fathom/              the Fathom drone voice, same shape: Fathom.cpp,
                          FathomLayout.hpp
 src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   Shoal.cpp              module and widget, mapped onto shoal::Host
+  FriendlyList.hpp       the friendly-mode list widget on the lower screen
+  ListLayout.hpp         the list's geometry, hit testing and gesture bookkeeping (Rack-free)
   Host.hpp               shoal::Host: one Core driven from the audio engine
   Core.hpp               shoal::Core, the firmware's only public header
   PatchState.hpp         the patch data's decode rules (version, length, range)
@@ -46,7 +48,7 @@ src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   Friendly.hpp           friendly mode's row model and edits (FriendlyModel, FriendlyEdit)
   SettingsAccess.inc     raw settings table for every app
   Friendly.inc           friendly mode's framework: helpers, the table of adapters, the edit checks
-  FriendlyAdapters<n>.inc  the per-app adapters, a file per group of apps (1: Quadraturia, Low-rents; 2: Harrington 1200, Automatonnetz, Dialectic Ping Pong, Viznutcracker sweet, References; 3: CopierMaschine, Quantermain, Meta-Q)
+  FriendlyAdapters<n>.inc  the per-app adapters, a file per group of apps (1: Quadraturia, Low-rents; 2: Harrington 1200, Automatonnetz, Dialectic Ping Pong, Viznutcracker sweet, References; 3: CopierMaschine, Quantermain, Meta-Q; 4: Piqued, Sequins, Acid Curds)
   CoreImpl.inc           shoal::Core's implementation
   CoreTest.hpp           test-only hooks into the core
   test_util.hpp          helpers shared by the Shoal tests
@@ -102,6 +104,7 @@ blur, so glows are a faint wide stroke under a thin bright one. Use the
 widgets in `src/widgets.hpp` (`rka::BigKnob`, `rka::MidKnob`,
 `rka::SmallKnob`, `rka::Trim`, `rka::CyanMagentaLight`, and for Shoal
 `rka::HoldButton`, a momentary button that shift-click latches,
+`rka::LatchButton`, a click-to-toggle switch in the same shape,
 `rka::Encoder`, an endless encoder turned by drag or scroll wheel, and
 `rka::PixelScreen`, a 128x64 1-bit frame drawn in one accent) rather than
 stock ones so modules match. `rka::Trim` is the plugin's own 4.6 mm
