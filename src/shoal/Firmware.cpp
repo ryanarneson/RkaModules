@@ -64,5 +64,8 @@
 // Per-instance firmware state.
 #include "FirmwareContext.inc"
 
+// Raw settings access for every app.
+#include "SettingsAccess.inc"
+
 // shoal::Core.
 #include "CoreImpl.inc"

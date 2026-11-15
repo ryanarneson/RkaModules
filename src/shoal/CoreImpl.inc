@@ -271,34 +271,10 @@ bool Core::appMenuOpen() const {
 }
 
 int Core::channels() const {
-	// Task 6
-	return 0;
+	Scope scope(impl_->ctx.get());
+	const AppSettings* a = currentAppSettings();
+	return a ? a->channels : 0;
 }
-
-// Settings access per app. Only CopierMaschine (app 0, one settings object)
-// is filled in so far; Task 6 adds the other apps (and the channel argument).
-namespace {
-struct AppSettings {
-	int count;                                          // settings per channel
-	const settings::value_attr& (*attr)(size_t index);  // the app's SETTINGS_DECLARE table
-	int (*get)(int channel, int index);
-};
-
-int asrGet(int, int index) {
-	return asr.get_value(index);
-}
-
-constexpr AppSettings kAppSettings[] = {
-	{ ASR_SETTING_LAST, &ASR::value_attr, &asrGet },
-};
-
-// The current app's entry, or null where Task 6 has not added it yet.
-const AppSettings* currentAppSettings() {
-	const int app = OC::apps::index_of(OC::global_settings.current_app_id);
-	const int n = (int) (sizeof(kAppSettings) / sizeof(kAppSettings[0]));
-	return app >= 0 && app < n ? &kAppSettings[app] : nullptr;
-}
-} // namespace
 
 int Core::settingCount() const {
 	Scope scope(impl_->ctx.get());
@@ -318,14 +294,17 @@ SettingInfo Core::settingInfo(int index) const {
 int Core::setting(int channel, int index) const {
 	Scope scope(impl_->ctx.get());
 	const AppSettings* a = currentAppSettings();
-	if (!a || index < 0 || index >= a->count)
+	if (!a || channel < 0 || channel >= a->channels || index < 0 || index >= a->count)
 		return 0;
 	return a->get(channel, index);
 }
 
-bool Core::setSettingRaw(int, int, int) {
-	// Task 6
-	return false;
+bool Core::setSettingRaw(int channel, int index, int value) {
+	Scope scope(impl_->ctx.get());
+	const AppSettings* a = currentAppSettings();
+	if (!a || channel < 0 || channel >= a->channels || index < 0 || index >= a->count)
+		return false;
+	return a->set(channel, index, value);
 }
 
 void Core::save(uint8_t* out) {
