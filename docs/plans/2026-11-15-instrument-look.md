@@ -36,7 +36,7 @@ The spec leaves these open; each is the planner's call and is listed for the own
 
 1. **All three modules on one branch, one pull request.** The owner asked for the three to be rebuilt together, so nothing ships in a mixed state. The version stays 2.0.0 (unreleased); the changelog entries are edited in place.
 2. **Shoal is built now**, against its layout as it stands after friendly mode, using the spec's Shoal section as the direction. Positions follow the mockup where the current feature set allows.
-3. **Typeface:** one openly licensed condensed sans close to the mockups' DIN, vendored with its licence under `tools/fonts/` so `make panels` gives the same result on any machine. First choice Barlow Condensed (SIL OFL). Fetching it is a download and needs the owner's go-ahead; without it, DejaVu Sans Condensed (already installed, openly licensed) is used.
+3. **Typeface (decided by the owner, 2026-11-15): D-DIN Condensed for everything,** one face only, in its two weights (Regular and Bold). It is Datto's open DIN 1451 digitisation (SIL OFL 1.1, from github.com/amcchord/datto-d-din). `D-DINCondensed.ttf`, `D-DINCondensed-Bold.ttf`, the licence (`COPYING.txt`, `OFL-1.1.txt`) and a short README naming the source go in `tools/fonts/`, so `make panels` gives the same result on any machine. The generator points Inkscape at that folder (a private fontconfig file) and never falls back to a system font: if the face is missing, `make panels` fails. Where a label does not fit, it is shortened or the layout is changed; no second face. Chosen over Barlow Condensed, DejaVu Sans Condensed and D-DIN (normal width) from a side-by-side render of the Sway mockup; the mockups' DIN Alternate is a commercial font and cannot be used.
 4. **Sway's rate light** follows channel 1: lit for the first half of each cycle, and steady at half brightness above 10 Hz where blinking stops being readable. One new light id, appended last.
 5. **Shoal's lights follow "cyan means lit":** trigger lights become cyan; each output light is cyan with brightness from the voltage's magnitude (|V| / 5), replacing the cyan/magenta pair. The busy banner in the list moves from amber to brass and ivory.
 6. **Shoal's screens keep their size** (0.65 mm per firmware pixel) and move 4 mm lower as in the mockup, if the generator's clearance checks allow.
@@ -54,7 +54,7 @@ The spec leaves these open; each is the planner's call and is listed for the own
 ### Task 1: The Instrument language in the generator, and the shared components
 
 **Files:**
-- Create: `tools/test_gen_panels.py`, `tools/fonts/` (the typeface and its licence, if fetching is approved), a specimen panel description inside `tools/gen_panels.py` (generated to `build/specimen/`, never to `res/`)
+- Create: `tools/test_gen_panels.py`, `tools/fonts/` (D-DIN Condensed Regular and Bold, `COPYING.txt`, `OFL-1.1.txt`, a README naming the source; the files are in the session scratch folder `fontcmp/fonts/` to copy from, or fetch them from github.com/amcchord/datto-d-din), a fontconfig file the generator passes to Inkscape, a specimen panel description inside `tools/gen_panels.py` (generated to `build/specimen/`, never to `res/`)
 - Modify: `tools/gen_panels.py`, `src/widgets.hpp`, `src/RkaTheme.hpp` (generated), `res/components/` (generated), `Makefile` (`make panels`, and a `panels-test` target run by `make test`), `tests.mk` if the Python test is wired there, `README.md`
 
 **Interfaces:**
@@ -181,4 +181,4 @@ Layout, from the spec's "Shoal" section and mockup (provisional positions; tune 
 5. Sway's rate light blinks with the cycle at slow rates and holds steady when fast. Decide whether it stays.
 6. Open a patch saved with the old Sway (18 HP): it loads with every setting intact and a 6 HP gap to its right.
 7. Shoal: the encoders, buttons, UI MODE cap, the list and both screens in the new colours; trigger and output lights in cyan.
-8. The typeface: happy with it, or name another.
+8. D-DIN Condensed at 100 % zoom: the smallest labels readable on the ground and on the ivory tiles.
