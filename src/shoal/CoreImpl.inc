@@ -465,6 +465,23 @@ int CoreTest::menuRow(Core& c) {
 	}
 }
 
+bool CoreTest::menuEditing(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	switch (c.app()) {
+		case 0: return asr_state.cursor.editing();
+		case 1: return h1200_state.cursor.editing();
+		case 2: return automatonnetz_state.ui.grid_cursor.editing();
+		case 3: return qq_state.cursor.editing();
+		case 4: return dq_state.cursor.editing();
+		case 5: return poly_lfo_state.cursor.editing();
+		case 6: return lorenz_generator_state.cursor.editing();
+		case 9: return bbgen.ui.cursor.editing();
+		case 10: return bytebeatgen.ui.cursor.editing();
+		case 12: return references_app.ui.cursor.editing();
+		default: return false;
+	}
+}
+
 int CoreTest::selectedChannel(Core& c) {
 	Scope scope(c.impl_->ctx.get());
 	switch (c.app()) {
@@ -532,6 +549,12 @@ void CoreTest::encoderEvent(Core& c, Encoder e, int delta) {
 	if (delta)
 		OC::apps::current_app->HandleEncoderEvent(UI::Event(UI::EVENT_ENCODER,
 			e == ENCODER_L ? OC::CONTROL_ENCODER_L : OC::CONTROL_ENCODER_R, (int16_t) delta, 0));
+}
+
+void CoreTest::appMenuEvents(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	OC::g_ui.AppMenuOpen();
+	OC::g_ui.AppMenuHandle(UI::Event(UI::EVENT_BUTTON_PRESS, OC::CONTROL_BUTTON_R, 0, 0));
 }
 
 void CoreTest::buttonEvent(Core& c, Button b, bool longPress) {

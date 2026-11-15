@@ -90,15 +90,6 @@ inline void encoder(OC::UiControl control, int delta) {
 	}
 }
 
-// |delta| events of one step each, for handlers whose guard looks at single
-// steps only (Quantermain and Meta-Q trigger and source).
-inline void encoderSteps(OC::UiControl control, int delta) {
-	for (; delta > 0; delta--)
-		encoder(control, 1);
-	for (; delta < 0; delta++)
-		encoder(control, -1);
-}
-
 // A short or a long press. The app never sees an R or UP long press on the
 // hardware (OC_ui.cpp: the app menu, and nothing): do not send those.
 inline void button(OC::UiControl control, bool longPress = false) {
@@ -296,16 +287,60 @@ inline int enabledRowOf(const T& obj, int setting) {
 // mode (whatever else the app's handler does with it), and both go through
 // that handler, so what the app does on entering and leaving edit mode
 // happens. Not for a row whose R push opens a sub-editor.
+//
+// An app whose menu has such rows (a mask row opens the scale editor), or
+// whose list can be rebuilt under an editing cursor (a stale list the edit
+// rebuilds), passes a Menu. The rule the helpers then keep: a friendly edit
+// never opens a sub-editor, and a SetValue ends on the settings menu with
+// the cursor not editing. Where an R push would open a sub-editor, they
+// leave edit mode through the app menu instead (leaveViaAppMenu).
+
+// What the cursor helpers need to know of an app's menu, for the selected
+// channel, as its handlers see it now.
+struct Menu {
+	// The setting at a menu row, read as the app's R-push and R-encoder
+	// handlers read it (enabled_setting_at(row), past the list's end too).
+	int (*settingAt)(int menuRow);
+	// Whether the R push on that setting's row opens a sub-editor.
+	bool (*opensEditor)(int setting);
+	// The setting's menu row; -1: hidden.
+	int (*rowOf)(int setting);
+};
+
+// Leave edit mode where an R push would open a sub-editor, as a person
+// must: R long press (the app menu opens; the app gets SUSPEND), R push (it
+// closes on the same app; RESUME, on which each app that passes a Menu
+// leaves edit mode and closes its editors). Like the hardware's, the round
+// trip drops UI events still queued.
+inline void leaveViaAppMenu() {
+	OC::g_ui.AppMenuOpen();
+	OC::g_ui.AppMenuClose(true);
+}
+
+// Whether the cursor is editing on a row whose R push opens a sub-editor
+// (edit mode carried there by a channel switch, or a list rebuilt under it).
+inline bool editingOnEditorRow(const Cursor& c, const Menu* menu) {
+	return c.editing() && menu && menu->opensEditor(menu->settingAt(c.cursor_pos()));
+}
+
+// Leave edit mode: an R push, or the app menu where the R push would open a
+// sub-editor. Not editing: nothing.
+inline void leaveEditing(const Cursor& c, const Menu* menu) {
+	if (editingOnEditorRow(c, menu))
+		leaveViaAppMenu();
+	else if (c.editing())
+		button(OC::CONTROL_BUTTON_R);
+}
 
 // Put the cursor on menu row `menuRow` (a setting index, or an index into
 // the enabled list: whatever the app's cursor counts), as a person would:
-// if it is editing another row, an R push leaves that row first. On the row
-// already: nothing, and edit mode stays as it is. This is all of Focus.
-inline void moveCursor(Cursor& c, int menuRow) {
+// if it is editing another row, it leaves edit mode first (leaveEditing).
+// On the row already: nothing, and edit mode stays as it is. This is all of
+// Focus.
+inline void moveCursor(Cursor& c, int menuRow, const Menu* menu = nullptr) {
 	if (menuRow == c.cursor_pos())
 		return;
-	if (c.editing())
-		button(OC::CONTROL_BUTTON_R);
+	leaveEditing(c, menu);
 	c.Scroll(menuRow - c.cursor_pos());
 }
 
@@ -316,22 +351,39 @@ inline void moveCursor(Cursor& c, int menuRow) {
 // events of one step, for handlers whose guard looks at single steps only;
 // otherwise as one event. False, with no edit made, if the cursor cannot
 // reach the row (the menu's end is short of it: References after a patch
-// load) or the R push did not put the cursor in edit mode; the cursor may
-// have moved on the way (and left edit mode on another row).
-inline bool replaySet(Cursor& c, int menuRow, int delta, bool unitSteps = false) {
-	moveCursor(c, menuRow);
+// load), the row's R push opens a sub-editor (menu), or the R push did not
+// put the cursor in edit mode; the cursor may have moved on the way (and
+// left edit mode on another row).
+//
+// With a menu: if a step rebuilds the list so that another setting comes
+// under the cursor, the steps stop there (the rest would go to that
+// setting), edit mode is left (leaveEditing: never an R push that opens a
+// sub-editor), and the rest of the turn goes to the setting's new row, as
+// a person would go on; if it is hidden now, the edit ends where it got.
+inline bool replaySet(Cursor& c, int menuRow, int delta, bool unitSteps = false, const Menu* menu = nullptr) {
+	moveCursor(c, menuRow, menu);
 	if (c.cursor_pos() != menuRow)
 		return false;
+	const int setting = menu ? menu->settingAt(menuRow) : -1;
+	if (menu && menu->opensEditor(setting))
+		return false;
 	if (!c.editing())
 		button(OC::CONTROL_BUTTON_R);
 	if (!c.editing())
 		return false;
-	if (unitSteps)
-		encoderSteps(OC::CONTROL_ENCODER_R, delta);
-	else
-		encoder(OC::CONTROL_ENCODER_R, delta);
-	if (c.editing())
-		button(OC::CONTROL_BUTTON_R);
+	int left = delta;
+	if (!unitSteps) {
+		encoder(OC::CONTROL_ENCODER_R, left);
+		left = 0;
+	}
+	for (; left && (!menu || menu->settingAt(c.cursor_pos()) == setting); left += left > 0 ? -1 : 1)
+		encoder(OC::CONTROL_ENCODER_R, left > 0 ? 1 : -1);
+	leaveEditing(c, menu);
+	if (left && menu) {  // each pass sends a step at least, so this ends
+		const int row = menu->rowOf(setting);
+		if (row >= 0)
+			replaySet(c, row, left, unitSteps, menu);
+	}
 	return true;
 }
 

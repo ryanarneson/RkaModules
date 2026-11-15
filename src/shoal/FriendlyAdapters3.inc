@@ -153,40 +153,43 @@ constexpr Adapter kAdapter = { &header, &rows, nullptr, &edit, &accepting, nullp
 // turning one detent at a time cannot, so SetValue on those two rows sends
 // unit steps and the guard stops it where it stops the person.
 //
-// The cursor's edit mode survives a channel switch, so it can end up editing
-// on a mask row, where an R push opens the scale editor instead of leaving
-// edit mode (and Meta-Q's R encoder would nudge the mask as a number, an
-// upstream slip in its guard). From there the cursor cannot be moved the way
-// moveCursor assumes: an edit that would move it is dropped. The person gets
-// out by the app menu (its RESUME leaves edit mode) or by switching channel.
-
-// Whether the cursor is editing on a mask row, where `isMask` says which
-// settings are masks.
-template <class Channel>
-inline bool editingOnMask(const Channel& channel, const Cursor& cursor, bool (*isMask)(int)) {
-	return cursor.editing() && isMask((int) channel.enabled_setting_at(cursor.cursor_pos()));
-}
+// The list can be rebuilt under an editing cursor. Neither app rebuilds a
+// channel's list when the L encoder selects it (Quantermain) or when L push
+// or "Copy scale" changes it (both), so a channel can show a stale list
+// until an edit rebuilds it; that edit's first step can then put another
+// setting, the mask row included, under the cursor. And edit mode survives
+// a channel switch, so the panel can leave the cursor editing on a mask row.
+// On a mask row an R push opens the scale editor instead of leaving edit
+// mode, and the R encoder does nothing there (Meta-Q's nudges the mask as a
+// number, an upstream slip in its guard). Both apps pass a Menu, so the
+// cursor helpers stop the steps when the setting under the cursor changes,
+// leave edit mode through the app menu where an R push would open the
+// editor, and finish the turn on the setting's new row (Friendly.inc).
 
 // The edits common to both apps, on `channel` (the selected one): the mask
 // row's ToggleBit (on `slot`), and SetValue (unit steps for `guarded`
-// settings) and Focus on a menu row.
+// settings) and Focus on a menu row. First, a cursor the panel left editing
+// on a mask row leaves edit mode (through the app menu).
 template <class Channel>
 inline bool quantizerEdit(const FriendlyEdit& e, const Row& row, Channel& channel, Cursor& cursor, int slot,
-		bool (*isMask)(int), bool (*guarded)(int)) {
+		const Menu& menu, bool (*guarded)(int)) {
 	const int menuRow = enabledRowOf(channel, row.id);
 	if (menuRow < 0)  // an extra row: Focus leaves the cursor where it is
 		return e.type == FriendlyEdit::Focus;
-	if (menuRow != cursor.cursor_pos() && editingOnMask(channel, cursor, isMask))
-		return false;
+	if (editingOnEditorRow(cursor, &menu))
+		leaveViaAppMenu();
 	switch (e.type) {
 		case FriendlyEdit::ToggleBit:  // the mask row (the framework checked)
-			moveCursor(cursor, menuRow);
+			moveCursor(cursor, menuRow, &menu);
 			toggleMaskBit(channel, slot, e.value, row.max);
 			return true;
 		case FriendlyEdit::SetValue:
-			return replaySet(cursor, menuRow, e.value - row.value, guarded(row.id));
+			return replaySet(cursor, menuRow, e.value - row.value, guarded(row.id), &menu);
+		case FriendlyEdit::Focus:
+			moveCursor(cursor, menuRow, &menu);
+			return true;
 		default:
-			return menuEdit(e, row, cursor, menuRow);
+			return false;
 	}
 }
 
@@ -237,6 +240,16 @@ void selectTab(int tab) {
 	encoder(OC::CONTROL_ENCODER_L, tab - qq_state.selected_channel);
 }
 
+int settingAt(int menuRow) {
+	return (int) quantizer_channels[qq_state.selected_channel].enabled_setting_at(menuRow);
+}
+
+int rowOf(int setting) {
+	return enabledRowOf(quantizer_channels[qq_state.selected_channel], setting);
+}
+
+constexpr Menu kMenu = { &settingAt, &isMask, &rowOf };
+
 bool accepting() {
 	return !qq_state.scale_editor.active();
 }
@@ -249,7 +262,7 @@ bool edit(const FriendlyEdit& e, const Row& row) {
 			default: return false;
 		}
 	}
-	return quantizerEdit(e, row, quantizer_channels[qq_state.selected_channel], qq_state.cursor, 0, &isMask, &guarded);
+	return quantizerEdit(e, row, quantizer_channels[qq_state.selected_channel], qq_state.cursor, 0, kMenu, &guarded);
 }
 
 constexpr Adapter kAdapter = { &header, &rows, &selectTab, &edit, &accepting, nullptr, 0, nullptr, 0 };
@@ -318,6 +331,16 @@ void selectTab(int tab) {
 	encoder(OC::CONTROL_ENCODER_L, tab - dq_state.selected_channel);
 }
 
+int settingAt(int menuRow) {
+	return (int) dq_quantizer_channels[dq_state.selected_channel].enabled_setting_at(menuRow);
+}
+
+int rowOf(int setting) {
+	return enabledRowOf(dq_quantizer_channels[dq_state.selected_channel], setting);
+}
+
+constexpr Menu kMenu = { &settingAt, &isMask, &rowOf };
+
 bool accepting() {
 	return !dq_state.scale_editor.active();
 }
@@ -331,7 +354,7 @@ bool edit(const FriendlyEdit& e, const Row& row) {
 		}
 	}
 	DQ_QuantizerChannel& channel = dq_quantizer_channels[dq_state.selected_channel];
-	return quantizerEdit(e, row, channel, dq_state.cursor, channel.get_scale_select(), &isMask, &guarded);
+	return quantizerEdit(e, row, channel, dq_state.cursor, channel.get_scale_select(), kMenu, &guarded);
 }
 
 // CV source: 0..4 (CV1 to CV4, Turing) over cv_input_names, which has four

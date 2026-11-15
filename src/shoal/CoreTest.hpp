@@ -32,6 +32,8 @@ struct CoreTest {
 	static int menuSetting(Core& c);
 	// The menu cursor's row (cursor_pos) of the apps above; -1 for others.
 	static int menuRow(Core& c);
+	// Whether that cursor is in edit mode (false for other apps).
+	static bool menuEditing(Core& c);
 	// The firmware's selected channel (0 for an app with one).
 	static int selectedChannel(Core& c);
 	// The firmware's menu, as settings in row order, for the selected channel
@@ -66,6 +68,10 @@ struct CoreTest {
 	// friendly::Text::fixed, the status texts' printf("%*.*f") stand-in.
 	static void fixedText(double value, int decimals, int width, char (&out)[24]);
 	static void buttonEvent(Core& c, Button b, bool longPress);
+	// The app menu round trip as OC::Ui handles the events: an R long press
+	// (DispatchEvents opens the app menu; the app gets SUSPEND), then an R
+	// push to the menu (AppMenuHandle closes it on the same app; RESUME).
+	static void appMenuEvents(Core& c);
 	// The firmware's storage pages inside a state image: the global settings
 	// page or the app data page (page 0 of each, where a first save puts it).
 	// pageOffset: the page header; dataOffset, dataSize: the stored data.

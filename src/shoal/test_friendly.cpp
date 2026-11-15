@@ -841,8 +841,20 @@ void testEditStorm() {
 				case 3: e.value = (int32_t) ((rng.next() >> 8) % 40) - 4; break;
 				default: e.value = row.min + (int32_t) ((rng.next() >> 8) % (uint32_t) (row.max - row.min + 1 > 0 ? row.max - row.min + 1 : 1));
 			}
-			if (c.friendlyEdit(e))
+			if (c.friendlyEdit(e)) {
 				applied[app]++;
+				// An accepted edit leaves the app on its settings menu, and a
+				// value or cell edit on a menu row leaves the cursor there, not
+				// editing (never an editor opened, never edit mode left on).
+				const FriendlyModel after = model(c);
+				CHECK(!(after.flags & shoal::kModelBusy), "storm %s: busy after an accepted edit (type %d, id %d)", Core::appName(app),
+					(int) e.type, e.id);
+				const Row* r = findRow(after, e.id);
+				if ((e.type == FriendlyEdit::SetValue || e.type == FriendlyEdit::ToggleBit) && r && (r->flags & shoal::kRowCursor))
+					for (int i = 0; i < after.rows; i++)
+						CHECK(!(after.row[i].flags & shoal::kRowEditing), "storm %s: row %d editing after an edit (type %d, id %d)",
+							Core::appName(app), i, (int) e.type, e.id);
+			}
 			// The panel stays live: encoder turns and short presses now and then.
 			const uint32_t p = (rng.next() >> 8) % 64;
 			if (p < 2)
@@ -1007,6 +1019,7 @@ void listEquivalence(int app, void (*prepare)(Pair&, int tab), bool (*special)(C
 				const FriendlyModel after = model(p.a);
 				const Row* r = findRow(after, row.id);
 				const int flags = inMenu ? shoal::kRowCursor : 0;
+				CHECK(!(after.flags & shoal::kModelBusy), "%s tab %d %s: busy after an edit", an, tab, row.label);
 				CHECK(r && r->value == want && (r->flags & (shoal::kRowCursor | shoal::kRowEditing)) == flags,
 					"%s tab %d %s: the model shows %d, flags %d", an, tab, row.label, r ? (int) r->value : -1, r ? r->flags : -1);
 				p.checkSame("edit", row.label, target);
@@ -1522,8 +1535,9 @@ void testMaskCells() {
 					p.a.setting(0, k.mask), want);
 				const FriendlyModel after = model(p.a);
 				const Row* r = findRow(after, k.mask);
-				CHECK(r && r->value == want && (r->flags & shoal::kRowCursor), "%s %s: cell %d: the model shows %04x", an, cs.what, bit,
-					r ? (int) r->value : -1);
+				CHECK(r && r->value == want && (r->flags & (shoal::kRowCursor | shoal::kRowEditing)) == shoal::kRowCursor
+					&& !(after.flags & shoal::kModelBusy), "%s %s: cell %d: the model shows %04x, flags %d", an, cs.what, bit,
+					r ? (int) r->value : -1, r ? r->flags : -1);
 				p.checkSame(what, cs.what, bit);
 			};
 			for (int bit = 0; bit < cs.cells; bit++)
@@ -1708,9 +1722,7 @@ void testQuantizerActions() {
 }
 
 // The scale editor takes every event while it is open: the model is busy and
-// every edit dropped. And an edit mode carried onto a mask row by a channel
-// switch, where an R push opens the editor: edits that would move the cursor
-// are dropped.
+// every edit dropped.
 void testQuantizerBusy() {
 	struct App { int app, mask; };
 	for (const App& k : { App{ kCopier, 3 }, App{ kQuantermain, 2 }, App{ kMetaQ, 9 } }) {
@@ -1733,31 +1745,6 @@ void testQuantizerBusy() {
 		CHECK(sameSnapshot(before, snapshot(c)), "%s: a dropped edit changed a setting", an);
 		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);  // closes it
 		CHECK(!(model(c).flags & shoal::kModelBusy), "%s: busy after the editor closed", an);
-		if (k.app == kCopier)
-			continue;
-		// Channel A on scale Off, the cursor editing its row 2 (Quantermain:
-		// Trigger source) or 1 (Meta-Q: octave); the L encoder to B, where
-		// that row is the mask.
-		const int row = k.app == kQuantermain ? 2 : 1;
-		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, k.app, 0, 0, 4)), "%s: scale Off dropped", an);
-		CoreTest::encoderEvent(c, shoal::ENCODER_R, row - CoreTest::menuRow(c));
-		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
-		CoreTest::encoderEvent(c, shoal::ENCODER_L, 1);
-		CHECK(CoreTest::menuSetting(c) == k.mask, "%s: the cursor is on setting %d", an, CoreTest::menuSetting(c));
-		const FriendlyModel stuck = model(c);
-		const Row* r = findRow(stuck, k.mask);
-		CHECK(r && (r->flags & shoal::kRowEditing) && !(stuck.flags & shoal::kModelBusy), "%s: editing on the mask row: flags %d", an,
-			r ? r->flags : -1);
-		const Snapshot held = snapshot(c);
-		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::SetValue, k.app, 1, other, 2)), "%s: SetValue taken while editing on the mask", an);
-		CHECK(!c.friendlyEdit(makeEdit(FriendlyEdit::Focus, k.app, 1, other, 0)), "%s: Focus taken while editing on the mask", an);
-		CHECK(sameSnapshot(held, snapshot(c)) && CoreTest::friendlyAccepting(c), "%s: a dropped edit changed the app", an);
-		// On the mask row itself the cursor need not move: a cell toggles.
-		CHECK(c.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, k.app, 1, k.mask, 0)) && c.setting(1, k.mask) == 0xfffe,
-			"%s: ToggleBit on the mask row being edited: mask %04x", an, c.setting(1, k.mask));
-		// Why: there an R push opens the scale editor, not edit mode's end.
-		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
-		CHECK(!CoreTest::friendlyAccepting(c), "%s: R push on the mask row did not open the editor", an);
 	}
 }
 
@@ -1787,6 +1774,199 @@ void testQuantizerStatus() {
 		CHECK(std::strcmp(model(c).status, "Next: Off ") == 0, "CopierMaschine status '%s'", model(c).status);
 		CoreTest::buttonEvent(c, shoal::BUTTON_L, false);
 		CHECK(std::strcmp(model(c).status, "Off ") == 0 && model(c).row[0].value == 4, "CopierMaschine status '%s'", model(c).status);
+	}
+}
+
+// ---- Task 3, fix round 1: lists rebuilt under an editing cursor -------------
+
+// Whether `id` is one of the app's mask settings, whose row's R push opens
+// the scale editor.
+bool isMaskSetting(int app, int id) {
+	return (app == kCopier && id == 3) || (app == kQuantermain && id == 2) || (app == kMetaQ && id >= 9 && id <= 12);
+}
+
+// A person leaving edit mode: an R push, or, on a mask row (where it would
+// open the scale editor), the app menu: R long press, R push.
+void personLeaveEditing(Core& c) {
+	if (!CoreTest::menuEditing(c))
+		return;
+	if (isMaskSetting(c.app(), CoreTest::menuSetting(c)))
+		CoreTest::appMenuEvents(c);
+	else
+		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+}
+
+// A person setting `setting` of the selected channel where the list may be
+// rebuilt under the cursor: leave edit mode if it is on, scroll to the row,
+// R push, turn (a detent at a time on a guarded row) while that setting is
+// still under the cursor, leave edit mode, and turn the rest on the
+// setting's row as it is now.
+void personSet(Core& c, int setting, int target, int depth = 0) {
+	const int ch = CoreTest::selectedChannel(c);
+	const int row = menuRowOf(c, setting);
+	if (row < 0 || depth > 4)
+		return;
+	if (CoreTest::menuRow(c) != row) {
+		personLeaveEditing(c);
+		CoreTest::encoderEvent(c, shoal::ENCODER_R, row - CoreTest::menuRow(c));
+	}
+	if (!CoreTest::menuEditing(c))
+		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+	int left = target - c.setting(ch, setting);
+	if (!guardedRow(c.app(), setting)) {
+		CoreTest::encoderEvent(c, shoal::ENCODER_R, left);
+		left = 0;
+	}
+	for (; left && CoreTest::menuSetting(c) == setting; left += left > 0 ? -1 : 1)
+		CoreTest::encoderEvent(c, shoal::ENCODER_R, left > 0 ? 1 : -1);
+	personLeaveEditing(c);
+	if (left)
+		personSet(c, setting, c.setting(ch, setting) + left, depth + 1);
+}
+
+// After a friendly edit: on the settings menu, nothing editing.
+void checkSettled(Core& c, const char* what) {
+	const FriendlyModel m = model(c);
+	CHECK(!(m.flags & shoal::kModelBusy) && CoreTest::friendlyAccepting(c) && !CoreTest::menuEditing(c), "%s %s: flags %d, editing %d",
+		Core::appName(c.app()), what, m.flags, CoreTest::menuEditing(c));
+	for (int i = 0; i < m.rows; i++)
+		CHECK(!(m.row[i].flags & shoal::kRowEditing), "%s %s: row %d editing", Core::appName(c.app()), what, i);
+}
+
+// A stale list (the firmware's, after "Copy scale") rebuilt by the first step
+// of an edit: the row under the editing cursor becomes another setting, the
+// mask row in Quantermain. The edit leaves edit mode without opening the
+// scale editor (the app menu, as a person must), finishes the turn on the
+// setting's new row, and the list goes on taking edits.
+void testStaleListRebuild() {
+	for (int target : { 1, 3 }) {
+		Pair p(kQuantermain);
+		setBoth(p, kQuantermain, 0, 0, 4);  // A: scale Off
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, kQuantermain, 0, 0, 1)), "SelectTab B dropped");
+		tabGesture(p.b, 1);
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Press, kQuantermain, 1, kCopyScale, 0)), "Copy scale dropped");
+		CoreTest::buttonEvent(p.b, shoal::BUTTON_L, true);
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, kQuantermain, 1, 0, 0)), "SelectTab A dropped");
+		tabGesture(p.b, 0);
+		p.checkSame("stale", "copy scale", 0);
+		{
+			const FriendlyModel m = model(p.a);
+			CHECK(p.a.setting(0, 0) == 5 && !findRow(m, 2) && menuRowOf(p.a, 5) == 2, "Quantermain A: scale %d, the stale list's trigger row %d",
+				p.a.setting(0, 0), menuRowOf(p.a, 5));
+		}
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kQuantermain, 0, 5, target)), "Trigger source -> %d dropped", target);
+		personSet(p.b, 5, target);
+		checkSettled(p.a, "stale list rebuilt");
+		CHECK(p.a.setting(0, 5) == target && findRow(model(p.a), 2), "Quantermain A: trigger %d, want %d; mask row listed %d", p.a.setting(0, 5),
+			target, findRow(model(p.a), 2) != nullptr);
+		p.checkSame("stale list rebuilt", "Trigger source", target);
+		// The list goes on taking edits, SelectTab included.
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kQuantermain, 0, 9, 2)), "Octave dropped after the rebuild");
+		personSet(p.b, 9, 2);
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SelectTab, kQuantermain, 0, 0, 2)), "SelectTab dropped after the rebuild");
+		tabGesture(p.b, 2);
+		p.checkSame("after the rebuild", "Octave", 2);
+	}
+	// Meta-Q: slot 1 Off on A, copied to every slot of both channels; L push
+	// to B (no rebuild) leaves B's list stale, with the mask row. Its CV
+	// source's first step rebuilds the list: aux pw comes under the cursor;
+	// the rest of the turn goes to the source's new row.
+	{
+		Pair p(kMetaQ);
+		setBoth(p, kMetaQ, 0, 0, 4);
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Press, kMetaQ, 0, kCopyScale, 0)), "Copy scale dropped");
+		CoreTest::buttonEvent(p.b, shoal::BUTTON_L, true);
+		for (Core* c : { &p.a, &p.b })
+			CoreTest::buttonEvent(*c, shoal::BUTTON_L, false);  // B, from the panel
+		p.checkSame("stale", "copy scale", 0);
+		CHECK(model(p.a).tab == 1 && p.a.setting(1, 0) == 4 && findRow(model(p.a), 9) && menuRowOf(p.a, 14) == 7,
+			"Meta-Q B: tab %d, scale %d, source row %d", model(p.a).tab, p.a.setting(1, 0), menuRowOf(p.a, 14));
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, kMetaQ, 1, 14, 0)), "CV source dropped");
+		personSet(p.b, 14, 0);
+		checkSettled(p.a, "stale list rebuilt");
+		CHECK(p.a.setting(1, 14) == 0 && p.a.setting(1, 23) == p.b.setting(1, 23) && rowsAreMenu(p.a, model(p.a)),
+			"Meta-Q B: source %d, want 0", p.a.setting(1, 14));
+		p.checkSame("stale list rebuilt", "CV source", 0);
+	}
+}
+
+// The panel leaves the cursor editing on a mask row (edit mode carried over a
+// channel switch). The next friendly edit leaves edit mode the way a person
+// must there (the app menu), then does its work.
+void testLeaveMaskEditing() {
+	struct App { int app, row, mask, octave; };
+	for (const App& k : { App{ kQuantermain, 2, 2, 9 }, App{ kMetaQ, 1, 9, 21 } }) {
+		const char* an = Core::appName(k.app);
+		Pair p(k.app);
+		setBoth(p, k.app, 0, 0, 4);  // A: scale Off, so its row k.row is not a mask
+		// Both cores: edit mode on A's row k.row, then the L encoder to B, where that row is the mask.
+		auto strand = [&]() {
+			for (Core* c : { &p.a, &p.b }) {
+				CoreTest::encoderEvent(*c, shoal::ENCODER_L, -1);
+				personLeaveEditing(*c);
+				CoreTest::encoderEvent(*c, shoal::ENCODER_R, k.row - CoreTest::menuRow(*c));
+				CoreTest::buttonEvent(*c, shoal::BUTTON_R, false);
+				CoreTest::encoderEvent(*c, shoal::ENCODER_L, 1);
+			}
+			const FriendlyModel m = model(p.a);
+			const Row* r = findRow(m, k.mask);
+			CHECK(r && (r->flags & shoal::kRowEditing) && CoreTest::menuSetting(p.a) == k.mask && !(m.flags & shoal::kModelBusy),
+				"%s: not editing on the mask row (flags %d)", an, r ? r->flags : -1);
+		};
+		strand();
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, k.app, 1, k.octave, 2)), "%s: octave dropped while editing on the mask", an);
+		personSet(p.b, k.octave, 2);
+		checkSettled(p.a, "SetValue from the mask");
+		CHECK(p.a.setting(1, k.octave) == 2, "%s: octave %d", an, p.a.setting(1, k.octave));
+		p.checkSame("from the mask", "octave", 2);
+		strand();
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, k.app, 1, k.mask, 3)), "%s: ToggleBit dropped while editing on the mask", an);
+		personLeaveEditing(p.b);
+		editorToggle(p.b, k.mask, 3);
+		checkSettled(p.a, "ToggleBit on the mask being edited");
+		CHECK(p.a.setting(1, k.mask) == 0xfff7, "%s: mask %04x", an, p.a.setting(1, k.mask));
+		p.checkSame("from the mask", "cell", 3);
+		strand();
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::Focus, k.app, 1, k.octave, 0)), "%s: Focus dropped while editing on the mask", an);
+		personLeaveEditing(p.b);
+		CoreTest::encoderEvent(p.b, shoal::ENCODER_R, menuRowOf(p.b, k.octave) - CoreTest::menuRow(p.b));
+		checkSettled(p.a, "Focus from the mask");
+		CHECK(CoreTest::menuSetting(p.a) == k.octave, "%s: Focus left the cursor on %d", an, CoreTest::menuSetting(p.a));
+		p.checkSame("from the mask", "focus", 0);
+	}
+}
+
+// Meta-Q's mask row is the "scale #" slot's, also while the scale sequencer
+// plays another slot: a ToggleBit equals the scale editor's toggle (which
+// edits that slot) and leaves the playing slot's mask alone.
+void testMetaQSlotMask() {
+	Pair p(kMetaQ);
+	setBoth(p, kMetaQ, 0, 8, 2);   // scale # 3
+	setBoth(p, kMetaQ, 0, 13, 1);  // seq_mode TR+1: TR2 alternates slots 3 and 4
+	p.checkSame("sequence", "seq_mode", 1);
+	bool other = false;
+	for (int pulse = 0; pulse < 8 && !other; pulse++) {
+		for (Core* c : { &p.a, &p.b })
+			c->setGate(1, 10.f);
+		runTogether(p.a, p.b, p.rng, 100);
+		for (Core* c : { &p.a, &p.b })
+			c->setGate(1, 0.f);
+		runTogether(p.a, p.b, p.rng, 100);
+		other = std::strncmp(model(p.a).status, "A #4", 4) == 0;
+	}
+	CHECK(other, "Meta-Q: the sequencer is not playing slot 4: status '%s'", model(p.a).status);
+	const FriendlyModel m = model(p.a);
+	const Row* r = findRow(m, 11);
+	CHECK(r && r->kind == RowKind::Mask && !findRow(m, 12) && !findRow(m, 9), "Meta-Q: the mask row is not slot 3's");
+	const int playing = p.a.setting(0, 12);
+	for (int bit : { 0, 4, 11, 4 }) {
+		const uint16_t want = expectToggle((uint16_t) p.a.setting(0, 11), bit, 12);
+		CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::ToggleBit, kMetaQ, 0, 11, bit)), "Meta-Q slot 3: cell %d dropped", bit);
+		editorToggle(p.b, 11, bit);
+		CHECK(p.a.setting(0, 11) == want && p.a.setting(0, 12) == playing, "Meta-Q: slot 3 mask %04x (want %04x), slot 4 %04x",
+			p.a.setting(0, 11), want, p.a.setting(0, 12));
+		checkSettled(p.a, "slot mask");
+		p.checkSame("slot mask", "cell", bit);
 	}
 }
 
@@ -1823,6 +2003,9 @@ int main() {
 	testQuantizerActions();
 	testQuantizerBusy();
 	testQuantizerStatus();
+	testStaleListRebuild();
+	testLeaveMaskEditing();
+	testMetaQSlotMask();
 	testEditStorm();
 	return rkatest::finish("test_friendly");
 }
