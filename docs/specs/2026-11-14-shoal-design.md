@@ -494,3 +494,57 @@ Each stage is usable on its own and gets its own implementation plan.
 - How the screens are drawn (rectangles or a texture).
 - Step-function rates, if the suggested ones cost too much or feel slow.
 - The Makefile changes for per-file flags and linked tests.
+
+## Carried forward from stage 1
+
+Stage 1 (the headless firmware core) is done. Its reviews left these for
+later stages.
+
+Decide when planning stage 2:
+
+- Power-on outputs. A fresh core, and a core after reset or patch load,
+  holds the DAC power-on code (about +6.17 V on all four outputs) until
+  the app first writes; CopierMaschine writes only when clocked. The
+  reviewer recommends setting the 0 V code after boot in the shim, logged
+  as a deliberate deviation. `out()` also reads -3.75 V before the first
+  tick.
+
+Do in stage 2:
+
+- Add `static_assert`s on the `GlobalSettings` / `AppData` layout and a
+  version field in the patch JSON before any patch is saved: the saved
+  image depends on host struct layout.
+- `EncoderPins` uses `std::deque`, which allocates on the audio thread;
+  replace with a fixed ring.
+- Move `TickClock` into the public header (`Core.hpp`).
+- `restore()`'s result reflects the app-data page only; a bad global page
+  with a good app page returns true.
+- The first `save()` after a `restore()` differs from the restored image
+  by one calibration page. Do not detect "patch changed" by comparing
+  saved data.
+- Call `seed()` per instance, or two Shoals play the same random values.
+- `reboot()`: assert it is not called inside a Scope on the same core;
+  clear `Impl::dac`; say in `Core.hpp` that outputs reset too.
+- Build `Firmware.cpp` with `-fvisibility=hidden`; consider
+  `-funsigned-char` (plain `char` is unsigned on the Teensy).
+- Allow-list the single `thread_local` in `tools/check_shoal_globals.sh`.
+- Add `drawMenu` / `drawScope` to the bench; the scope views of four apps
+  animate at the host's draw rate.
+- Commit an opt-in seed-loop fuzz target; the committed random sweep is
+  light. Give `testQuantizerFarPitch` a value assertion.
+- Judge by feel once there is a UI: the Meta-Q slot-switch gate lasts
+  about 0.5 s; held buttons forget their press state on restore.
+- Confirm the first real `ubuntu-latest` run of `make -f tests.mk test`;
+  it has only run in an emulated x86 container.
+- `bjorklund_row` maps every length above 31 to the 31-step row; check
+  that is intended.
+
+Do in stage 3:
+
+- `setSettingRaw` returns true when the value is unchanged.
+- Check the settings enum coverage against the firmware menus.
+
+Before any public release:
+
+- `OC_DAC.cpp` is GPL version 3 only, while `plugin.json` says
+  GPL-3.0-or-later; several firmware files have no licence header.
