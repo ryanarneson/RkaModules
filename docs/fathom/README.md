@@ -8,6 +8,26 @@ note is held for minutes.
 
 ![Fathom panel](Fathom.png)
 
+## The panel
+
+Fathom is drawn as an echo sounder: **PITCH** is the transducer, and every
+arc on the panel is a ping travelling out from it.
+
+- **PITCH** is the large dial at the top left, numbered in octaves from
+  −2 to +2 with a tick per semitone.
+- The graduated brass arc round it carries **SUB**, **SPREAD**,
+  **DETUNE** and **DRIFT**, and the **V/OCT** input on its left.
+- The filter sits on the next arc out: **RES**, **CUTOFF** (on its own
+  small dial) and **DRIVE**.
+- Below them, five attenuverters and a row of five CV jacks, in the order
+  **RES**, **DRIFT**, **CUTOFF**, **DETUNE**, **DRIVE**. A line joins
+  each jack to its attenuverter and on to the knob it moves; the DRIFT and
+  DETUNE lines climb up and bend across to their knobs on the arc.
+- Bottom row: the **SUB** output on the left, **L** and **R** on the
+  right, each on a light tile; inputs are bare.
+- The faint line falling from PITCH, marked 10 and 20, is the sounding
+  line: a depth scale for the pings, nothing to set.
+
 ## Pitch
 
 - **PITCH**: −24 to +24 semitones, snapped, with 0 at C2 (65.4 Hz). The

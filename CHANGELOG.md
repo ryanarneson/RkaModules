@@ -33,6 +33,7 @@
   - CV with attenuverters for DETUNE, DRIFT, RES, DRIVE and CUTOFF
     (1 V/oct).
   - Stereo out through a soft clipper, plus a separate SUB out.
+  - Drawn in the "Instrument" look, as an echo sounder.
 - "Nightglow" look shared by all modules: navy panels, glowing cards,
   colour-coded outputs, white knobs, and the plugin's own small
   attenuverter trim; panels can carry glowing rings.

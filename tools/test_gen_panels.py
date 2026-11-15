@@ -22,8 +22,6 @@ ROOT = Path(__file__).resolve().parent.parent
 # existed (1080efe). A module's two entries are deleted in the commit that
 # converts it; until then its output may not change by a byte.
 NIGHTGLOW_SHA256 = {
-    "fathom/Fathom-dark.svg": "5e8d723ae090512e5a1e429a2e4d01ddde591afe1463b9e59406fabf1f5a6f73",
-    "fathom/Fathom.svg": "fdb64725a3f165fd770ea114845adfd55d87d53fc5c1efff11b954d3bf8c30f5",
     "shoal/Shoal-dark.svg": "ac81d3ef7eb4cf2f185855456269fbd38219cbf6e526b3850144c65e07764f69",
     "shoal/Shoal.svg": "6f0f8dafb53b168f535263cdd5deee7faa4791b8d5ac35eb25704df1794dade2",
 }

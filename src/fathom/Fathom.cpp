@@ -181,33 +181,39 @@ struct FathomWidget : ModuleWidget {
 		setModule(module);
 		setPanel(createPanel(asset::plugin(pluginInstance, "res/fathom/Fathom.svg"), asset::plugin(pluginInstance, "res/fathom/Fathom-dark.svg")));
 
-		addChild(createWidget<ThemedScrew>(Vec(RACK_GRID_WIDTH, 0)));
-		addChild(createWidget<ThemedScrew>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
+		for (const Vec& screw : SCREWS)
+			addChild(createWidgetCentered<rka::Screw>(mm2px(screw)));
 
-		addParam(createParamCentered<rka::BigKnob>(mm2px(PARAM_PITCH), module, Fathom::PITCH_PARAM));
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_DRIFT), module, Fathom::DRIFT_PARAM));
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_SPREAD), module, Fathom::SPREAD_PARAM));
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_SUB), module, Fathom::SUB_PARAM));
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_DETUNE), module, Fathom::DETUNE_PARAM));
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_RES), module, Fathom::RES_PARAM));
-		addParam(createParamCentered<rka::MidKnob>(mm2px(PARAM_CUTOFF), module, Fathom::CUTOFF_PARAM));
-		addParam(createParamCentered<rka::SmallKnob>(mm2px(PARAM_DRIVE), module, Fathom::DRIVE_PARAM));
-		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_RES_ATT), module, Fathom::RES_ATT_PARAM));
-		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_CUTOFF_ATT), module, Fathom::CUTOFF_ATT_PARAM));
-		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_DRIVE_ATT), module, Fathom::DRIVE_ATT_PARAM));
-		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_DETUNE_ATT), module, Fathom::DETUNE_ATT_PARAM));
-		addParam(createParamCentered<rka::Trim>(mm2px(PARAM_DRIFT_ATT), module, Fathom::DRIFT_ATT_PARAM));
+		// PITCH, the origin, on its numbered face; the voice knobs and
+		// V/OCT on the limb around it.
+		addParam(createParamCentered<rka::HeroKnob>(mm2px(PARAM_PITCH), module, Fathom::PITCH_PARAM));
+		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_SUB), module, Fathom::SUB_PARAM));
+		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_SPREAD), module, Fathom::SPREAD_PARAM));
+		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_DETUNE), module, Fathom::DETUNE_PARAM));
+		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_DRIFT), module, Fathom::DRIFT_PARAM));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_VOCT), module, Fathom::VOCT_INPUT));
 
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_VOCT), module, Fathom::VOCT_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_RES_CV), module, Fathom::RES_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_CUTOFF_CV), module, Fathom::CUTOFF_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_DRIVE_CV), module, Fathom::DRIVE_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_DETUNE_CV), module, Fathom::DETUNE_INPUT));
-		addInput(createInputCentered<ThemedPJ301MPort>(mm2px(INPUT_DRIFT_CV), module, Fathom::DRIFT_INPUT));
+		// The filter on the next ping out.
+		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_RES), module, Fathom::RES_PARAM));
+		addParam(createParamCentered<rka::FaceKnob>(mm2px(PARAM_CUTOFF), module, Fathom::CUTOFF_PARAM));
+		addParam(createParamCentered<rka::LimbKnob>(mm2px(PARAM_DRIVE), module, Fathom::DRIVE_PARAM));
 
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_SUBOUT), module, Fathom::SUB_OUTPUT));
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_LEFT), module, Fathom::LEFT_OUTPUT));
-		addOutput(createOutputCentered<ThemedPJ301MPort>(mm2px(OUTPUT_RIGHT), module, Fathom::RIGHT_OUTPUT));
+		// Attenuverters and CV jacks: RES, DRIFT, CUTOFF, DETUNE, DRIVE.
+		addParam(createParamCentered<rka::Atten>(mm2px(PARAM_RES_ATT), module, Fathom::RES_ATT_PARAM));
+		addParam(createParamCentered<rka::Atten>(mm2px(PARAM_DRIFT_ATT), module, Fathom::DRIFT_ATT_PARAM));
+		addParam(createParamCentered<rka::Atten>(mm2px(PARAM_CUTOFF_ATT), module, Fathom::CUTOFF_ATT_PARAM));
+		addParam(createParamCentered<rka::Atten>(mm2px(PARAM_DETUNE_ATT), module, Fathom::DETUNE_ATT_PARAM));
+		addParam(createParamCentered<rka::Atten>(mm2px(PARAM_DRIVE_ATT), module, Fathom::DRIVE_ATT_PARAM));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_RES_CV), module, Fathom::RES_INPUT));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_DRIFT_CV), module, Fathom::DRIFT_INPUT));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_CUTOFF_CV), module, Fathom::CUTOFF_INPUT));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_DETUNE_CV), module, Fathom::DETUNE_INPUT));
+		addInput(createInputCentered<rka::BrassPort>(mm2px(INPUT_DRIVE_CV), module, Fathom::DRIVE_INPUT));
+
+		// Outputs, each on its own ivory tile.
+		addOutput(createOutputCentered<rka::BrassPort>(mm2px(OUTPUT_SUBOUT), module, Fathom::SUB_OUTPUT));
+		addOutput(createOutputCentered<rka::BrassPort>(mm2px(OUTPUT_LEFT), module, Fathom::LEFT_OUTPUT));
+		addOutput(createOutputCentered<rka::BrassPort>(mm2px(OUTPUT_RIGHT), module, Fathom::RIGHT_OUTPUT));
 	}
 
 	void appendContextMenu(Menu* menu) override {

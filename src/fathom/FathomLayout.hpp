@@ -3,26 +3,27 @@
 #include <rack.hpp>
 
 namespace FathomLayout {
-static const rack::math::Vec PARAM_PITCH(25.4f, 40.0f);
-static const rack::math::Vec INPUT_VOCT(8.9f, 40.0f);
-static const rack::math::Vec OUTPUT_SUBOUT(41.9f, 40.0f);
-static const rack::math::Vec PARAM_DRIFT(17.15f, 25.7f);
-static const rack::math::Vec PARAM_SPREAD(33.65f, 25.7f);
-static const rack::math::Vec PARAM_SUB(17.15f, 54.3f);
-static const rack::math::Vec PARAM_DETUNE(33.65f, 54.3f);
-static const rack::math::Vec PARAM_RES(9.5f, 76.0f);
-static const rack::math::Vec PARAM_CUTOFF(25.4f, 76.0f);
-static const rack::math::Vec PARAM_DRIVE(41.3f, 76.0f);
-static const rack::math::Vec PARAM_RES_ATT(9.5f, 86.5f);
-static const rack::math::Vec PARAM_CUTOFF_ATT(25.4f, 86.5f);
-static const rack::math::Vec PARAM_DRIVE_ATT(41.3f, 86.5f);
-static const rack::math::Vec INPUT_RES_CV(9.5f, 94.0f);
-static const rack::math::Vec INPUT_CUTOFF_CV(25.4f, 94.0f);
-static const rack::math::Vec INPUT_DRIVE_CV(41.3f, 94.0f);
-static const rack::math::Vec PARAM_DETUNE_ATT(8.0f, 106.0f);
-static const rack::math::Vec PARAM_DRIFT_ATT(20.0f, 106.0f);
-static const rack::math::Vec INPUT_DETUNE_CV(8.0f, 115.0f);
-static const rack::math::Vec INPUT_DRIFT_CV(20.0f, 115.0f);
-static const rack::math::Vec OUTPUT_LEFT(34.0f, 112.0f);
-static const rack::math::Vec OUTPUT_RIGHT(44.0f, 112.0f);
+static const rack::math::Vec PARAM_PITCH(19.0f, 33.0f);
+static const rack::math::Vec PARAM_SUB(43.73f, 24.97f);
+static const rack::math::Vec PARAM_SPREAD(44.23f, 39.29f);
+static const rack::math::Vec PARAM_DETUNE(37.06f, 51.7f);
+static const rack::math::Vec PARAM_DRIFT(24.41f, 58.43f);
+static const rack::math::Vec INPUT_VOCT(8.42f, 56.75f);
+static const rack::math::Vec PARAM_RES(6.4f, 78.28f);
+static const rack::math::Vec PARAM_CUTOFF(25.4f, 79.56f);
+static const rack::math::Vec PARAM_DRIVE(44.4f, 72.55f);
+static const rack::math::Vec PARAM_RES_ATT(6.4f, 89.61f);
+static const rack::math::Vec PARAM_DRIFT_ATT(15.9f, 90.92f);
+static const rack::math::Vec PARAM_CUTOFF_ATT(25.4f, 90.65f);
+static const rack::math::Vec PARAM_DETUNE_ATT(34.9f, 88.78f);
+static const rack::math::Vec PARAM_DRIVE_ATT(44.4f, 85.14f);
+static const rack::math::Vec INPUT_RES_CV(6.4f, 101.0f);
+static const rack::math::Vec INPUT_DRIFT_CV(15.9f, 101.0f);
+static const rack::math::Vec INPUT_CUTOFF_CV(25.4f, 101.0f);
+static const rack::math::Vec INPUT_DETUNE_CV(34.9f, 101.0f);
+static const rack::math::Vec INPUT_DRIVE_CV(44.4f, 101.0f);
+static const rack::math::Vec OUTPUT_SUBOUT(6.4f, 116.0f);
+static const rack::math::Vec OUTPUT_LEFT(34.9f, 116.0f);
+static const rack::math::Vec OUTPUT_RIGHT(44.4f, 116.0f);
+static const rack::math::Vec SCREWS[] = {rack::math::Vec(43.18f, 2.54f), rack::math::Vec(7.62f, 125.96f)};
 }

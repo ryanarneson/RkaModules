@@ -113,6 +113,21 @@ def component_size(spec, name, kind, cname):
         return "trim" if cname.endswith("_ATT") else "small"
     return "jack"
 
+
+def arc_point(cx, cy, r, deg):
+    """The point on the circle of radius r about (cx, cy) at `deg` degrees
+    from straight down, positive toward the right."""
+    a = math.radians(deg)
+    return cx + r * math.sin(a), cy + r * math.cos(a)
+
+
+def dial_point(cx, cy, r, deg):
+    """The point r from a dial's centre at `deg` degrees of turn: 0 straight
+    up, positive clockwise, as a knob's pointer moves."""
+    a = math.radians(deg)
+    return cx + r * math.sin(a), cy - r * math.cos(a)
+
+
 # Rack's screws are 15 px (one HP) square, set as Rack's template sets them:
 # one grid step in from the left edge, two in from the right, against the
 # top or bottom rail. The widget (rka::Screw) is drawn at these centres, from
@@ -154,6 +169,29 @@ _SW_LIMB, _SW_ATT = 58, 68
 
 def _sway_on(r, x):
     return round(column_on_arc(*_SW_PIVOT, r, x), 2)
+
+
+# Fathom, an echo sounder: the origin is PITCH. Angles at the origin from
+# straight down, positive toward the right (arc_point). Five columns.
+_FA_O = (19.0, 33.0)
+_FA_X = [round(6.4 + 9.5 * i, 2) for i in range(5)]
+_FA_COLS = ["RES", "DRIFT", "CUTOFF", "DETUNE", "DRIVE"]   # attenuverters and CV jacks
+_FA_LIMB_R, _FA_FILTER, _FA_ATT = 26, 47, 58
+_FA_LIMB = [("SUB", 108), ("SPREAD", 76), ("DETUNE", 44), ("DRIFT", 12)]
+_FA_VOCT = -24
+_FA_FILTER_COLS = [("RES", 0), ("CUTOFF", 2), ("DRIVE", 4)]
+# The sounding line: a radius at -10 degrees, from the origin to the foot.
+_FA_SOUNDING = -10
+_FA_SOUNDING_END = tuple(round(v, 2) for v in arc_point(
+    *_FA_O, (PANEL_H - _FA_O[1]) / math.cos(math.radians(_FA_SOUNDING)), _FA_SOUNDING))
+
+
+def _fathom_limb(deg):
+    return tuple(round(v, 2) for v in arc_point(*_FA_O, _FA_LIMB_R, deg))
+
+
+def _fathom_on(r, x):
+    return round(column_on_arc(*_FA_O, r, x), 2)
 
 
 PANELS = {
@@ -207,75 +245,56 @@ PANELS = {
         # As the mockup: clear of the nameplate, top left.
         screws=screws_at(12, "tr", "bl", "br"),
     ),
-    # Fathom, the drone voice. The voice is an "orbit": PITCH is a sun with
-    # the four voice knobs on a ring around it, V/OCT in on the ring's left
-    # and SUB out on its right. Under it the filter is flat: three columns,
-    # RES / CUTOFF / DRIVE, each dial over attenuverter over CV jack, with
-    # a line dropping from the orbit into CUTOFF (the voice into the
-    # filter). The band at the bottom holds the DETUNE and DRIFT CVs and
-    # the outputs.
+    # Fathom, an echo sounder. PITCH is the transducer, the origin every arc
+    # is struck from, and every arc is a ping travelling out from it: the
+    # limb (radius 26) carries the voice knobs and V/OCT; the filter sits
+    # on the next ping (47), the attenuverters on the one after (58), the
+    # CV jacks in a row under them and the outputs on tiles below. A faint
+    # sounding line runs down from the origin with its depths marked.
     "Fathom": dict(
+        look="instrument",
         dir="fathom",
         hp=10,
         title="FATHOM",
+        subtitle="DRONE VOICE",
         components=[
-            ("param", "PITCH", 25.4, 40.0, "PITCH"),
-            ("input", "VOCT", 8.9, 40.0, "V/OCT"),
-            ("output", "SUBOUT", 41.9, 40.0, "SUB"),
-            ("param", "DRIFT", 17.15, 25.7, "DRIFT"),
-            ("param", "SPREAD", 33.65, 25.7, "SPREAD"),
-            ("param", "SUB", 17.15, 54.3, "SUB"),
-            ("param", "DETUNE", 33.65, 54.3, "DETUNE"),
-            ("param", "RES", 9.5, 76.0, "RES"),
-            ("param", "CUTOFF", 25.4, 76.0, "CUTOFF"),
-            ("param", "DRIVE", 41.3, 76.0, "DRIVE"),
-            ("param", "RES_ATT", 9.5, 86.5, None),
-            ("param", "CUTOFF_ATT", 25.4, 86.5, None),
-            ("param", "DRIVE_ATT", 41.3, 86.5, None),
-            ("input", "RES_CV", 9.5, 94.0, "CV"),
-            ("input", "CUTOFF_CV", 25.4, 94.0, "CV"),
-            ("input", "DRIVE_CV", 41.3, 94.0, "CV"),
-            ("param", "DETUNE_ATT", 8.0, 106.0, None),
-            ("param", "DRIFT_ATT", 20.0, 106.0, None),
-            ("input", "DETUNE_CV", 8.0, 115.0, "DETUNE"),
-            ("input", "DRIFT_CV", 20.0, 115.0, "DRIFT"),
-            ("output", "LEFT", 34.0, 112.0, "L"),
-            ("output", "RIGHT", 44.0, 112.0, "R"),
-        ],
-        # Widget sizes that are not the defaults (see component_size).
-        sizes={"CUTOFF": "mid"},
-        cards=[(28.5, 101.0, 20.0, 19.0, "cyan")],
-        # Orbits: cx, cy, r, accent.
-        rings=[(25.4, 40.0, 16.5, "violet")],
-        # x1, y1, x2, y2, accent, dotted. The pitch path, V/OCT in to SUB
-        # out, across the ring; and the voice dropping into the filter.
-        lines=[(8.9, 40.0, 41.9, 40.0, "cyan", False),
-               (25.4, 56.9, 25.4, 68.9, "cyan", False)],
-        # Dotted ticks from one component's edge to another's: from, to,
-        # accent. Attenuverter to the dial it scales; in the band,
-        # attenuverter to its jack.
-        ticks=[("RES_ATT", "RES", "cyan"), ("CUTOFF_ATT", "CUTOFF", "cyan"), ("DRIVE_ATT", "DRIVE", "cyan"),
-               ("DETUNE_ATT", "DETUNE_CV", "violet"), ("DRIFT_ATT", "DRIFT_CV", "violet")],
-        # Small stroked paths: x, y, path d (centred on 0,0), accent.
-        glyphs=[(9.5, 58.2, "M-3 0 q1.5 -2.4 3 0 t3 0", "cyan"),
-                (41.6, 58.2, "M-3.4 1.2 l2.3 -2.4 v2.4 l2.3 -2.4 v2.4 l2.2 -2.4", "amber")],
-        # Accent names colour a label; theme keys ("ink", "hint") also work.
-        label_accents={"PITCH": "ink", "CUTOFF": "ink", "SUBOUT": "green",
-                       "LEFT": "cyan", "RIGHT": "cyan",
-                       "RES_CV": "hint", "CUTOFF_CV": "hint", "DRIVE_CV": "hint",
-                       "DETUNE_CV": "hint", "DRIFT_CV": "hint"},
-        label_size={"PITCH": 2.2, "CUTOFF": 2.2, "DRIFT": 2.0, "SPREAD": 2.0, "SUB": 2.0,
-                    "DETUNE": 2.0, "VOCT": 2.0, "SUBOUT": 2.0, "RES": 1.8, "DRIVE": 1.8,
-                    "RES_CV": 1.5, "CUTOFF_CV": 1.5, "DRIVE_CV": 1.5,
-                    "DETUNE_CV": 1.7, "DRIFT_CV": 1.7, "LEFT": 1.9, "RIGHT": 1.9},
-        # Negative gaps put the label below the component.
-        label_gap={"DRIFT": 6.5, "SPREAD": 6.5, "SUB": -8.1, "DETUNE": -8.1, "PITCH": -14.2,
-                   "VOCT": -9.0, "SUBOUT": -9.0, "RES": 6.5, "CUTOFF": 8.7, "DRIVE": 6.5,
-                   "RES_CV": -6.2, "CUTOFF_CV": -6.2, "DRIVE_CV": -6.2,
-                   "DETUNE_CV": -6.6, "DRIFT_CV": -6.6, "LEFT": 5.7, "RIGHT": 5.7},
-        # The two jacks on the pitch ring get their labels pushed outward so
-        # the text clears the ring.
-        label_dx={"VOCT": -1.5, "SUBOUT": 1.5},
+            # (kind, name, x mm, y mm, label)
+            ("param", "PITCH", *_FA_O, "PITCH"),
+        ]
+        + [("param", n, *_fathom_limb(deg), n) for n, deg in _FA_LIMB]
+        + [("input", "VOCT", *_fathom_limb(_FA_VOCT), "V/OCT")]
+        + [("param", n, _FA_X[i], _fathom_on(_FA_FILTER, _FA_X[i]), n) for n, i in _FA_FILTER_COLS]
+        + [("param", n + "_ATT", x, _fathom_on(_FA_ATT, x), None) for n, x in zip(_FA_COLS, _FA_X)]
+        + [("input", n + "_CV", x, 101.0, None) for n, x in zip(_FA_COLS, _FA_X)]
+        + [("output", "SUBOUT", _FA_X[0], 116.0, "SUB"),
+           ("output", "LEFT", _FA_X[3], 116.0, "L"),
+           ("output", "RIGHT", _FA_X[4], 116.0, "R")],
+        sizes={"PARAM_PITCH": "hero", "PARAM_CUTOFF": "face"},
+        origins=[_FA_O],
+        circles=[(*_FA_O, r) for r in (_FA_FILTER, _FA_ATT, 72, 86, 100)],
+        # The sounding line, from the origin to the foot of the panel.
+        radii=[(*_FA_O, *_FA_SOUNDING_END)],
+        # From the upper right, clear of the nameplate, round through the
+        # bottom and off the left edge.
+        limbs=[dict(c=_FA_O, r=_FA_LIMB_R, a0=-50, a1=124, step=2, major=5)],
+        faces={
+            # A tick per semitone over +-24, numbered in octaves.
+            "PARAM_PITCH": dict(r=13.4, ticks=48, major=12, numerals=["-2", "-1", "0", "+1", "+2"],
+                                tick_r=9.6, minor_len=0.6, major_len=1.0, numeral_r=11.85, numeral_size=1.9),
+            # 20 Hz to 20 kHz: a long tick per octave.
+            "PARAM_CUTOFF": dict(r=7.3, ticks=20, major=2),
+        },
+        tiles=[dict(port=f"OUTPUT_{n}") for n in ("SUBOUT", "LEFT", "RIGHT")],
+        traces=[[f"INPUT_{n}_CV", f"PARAM_{n}_ATT", f"PARAM_{n}"] for n in ("RES", "CUTOFF", "DRIVE")]
+        + [["INPUT_DRIFT_CV", "PARAM_DRIFT_ATT", (_FA_X[1], 68.0), "PARAM_DRIFT"],
+           ["INPUT_DETUNE_CV", "PARAM_DETUNE_ATT", (_FA_X[3], 60.0), "PARAM_DETUNE"]],
+        # SUB's and SPREAD's names inside the limb: above, they would cross it.
+        label_at={"PARAM_PITCH": "face", "PARAM_SUB": "left", "PARAM_SPREAD": "left"},
+        # Depths, just right of the sounding line where it crosses the limb
+        # and the filter ping.
+        notes=[(15.6, 56.6, "10", 1.6, "brass", "start"), (11.9, 78.6, "20", 1.6, "brass", "start")],
+        # Not in the mockup: as Sway, clear of the nameplate.
+        screws=screws_at(10, "tr", "bl"),
     ),
     # Shoal, the Ornament & Crime emulation. The left 83 mm is three screens
     # the module draws (output strip, scope, editor); on the right a controls
@@ -673,22 +692,8 @@ def num(v):
     return "0" if s in ("-0", "") else s
 
 
-# --- Geometry helpers (pure; tools/test_gen_panels.py). column_on_arc is
-# above PANELS, whose descriptions use it. ---
-
-def arc_point(cx, cy, r, deg):
-    """The point on the circle of radius r about (cx, cy) at `deg` degrees
-    from straight down, positive toward the right."""
-    a = math.radians(deg)
-    return cx + r * math.sin(a), cy + r * math.cos(a)
-
-
-def dial_point(cx, cy, r, deg):
-    """The point r from a dial's centre at `deg` degrees of turn: 0 straight
-    up, positive clockwise, as a knob's pointer moves."""
-    a = math.radians(deg)
-    return cx + r * math.sin(a), cy - r * math.cos(a)
-
+# --- Geometry helpers (pure; tools/test_gen_panels.py). column_on_arc,
+# arc_point and dial_point are above PANELS, whose descriptions use them. ---
 
 def trace_end(start, centre, radius):
     """Where a trace coming from `start`, aimed at a control's centre, stops:
