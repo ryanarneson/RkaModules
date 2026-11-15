@@ -8,8 +8,10 @@ Status: idea, 2026-11-15. Not designed.
 delay does not give.
 
 **The instrument.** A visibility scale. The main dial is lettered in the
-terms used for visibility at sea: Dense, Thick, Fog, Mist, Haze, Clear.
-Less visibility means a longer, thicker reverb. It is the first panel
+terms used for visibility at sea, running clockwise from Clear through
+Haze, Mist, Fog and Thick to Dense. Clear is fully anticlockwise, at the
+user's request: turning the knob up should give more reverb, as on any
+other effect. It is the first panel
 with the hero low down: the other knobs arch over it on a graduated arc.
 
 **Sketched controls.** Visibility (the hero) with CV and attenuverter;
