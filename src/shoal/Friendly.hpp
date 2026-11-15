@@ -36,9 +36,14 @@ struct Row {
 	int16_t nameCount;
 	char text[kRowText];         // the value as the firmware prints it; empty: show the number or the name
 };
+enum : uint8_t {
+	kModelBusy = 1,       // the app is not on its settings menu (app menu or a sub-editor open): every edit is dropped
+	kModelTruncated = 2   // more rows than kMaxRows: a fault in an adapter, never expected
+};
 struct FriendlyModel {
 	uint8_t app;                 // index into Core::appName
 	uint8_t tabs, tab;           // channels and the firmware's selected one; tabs <= 1: no tab bar
+	uint8_t flags;               // kModelBusy, kModelTruncated
 	const char* tabLabel[kMaxTabs];
 	char status[kStatusText];    // the title bar's live text (freeze, clock, frequency); may be empty
 	int16_t rows;

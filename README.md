@@ -45,7 +45,8 @@ src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   FirmwareContext.inc    per-instance firmware state (shoal::Context)
   Friendly.hpp           friendly mode's row model and edits (FriendlyModel, FriendlyEdit)
   SettingsAccess.inc     raw settings table for every app
-  FriendlyAdapters.inc   friendly mode: one adapter per app, edits through the app's handlers
+  Friendly.inc           friendly mode's framework: helpers, the table of adapters, the edit checks
+  FriendlyAdapters<n>.inc  the per-app adapters, a file per group of apps (1: Quadraturia, Low-rents)
   CoreImpl.inc           shoal::Core's implementation
   CoreTest.hpp           test-only hooks into the core
   test_util.hpp          helpers shared by the Shoal tests

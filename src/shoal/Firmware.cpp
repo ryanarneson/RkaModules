@@ -68,8 +68,9 @@
 // Raw settings access for every app.
 #include "SettingsAccess.inc"
 
-// Friendly mode: the row model and the edits, one adapter per app.
-#include "FriendlyAdapters.inc"
+// Friendly mode: the row model and the edits, one adapter per app
+// (Friendly.inc includes the FriendlyAdapters<n>.inc files).
+#include "Friendly.inc"
 
 // shoal::Core.
 #include "CoreImpl.inc"

@@ -33,6 +33,22 @@ struct CoreTest {
 	// press. The friendly-mode tests use these as "what the encoders would
 	// do". Unlike the hardware, an R or UP long press reaches the app too.
 	static void encoderEvent(Core& c, Encoder e, int delta);
+	// Whether app `app` has a friendly-mode adapter of its own (one that
+	// takes edits), not the read-only generic one.
+	static bool friendlyHasAdapter(int app);
+	// Friendly mode through a stand-in for the Low-rents adapter with one
+	// thing wrong (Friendly.inc, namespace fake); c must be on Low-rents.
+	// Applies *e if given (the result; false without one), then builds the
+	// stand-in's model into *out if given.
+	enum FriendlyFake {
+		NotAccepting,   // its accepting() is false: as with a sub-editor open
+		TabsNoSelect,   // reports two tabs, has no selectTab
+		SelectFails,    // reports two tabs (the first selected); its selectTab does nothing
+		TooManyRows     // lists kMaxRows + 5 action rows
+	};
+	static bool friendlyFake(Core& c, FriendlyFake fake, const FriendlyEdit* e, FriendlyModel* out);
+	// friendly::Text::fixed, the status texts' printf("%*.*f") stand-in.
+	static void fixedText(double value, int decimals, int width, char (&out)[24]);
 	static void buttonEvent(Core& c, Button b, bool longPress);
 	// The firmware's storage pages inside a state image: the global settings
 	// page or the app data page (page 0 of each, where a first save puts it).

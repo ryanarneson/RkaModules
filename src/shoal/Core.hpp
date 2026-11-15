@@ -85,10 +85,12 @@ public:
 	// Friendly mode (Friendly.hpp): the current app's settings as a list, and
 	// edits on it, carried out through the app's own encoder and button
 	// handlers. Neither allocates or locks. An edit is dropped (false) when
-	// its app is not the current one, the app menu is open, its tab does not
-	// exist, its row is not in that tab's list now, or the row does not take
-	// that type of edit. True means it was handed to the app, which may
-	// still refuse or clamp it: the next model shows the result.
+	// its app is not the current one, the app is not on its settings menu
+	// (the app menu or a sub-editor is open: the model's kModelBusy), its tab
+	// does not exist or the app would not select it, its row is not in that
+	// tab's list now, or the row does not take that type of edit. True means
+	// it was handed to the app, which may still refuse or clamp it: the next
+	// model shows the result.
 	void friendlyModel(FriendlyModel& out) const;
 	bool friendlyEdit(const FriendlyEdit& e);
 	// State.

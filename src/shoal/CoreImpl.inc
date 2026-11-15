@@ -366,12 +366,12 @@ bool Core::setSettingRaw(int channel, int index, int value) {
 
 void Core::friendlyModel(FriendlyModel& out) const {
 	Scope scope(impl_->ctx.get());
-	friendly::model(out);
+	friendly::model(friendly::adapterFor(OC::apps::index_of(OC::global_settings.current_app_id)), out);
 }
 
 bool Core::friendlyEdit(const FriendlyEdit& e) {
 	Scope scope(impl_->ctx.get());
-	return friendly::edit(e);
+	return friendly::edit(friendly::adapterFor(OC::apps::index_of(OC::global_settings.current_app_id)), e);
 }
 
 void Core::save(uint8_t* out) {
@@ -443,6 +443,23 @@ int CoreTest::menuSetting(Core& c) {
 	if (c.app() == 6)
 		return lorenz_generator_state.cursor.cursor_pos();
 	return -1;
+}
+
+bool CoreTest::friendlyHasAdapter(int app) {
+	return app >= 0 && app < kNumApps && friendly::adapterFor(app).edit != nullptr;
+}
+
+bool CoreTest::friendlyFake(Core& c, FriendlyFake fake, const FriendlyEdit* e, FriendlyModel* out) {
+	Scope scope(c.impl_->ctx.get());
+	const friendly::Adapter& a = friendly::fake::kFakes[fake];
+	const bool taken = e && friendly::edit(a, *e);
+	if (out)
+		friendly::model(a, *out);
+	return taken;
+}
+
+void CoreTest::fixedText(double value, int decimals, int width, char (&out)[24]) {
+	friendly::Text(out).fixed(value, decimals, width);
 }
 
 void CoreTest::encoderEvent(Core& c, Encoder e, int delta) {

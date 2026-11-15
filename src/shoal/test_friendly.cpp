@@ -4,6 +4,7 @@
 // describes (docs/specs/2026-11-15-shoal-app-survey.md), as single events
 // straight to the app's handlers, and require the two to end up identical.
 #include <climits>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <initializer_list>
@@ -32,6 +33,14 @@ const ShortNames kShortNames[] = {
 	{ 4, "CV source", 4 },       // OC_strings.cpp:25 cv_input_names[4], range 0..4
 	{ 7, "Trigger input", 4 },   // OC_strings.cpp:21 trigger_input_names[4], range 0..6
 	{ 11, "chord:", 8 },         // APP_CHORDS.ino:984 chords_slots, 8 names, range 0..CHORDS_USER_LAST - 1
+};
+
+// Labels an adapter gives in place of the settings table's (allowed where
+// the table's name is a one- or two-letter abbreviation).
+struct LabelOverride { int app, setting; const char* table; const char* label; };
+const LabelOverride kLabelOverrides[] = {
+	{ 5, 0, "C", "Coarse" },
+	{ 5, 1, "F", "Fine" },
 };
 
 const ShortNames* shortNamesFor(int app, const char* label) {
@@ -72,6 +81,9 @@ int checkWellFormed(const Core& c, const FriendlyModel& m, const char* what) {
 	CHECK(m.rows >= 1 && m.rows <= shoal::kMaxRows, "%s %s: %d rows", what, an, m.rows);
 	CHECK(m.tabs <= shoal::kMaxTabs, "%s %s: %d tabs", what, an, m.tabs);
 	CHECK(m.tab < (m.tabs ? m.tabs : 1), "%s %s: tab %d of %d", what, an, m.tab, m.tabs);
+	CHECK((m.flags & ~shoal::kModelBusy) == 0, "%s %s: model flags %d (2: rows were cut off)", what, an, m.flags);
+	CHECK(((m.flags & shoal::kModelBusy) != 0) == c.appMenuOpen(), "%s %s: model flags %d, app menu %s", what, an, m.flags,
+		c.appMenuOpen() ? "open" : "closed");
 	for (int t = 0; m.tabs > 1 && t < m.tabs && t < shoal::kMaxTabs; t++)  // one tab: no tab bar, no label
 		CHECK(m.tabLabel[t] != nullptr && std::strlen(m.tabLabel[t]) > 0, "%s %s: tab %d has no label", what, an, t);
 	CHECK(terminated(m.status, shoal::kStatusText), "%s %s: status not terminated", what, an);
@@ -122,6 +134,13 @@ int checkWellFormed(const Core& c, const FriendlyModel& m, const char* what) {
 			CHECK(m.row[k].id != r.id, "%s %s: rows %d and %d share id %d", what, an, k, i, r.id);
 	}
 	CHECK(cursors <= 1, "%s %s: %d rows under the cursor", what, an, cursors);
+	// An app with an adapter of its own: whenever the firmware's cursor is on
+	// a setting the model lists, that row and no other carries the cursor.
+	const int under = CoreTest::friendlyHasAdapter(app) ? CoreTest::menuSetting(const_cast<Core&>(c)) : -1;
+	const Row* at = under >= 0 ? findRow(m, under) : nullptr;
+	if (at)
+		CHECK(cursors == 1 && (at->flags & shoal::kRowCursor), "%s %s: the cursor is on setting %d; %d rows marked, that row's flags %d",
+			what, an, under, cursors, at->flags);
 	return cursors;
 }
 
@@ -241,10 +260,18 @@ struct Pair {
 
 // The hardware gesture for a row of the settings menu, in apps whose R push
 // toggles edit mode: scroll to the row, push, turn by the difference, push.
-void menuGesture(Core& c, int row, int target) {
+// `editing`: the cursor is in edit mode beforehand (an R push on the panel);
+// a person then pushes R to leave it before scrolling to another row, and
+// does not push again to edit the row it is on.
+void menuGesture(Core& c, int row, int target, bool editing = false) {
 	const int at = CoreTest::menuSetting(c);
+	if (editing && at != row) {
+		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+		editing = false;
+	}
 	CoreTest::encoderEvent(c, shoal::ENCODER_R, row - at);
-	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
+	if (!editing)
+		CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
 	CoreTest::encoderEvent(c, shoal::ENCODER_R, target - c.setting(0, row));
 	CoreTest::buttonEvent(c, shoal::BUTTON_R, false);
 }
@@ -265,7 +292,15 @@ void testGenericModel() {
 				continue;
 			CHECK(r.id >= 0 && r.id < c.settingCount(), "%s row %d: id %d", an, i, r.id);
 			const shoal::SettingInfo s = c.settingInfo(r.id);
-			CHECK(r.label == s.name, "%s row %d: label '%s', table '%s'", an, i, r.label, s.name);
+			const LabelOverride* over = nullptr;
+			for (const LabelOverride& o : kLabelOverrides)
+				if (o.app == app && o.setting == r.id)
+					over = &o;
+			if (over)
+				CHECK(std::strcmp(s.name, over->table) == 0 && std::strlen(s.name) <= 2 && std::strcmp(r.label, over->label) == 0,
+					"%s row %d: label '%s' for the table's '%s', want '%s' for '%s'", an, i, r.label, s.name, over->label, over->table);
+			else
+				CHECK(r.label == s.name, "%s row %d: label '%s', table '%s'", an, i, r.label, s.name);
 			if (isValueRow(r)) {
 				CHECK(r.min == s.min && r.max == s.max && r.def == s.def, "%s row %d (%s): range", an, i, r.label);
 				CHECK(r.value == c.setting(m.tab, r.id), "%s row %d (%s): value %d, setting %d", an, i, r.label,
@@ -278,6 +313,8 @@ void testGenericModel() {
 			}
 		}
 		// The two apps with an adapter always have the cursor on a listed row.
+		CHECK(CoreTest::friendlyHasAdapter(app) == (app == kQuadraturia || app == kLowRents), "%s: adapter %d", an,
+			CoreTest::friendlyHasAdapter(app));
 		if (app == kQuadraturia || app == kLowRents)
 			CHECK(cursors == 1, "%s: %d rows under the cursor", an, cursors);
 		// A list is never cut short: the largest table plus its extras fits.
@@ -492,6 +529,7 @@ void testFocusMovesCursor() {
 			const Row row = first.row[n];
 			const int before = CoreTest::menuSetting(a);
 			const Snapshot settings = snapshot(a);
+			CHECK(!(model(a).flags & shoal::kModelBusy), "%s: busy on its settings menu", an);
 			const bool inMenu = row.id >= 2 && row.id < kExtraId;  // both apps' menus start at setting 2
 			CHECK(a.friendlyEdit(makeEdit(FriendlyEdit::Focus, app, 0, row.id, 0)), "%s: Focus on '%s' dropped", an, row.label);
 			CHECK(sameSnapshot(settings, snapshot(a)), "%s: Focus on '%s' changed a setting", an, row.label);
@@ -518,14 +556,144 @@ void testFocusMovesCursor() {
 			CHECK(std::memcmp(fa.bytes, fb.bytes, sizeof(fa.bytes)) == 0, "%s: Focus on '%s': the menu differs from the encoder's",
 				an, row.label);
 		}
-		// Focus leaves edit mode as it found it.
+		// While the cursor is editing: Focus on its own row changes nothing;
+		// Focus on another row leaves edit mode first, as a person must (an
+		// R push, then the turn).
+		const int here = CoreTest::menuSetting(a);
+		const int there = here == 4 ? 5 : 4;
 		CoreTest::buttonEvent(a, shoal::BUTTON_R, false);
-		CHECK(a.friendlyEdit(makeEdit(FriendlyEdit::Focus, app, 0, 4, 0)), "%s: Focus while editing dropped", an);
-		const FriendlyModel editing = model(a);
-		const Row* r = findRow(editing, 4);
-		CHECK(r && (r->flags & shoal::kRowCursor) && (r->flags & shoal::kRowEditing), "%s: Focus while editing: flags %d", an,
+		CHECK(a.friendlyEdit(makeEdit(FriendlyEdit::Focus, app, 0, here, 0)), "%s: Focus on the row being edited dropped", an);
+		const FriendlyModel same = model(a);
+		const Row* r = findRow(same, here);
+		CHECK(r && (r->flags & shoal::kRowCursor) && (r->flags & shoal::kRowEditing), "%s: Focus on the row being edited: flags %d", an,
 			r ? r->flags : -1);
+		CHECK(a.friendlyEdit(makeEdit(FriendlyEdit::Focus, app, 0, there, 0)), "%s: Focus while editing dropped", an);
+		const FriendlyModel moved = model(a);
+		r = findRow(moved, there);
+		CHECK(r && (r->flags & (shoal::kRowCursor | shoal::kRowEditing)) == shoal::kRowCursor, "%s: Focus while editing another row: flags %d",
+			an, r ? r->flags : -1);
 	}
+}
+
+// An edit that arrives while the cursor is editing (R pushed on the panel):
+// it applies, and the cursor ends on the edited row, not editing.
+void testEditWhileEditing() {
+	for (int app : { kQuadraturia, kLowRents }) {
+		const char* an = Core::appName(app);
+		Pair p(app);
+		const FriendlyModel first = model(p.a);
+		// From each menu row in edit mode, an edit on another row and one on that row.
+		for (int from = 2; from < p.a.settingCount(); from++) {
+			for (int to : { from == 2 ? p.a.settingCount() - 1 : from - 1, from }) {
+				for (Core* c : { &p.a, &p.b }) {
+					CoreTest::encoderEvent(*c, shoal::ENCODER_R, from - CoreTest::menuSetting(*c));
+					CoreTest::buttonEvent(*c, shoal::BUTTON_R, false);
+				}
+				const FriendlyModel before = model(p.a);
+				const Row* held = findRow(before, from);
+				CHECK(held && (held->flags & shoal::kRowEditing), "%s: setting %d is not being edited", an, from);
+				const Row* row = findRow(first, to);
+				const int target = p.a.setting(0, to) == row->max ? row->min : row->max;
+				const int fromValue = p.a.setting(0, from);
+				CHECK(p.a.friendlyEdit(makeEdit(FriendlyEdit::SetValue, app, 0, to, target)), "%s: edit of %d while editing %d dropped",
+					an, to, from);
+				menuGesture(p.b, to, target, true);
+				CHECK(p.a.setting(0, to) == target, "%s: setting %d is %d, want %d", an, to, p.a.setting(0, to), target);
+				if (to != from)
+					CHECK(p.a.setting(0, from) == fromValue, "%s: the row being edited (%d) changed", an, from);
+				const FriendlyModel after = model(p.a);
+				for (int i = 0; i < after.rows; i++) {
+					const int want = after.row[i].id == to ? shoal::kRowCursor : 0;
+					CHECK((after.row[i].flags & (shoal::kRowCursor | shoal::kRowEditing)) == want, "%s: after an edit of %d while editing %d, row %d has flags %d",
+						an, to, from, i, after.row[i].flags);
+				}
+				CHECK(sameSettings(p.a, p.b) && modelDiff(after, model(p.b)) < 0, "%s: edit of %d while editing %d differs from the gesture",
+					an, to, from);
+			}
+		}
+		p.checkSame("while editing", "all rows", 0);
+	}
+}
+
+// The drops no real adapter can show yet, through stand-ins for the
+// Low-rents adapter (CoreTest::friendlyFake).
+void testFrameworkDrops() {
+	Core c;
+	c.selectApp(kLowRents);
+	const Snapshot before = snapshot(c);
+	const int cursor = CoreTest::menuSetting(c);
+	const FriendlyEdit set = makeEdit(FriendlyEdit::SetValue, kLowRents, 0, 4, 1);
+	const FriendlyEdit focus = makeEdit(FriendlyEdit::Focus, kLowRents, 0, 5, 0);
+	auto untouched = [&](const char* what) {
+		CHECK(sameSnapshot(before, snapshot(c)) && CoreTest::menuSetting(c) == cursor, "%s: a dropped edit changed the app", what);
+	};
+	FriendlyModel m;
+	// Not on its settings menu (a sub-editor has the controls): busy, all dropped.
+	CHECK(!CoreTest::friendlyFake(c, CoreTest::NotAccepting, &set, &m), "not accepting: SetValue applied");
+	CHECK(m.flags == shoal::kModelBusy && m.rows == 10, "not accepting: flags %d, %d rows", m.flags, m.rows);
+	CHECK(!CoreTest::friendlyFake(c, CoreTest::NotAccepting, &focus, nullptr), "not accepting: Focus applied");
+	const FriendlyEdit tab0 = makeEdit(FriendlyEdit::SelectTab, kLowRents, 0, 0, 0);
+	CHECK(!CoreTest::friendlyFake(c, CoreTest::NotAccepting, &tab0, nullptr), "not accepting: SelectTab applied");
+	untouched("not accepting");
+	// Several tabs and no selectTab: nothing is taken, even on the selected tab.
+	CHECK(!CoreTest::friendlyFake(c, CoreTest::TabsNoSelect, &set, &m), "tabs without selectTab: SetValue applied");
+	CHECK(m.tabs == 2 && m.tab == 0 && m.flags == 0, "tabs without selectTab: %d tabs, flags %d", m.tabs, m.flags);
+	const FriendlyEdit tab1 = makeEdit(FriendlyEdit::SelectTab, kLowRents, 0, 0, 1);
+	CHECK(!CoreTest::friendlyFake(c, CoreTest::TabsNoSelect, &tab1, nullptr), "tabs without selectTab: SelectTab applied");
+	untouched("tabs without selectTab");
+	// The app does not follow selectTab: an edit for the other tab is dropped
+	// and never reaches a row of the tab that stayed selected.
+	const FriendlyEdit other = makeEdit(FriendlyEdit::SetValue, kLowRents, 1, 4, 1);
+	CHECK(!CoreTest::friendlyFake(c, CoreTest::SelectFails, &other, nullptr), "selectTab failed: SetValue for tab 1 applied");
+	CHECK(!CoreTest::friendlyFake(c, CoreTest::SelectFails, &tab1, nullptr), "selectTab failed: SelectTab reported done");
+	const FriendlyEdit otherFocus = makeEdit(FriendlyEdit::Focus, kLowRents, 1, 5, 0);
+	CHECK(!CoreTest::friendlyFake(c, CoreTest::SelectFails, &otherFocus, nullptr), "selectTab failed: Focus for tab 1 applied");
+	untouched("selectTab failed");
+	// The same stand-in takes an edit for the tab that is selected.
+	CHECK(CoreTest::friendlyFake(c, CoreTest::SelectFails, &tab0, nullptr), "SelectTab of the selected tab dropped");
+	CHECK(CoreTest::friendlyFake(c, CoreTest::SelectFails, &set, nullptr), "an edit on the selected tab dropped");
+	CHECK(c.setting(0, 4) == 1 && CoreTest::menuSetting(c) == 4, "the edit left %d, cursor on %d", c.setting(0, 4), CoreTest::menuSetting(c));
+	// Too many rows: the model says so, and holds kMaxRows sound rows.
+	CoreTest::friendlyFake(c, CoreTest::TooManyRows, nullptr, &m);
+	CHECK(m.flags == shoal::kModelTruncated && m.rows == shoal::kMaxRows, "too many rows: flags %d, %d rows", m.flags, m.rows);
+	for (int i = 0; i < m.rows; i++)
+		CHECK(m.row[i].id == kExtraId + i && m.row[i].label != nullptr, "too many rows: row %d has id %d", i, m.row[i].id);
+	// The app menu makes a real model busy, and it clears when the menu closes.
+	c.setButton(shoal::BUTTON_R, true);
+	run(c, 1.1);
+	c.setButton(shoal::BUTTON_R, false);
+	run(c, 0.05);
+	CHECK(c.appMenuOpen() && (model(c).flags & shoal::kModelBusy), "app menu open: flags %d", model(c).flags);
+	c.selectApp(kLowRents);
+	CHECK(model(c).flags == 0, "app menu closed: flags %d", model(c).flags);
+}
+
+// The status texts' number formatting against printf, away from rounding ties.
+void testFixedText() {
+	char got[24], want[24];
+	Lcg rng;
+	for (int n = 0; n < 20000; n++) {
+		const int decimals = n % 4, width = (n / 4) % 9;
+		// A value on a fine grid, pushed off the half-way points.
+		const double scale[] = { 1.0, 10.0, 100.0, 1000.0 };
+		const double grid = (double) ((int32_t) rng.next() >> (8 + n % 20)) / scale[decimals];
+		const double v = grid + (n & 1 ? 0.2 : -0.3) / scale[decimals];
+		CoreTest::fixedText(v, decimals, width, got);
+		std::snprintf(want, sizeof(want), "%*.*f", width, decimals, v);
+		CHECK(std::strcmp(got, want) == 0, "fixed(%.9g, %d, %d) is '%s', printf gives '%s'", v, decimals, width, got, want);
+	}
+	CoreTest::fixedText(0.0 / 1e-300 * 0.0, 2, 6, got);  // 0
+	CHECK(std::strcmp(got, "  0.00") == 0, "fixed(0) is '%s'", got);
+	CoreTest::fixedText(1e300 * 1e300, 3, 6, got);  // infinity: the limit, cut to the buffer
+	CHECK(std::strncmp(got, "1000000000000.000", 17) == 0 && std::strlen(got) == 17, "fixed(inf) is '%s'", got);
+	CoreTest::fixedText(1e300 * 1e300 - 1e300 * 1e300, 3, 6, got);
+	CHECK(std::strcmp(got, "nan") == 0, "fixed(nan) is '%s'", got);
+	// The same text the firmware's own title bar prints.
+	Core c;
+	c.selectApp(kQuadraturia);
+	run(c, 0.2);
+	const FriendlyModel m = model(c);
+	CHECK(std::strlen(m.status) == 19 && std::strcmp(m.status + 16, " Hz") == 0 && m.status[13] == '.', "Quadraturia status '%s'", m.status);
 }
 
 void testStaleEditDropped() {
@@ -672,6 +840,9 @@ int main() {
 	testQuadraturiaEquivalence();
 	testQuadraturiaPhaseReset();
 	testFocusMovesCursor();
+	testEditWhileEditing();
+	testFrameworkDrops();
+	testFixedText();
 	testStaleEditDropped();
 	testEditStorm();
 	return rkatest::finish("test_friendly");
