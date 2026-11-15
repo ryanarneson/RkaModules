@@ -250,11 +250,20 @@ Three habits behind most of them:
 | CPU bench | No | No | Yes |
 | Smoke screenshot | Yes | Yes | Yes |
 
-Open items:
+## Future work
 
-- Sway and Fathom tests should build with the sanitizers, as Shoal's do.
-- Sway and Fathom need hostile-input sweeps to the standard of rule 4, and a
-  bench.
+Decided 2026-11-15: bringing Sway and Fathom up to these rules is future
+work, to be planned on its own after Shoal's friendly mode. Not started.
+
+- Sway and Fathom tests build with the sanitizers, as Shoal's do (rule 3).
+- Sway and Fathom get hostile-input and sample-rate sweeps and a seeded
+  random fuzz to the standard of rule 4.
+- Sway and Fathom get an allocation check on the audio path (rule 6) and a
+  CPU bench (rule 10).
+- Their existing tests are each shown to fail by mutation (rule 1).
+
+Other open items:
+
 - Shoal's own code (not the vendored firmware) should compile with
   `-Wall -Wextra -Werror` in CI; today CI's `-Werror` reaches only the other
   modules' tests.
