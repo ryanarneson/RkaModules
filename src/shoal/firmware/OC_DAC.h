@@ -8,11 +8,7 @@
 #include "util/util_math.h"
 #include "util/util_macros.h"
 
-extern void set8565_CHA(uint32_t data);
-extern void set8565_CHB(uint32_t data);
-extern void set8565_CHC(uint32_t data);
-extern void set8565_CHD(uint32_t data);
-extern void SPI_init();
+// SHOAL: SPI and DAC8565 driver functions deleted; the shim reads values_.
 
 enum DAC_CHANNEL {
   DAC_CHANNEL_A, DAC_CHANNEL_B, DAC_CHANNEL_C, DAC_CHANNEL_D, DAC_CHANNEL_LAST
@@ -215,10 +211,7 @@ public:
 
   static void Update() {
 
-    set8565_CHA(values_[DAC_CHANNEL_A]);
-    set8565_CHB(values_[DAC_CHANNEL_B]);
-    set8565_CHC(values_[DAC_CHANNEL_C]);
-    set8565_CHD(values_[DAC_CHANNEL_D]);
+    // SHOAL: no SPI transfer; the shim reads values_ (see value()).
 
     size_t tail = history_tail_;
     history_[DAC_CHANNEL_A][tail] = values_[DAC_CHANNEL_A];

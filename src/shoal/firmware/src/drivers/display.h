@@ -32,31 +32,26 @@
 namespace display {
 
 extern FrameBuffer<SH1106_128x64_Driver::kFrameSize, 2> frame_buffer;
-extern PagedDisplayDriver<SH1106_128x64_Driver> driver;
+// SHOAL: no display driver (the paged SH1106 transfer and AdjustOffset are
+// deleted). Nothing reads frames out, so Flush/Update do nothing and each
+// finished frame is consumed at once (GRAPHICS_END_FRAME).
 
 void Init();
-void AdjustOffset(uint8_t offset);
 
 static inline void Flush() __attribute__((always_inline));
 static inline void Flush() {
-	if (driver.Flush())
-		frame_buffer.read();
 }
 
 static inline void Update() __attribute__((always_inline));
 static inline void Update() {
-  if (driver.frame_valid()) {
-    driver.Update();
-  } else {
-    if (frame_buffer.readable())
-      driver.Begin(frame_buffer.readable_frame());
-  }
 }
 
 };
 
 extern weegfx::Graphics graphics;
 
+// SHOAL: a frame is always writeable, so `wait` never blocks; END_FRAME
+// marks it written and read, leaving it as the latest finished frame.
 #define GRAPHICS_BEGIN_FRAME(wait) \
 do { \
   DEBUG_PIN_SCOPE(OC_GPIO_DEBUG_PIN1); \
@@ -72,6 +67,7 @@ do { \
 #define GRAPHICS_END_FRAME() \
     graphics.End(); \
     display::frame_buffer.written(); \
+    display::frame_buffer.read(); \
   } \
 } while (0)
 

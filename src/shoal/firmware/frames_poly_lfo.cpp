@@ -233,7 +233,9 @@ void PolyLfo::Render(int32_t frequency, bool reset_phase, bool tempo_sync, uint8
       dac_code_[i] = wt_value_[i] + 32768; //Keyframer::ConvertToDacCode(value + 32768, 0);
     }
     // cross-channel AM
-    dac_code_[i] = (dac_code_[i] * (65535 - (((65535 - dac_code_[i-1]) * am_depths[i]) >> 8))) >> 16 ; 
+    // SHOAL: upstream reads dac_code_[-1] for i == 0; am_depths[0] is 0, so the
+    // value never mattered. Read 0 instead of out of bounds.
+    dac_code_[i] = (dac_code_[i] * (65535 - (((65535 - (i ? dac_code_[i-1] : 0)) * am_depths[i]) >> 8))) >> 16 ; 
     // attenuationand offset
     dac_code_[i] = ((dac_code_[i] * attenuation_) >> 16) + offset_ ;
     wavetable_index += shape_spread_;

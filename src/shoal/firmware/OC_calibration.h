@@ -36,7 +36,7 @@ enum CalibrationFlags : uint32_t {
 };
 
 struct CalibrationData {
-  static constexpr uint32_t FOURCC = FOURCC<'C', 'A', 'L', 1>::value;
+  static constexpr uint32_t FOURCC = ::FOURCC<'C', 'A', 'L', 1>::value; // SHOAL: '::' for clang (member name hides the template)
 
   DAC::CalibrationData dac;
   ADC::CalibrationData adc;

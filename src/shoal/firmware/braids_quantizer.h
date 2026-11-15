@@ -36,7 +36,7 @@ namespace braids {
   
 struct Scale {
   int16_t span;
-  size_t num_notes;
+  uint32_t num_notes; // SHOAL: was size_t (32-bit on ARM); keeps GlobalSettings within its EEPROM pages
   int16_t notes[16];
 };
 

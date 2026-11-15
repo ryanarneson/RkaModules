@@ -3,7 +3,7 @@
 
 #include "OC_config.h"
 #include "OC_options.h"
-#include "OC_debug.h"
+// SHOAL: OC_debug.h (profiling and debug counters) dropped.
 #include "UI/ui_button.h"
 #include "UI/ui_encoder.h"
 #include "UI/ui_event_queue.h"
@@ -128,11 +128,7 @@ private:
   UI::EventQueue<kEventQueueDepth> event_queue_;
 
   inline void PushEvent(UI::EventType t, uint16_t c, int16_t v, uint16_t m) {
-#ifdef OC_UI_DEBUG
-    if (!event_queue_.writable())
-      ++DEBUG::UI_queue_overflow;
-    ++DEBUG::UI_event_count;
-#endif
+    // SHOAL: OC_UI_DEBUG event counters deleted (OC_debug.h dropped).
     event_queue_.PushEvent(t, c, v, m);
   }
 

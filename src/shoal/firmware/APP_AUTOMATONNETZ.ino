@@ -280,7 +280,8 @@ public:
   }
 
   TransformCell cells_[GRID_CELLS];
-  CellGrid<TransformCell, GRID_DIMENSION, FRACTIONAL_BITS, GRID_EPSILON> grid;
+  // SHOAL: CellGrid's epsilon parameter is a bool; ARM GCC accepted 6 and made it true.
+  CellGrid<TransformCell, GRID_DIMENSION, FRACTIONAL_BITS, (bool)GRID_EPSILON> grid;
 
   OC::SemitoneQuantizer quantizer;
   TonnetzState tonnetz_state;

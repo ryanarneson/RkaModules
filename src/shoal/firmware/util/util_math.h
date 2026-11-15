@@ -38,34 +38,44 @@
 #define MOD_8(n, div) \
   FAST_FP_MOD(n, div, 8)
 
-inline uint32_t USAT16(uint32_t value) __attribute__((always_inline));
-inline uint32_t USAT16(uint32_t value) {
-  uint32_t result;
-  __asm("usat %0, %1, %2" : "=r" (result) : "I" (16), "r" (value));
-  return result;
+// SHOAL: the ARM assembly below (usat, umull) is replaced by portable C with
+// the same results, including ARM's register-shift rule (shift amount taken
+// from the bottom byte; 32 or more shifts everything out).
+static inline uint32_t shoal_arm_lsl(uint32_t value, uint32_t shift) {
+  shift &= 0xff;
+  return shift >= 32 ? 0 : value << shift;
 }
 
+static inline uint32_t shoal_arm_lsr(uint32_t value, uint32_t shift) {
+  shift &= 0xff;
+  return shift >= 32 ? 0 : value >> shift;
+}
+
+// usat #16: the operand is read as signed and clamped to 0..65535.
 inline uint32_t USAT16(int32_t value) __attribute__((always_inline));
 inline uint32_t USAT16(int32_t value) {
-  uint32_t result;
-  __asm("usat %0, %1, %2" : "=r" (result) : "I" (16), "r" (value));
-  return result;
+  return value < 0 ? 0 : value > 0xffff ? 0xffff : (uint32_t)value;
+}
+
+inline uint32_t USAT16(uint32_t value) __attribute__((always_inline));
+inline uint32_t USAT16(uint32_t value) {
+  return USAT16((int32_t)value);
 }
 
 static inline uint32_t multiply_u32xu32_rshift24(uint32_t a, uint32_t b) __attribute__((always_inline));
 static inline uint32_t multiply_u32xu32_rshift24(uint32_t a, uint32_t b)
 {
-  register uint32_t lo, hi;
-  asm volatile("umull %0, %1, %2, %3" : "=r" (lo), "=r" (hi) : "r" (a), "r" (b));
+  const uint64_t product = (uint64_t)a * b;
+  const uint32_t lo = (uint32_t)product, hi = (uint32_t)(product >> 32);
   return (lo >> 24) | (hi << 8);
 }
 
 static inline uint32_t multiply_u32xu32_rshift(uint32_t a, uint32_t b, uint32_t shift) __attribute__((always_inline));
 static inline uint32_t multiply_u32xu32_rshift(uint32_t a, uint32_t b, uint32_t shift)
 {
-  register uint32_t lo, hi;
-  asm volatile("umull %0, %1, %2, %3" : "=r" (lo), "=r" (hi) : "r" (a), "r" (b));
-  return (lo >> shift) | (hi << (32 - shift));
+  const uint64_t product = (uint64_t)a * b;
+  const uint32_t lo = (uint32_t)product, hi = (uint32_t)(product >> 32);
+  return shoal_arm_lsr(lo, shift) | shoal_arm_lsl(hi, 32 - shift);
 }
 
 template <typename T, T smoothing>

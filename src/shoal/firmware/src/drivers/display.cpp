@@ -28,16 +28,11 @@ weegfx::Graphics graphics;
 namespace display {
 
 FrameBuffer<SH1106_128x64_Driver::kFrameSize, 2> frame_buffer;
-PagedDisplayDriver<SH1106_128x64_Driver> driver;
+// SHOAL: display driver and AdjustOffset() deleted (no SH1106).
 
 void Init() {
   frame_buffer.Init();
-  driver.Init();
   graphics.Init();
-}
-
-void AdjustOffset(uint8_t offset) {
-	SH1106_128x64_Driver::AdjustOffset(offset);
 }
 
 };

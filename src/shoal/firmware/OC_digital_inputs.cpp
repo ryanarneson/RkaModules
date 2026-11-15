@@ -10,39 +10,14 @@ uint32_t OC::DigitalInputs::clocked_mask_;
 /*static*/
 volatile uint32_t OC::DigitalInputs::clocked_[DIGITAL_INPUT_LAST];
 
-void FASTRUN tr1_ISR() {  
-  OC::DigitalInputs::clock<OC::DIGITAL_INPUT_1>();
-}  // main clock
-
-void FASTRUN tr2_ISR() {
-  OC::DigitalInputs::clock<OC::DIGITAL_INPUT_2>();
-}
-
-void FASTRUN tr3_ISR() {
-  OC::DigitalInputs::clock<OC::DIGITAL_INPUT_3>();
-}
-
-void FASTRUN tr4_ISR() {
-  OC::DigitalInputs::clock<OC::DIGITAL_INPUT_4>();
-}
+// SHOAL: the TR1..TR4 pin-change ISRs are deleted. The shim calls
+// clock<input>() for each rising trigger edge before the tick's Scan(), and
+// drives the TR pins so read_immediate() sees the gate level.
 
 /*static*/
 void OC::DigitalInputs::Init() {
 
-  static const struct {
-    uint8_t pin;
-    void (*isr_fn)();
-  } pins[DIGITAL_INPUT_LAST] =  {
-    {TR1, tr1_ISR},
-    {TR2, tr2_ISR},
-    {TR3, tr3_ISR},
-    {TR4, tr4_ISR},
-  };
-
-  for (auto pin : pins) {
-    pinMode(pin.pin, OC_GPIO_TRx_PINMODE);
-    attachInterrupt(pin.pin, pin.isr_fn, FALLING);
-  }
+  // SHOAL: pin setup and attachInterrupt() deleted.
 
   clocked_mask_ = 0;
   std::fill(clocked_, clocked_ + DIGITAL_INPUT_LAST, 0);
@@ -66,14 +41,7 @@ void OC::DigitalInputs::Init() {
 }
 
 void OC::DigitalInputs::reInit() {
-  // re-init TR4, to avoid conflict with the FTM
-  #ifdef FLIP_180
-    pinMode(TR1, OC_GPIO_TRx_PINMODE);
-    attachInterrupt(TR1, tr1_ISR, FALLING);
-  #else
-    pinMode(TR4, OC_GPIO_TRx_PINMODE);
-    attachInterrupt(TR4, tr4_ISR, FALLING);
-  #endif
+  // SHOAL: re-attaching the TR4 interrupt (after FreqMeasure) deleted.
 }
 
 /*static*/

@@ -75,7 +75,7 @@ namespace OC {
 // Global settings are stored separately to actual app setings.
 // The theory is that they might not change as often.
 struct GlobalSettings {
-  static constexpr uint32_t FOURCC = FOURCC<'O','C','S',2>::value;
+  static constexpr uint32_t FOURCC = ::FOURCC<'O','C','S',2>::value; // SHOAL: '::' for clang (member name hides the template)
 
   bool encoders_enable_acceleration;
   bool reserved0;
@@ -100,7 +100,7 @@ struct AppChunkHeader {
 } __attribute__((packed));
 
 struct AppData {
-  static constexpr uint32_t FOURCC = FOURCC<'O','C','A',4>::value;
+  static constexpr uint32_t FOURCC = ::FOURCC<'O','C','A',4>::value; // SHOAL: '::' for clang (member name hides the template)
 
   static constexpr size_t kAppDataSize = EEPROM_APPDATA_BINARY_SIZE;
   char data[kAppDataSize];
@@ -350,111 +350,14 @@ void draw_save_message(uint8_t c) {
   GRAPHICS_END_FRAME();
 }
 
+// SHOAL: the blocking app-selection loop and the reset confirmation are
+// stubbed until Shoal's non-blocking app menu replaces them (Task 5).
+// AppSettings() changes nothing; ConfirmReset() declines.
 void Ui::AppSettings() {
-
-  SetButtonIgnoreMask();
-
-  apps::current_app->HandleAppEvent(APP_EVENT_SUSPEND);
-
-  menu::ScreenCursor<5> cursor;
-  cursor.Init(0, NUM_AVAILABLE_APPS - 1);
-  cursor.Scroll(apps::index_of(global_settings.current_app_id));
-
-  bool change_app = false;
-  bool save = false;
-  while (!change_app && idle_time() < APP_SELECTION_TIMEOUT_MS) {
-
-    while (event_queue_.available()) {
-      UI::Event event = event_queue_.PullEvent();
-      if (IgnoreEvent(event))
-        continue;
-
-      if (UI::EVENT_ENCODER == event.type && CONTROL_ENCODER_R == event.control) {
-        cursor.Scroll(event.value);
-      } else if (CONTROL_BUTTON_R == event.control) {
-        save = event.type == UI::EVENT_BUTTON_LONG_PRESS;
-        change_app = true;
-      } else if (CONTROL_BUTTON_L == event.control) {
-        ui.DebugStats();
-      } else if (CONTROL_BUTTON_UP == event.control) {
-        bool enabled = !global_settings.encoders_enable_acceleration;
-        SERIAL_PRINTLN("Encoder acceleration: %s", enabled ? "enabled" : "disabled");
-        ui.encoders_enable_acceleration(enabled);
-        global_settings.encoders_enable_acceleration = enabled;
-      }
-    }
-
-    draw_app_menu(cursor);
-  }
-
-  event_queue_.Flush();
-  event_queue_.Poke();
-
-  CORE::app_isr_enabled = false;
-  delay(1);
-
-  if (change_app) {
-    apps::set_current_app(cursor.cursor_pos());
-    FreqMeasure.end();
-    OC::DigitalInputs::reInit();
-    if (save) {
-      save_global_settings();
-      save_app_data();
-      // draw message:
-      int cnt = 0;
-      while(idle_time() < SETTINGS_SAVE_TIMEOUT_MS)
-        draw_save_message((cnt++) >> 4);
-    }
-  }
-
-  OC::ui.encoders_enable_acceleration(global_settings.encoders_enable_acceleration);
-
-  // Restore state
-  apps::current_app->HandleAppEvent(APP_EVENT_RESUME);
-  CORE::app_isr_enabled = true;
-#ifdef VOR
-  VBiasManager *vbias_m = vbias_m->get();
-  vbias_m->SetStateForApp(apps::index_of(global_settings.current_app_id));
-#endif
 }
 
 bool Ui::ConfirmReset() {
-
-  SetButtonIgnoreMask();
-
-  bool done = false;
-  bool confirm = false;
-
-  do {
-    while (event_queue_.available()) {
-      UI::Event event = event_queue_.PullEvent();
-      if (IgnoreEvent(event))
-        continue;
-      if (CONTROL_BUTTON_R == event.control) {
-        confirm = true;
-        done = true;
-      } else if (CONTROL_BUTTON_L == event.control) {
-        confirm = false;
-        done = true;
-      }
-    }
-
-    GRAPHICS_BEGIN_FRAME(true);
-    weegfx::coord_t y = menu::CalcLineY(0);
-    graphics.setPrintPos(menu::kIndentDx, y);
-    graphics.print("[L] EXIT");
-    y += menu::kMenuLineH;
-
-    graphics.setPrintPos(menu::kIndentDx, y);
-    graphics.print("[R] RESET SETTINGS" );
-    y += menu::kMenuLineH;
-    graphics.setPrintPos(menu::kIndentDx, y);
-    graphics.print("    AND ERASE EEPROM");
-    GRAPHICS_END_FRAME();
-
-  } while (!done);
-
-  return confirm;
+  return false;
 }
 
 }; // namespace OC

@@ -489,7 +489,7 @@ void Graphics::print(uint16_t value, unsigned width) {
   print(str);
 }
 
-void Graphics::print(uint32_t value, size_t width) {
+void Graphics::print(uint32_t value, unsigned width) { // SHOAL: was size_t (== unsigned on ARM), declared unsigned
   char buf[24];
   char *str = itos<uint32_t, false>(value, buf, sizeof(buf));
   while (str > buf &&

@@ -4,6 +4,10 @@
 // that file's comments; intermediates are 64-bit.
 #include <stdint.h>
 
+// Claim the upstream header's include guard so firmware/extern/dspinst.h
+// (ARM assembly) compiles to nothing once this file is included first.
+#define dspinst_h_
+
 // computes limit((val >> rshift), 2**bits): signed saturation to `bits` bits.
 // Defined for bits 1..32 and rshift 0..63 (rshift >= 32 shifts out everything
 // but the sign, like an arithmetic shift). Out-of-range arguments are clamped.

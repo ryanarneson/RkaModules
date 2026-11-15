@@ -1,4 +1,4 @@
-// Offline tests of the Shoal shim primitives: no firmware, no Rack.
+// Offline tests of the Shoal shim primitives and the firmware's portable util_math helpers; no Rack.
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -12,6 +12,7 @@
 #include "Pins.hpp"
 #include "Volts.hpp"
 #include "dspinst.h"
+#include "util/util_math.h" // firmware header with Shoal's portable USAT16/umull
 
 static void testVolts() {
 	CHECK(std::fabs(shoal::dacToVolts(24551) - 0.f) < 1e-4f, "0 V");
@@ -178,11 +179,44 @@ static void testDspinst() {
 	CHECK(signed_saturate_rshift(100000, 16, 0) == 32767 && signed_saturate_rshift(-100000, 16, 0) == -32768, "ssat 16");
 }
 
+// util/util_math.h: USAT16 and the umull-based multiplies, against 64-bit
+// definitions and ARM's rules (usat reads its operand as signed; a register
+// shift of 32 or more yields 0).
+static void testUtilMath() {
+	CHECK(USAT16((int32_t) -1) == 0 && USAT16((int32_t) 0) == 0, "usat negative/zero");
+	CHECK(USAT16((int32_t) 65535) == 65535 && USAT16((int32_t) 65536) == 65535, "usat top");
+	CHECK(USAT16((int32_t) 1234) == 1234, "usat passes in-range values");
+	CHECK(USAT16((uint32_t) 70000) == 65535, "usat unsigned overflow");
+	CHECK(USAT16((uint32_t) 0x80000000u) == 0 && USAT16((uint32_t) 0xffffffffu) == 0, "usat reads unsigned operand as signed");
+	CHECK(USAT16((int32_t) INT32_MIN) == 0 && USAT16((int32_t) INT32_MAX) == 65535, "usat extremes");
+
+	std::mt19937 rng(777);
+	std::vector<uint32_t> vals = {0u, 1u, 0xffu, 0xffffu, 0x10000u, 0x7fffffffu, 0x80000000u, 0xffffffffu};
+	for (int i = 0; i < 300; i++) vals.push_back((uint32_t) rng());
+	for (uint32_t a : vals) {
+		for (uint32_t b : vals) {
+			const uint64_t p = (uint64_t) a * b;
+			CHECK(multiply_u32xu32_rshift24(a, b) == (uint32_t) (p >> 24), "rshift24 a=%u b=%u", a, b);
+			for (uint32_t sh : {0u, 1u, 7u, 16u, 24u, 31u, 32u}) {
+				CHECK(multiply_u32xu32_rshift(a, b, sh) == (uint32_t) (p >> sh), "rshift a=%u b=%u sh=%u", a, b, sh);
+			}
+			for (uint32_t sh : {33u, 40u, 63u, 64u, 200u}) {
+				CHECK(multiply_u32xu32_rshift(a, b, sh) == 0, "rshift past 32 is 0: a=%u b=%u sh=%u", a, b, sh);
+			}
+		}
+	}
+	// Spot values, written by hand.
+	CHECK(multiply_u32xu32_rshift(0x10000u, 0x10000u, 32) == 1, "2^32 >> 32");
+	CHECK(multiply_u32xu32_rshift(3u, 5u, 0) == 15, "shift 0 is the low word");
+	CHECK(multiply_u32xu32_rshift24(0x1000000u, 7u) == 7, "2^24 * 7 >> 24");
+}
+
 int main() {
 	testVolts();
 	testSchmitt();
 	testTickClock();
 	testEncoderPins();
 	testDspinst();
+	testUtilMath();
 	return rkatest::finish("test_shim");
 }
