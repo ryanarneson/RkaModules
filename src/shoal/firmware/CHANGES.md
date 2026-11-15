@@ -146,6 +146,19 @@ is marked `// SHOAL:`.
 
 ## Desktop-CPU guards
 
+- Drawing changes no firmware state (Task 5 review). Upstream's menu draw
+  code advanced two pieces of state that gate input, which would have tied
+  behaviour to how often the host draws (or whether it draws at all):
+  `OC_scale_edit.h`'s `ticks_` (Meta-Q's scale editor lets UP/DOWN switch
+  slots only once it passes 250) and `OC_autotuner.h`'s error/completion
+  status transitions (which the button handling reads). Both moved from
+  `Draw()` into `Redrawn()`. `shoal_main_pass()` (`o_c_REV.ino`) keeps
+  upstream's redraw bookkeeping (`MENU_REDRAW`, `LAST_REDRAW_TIME`) and, where
+  upstream drew, calls `DQ_menuRedrawn()` (`APP_DQ.ino`) or
+  `REFS_menuRedrawn()` (`APP_REFS.ino`) for the current app, at the same
+  cadence (every UI event and at least every 2 ms). Every other `*_menu`,
+  `*_screensaver` and editor `Draw()` writes only draw-only scratch (scope
+  averaging, preview and history buffers).
 - `APP_REFS.ino` (References screensaver view): with no TR4 frequency,
   `round(12000 * log2f(0))` converted -inf to `int32_t` (undefined on the
   host; ARM saturates). The value is printed only when a frequency is

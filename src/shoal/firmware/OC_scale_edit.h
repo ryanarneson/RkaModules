@@ -68,6 +68,13 @@ public:
 
   void Close();
   void Draw();
+  // SHOAL: advances the draw-paced state upstream's Draw() advanced (ticks_
+  // in SEQ_MODE, which gates UP/DOWN slot switching); called by
+  // shoal_main_pass() at upstream's redraw cadence, not by drawing.
+  void Redrawn() {
+    if (SEQ_MODE)
+      ticks_++;
+  }
   void HandleButtonEvent(const UI::Event &event);
   void HandleEncoderEvent(const UI::Event &event);
   static uint16_t RotateMask(uint16_t mask, int num_notes, int amount);
@@ -135,7 +142,7 @@ void ScaleEditor<Owner>::Draw() {
     graphics.print(scale_name_);
     
     if (SEQ_MODE) {
-      ticks_++;
+      // SHOAL: ticks_++ moved to Redrawn() (drawing must not change state)
       uint8_t id = edit_this_scale_;
       if (edit_this_scale_ == owner_->get_scale_select())
         id += 4;

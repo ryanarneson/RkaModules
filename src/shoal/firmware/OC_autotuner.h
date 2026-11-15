@@ -83,6 +83,21 @@ public:
 
   void Close();
   void Draw();
+  // SHOAL: the status transitions upstream's Draw() made (error and
+  // completion, which gate the button handling); called by shoal_main_pass()
+  // at upstream's redraw cadence, not by drawing.
+  void Redrawn() {
+    if (owner_->autotuner_error()) {
+      auto_tune_running_status_ = AT_ERROR;
+      owner_->reset_autotuner();
+    }
+    else if (owner_->autotuner_completed()) {
+      auto_tune_running_status_ = AT_DONE;
+      owner_->autotuner_reset_completed();
+    }
+    if (auto_tune_running_status_ == AT_DONE)
+      calibration_data_ = owner_->data_available();
+  }
   void HandleButtonEvent(const UI::Event &event);
   void HandleEncoderEvent(const UI::Event &event);
   
@@ -118,14 +133,7 @@ private:
 
     x = 16; y = 15;
 
-    if (owner_->autotuner_error()) {
-      auto_tune_running_status_ = AT_ERROR;
-      owner_->reset_autotuner();
-    }
-    else if (owner_->autotuner_completed()) {
-      auto_tune_running_status_ = AT_DONE;
-      owner_->autotuner_reset_completed();
-    }
+    // SHOAL: the error/completion status transitions moved to Redrawn().
     
     for (size_t i = 0; i < (AUTO_MENU_ITEMS_LAST - 0x1); ++i, y += 20) {
         //
@@ -188,7 +196,7 @@ private:
         case AT_DONE: 
         graphics.print(OC::Strings::channel_id[channel_]);
         graphics.print("  --> a-ok!");
-        calibration_data_ = owner_->data_available();
+        // SHOAL: calibration_data_ update moved to Redrawn().
         break;
         default:
         break;

@@ -1210,6 +1210,12 @@ void DQ_isr() {
 void DQ_loop() {
 }
 
+// SHOAL: draw-paced state of DQ_menu() (see shoal_main_pass()).
+void DQ_menuRedrawn() {
+  if (dq_state.scale_editor.active())
+    dq_state.scale_editor.Redrawn();
+}
+
 void DQ_menu() {
 
   menu::DualTitleBar::Draw();

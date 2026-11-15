@@ -30,7 +30,10 @@ public:
 	// each plays out over two 1 ms UI polls (capped near 256 queued per encoder).
 	void setButton(Button b, bool down);
 	void turnEncoder(Encoder e, int detents);  // > 0 clockwise
-	void setEncoderAcceleration(bool on);      // as the app menu's UP button; on at boot
+	// As the app menu's UP button: both encoders; on at boot. Automatonnetz
+	// turns its L encoder's acceleration off on resume; calling this while it
+	// runs overrides that until its next resume (app switch or app menu).
+	void setEncoderAcceleration(bool on);
 	// Screens, drawn on request (call on the tick thread, at any rate or
 	// never). drawMenu: the app's menu, or the app-selection menu while it is
 	// open. drawScope: the app's screensaver view. Each draws into its own

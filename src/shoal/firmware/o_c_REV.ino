@@ -110,7 +110,30 @@ void shoal_boot() {
 
 /*  ---------    main loop  --------  */
 
+// SHOAL: firmware state that upstream's menu drawing advanced, advanced at
+// upstream's redraw cadence instead (drawing is the host's, at any rate).
+// Found by reading every *_menu/*_screensaver and editor Draw(): only the
+// Meta-Q scale editor's ticks_ and the References autotuner's status gate
+// behaviour; the rest write draw-only scratch (scope averaging, preview and
+// history buffers).
+static void shoal_menu_redrawn() {
+  if (OC::apps::current_app->DrawMenu == DQ_menu)
+    DQ_menuRedrawn();
+  else if (OC::apps::current_app->DrawMenu == REFS_menu)
+    REFS_menuRedrawn();
+}
+
 void FASTRUN shoal_main_pass() {
+
+    // SHOAL: upstream drew the menu here whenever MENU_REDRAW was set (on
+    // every UI event, app updates, and at least every REDRAW_TIMEOUT_MS + 1
+    // ms). The host draws instead; the redraw bookkeeping stays so the
+    // draw-paced state advances at the same cadence.
+    if (MENU_REDRAW && !OC::g_ui.app_menu_open()) {
+      shoal_menu_redrawn();
+      MENU_REDRAW = 0;
+      LAST_REDRAW_TIME = millis();
+    }
 
     // SHOAL: the app menu is non-blocking (Ui::DispatchEvents opens, runs and
     // closes it), so there is no UI_MODE_APP_SETTINGS step here. While it is

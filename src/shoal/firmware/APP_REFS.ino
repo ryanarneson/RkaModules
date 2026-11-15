@@ -788,6 +788,12 @@ void REFS_handleAppEvent(OC::AppEvent event) {
 void REFS_loop() {
 }
 
+// SHOAL: draw-paced state of REFS_menu() (see shoal_main_pass()).
+void REFS_menuRedrawn() {
+  if (references_app.autotuner.active())
+    references_app.autotuner.Redrawn();
+}
+
 void REFS_menu() {
   menu::QuadTitleBar::Draw();
   for (uint_fast8_t i = 0; i < NUM_REF_CHANNELS; ++i) {
