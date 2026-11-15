@@ -525,6 +525,113 @@ class Areas(unittest.TestCase):
         self.assertIn("SCREEN_S", msg)
 
 
+class OnThePanel(unittest.TestCase):
+    """Components and dial faces lie wholly on the panel."""
+
+    def test_a_component_partly_off_the_panel_fails_naming_it(self):
+        w = 12 * g.HP
+        for x, y in ((g.RADII["port"] + g.CLEARANCE, 60.0), (w - g.RADII["port"] - g.CLEARANCE, 60.0),
+                     (30.0, g.RADII["port"] + g.CLEARANCE), (5.0, g.PANEL_H - g.RADII["port"] - g.CLEARANCE)):
+            g.check_panel("T", spec(components=[("input", "J", x, y, None)]))
+        for x, y in ((0.9, 60.0), (w - 3.9, 60.0), (30.0, 3.9), (5.0, g.PANEL_H - 2.0)):
+            msg = failure(self, "T", spec(components=[("input", "J", x, y, None)]))
+            self.assertIn("INPUT_J", msg)
+            self.assertIn("off the panel", msg)
+
+    def test_a_dial_face_partly_off_the_panel_fails_naming_it(self):
+        def dial(x):
+            return spec(components=[("param", "R", x, 60.0, None)], sizes={"PARAM_R": "face"},
+                        faces={"PARAM_R": dict(r=7.3, ticks=20, major=5)})
+        g.check_panel("T", dial(8.0))
+        msg = failure(self, "T", dial(7.0))      # the knob is on the panel, its face is not
+        self.assertIn("dial face of PARAM_R", msg)
+        self.assertIn("off the panel", msg)
+
+    def test_fathoms_res_column_moved_to_the_edge_fails(self):
+        # The reviewer's case: Fathom's RES CV jack and attenuverter at x = 0.9.
+        import copy
+        s = copy.deepcopy(g.PANELS["Fathom"])
+        g.check_panel("Fathom", s)
+        s["components"] = [(k, n, 0.9 if n in ("RES_CV", "RES_ATT") else x, y, lab)
+                           for k, n, x, y, lab in s["components"]]
+        s["traces"] = [t for t in s["traces"] if t[0] != "INPUT_RES_CV"]
+        s["traces"].append(["INPUT_RES_CV", "PARAM_RES_ATT", (0.9, 70.0), "PARAM_RES"])
+        msg = failure(self, "Fathom", s)
+        self.assertIn("off the panel", msg)
+        self.assertTrue("INPUT_RES_CV" in msg or "PARAM_RES_ATT" in msg, msg)
+
+
+class LimbClear(unittest.TestCase):
+    """The limb, arc and ticks, runs under no dial face, tile or screen."""
+    LIMB = [dict(c=(30.0, 0.0), r=40.0, a0=-20, a1=20, step=2, major=5)]
+
+    def test_a_limb_under_a_dial_face_fails_naming_it(self):
+        def dial(y):
+            return spec(components=[("param", "R", 30.0, y, None)], sizes={"PARAM_R": "face"},
+                        faces={"PARAM_R": dict(r=7.3, ticks=20, major=5)}, limbs=self.LIMB)
+        g.check_panel("T", dial(25.0))       # inside the arc, clear of it
+        g.check_panel("T", dial(55.0))       # outside it, clear of the ticks
+        for y in (40.0, 33.0, 48.0):         # on the arc; touching it; over the ticks
+            msg = failure(self, "T", dial(y))
+            self.assertIn("limb", msg)
+            self.assertIn("dial face of PARAM_R", msg)
+
+    def test_a_limb_across_a_tile_fails_naming_it(self):
+        def tiled(y):
+            return spec(components=[("output", "X", 30.0, y, "X")], tiles=[dict(port="OUTPUT_X")],
+                        limbs=self.LIMB)
+        g.check_panel("T", tiled(53.0))
+        msg = failure(self, "T", tiled(44.0))
+        self.assertIn("limb", msg)
+        self.assertIn("tile of OUTPUT_X", msg)
+
+    def test_a_limb_under_a_screen_fails_naming_it(self):
+        g.check_panel("T", spec(limbs=self.LIMB, screens=[("S", 20.0, 46.0, 20.0, 10.0)]))
+        msg = failure(self, "T", spec(limbs=self.LIMB, screens=[("S", 20.0, 38.0, 20.0, 10.0)]))
+        self.assertIn("limb", msg)
+        self.assertIn("SCREEN_S", msg)
+
+
+class EveryCVPathTraced(unittest.TestCase):
+    """A CV input with an attenuverter (PARAM_<N>_ATT beside INPUT_<N> or
+    INPUT_<N>_CV) has a trace from the jack through the attenuverter to the
+    control it moves. Inputs with no attenuverter need none."""
+
+    def column(self, jack="A", traces=None):
+        return spec(components=[("input", jack, 10.0, 110.0, None), ("param", "A_ATT", 10.0, 90.0, None),
+                                ("param", "A", 10.0, 40.0, None), ("input", "CLOCK", 30.0, 110.0, "CLOCK")],
+                    traces=traces if traces is not None else [[f"INPUT_{jack}", "PARAM_A_ATT", "PARAM_A"]])
+
+    def test_a_traced_cv_input_passes_and_an_untraced_one_fails(self):
+        for jack in ("A", "A_CV"):
+            g.check_panel("T", self.column(jack))
+            msg = failure(self, "T", self.column(jack, traces=[]))
+            for part in (f"INPUT_{jack}", "PARAM_A_ATT", "trace"):
+                self.assertIn(part, msg)
+
+    def test_a_trace_that_skips_the_attenuverter_or_stops_at_it_fails(self):
+        s = self.column(traces=[["INPUT_A", "PARAM_A"]])
+        s["components"][1] = ("param", "A_ATT", 20.0, 90.0, None)    # out of the trace's way
+        msg = failure(self, "T", s)
+        self.assertIn("PARAM_A_ATT", msg)
+        msg = failure(self, "T", self.column(traces=[["INPUT_A", "PARAM_A_ATT"]]))
+        self.assertIn("PARAM_A_ATT", msg)
+
+    def test_an_attenuverter_without_its_jack_fails(self):
+        s = spec(components=[("param", "A_ATT", 10.0, 90.0, None), ("input", "B", 30.0, 110.0, None)])
+        msg = failure(self, "T", s)
+        for part in ("PARAM_A_ATT", "INPUT_A", "INPUT_A_CV"):
+            self.assertIn(part, msg)
+
+    def test_each_module_loses_a_trace_and_fails(self):
+        for name in ("Sway", "Fathom"):
+            s = dict(g.PANELS[name])
+            jack = s["traces"][0][0]
+            s["traces"] = s["traces"][1:]
+            msg = failure(self, name, s)
+            self.assertIn(jack, msg)
+
+
 class Screws(unittest.TestCase):
     """Rack's screws, at the positions the description gives, keep clear of
     everything on the panel."""
@@ -626,6 +733,46 @@ class Descriptions(unittest.TestCase):
             self.assertIn(missing, cm.exception.code)
             self.assertNotIn("\n", cm.exception.code)
         self.assertEqual(g.need_inkscape(sys.executable), sys.executable)
+
+
+class InkscapeVersion(unittest.TestCase):
+    """The committed panels were made with one Inkscape; another is reported,
+    not refused."""
+
+    def test_the_version_is_read_from_its_banner(self):
+        self.assertEqual(g.inkscape_version("Inkscape 1.4.4 (dcaf3e7, 2026-05-05)\n"), "1.4.4")
+        self.assertEqual(g.inkscape_version("Pango version: 1.50\nInkscape 1.2.2 (b0a8486541, 2022-12-01)"), "1.2.2")
+        self.assertIsNone(g.inkscape_version("something else"))
+
+    def test_the_same_version_is_quiet_and_another_warns(self):
+        self.assertEqual(g.INKSCAPE_VERSION, "1.4.4")
+        self.assertIsNone(g.inkscape_warning("1.4.4"))
+        for other in ("1.4.3", "1.5.0", None):
+            msg = g.inkscape_warning(other)
+            self.assertIn("warning", msg)
+            self.assertIn("1.4.4", msg)
+            self.assertIn(str(other) if other else "could not tell", msg)
+
+
+class TextEncoding(unittest.TestCase):
+    def test_every_text_read_and_write_names_utf8(self):
+        # The foot mark holds "\u00b7"; a platform's default encoding must not
+        # decide how it is written or read.
+        import ast
+        for path in (ROOT / "tools" / "gen_panels.py", Path(__file__).resolve()):
+            calls = 0
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if not isinstance(node, ast.Call):
+                    continue
+                f = node.func
+                called = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", None)
+                if called not in ("write_text", "read_text", "open"):
+                    continue
+                calls += 1
+                enc = [k.value.value for k in node.keywords
+                       if k.arg == "encoding" and isinstance(k.value, ast.Constant)]
+                self.assertEqual(enc, ["utf-8"], f"{path.name}:{node.lineno}: {called} without encoding=\"utf-8\"")
+            self.assertGreater(calls, 3, path)
 
 
 class Artwork(unittest.TestCase):
@@ -817,6 +964,35 @@ class ShoalPanel(unittest.TestCase):
 SVG_NS = "{http://www.w3.org/2000/svg}"
 
 
+def folder_mismatch(folder, want):
+    """What is wrong with a generated folder's contents, or None: the files
+    the generator writes that are missing, and any other file in it. Dotfiles
+    (a Finder .DS_Store) are ignored: .gitignore hides them, and they are
+    not the generator's."""
+    have = {p.name for p in folder.iterdir() if not p.name.startswith(".")}
+    missing, extra = sorted(set(want) - have), sorted(have - set(want))
+    if not missing and not extra:
+        return None
+    return (f"{folder}: " + "; ".join(([f"missing {', '.join(missing)}"] if missing else [])
+                                      + ([f"not written by the generator: {', '.join(extra)}"] if extra else [])))
+
+
+class FolderContents(unittest.TestCase):
+    def test_dotfiles_are_ignored_and_any_other_extra_file_is_named(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            (folder / "A.svg").write_text("", encoding="utf-8")
+            (folder / ".DS_Store").write_text("", encoding="utf-8")
+            self.assertIsNone(folder_mismatch(folder, {"A.svg"}))
+            (folder / "Old.svg").write_text("", encoding="utf-8")
+            (folder / "notes.txt").write_text("", encoding="utf-8")
+            msg = folder_mismatch(folder, {"A.svg", "B.svg"})
+            for part in ("missing B.svg", "Old.svg", "notes.txt"):
+                self.assertIn(part, msg)
+            self.assertNotIn(".DS_Store", msg)
+
+
 def drawing(svg_text):
     """A panel SVG as a list of what it draws, in order, for comparing a
     generated source with Inkscape's output: each element as (tag,
@@ -869,9 +1045,9 @@ class Committed(unittest.TestCase):
             self.assertEqual({p.name for p in folder.glob("*.svg")}, {f"{name}{sfx}.svg" for sfx in g.INSTRUMENT})
             for suffix, pal in g.INSTRUMENT.items():
                 path = folder / f"{name}{suffix}.svg"
-                self.assertEqual(g.panel_svg(name, s, pal), path.read_text(), path)
+                self.assertEqual(g.panel_svg(name, s, pal), path.read_text(encoding="utf-8"), path)
             path = ROOT / "src" / s["dir"] / f"{name}Layout.hpp"
-            self.assertEqual(g.layout_hpp(name, s), path.read_text(), path)
+            self.assertEqual(g.layout_hpp(name, s), path.read_text(encoding="utf-8"), path)
 
     def test_layout_headers_carry_no_float_noise(self):
         # A position is a few decimals of a millimetre, never 125.60000000000001.
@@ -884,11 +1060,12 @@ class Committed(unittest.TestCase):
         self.assertEqual(folders, {s["dir"] for s in g.PANELS.values()} | {"components"})
         for name, s in g.PANELS.items():
             folder = ROOT / "res" / s["dir"]
-            self.assertEqual({p.name for p in folder.iterdir()}, {f"{name}{sfx}.svg" for sfx in g.INSTRUMENT})
+            mismatch = folder_mismatch(folder, {f"{name}{sfx}.svg" for sfx in g.INSTRUMENT})
+            self.assertIsNone(mismatch, mismatch)
             boxes = [g.text_box(t) for t in g.instrument_texts(name, s) + [g.foot_mark(s)]]
             for suffix, pal in g.INSTRUMENT.items():
                 path = folder / f"{name}{suffix}.svg"
-                want, got = drawing(g.panel_svg(name, s, pal)), drawing(path.read_text())
+                want, got = drawing(g.panel_svg(name, s, pal)), drawing(path.read_text(encoding="utf-8"))
                 self.assertEqual(len(got), len(want), f"{path}: not what the generator draws")
                 lettering = 0
                 for w, h in zip(want, got):
@@ -905,7 +1082,7 @@ class Committed(unittest.TestCase):
 
     def test_theme_header_is_current_and_holds_only_the_palette(self):
         hpp = g.theme_hpp()
-        self.assertEqual(hpp, (ROOT / "src" / "RkaTheme.hpp").read_text())
+        self.assertEqual(hpp, (ROOT / "src" / "RkaTheme.hpp").read_text(encoding="utf-8"))
         consts = re.findall(r"NVGcolor (\w+) = ", hpp)
         want = [const + tag for const, _ in g.INSTRUMENT_WIDGET_COLOURS for tag in ("", "_DARK")]
         self.assertEqual(consts, want)
@@ -914,9 +1091,10 @@ class Committed(unittest.TestCase):
     def test_component_artwork_is_current(self):
         files = g.component_files()
         folder = ROOT / "res" / "components"
-        self.assertEqual(set(files), {p.name for p in folder.iterdir()})
+        mismatch = folder_mismatch(folder, set(files))
+        self.assertIsNone(mismatch, mismatch)
         for fname, svg in files.items():
-            self.assertEqual(svg, (folder / fname).read_text(), fname)
+            self.assertEqual(svg, (folder / fname).read_text(encoding="utf-8"), fname)
 
 if __name__ == "__main__":
     unittest.main()

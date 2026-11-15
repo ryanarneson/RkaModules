@@ -62,8 +62,6 @@
 <text x="6.53" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">SUB</text>
 <text x="35.02" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">L</text>
 <text x="44.52" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">R</text>
-<text x="15.60" y="56.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#9c7f52">10</text>
-<text x="11.90" y="78.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#9c7f52">20</text>
 <text x="25.65" y="125.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.5" text-anchor="middle" fill="#757062">R K A · INSTRUMENTS</text>
 <g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
 <circle id="param-PITCH" cx="19.0" cy="33.0" r="1" fill="#ff0000"/>

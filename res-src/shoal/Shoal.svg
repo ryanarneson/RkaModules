@@ -74,10 +74,10 @@
 <text x="111.40" y="56.69" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#8a8474">UP</text>
 <text x="111.40" y="65.29" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#8a8474">DOWN</text>
 <text x="121.62" y="60.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">UI MODE</text>
-<text x="122.93" y="80.75" font-family="D-DIN Condensed" font-size="2.1" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">A</text>
-<text x="122.93" y="91.15" font-family="D-DIN Condensed" font-size="2.1" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">B</text>
-<text x="122.93" y="101.55" font-family="D-DIN Condensed" font-size="2.1" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">C</text>
-<text x="122.93" y="111.95" font-family="D-DIN Condensed" font-size="2.1" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">D</text>
+<text x="122.93" y="80.75" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">A</text>
+<text x="122.93" y="91.15" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">B</text>
+<text x="122.93" y="101.55" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">C</text>
+<text x="122.93" y="111.95" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">D</text>
 <text x="14.53" y="17.90" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">A</text>
 <text x="35.33" y="17.90" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">B</text>
 <text x="56.12" y="17.90" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">C</text>

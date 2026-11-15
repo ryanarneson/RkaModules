@@ -126,10 +126,13 @@ generated `src/RkaTheme.hpp`. Panels are lettered in D-DIN Condensed only,
 from `tools/fonts/`: `make panels` shows Inkscape that folder and nothing
 else, and stops if Inkscape would set the text in any other face.
 
-Besides component clearance the generator fails a layout whose trace
-grazes a control or tile it does not belong to, runs under a screen or
-through lettering, or bends more than once; whose traces cross or touch;
-whose screens' bezels touch; or whose lettering (the foot mark included)
+Besides component clearance the generator fails a layout with a component
+or dial face partly off the panel; a limb under a dial face, tile or
+screen; a CV input with an attenuverter (`PARAM_<N>_ATT` beside
+`INPUT_<N>` or `INPUT_<N>_CV`) and no trace from the jack through it; a
+trace that grazes a control or tile it does not belong to, runs under a
+screen or through lettering, or bends more than once; traces that cross
+or touch; screens whose bezels touch; or lettering (the foot mark included)
 overlaps a component, other lettering, a screen, the limb, or a face or
 tile it does not sit on. The rack screws (`screws` in a description,
 placed by the module from its layout header's `SCREWS`) are kept clear of
@@ -140,8 +143,11 @@ all of these as well. A misspelt key in a description fails too.
 Edit the layout in `tools/gen_panels.py`, then `make panels`. That rewrites
 the light and dark SVGs and `src/<module>/<Module>Layout.hpp`, so positions in the
 panel and the C++ can't drift apart. Rack can't draw `<text>`, so Inkscape
-converts text to paths on the way to `res/<module>/`. Commit `res/` so builds don't
-need Inkscape. `make test` fails if a committed generated file is not what
+converts text to paths on the way to `res/<module>/`. The committed panels
+were made with Inkscape 1.4.4, and the offline test reads that version's
+output; `make panels` prints the version it found and warns if it is another
+one (a different version may write the outlines differently). Commit `res/`
+so builds don't need Inkscape. `make test` fails if a committed generated file is not what
 the generator writes now (a hand edit, or `make panels` not run); without
 Inkscape it cannot check the lettering's outlines in `res/`, so after
 `make panels` also see that `git status` shows nothing you did not expect.

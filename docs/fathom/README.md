@@ -25,8 +25,8 @@ arc on the panel is a ping travelling out from it.
   DETUNE lines climb up and bend across to their knobs on the arc.
 - Bottom row: the **SUB** output on the left, **L** and **R** on the
   right, each on an ivory tile; inputs are bare.
-- The faint line falling from PITCH, marked 10 and 20, is the sounding
-  line: a depth scale for the pings, nothing to set.
+- The faint line falling from PITCH is the sounding line: it marks depth
+  for the pings, and there is nothing to set.
 
 ## Pitch
 

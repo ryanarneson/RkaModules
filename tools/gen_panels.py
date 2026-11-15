@@ -185,8 +185,9 @@ PANELS = {
         # Faint radii to the first and last knob on the limb.
         radii=[(*_SW_PIVOT, _SW_X[1], _sway_on(_SW_LIMB, _SW_X[1])),
                (*_SW_PIVOT, _SW_X[5], _sway_on(_SW_LIMB, _SW_X[5]))],
-        # From off the left edge to MORPH, the last knob on it.
-        limbs=[dict(c=_SW_PIVOT, r=_SW_LIMB, a0=-56, a1=10, step=1, major=5)],
+        # From off the left edge, past MORPH, to the right edge (as the
+        # mockup draws it), so the arc reads behind the knobs.
+        limbs=[dict(c=_SW_PIVOT, r=_SW_LIMB, a0=-56, a1=17, step=1, major=5)],
         faces={
             "PARAM_RATE": dict(r=16.4, ticks=50, major=5, numerals=list(range(11))),
             "PARAM_SPREAD": dict(r=7.3, ticks=20, major=5),
@@ -212,7 +213,8 @@ PANELS = {
     # limb (radius 26) carries the voice knobs and V/OCT; the filter sits
     # on the next ping (47), the attenuverters on the one after (58), the
     # CV jacks in a row under them and the outputs on tiles below. A faint
-    # sounding line runs down from the origin with its depths marked.
+    # sounding line runs down from the origin (unnumbered: depth numerals
+    # did not read at 100 %, and the spec drops them first).
     "Fathom": dict(
         dir="fathom",
         hp=10,
@@ -252,9 +254,6 @@ PANELS = {
            ["INPUT_DETUNE_CV", "PARAM_DETUNE_ATT", (_FA_X[3], 60.0), "PARAM_DETUNE"]],
         # SUB's and SPREAD's names inside the limb: above, they would cross it.
         label_at={"PARAM_PITCH": "face", "PARAM_SUB": "left", "PARAM_SPREAD": "left"},
-        # Depths, just right of the sounding line where it crosses the limb
-        # and the filter ping.
-        notes=[(15.6, 56.6, "10", 1.6, "brass", "start"), (11.9, 78.6, "20", 1.6, "brass", "start")],
         # Not in the mockup: as Sway, clear of the nameplate.
         screws=screws_at(10, "tr", "bl"),
     ),
@@ -293,7 +292,7 @@ PANELS = {
         # One tick per detent, all the way round; no index, no majors.
         faces={f"WIDGET_ENC_{n}": dict(r=10.4, ticks=24, sweep=360, minor_len=1.3) for n in "LR"},
         tiles=[dict(port=f"OUTPUT_{n}", light=f"LIGHT_{n}", left=11.0, right=5.0, top=4.6, bottom=4.6,
-                    name_at=(-8.6, 0.75), name_size=2.1) for n in "ABCD"],
+                    name_at=(-8.6, 0.75)) for n in "ABCD"],
         traces=[["PARAM_ENC_L_PUSH", "WIDGET_ENC_L"], ["PARAM_ENC_R_PUSH", "WIDGET_ENC_R"]],
         # name, x, y, w, h in mm; the module draws in exactly these. 128 x 64
         # firmware pixels at 0.65 mm for the scope and the editor. The strip
@@ -1090,6 +1089,71 @@ def check_lettering(name, spec):
         boxes.append((t, box))
 
 
+def check_on_panel(name, spec):
+    """Every component, and every dial face to its bezel, lies wholly on the
+    panel: Rack would clip the rest."""
+    comps = comps_of(name, spec)
+    by = {c.id: c for c in comps}
+    w = spec["hp"] * HP
+
+    def off(x, y, r):
+        return x - r < 0 or y - r < 0 or x + r > w or y + r > PANEL_H
+
+    for c in comps:
+        if off(c.x, c.y, c.r):
+            sys.exit(f"{name}: {c.id} at ({c.x}, {c.y}) runs off the panel")
+    for fid, face in spec.get("faces", {}).items():
+        f = by[fid]
+        if off(f.x, f.y, face_edge(face)):
+            sys.exit(f"{name}: the dial face of {fid} runs off the panel")
+
+
+def check_limbs(name, spec):
+    """A limb, its arc and its ticks, keeps CLEARANCE from every dial face
+    (to its bezel), tile and screen: those are drawn over it and would cut
+    the scale."""
+    comps = comps_of(name, spec)
+    by = {c.id: c for c in comps}
+    for i, limb in enumerate(spec.get("limbs", [])):
+        what = "the limb" if len(spec["limbs"]) == 1 else f"limb {i + 1}"
+        segments = limb_segments(limb)
+        for fid, face in spec.get("faces", {}).items():
+            f = by[fid]
+            if any(point_segment_distance((f.x, f.y), a, b) < face_edge(face) + CLEARANCE for a, b in segments):
+                sys.exit(f"{name}: {what} runs under the dial face of {fid}")
+        for tile in spec.get("tiles", []):
+            rect = tile_rect(tile, by[tile["port"]])
+            if any(segment_rect_distance(a, b, rect) < CLEARANCE for a, b in segments):
+                sys.exit(f"{name}: {what} crosses the tile of {tile['port']}")
+        for screen in spec.get("screens", []):
+            rect = screen_keepout(spec, screen)
+            if any(segment_rect_distance(a, b, rect) < CLEARANCE for a, b in segments):
+                sys.exit(f"{name}: {what} runs under SCREEN_{screen[0]}")
+
+
+def check_cv_traced(name, spec):
+    """Every CV path is traced (the spec's "Signal traces"). A CV input is
+    one with an attenuverter: PARAM_<N>_ATT goes with INPUT_<N> or
+    INPUT_<N>_CV, and a trace must start at that jack, pass under the
+    attenuverter and go on to the control it moves. An attenuverter with
+    neither jack fails, so a renamed jack cannot slip past. Inputs without an
+    attenuverter (clock, reset, gate, V/OCT) need no trace."""
+    ids = {c.id for c in comps_of(name, spec)}
+    traces = [[n for n in t if isinstance(n, str)] for t in spec.get("traces", [])]
+    for kind, cname, *_ in spec["components"]:
+        if kind != "param" or not cname.endswith("_ATT"):
+            continue
+        att, base = cid(kind, cname), cname[:-len("_ATT")]
+        jacks = [j for j in (f"INPUT_{base}", f"INPUT_{base}_CV") if j in ids]
+        if not jacks:
+            sys.exit(f"{name}: {att} is an attenuverter with no CV input: there is no INPUT_{base} or "
+                     f"INPUT_{base}_CV")
+        jack = jacks[0]
+        if not any(t[0] == jack and att in t[1:-1] for t in traces):
+            sys.exit(f"{name}: {jack} has an attenuverter, {att}, but no trace from the jack through it "
+                     f"to the control it moves (every CV path is traced)")
+
+
 def check_screws(name, spec):
     """A rack screw's head stays on the panel and keeps CLEARANCE from every
     component, dial face, tile, screen, piece of lettering, limb, origin mark
@@ -1137,10 +1201,13 @@ def check_panel(name, spec):
     """Every layout check for a panel."""
     check_references(name, spec)
     check_clearance(name, spec)
+    check_on_panel(name, spec)
     check_screens(name, spec)
     check_faces(name, spec)
     check_tiles(name, spec)
+    check_limbs(name, spec)
     check_traces(name, spec)
+    check_cv_traced(name, spec)
     check_lettering(name, spec)
     check_screws(name, spec)
 
@@ -1456,7 +1523,7 @@ SPECIMEN = dict(
     },
     tiles=[dict(port="OUTPUT_SIN"), dict(port="OUTPUT_TRI")]
     + [dict(port=f"OUTPUT_{n}", light=f"LIGHT_{n}", left=11.0, right=5.0, top=4.6, bottom=4.6,
-            name_at=(-8.6, 0.75), name_size=2.1) for n in "AB"],
+            name_at=(-8.6, 0.75)) for n in "AB"],
     traces=[
         # Up its column, one elbow, then aimed at the centre of the dial.
         ["INPUT_FM", "PARAM_FM_ATT", (8.0, 58.0), "PARAM_RATE"],
@@ -1492,7 +1559,7 @@ def instrument_env(root):
     conf = work / "fonts.conf"
     conf.write_text('<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n'
                     f'  <dir>{escape(str(FONT_DIR))}</dir>\n'
-                    f'  <cachedir>{escape(str(work / "fontcache"))}</cachedir>\n</fontconfig>\n')
+                    f'  <cachedir>{escape(str(work / "fontcache"))}</cachedir>\n</fontconfig>\n', encoding="utf-8")
     return dict(os.environ, FONTCONFIG_FILE=str(conf))
 
 
@@ -1505,9 +1572,9 @@ def check_inkscape_typeface(inkscape, env, root):
     probe.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="600" viewBox="0 0 2000 600">\n'
                      + "".join(f'<text id="{key}" x="10" y="{120 * (i + 1)}" font-family="{FONT_INSTRUMENT}" '
                                f'font-size="100" font-weight="{weight}">{"H" * count}</text>\n'
-                               for i, (key, weight, count) in enumerate(rows)) + '</svg>\n')
+                               for i, (key, weight, count) in enumerate(rows)) + '</svg>\n', encoding="utf-8")
     done = subprocess.run([inkscape, "--query-all", str(probe)], env=env, check=True,
-                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, universal_newlines=True)
+                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, encoding="utf-8")
     widths = {}
     for line in done.stdout.splitlines():
         cells = line.split(",")
@@ -1523,6 +1590,42 @@ def check_inkscape_typeface(inkscape, env, root):
         if abs(got - want) > 0.01 * want:
             sys.exit(f"Inkscape is not setting text in {FONT_INSTRUMENT} ({weight}): a capital H advances "
                      f"{got:.2f} where the typeface's is {want:.2f}. Refusing to convert with a substitute.")
+
+
+# The Inkscape the committed res/ panels were made with. Another version may
+# write the outlines differently (tools/test_gen_panels.py reads this one's
+# plain-SVG output), so `make panels` says so, but goes on.
+INKSCAPE_VERSION = "1.4.4"
+
+
+def inkscape_version(banner):
+    """The version in `inkscape --version`'s output, or None."""
+    for line in banner.splitlines():
+        words = line.split()
+        if len(words) >= 2 and words[0] == "Inkscape" and words[1][:1].isdigit():
+            return words[1]
+    return None
+
+
+def inkscape_warning(found):
+    """A warning if `found` is not the version the panels were made with."""
+    if found == INKSCAPE_VERSION:
+        return None
+    return (f"warning: the committed panels were made with Inkscape {INKSCAPE_VERSION}, and this is "
+            + (f"Inkscape {found}" if found else "an Inkscape whose version I could not tell")
+            + "; check `git status` and the offline test after `make panels`")
+
+
+def report_inkscape(inkscape):
+    """Print the Inkscape version found, and warn (not fail) if it is not
+    the one the committed panels were made with."""
+    done = subprocess.run([inkscape, "--version"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                          encoding="utf-8", check=False)
+    found = inkscape_version(done.stdout)
+    print(f"using Inkscape {found or '(version unknown)'} at {inkscape}")
+    warning = inkscape_warning(found)
+    if warning:
+        print(warning, file=sys.stderr)
 
 
 def need_inkscape(inkscape):
@@ -1553,10 +1656,10 @@ def write_preview(root, name, spec, out_dir, inkscape):
         check_inkscape_typeface(inkscape, env, root)
     for suffix, pal in INSTRUMENT.items():
         panel = out_dir / f"{name}{suffix}.svg"
-        panel.write_text(panel_svg(name, spec, pal))
+        panel.write_text(panel_svg(name, spec, pal), encoding="utf-8")
         preview = out_dir / f"{name}{suffix}-preview.svg"
-        preview.write_text(preview_svg(name, spec, suffix))
-        (out_dir / f"{name}Layout.hpp").write_text(layout_hpp(name, spec))
+        preview.write_text(preview_svg(name, spec, suffix), encoding="utf-8")
+        (out_dir / f"{name}Layout.hpp").write_text(layout_hpp(name, spec), encoding="utf-8")
         if inkscape:
             text_to_path(inkscape, panel, out_dir / "paths" / panel.name, env)
             for zoom in (100, 300):
@@ -1577,6 +1680,7 @@ def main():
     root = Path(args.root)
     if args.inkscape:
         args.inkscape = need_inkscape(args.inkscape)
+        report_inkscape(args.inkscape)
 
     if args.specimen:
         write_preview(root, "Specimen", SPECIMEN, root / "build" / "specimen", args.inkscape)
@@ -1586,12 +1690,12 @@ def main():
             write_preview(root, name, spec, root / "build" / "preview", args.inkscape)
         return
 
-    (root / "src" / "RkaTheme.hpp").write_text(theme_hpp())
+    (root / "src" / "RkaTheme.hpp").write_text(theme_hpp(), encoding="utf-8")
     components = root / "res" / "components"
     components.mkdir(parents=True, exist_ok=True)
     files = component_files()
     for fname, svg in files.items():
-        (components / fname).write_text(svg)
+        (components / fname).write_text(svg, encoding="utf-8")
     for old in components.glob("*.svg"):
         if old.name not in files:
             old.unlink()   # artwork no component draws any more
@@ -1600,8 +1704,8 @@ def main():
         svg_dir = root / "res-src" / spec["dir"]
         svg_dir.mkdir(parents=True, exist_ok=True)
         for suffix, pal in INSTRUMENT.items():
-            (svg_dir / f"{name}{suffix}.svg").write_text(panel_svg(name, spec, pal))
-        (root / "src" / spec["dir"] / f"{name}Layout.hpp").write_text(layout_hpp(name, spec))
+            (svg_dir / f"{name}{suffix}.svg").write_text(panel_svg(name, spec, pal), encoding="utf-8")
+        (root / "src" / spec["dir"] / f"{name}Layout.hpp").write_text(layout_hpp(name, spec), encoding="utf-8")
         print(f"generated {name}")
 
     if args.inkscape:

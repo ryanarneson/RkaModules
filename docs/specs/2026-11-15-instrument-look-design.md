@@ -11,8 +11,10 @@ the plugin. Deferred:
   widgets and lights, the smallest lettering at 100 %.
 - Shoal's encoder: one detent moves its 55-tick knurl 0.23 mm, hard to
   see at 100 %. A coarser knurl (31 ticks) is proposed, not made.
-- Lights have no halo, so Rack's "light bloom" setting does nothing on
-  RKA's lights; giving the caps Rack's halo instead is the other choice.
+- Lights (`rka::JewelLight`) keep Rack's own halo, so Rack's "light
+  bloom" setting applies to them as on every other module (ruled at the
+  final review, reversing an earlier "no halo"). A lit button cap has no
+  halo: the cap itself is what lights.
 - Below, as written before the build, the text still speaks of Nightglow
   as the current look and of Shoal as not yet designed.
 

@@ -137,12 +137,6 @@ inline std::shared_ptr<window::Svg> instrumentArt(const std::string& name, bool 
 	return Svg::load(asset::plugin(pluginInstance, "res/components/" + name + (dark ? "-dark" : "") + ".svg"));
 }
 
-// A colour of the Instrument palette for the panel variant on show:
-// instrumentColour(RkaTheme::BRASS, RkaTheme::BRASS_DARK).
-inline NVGcolor instrumentColour(NVGcolor normal, NVGcolor dark) {
-	return settings::preferDarkPanels ? dark : normal;
-}
-
 // A knurled knob in two layers: <art>_bg.svg (the body) stays still;
 // <art>.svg (knurl, index, centre dot) turns with the param. Its scale and
 // bezel are on the panel (a dial face or the limb) and so never turn. 270
@@ -384,7 +378,10 @@ struct CapLatch : Cap {
 
 // A 2 mm cyan light in a dark seat, like a jewel. The seat and the unlit
 // lens are artwork; lit, the lens is RkaTheme::SIGNAL by the light's
-// brightness.
+// brightness. It keeps Rack's own halo (ModuleLightWidget::drawHalo), so
+// the user's light-bloom setting applies as on every other module. A lit
+// button cap (CapButton, CapLatch) has none: it is the cap itself that
+// lights, drawn as artwork, not a Rack light.
 template <typename TBase = app::ModuleLightWidget>
 struct TJewelLight : TBase {
 	std::shared_ptr<window::Svg> seat[2];
@@ -401,9 +398,6 @@ struct TJewelLight : TBase {
 		if (svg && svg->handle)
 			window::svgDraw(args.vg, svg->handle);
 	}
-
-	// No halo, as the lit button caps have none: the look has no glow.
-	void drawHalo(const widget::Widget::DrawArgs& args) override {}
 
 	void drawLight(const widget::Widget::DrawArgs& args) override {
 		if (this->color.a <= 0.f)
