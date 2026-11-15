@@ -96,6 +96,32 @@ struct Core::Impl {
 		shoal_boot();
 	}
 
+	// The ADC offsets for the current input range (Core::setInputRange).
+	void applyInputRange() {
+		for (int ch = 0; ch < kNumChannels; ch++)
+			OC::g_calibration_data.adc.offset[ch] = (uint16_t) adcOffset;
+	}
+
+	// The firmware's start-up from the EEPROM image (shoal_boot's calibration
+	// and UI set-up, then apps::Init's load); returns whether app data loaded.
+	// A boot to defaults, but for the host's inputs and the clocks.
+	bool reinit() {
+		for (auto& e : hw::state().encoders)
+			e.clear();
+		for (bool& e : edges)
+			e = false;
+		calibration_load();  // defaults; the input range is the core's, not the firmware's
+		applyInputRange();
+		OC::DAC::restore_scaling(0);  // apps::Init restores it only from a good page
+		OC::g_ui.Init();  // closes the app menu, drops queued events and press state
+		OC::g_ui.configure_encoders(OC::g_calibration_data.encoder_config());
+		OC::g_ui.set_screensaver_timeout(OC::g_calibration_data.screensaver_timeout);
+		ui_mode = OC::UI_MODE_MENU;
+		FreqMeasure.end();
+		OC::DigitalInputs::reInit();
+		return OC::apps::Init(false);
+	}
+
 	// Present the latched inputs to the firmware for the coming tick.
 	void applyInputs() {
 		for (int ch = 0; ch < kNumChannels; ch++)
@@ -150,8 +176,7 @@ void Core::setInputRange(InputRange r) {
 	impl_->adcOffset = r == InputRange::Bipolar5 ? hw::kAdcOffsetBipolar5 : hw::kAdcOffsetHardware;
 	// The firmware subtracts the offset from the smoothed code; the new
 	// codes arrive with the next ADC update.
-	for (int ch = 0; ch < kNumChannels; ch++)
-		OC::g_calibration_data.adc.offset[ch] = (uint16_t) impl_->adcOffset;
+	impl_->applyInputRange();
 }
 
 void Core::tick() {
@@ -308,17 +333,31 @@ bool Core::setSettingRaw(int channel, int index, int value) {
 }
 
 void Core::save(uint8_t* out) {
-	// Task 7
-	memset(out, 0, kStateBytes);
+	Scope scope(impl_->ctx.get());
+	// The firmware's own save: each rewrites its page only if the contents
+	// changed, so with no change the image is unchanged.
+	OC::save_global_settings();
+	OC::save_app_data();
+	memcpy(out, hw::state().eeprom, kStateBytes);
 }
 
-bool Core::restore(const uint8_t*) {
-	// Task 7
+bool Core::restore(const uint8_t* in) {
+	Scope scope(impl_->ctx.get());
+	static_assert(kStateBytes == EEPROMClass::kLength, "image is the whole EEPROM");
+	memcpy(hw::state().eeprom, in, kStateBytes);
+	if (impl_->reinit())
+		return true;
+	// Rejected: defaults, and an empty EEPROM, so that no stale page of the
+	// rejected image can outrank what the next save writes.
+	memset(hw::state().eeprom, 0, kStateBytes);
+	impl_->reinit();
 	return false;
 }
 
 void Core::resetToDefaults() {
-	// Task 7
+	Scope scope(impl_->ctx.get());
+	memset(hw::state().eeprom, 0, kStateBytes);
+	impl_->reinit();
 }
 
 void Core::seed(uint32_t s) {

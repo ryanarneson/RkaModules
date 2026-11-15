@@ -166,3 +166,16 @@ is marked `// SHOAL:`.
 - `frames_poly_lfo.cpp` (Quadraturia, any settings): `PolyLfo::Render` read
   `dac_code_[i-1]` at `i == 0` (index -1). The value is multiplied by
   `am_depths[0]`, which is always 0, so it now reads 0 instead.
+- `OC_apps.ino`, `OC_apps.h` (`apps::Init`): returns `bool`, true when the app
+  data page loaded (`Core::restore`'s result); upstream returns `void`.
+- `OC_apps.ino` (`save_app_data`): the chunks are written starting at app 0
+  instead of a random app. Upstream's random start (so that no app is always
+  the one dropped when they do not all fit) made every save differ in bytes
+  and advanced the random sequence the apps share; all apps fit, which
+  `test_state` checks.
+- `util/util_pagestorage.h` (`PageStorage::checksum`): the length is
+  `sizeof(DATA_TYPE)` instead of `sizeof(page_data) - sizeof(page_header)`.
+  The same on the 32-bit Teensy; on a 64-bit host `AppData` (a `size_t`)
+  aligns the data to 8, padding follows the 12-byte header, and the upstream
+  length read the checksum four bytes past the page (an out-of-bounds read of
+  whatever follows, which made `Load` reject valid pages at random).

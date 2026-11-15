@@ -196,7 +196,11 @@ protected:
     uint16_t c = 0;
     // header not included in crc
     const uint8_t *p = (const uint8_t *)&page.data;
-    size_t length = sizeof(page_data) - sizeof(page_header);
+    // SHOAL: sizeof(DATA_TYPE), not sizeof(page_data) - sizeof(page_header).
+    // They are the same on the Teensy (32-bit); with 8-byte size_t the data
+    // is aligned to 8, padding follows the header, and the upstream length
+    // read four bytes past the page.
+    size_t length = sizeof(DATA_TYPE);
     while (length--) {
       c += *p++;
     }

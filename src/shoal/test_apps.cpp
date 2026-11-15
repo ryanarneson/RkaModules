@@ -180,11 +180,92 @@ void testQuantermainInScale() {
 	}
 }
 
+// Channel i's settings are its own: write min + ch to each channel of a
+// multi-channel app, read all back (catches channel-0 aliasing).
+void testPerChannelWrites() {
+	for (int app = 0; app < shoal::kNumApps; app++) {
+		shoal::Core c;
+		c.selectApp(app);
+		const char* an = shoal::Core::appName(app);
+		const int chs = c.channels();
+		if (chs < 2)
+			continue;
+		int tested = 0;
+		for (int i = 0; i < c.settingCount(); i++) {
+			const shoal::SettingInfo s = c.settingInfo(i);
+			if (s.max - s.min + 1 < chs)
+				continue;
+			tested++;
+			for (int ch = 0; ch < chs; ch++)
+				CHECK(c.setSettingRaw(ch, i, s.min + ch), "%s ch %d '%s': write", an, ch, s.name);
+			for (int ch = 0; ch < chs; ch++)
+				CHECK(c.setting(ch, i) == s.min + ch, "%s '%s': channel %d holds %d, want %d",
+					an, s.name, ch, c.setting(ch, i), s.min + ch);
+		}
+		CHECK(tested > 0, "%s: a setting with %d values", an, chs);
+	}
+}
+
+// An independent oracle: the o_C documentation's scale list gives Ionian as
+// "0, 256, 512, 640, 896, 1152, 1408" in o_C DAC values (128 per semitone,
+// 1536 per octave; reference/scales.html).
+void testQuantermainIonian() {
+	shoal::Core c;
+	c.selectApp(3);
+	int scaleIdx = -1;
+	for (int i = 0; i < c.settingCount(); i++)
+		if (std::strcmp(c.settingInfo(i).name, "Scale") == 0)
+			scaleIdx = i;
+	CHECK(scaleIdx >= 0, "found the Scale setting");
+	if (scaleIdx < 0)
+		return;
+	const shoal::SettingInfo si = c.settingInfo(scaleIdx);
+	int ionian = -1;
+	for (int v = si.min; v <= si.max && si.valueNames; v++)
+		if (si.valueNames[v] && std::strcmp(si.valueNames[v], "Ionian") == 0)
+			ionian = v;
+	CHECK(ionian >= 0, "found the Ionian scale");
+	if (ionian < 0)
+		return;
+	c.setSettingRaw(0, scaleIdx, ionian);
+
+	const int notes[7] = { 0, 256, 512, 640, 896, 1152, 1408 };
+	bool seen[7] = {};
+	float prev = -1000.f;
+	for (float v = -3.f; v <= 6.f; v += 0.013f) {
+		c.setCv(0, v);
+		run(c, 0.01);
+		pulse(c, 0);
+		run(c, 0.005);
+		const float o = c.out(0);
+		float units = std::fmod(o * 1536.f, 1536.f);
+		if (units < 0.f)
+			units += 1536.f;
+		bool near = false;
+		for (int n = 0; n < 7; n++) {
+			// Circular: the top of an octave is near its 0.
+			float d = std::fabs(units - (float) notes[n]);
+			d = std::fmin(d, 1536.f - d);
+			if (d <= 3.f) {
+				near = true;
+				seen[n] = true;
+			}
+		}
+		CHECK(near, "in %.3f V: out %.4f V = %.1f units mod 1536 is not an Ionian note", v, o, units);
+		CHECK(o >= prev - 1e-4f, "in %.3f V: output fell from %.4f to %.4f", v, prev, o);
+		prev = o;
+	}
+	for (int n = 0; n < 7; n++)
+		CHECK(seen[n], "Ionian note %d never occurred", notes[n]);
+}
+
 } // namespace
 
 int main() {
 	testTables();
+	testPerChannelWrites();
 	testCopierMaschineShifts();
 	testQuantermainInScale();
+	testQuantermainIonian();
 	return rkatest::finish("test_apps");
 }

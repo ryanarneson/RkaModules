@@ -23,6 +23,7 @@ struct EncoderPins {
 			queue.push_back(kBoth0);
 		}
 	}
+	void clear() { queue.clear(); }
 	void poll(bool& a, bool& b) {
 		uint8_t s = kIdle;
 		if (!queue.empty()) {

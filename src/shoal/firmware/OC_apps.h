@@ -71,7 +71,7 @@ namespace apps {
   SHOAL_STATE(const App *, current_app) // SHOAL: per-instance state (shoal::Context); const App
 #define current_app current_app_ref()
 
-  void Init(bool reset_settings);
+  bool Init(bool reset_settings); // SHOAL: returns whether the app data loaded
 
   inline void ISR() __attribute__((always_inline));
   inline void ISR() {

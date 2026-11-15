@@ -144,7 +144,11 @@ void save_app_data() {
   char *data = app_settings.data;
   char *data_end = data + OC::AppData::kAppDataSize;
 
-  size_t start_app = random(NUM_AVAILABLE_APPS);
+  // SHOAL: upstream starts at a random app, so that if the apps ever outgrew
+  // the page it would not always be the same ones that were dropped. They all
+  // fit (test_state checks every app round-trips), and a random start made
+  // every save differ in bytes and advanced the random sequence the apps use.
+  size_t start_app = 0;
   for (size_t i = 0; i < NUM_AVAILABLE_APPS; ++i) {
     const auto &app = available_apps[(start_app + i) % NUM_AVAILABLE_APPS];
     size_t storage_size = app.storageSize() + sizeof(AppChunkHeader);
@@ -245,7 +249,10 @@ int index_of(uint16_t id) {
   return i;
 }
 
-void Init(bool reset_settings) {
+// SHOAL: returns whether the app data page loaded (Core::restore's result);
+// upstream's is void.
+bool Init(bool reset_settings) {
+  bool app_data_loaded = false; // SHOAL
 
   Scales::Init();
   AUTOTUNE::Init();
@@ -303,6 +310,7 @@ void Init(bool reset_settings) {
     if (!app_data_storage.Load(app_settings)) {
       SERIAL_PRINTLN("Data not loaded, using defaults!");
     } else {
+      app_data_loaded = true; // SHOAL
       restore_app_data();
     }
   }
@@ -321,6 +329,7 @@ void Init(bool reset_settings) {
   current_app->HandleAppEvent(APP_EVENT_RESUME);
 
   delay(100);
+  return app_data_loaded; // SHOAL
 }
 
 }; // namespace apps
