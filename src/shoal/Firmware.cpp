@@ -5,9 +5,10 @@
 // Arduino builds concatenate the .ino files and generate prototypes; this file
 // does both by hand: shim headers, then the prototypes header, then the
 // firmware .cpp files, then the .ino files in LC_ALL=C name order, then the
-// Core implementation.
+// per-instance state (shoal::Context), then the Core implementation.
 
 // Shim headers.
+#include "shim/Context.hpp" // path from here: Rack has its own context.hpp
 #include "Arduino.h"
 #include "EEPROM.h"
 #include "dspinst.h"
@@ -59,6 +60,9 @@
 #include "firmware/OC_apps.ino"
 #include "firmware/OC_calibration.ino"
 #include "firmware/o_c_REV.ino"
+
+// Per-instance firmware state.
+#include "FirmwareContext.inc"
 
 // shoal::Core.
 #include "CoreImpl.inc"

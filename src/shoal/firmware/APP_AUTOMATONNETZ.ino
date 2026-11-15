@@ -77,7 +77,7 @@ const size_t clock_fraction[] = {
   0, CLOCK_STEP_RES/8, 1+CLOCK_STEP_RES/7, CLOCK_STEP_RES/6, 1+CLOCK_STEP_RES/5, 1+CLOCK_STEP_RES/4, 1+CLOCK_STEP_RES/3, CLOCK_STEP_RES/2
 };
 
-const char *clock_fraction_names[] = {
+const char * const clock_fraction_names[] = { // SHOAL: const table (read-only data)
   " \0\0\0\0", "  1/8", "  1/7", "  1/6", "  1/5", "  1/4", "  1/3", "  1/2"
 };
 
@@ -135,7 +135,7 @@ public:
   }
 };
 
-const char *cell_event_masks[] = {
+const char * const cell_event_masks[] = { // SHOAL: const table (read-only data)
   "none",
   "rT__", // 0x1
   "r_O_", // 0x2
@@ -345,7 +345,8 @@ SETTINGS_DECLARE(AutomatonnetzState, GRID_SETTING_LAST) {
   {CLEAR_MODE_ZERO, CLEAR_MODE_ZERO, CLEAR_MODE_LAST - 1, "Clr", clear_mode_names, settings::STORAGE_TYPE_U4},
 };
 
-AutomatonnetzState automatonnetz_state;
+SHOAL_STATE(AutomatonnetzState, automatonnetz_state) // SHOAL: per-instance state (shoal::Context)
+#define automatonnetz_state automatonnetz_state_ref()
 
 void Automatonnetz_init() {
   automatonnetz_state.Init();
@@ -659,7 +660,7 @@ size_t Automatonnetz_restore(const void *dest) {
 void Automatonnetz_handleAppEvent(OC::AppEvent event) {
   switch (event) {
     case OC::APP_EVENT_RESUME:
-      OC::ui.encoder_enable_acceleration(OC::CONTROL_ENCODER_L, false);
+      OC::g_ui.encoder_enable_acceleration(OC::CONTROL_ENCODER_L, false); // SHOAL: g_ prefix (name clashes with app ui members)
       automatonnetz_state.AddUserAction(USER_ACTION_RESET);
       break;
     case OC::APP_EVENT_SUSPEND:

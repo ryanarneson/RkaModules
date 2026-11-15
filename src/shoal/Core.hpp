@@ -51,5 +51,6 @@ public:
 	void seed(uint32_t s);             // all firmware random sources
 private:
 	struct Impl;  Impl* impl_;
+	friend struct CoreTest;            // test-only hooks (CoreTest.hpp)
 };
 }

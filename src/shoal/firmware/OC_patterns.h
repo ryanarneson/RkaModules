@@ -38,8 +38,10 @@ public:
 
 extern const char *const pattern_names[];
 extern const char *const pattern_names_short[];
-extern Pattern user_patterns[OC::Patterns::PATTERN_USER_ALL];
-extern Pattern dummy_pattern;
+SHOAL_STATE(Pattern[OC::Patterns::PATTERN_USER_ALL], g_user_patterns) // SHOAL: per-instance state (shoal::Context)
+#define g_user_patterns g_user_patterns_ref()
+SHOAL_STATE(Pattern, dummy_pattern) // SHOAL: per-instance state (shoal::Context)
+#define dummy_pattern dummy_pattern_ref()
 
 };
 

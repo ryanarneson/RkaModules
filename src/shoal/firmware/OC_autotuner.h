@@ -364,7 +364,7 @@ private:
   
   template <typename Owner>
   void Autotuner<Owner>::Close() {
-    ui.SetButtonIgnoreMask();
+    g_ui.SetButtonIgnoreMask(); // SHOAL: g_ prefix (name clashes with app ui members)
     owner_ = nullptr;
   }
 }; // namespace OC

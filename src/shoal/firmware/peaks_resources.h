@@ -42,9 +42,9 @@ namespace peaks {
 
 typedef uint8_t ResourceId;
 
-extern const char* string_table[];
+extern const char* const string_table[]; // SHOAL: const table (read-only data)
 
-extern const uint16_t* lookup_table_table[];
+extern const uint16_t* const lookup_table_table[]; // SHOAL: const table (read-only data)
 
 // extern const uint32_t* lookup_table_32_table[];
 

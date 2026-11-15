@@ -19,11 +19,12 @@
 VBiasManager *VBiasManager::instance = 0;
 #endif
 
-extern uint_fast8_t MENU_REDRAW;
+SHOAL_STATE(uint_fast8_t, MENU_REDRAW) // SHOAL: per-instance state (shoal::Context)
+#define MENU_REDRAW MENU_REDRAW_ref()
 
 namespace OC {
 
-Ui ui;
+// SHOAL: g_ui lives in shoal::Context (g_ prefix: the name clashes with the apps' ui members).
 
 void Ui::Init() {
   ticks_ = 0;
@@ -112,7 +113,7 @@ void FASTRUN Ui::Poll() {
   button_state_ = button_state;
 }
 
-UiMode Ui::DispatchEvents(App *app) {
+UiMode Ui::DispatchEvents(const App *app) { // SHOAL: const (available_apps is a read-only table)
 
   while (event_queue_.available()) {
     const UI::Event event = event_queue_.PullEvent();

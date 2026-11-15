@@ -137,7 +137,7 @@ void UpdateArpeggiator(int channel_id, int sequence_id, int sequence_mask, int s
 
     // sort notes:
     uint8_t _channel_offset = !channel_id ? 0x0 : OC::Patterns::NUM_PATTERNS;
-    OC::Pattern *arp_pattern_ = &OC::user_patterns[sequence_id + _channel_offset];
+    OC::Pattern *arp_pattern_ = &OC::g_user_patterns[sequence_id + _channel_offset]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
     for (int i = 0; i < sequence_length; i++) 
       note_stack_[i] = arp_pattern_->notes[i];
     //memcpy(note_stack_, arp_pattern_->notes, sizeof(OC::Pattern)); // ??

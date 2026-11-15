@@ -167,7 +167,7 @@ inline void DrawEditIcon(weegfx::coord_t x, weegfx::coord_t y, int value, const 
 
 inline void DrawChord(weegfx::coord_t x, weegfx::coord_t y, int width, int value, int mem_offset) {
   
-   OC::Chord *active_chord = &OC::user_chords[value + mem_offset * OC::Chords::NUM_CHORDS];
+   OC::Chord *active_chord = &OC::g_user_chords[value + mem_offset * OC::Chords::NUM_CHORDS]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
    int8_t _quality = active_chord->quality;
    int8_t _voicing = active_chord->voicing;
    int y_pos;

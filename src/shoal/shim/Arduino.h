@@ -9,6 +9,8 @@
 #include <math.h>
 #include <string.h>
 
+#include "Context.hpp" // per-instance state: SHOAL_STATE, shoal::Ref
+
 // OC_config.h refuses any other CPU speed.
 #define F_CPU 120000000
 #define F_BUS 60000000
@@ -43,7 +45,9 @@ inline void delayMicroseconds(uint32_t) { }
 
 class elapsedMillis {
 public:
-	elapsedMillis() : ms_(millis()) { }
+	// Starts at 0, which is millis() at boot: firmware objects holding one are
+	// built with their shoal::Context, before any context is current.
+	elapsedMillis() : ms_(0) { }
 	elapsedMillis(uint32_t val) : ms_(millis() - val) { }
 	operator uint32_t() const { return millis() - ms_; }
 	elapsedMillis& operator=(uint32_t val) { ms_ = millis() - val; return *this; }
@@ -58,10 +62,10 @@ int32_t random(int32_t howsmall, int32_t howbig);
 
 // Serial output is dropped.
 struct ShoalSerial {
-	void print(const char*) { }
-	void println(const char*) { }
+	void print(const char*) const { }
+	void println(const char*) const { }
 };
-extern ShoalSerial Serial;
+extern const ShoalSerial Serial;
 
 // Interrupts and exclusive access: firmware code only ever runs on one
 // thread at a time here, so these are no-ops / plain loads and stores.
@@ -86,4 +90,4 @@ struct FreqMeasureClass {
 	static float countToFrequency(uint32_t) { return 0.f; }
 	static void end() { }
 };
-extern FreqMeasureClass FreqMeasure;
+extern const FreqMeasureClass FreqMeasure;

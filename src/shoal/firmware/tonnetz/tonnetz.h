@@ -41,14 +41,14 @@ namespace tonnetz {
     '*', 'P', 'L', 'R', 'N', 'S', 'H', '@'
   };
 
-  static const char *transform_names_str[TRANSFORM_LAST + 1] = {
+  static const char * const transform_names_str[TRANSFORM_LAST + 1] = { // SHOAL: const table (read-only data)
     "*", "P", "L", "R", "N", "S", "H", "@"
   };
 
   static struct transformation {
     size_t root_shift; // +1 = root -> third, +2 root -> fifth
     int offsets[abstract_triad::NOTES]; // root, third, fifth
-  } transformations[TRANSFORM_LAST][2] = {
+  } const transformations[TRANSFORM_LAST][2] = { // SHOAL: const table (read-only data)
     { { 0, {  0,  0,  0 } }, { 0, {  0,  0,  0 } } }, // NONE
     { { 0, {  0, -1,  0 } }, { 0, {  0,  1,  0 } } }, // TRANSFORM_P
     { { 1, { -1,  0,  0 } }, { 2, {  0,  0,  1 } } }, // TRANSFORM_L

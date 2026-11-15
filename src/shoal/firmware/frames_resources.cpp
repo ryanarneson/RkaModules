@@ -37,7 +37,7 @@ namespace frames {
 static const char str_dummy[] = "dummy";
 
 
-const char* string_table[] = {
+const char* const string_table[] = { // SHOAL: const table (read-only data)
   str_dummy,
 };
 
@@ -1471,7 +1471,7 @@ const uint16_t lut_exponential[] = {
 };
 
 
-const uint16_t* lookup_table_table[] = {
+const uint16_t* const lookup_table_table[] = { // SHOAL: const table (read-only data)
   lut_easing_in_quartic,
   lut_easing_out_quartic,
   lut_easing_in_out_sine,
@@ -1593,7 +1593,7 @@ const uint32_t lut_increments_vfast[] = {
 };
 */
 
-const uint32_t* lookup_table_hr_table[] = {
+const uint32_t* const lookup_table_hr_table[] = { // SHOAL: const table (read-only data)
   // lut_increments_vslow,
   // lut_increments_slow,
   lut_increments_med,
@@ -2762,7 +2762,7 @@ const uint8_t wt_lfo_waveforms[] = {
 };
 
 
-const uint8_t* wt_table[] = {
+const uint8_t* const wt_table[] = { // SHOAL: const table (read-only data)
   wt_lfo_waveforms,
 };
 

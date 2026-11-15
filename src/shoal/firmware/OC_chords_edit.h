@@ -67,7 +67,7 @@ public:
       return;
     
     edit_this_progression_ = num_progression;
-    chord_ = &OC::user_chords[chord + edit_this_progression_ * OC::Chords::NUM_CHORDS];
+    chord_ = &OC::g_user_chords[chord + edit_this_progression_ * OC::Chords::NUM_CHORDS]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
     max_chords_ = num_chords;
     owner_ = owner;
     BeginEditing();
@@ -286,7 +286,7 @@ void ChordEditor<Owner>::HandleEncoderEvent(const UI::Event &event) {
   	if (cursor_pos_ < (uint8_t)(max_chords_ + 1)) {
       
       // write to the right slot, at the right index/offset (a nicer struct would be nicer, but well)
-      OC::Chord *edit_user_chord_ = &OC::user_chords[edit_this_chord_ + edit_this_progression_ * OC::Chords::NUM_CHORDS]; 
+      OC::Chord *edit_user_chord_ = &OC::g_user_chords[edit_this_chord_ + edit_this_progression_ * OC::Chords::NUM_CHORDS]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
       
 	    switch(cursor_quality_pos_) {
 
@@ -441,7 +441,7 @@ void ChordEditor<Owner>::BeginEditing() {
 
 template <typename Owner>
 void ChordEditor<Owner>::Close() {
-  ui.SetButtonIgnoreMask();
+  g_ui.SetButtonIgnoreMask(); // SHOAL: g_ prefix (name clashes with app ui members)
   owner_ = nullptr;
 }
 

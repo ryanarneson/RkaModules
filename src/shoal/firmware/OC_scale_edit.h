@@ -51,7 +51,7 @@ public:
       return;
 
     if (scale < OC::Scales::SCALE_USER_LAST) {
-      scale_ = mutable_scale_ = &OC::user_scales[scale];
+      scale_ = mutable_scale_ = &OC::g_user_scales[scale]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
       scale_name_ = OC::scale_names_short[scale];
       // Serial.print("Editing mutable scale "); 
       // Serial.println(scale_name_);
@@ -180,7 +180,7 @@ void ScaleEditor<Owner>::Draw() {
       graphics.setPrintPos(x, y + 24);
       if (cursor_pos_ != num_notes) {
         graphics.movePrintPos(weegfx::Graphics::kFixedFontW, 0);
-        if (mutable_scale_ && OC::ui.read_immediate(OC::CONTROL_BUTTON_L))
+        if (mutable_scale_ && OC::g_ui.read_immediate(OC::CONTROL_BUTTON_L)) // SHOAL: g_ prefix (name clashes with app ui members)
           graphics.drawBitmap8(x + 1, y + 23, kBitmapEditIndicatorW, bitmap_edit_indicators_8);
         else if (mutable_scale_)
           graphics.drawBitmap8(x + 1, y + 23, 4, bitmap_indicator_4x8);
@@ -314,7 +314,7 @@ void ScaleEditor<Owner>::HandleEncoderEvent(const UI::Event &event) {
 
   if (OC::CONTROL_ENCODER_L == event.control) {
     
-    if (SEQ_MODE && OC::ui.read_immediate(OC::CONTROL_BUTTON_UP)) {
+    if (SEQ_MODE && OC::g_ui.read_immediate(OC::CONTROL_BUTTON_UP)) { // SHOAL: g_ prefix (name clashes with app ui members)
       
           // we're in Meta-Q, so we can change the scale:
          
@@ -333,7 +333,7 @@ void ScaleEditor<Owner>::HandleEncoderEvent(const UI::Event &event) {
           scale_changed = true; 
           
           if (_scale < OC::Scales::SCALE_USER_LAST) {
-            scale_ = mutable_scale_ = &OC::user_scales[_scale];
+            scale_ = mutable_scale_ = &OC::g_user_scales[_scale]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
             scale_name_ = OC::scale_names_short[_scale];
           } 
           else {
@@ -359,7 +359,7 @@ void ScaleEditor<Owner>::HandleEncoderEvent(const UI::Event &event) {
           if (mutable_scale_) {
             if (cursor_pos_ < num_notes_) {
               if (event.mask & OC::CONTROL_BUTTON_L) {
-                OC::ui.IgnoreButton(OC::CONTROL_BUTTON_L);
+                OC::g_ui.IgnoreButton(OC::CONTROL_BUTTON_L); // SHOAL: g_ prefix (name clashes with app ui members)
                 change_note(cursor_pos_, event.value, false);
                 scale_changed = true;
                 handled = true;
@@ -460,7 +460,7 @@ template <typename Owner>
 void ScaleEditor<Owner>::handleButtonUp(const UI::Event &event) {
 
   if (event.mask & OC::CONTROL_BUTTON_L) {
-    OC::ui.IgnoreButton(OC::CONTROL_BUTTON_L);
+    OC::g_ui.IgnoreButton(OC::CONTROL_BUTTON_L); // SHOAL: g_ prefix (name clashes with app ui members)
     if (cursor_pos_ == num_notes_)
       reset_scale();
     else
@@ -478,7 +478,7 @@ void ScaleEditor<Owner>::handleButtonUp(const UI::Event &event) {
         uint8_t scale = owner_->get_scale(edit_this_scale_);  
         // Serial.println(scale);
         if (scale < OC::Scales::SCALE_USER_LAST) {
-          scale_ = mutable_scale_ = &OC::user_scales[scale];
+          scale_ = mutable_scale_ = &OC::g_user_scales[scale]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
           scale_name_ = OC::scale_names_short[scale];
           // Serial.print("Editing mutable scale "); 
           // Serial.println(scale_name_);
@@ -501,7 +501,7 @@ void ScaleEditor<Owner>::handleButtonUp(const UI::Event &event) {
 template <typename Owner>
 void ScaleEditor<Owner>::handleButtonDown(const UI::Event &event) {
   if (event.mask & OC::CONTROL_BUTTON_L) {
-    OC::ui.IgnoreButton(OC::CONTROL_BUTTON_L);
+    OC::g_ui.IgnoreButton(OC::CONTROL_BUTTON_L); // SHOAL: g_ prefix (name clashes with app ui members)
     change_note(cursor_pos_, -128, true);
   } else {
     if (!SEQ_MODE)
@@ -516,7 +516,7 @@ void ScaleEditor<Owner>::handleButtonDown(const UI::Event &event) {
         uint8_t scale = owner_->get_scale(edit_this_scale_);  
         // Serial.println(scale);
         if (scale < OC::Scales::SCALE_USER_LAST) {
-          scale_ = mutable_scale_ = &OC::user_scales[scale];
+          scale_ = mutable_scale_ = &OC::g_user_scales[scale]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
           scale_name_ = OC::scale_names_short[scale];
           // Serial.print("Editing mutable scale "); 
           // Serial.println(scale_name_);
@@ -539,7 +539,7 @@ void ScaleEditor<Owner>::handleButtonDown(const UI::Event &event) {
 template <typename Owner>
 void ScaleEditor<Owner>::handleButtonLeft(const UI::Event &) {
 
-  if (SEQ_MODE && OC::ui.read_immediate(OC::CONTROL_BUTTON_UP)) {
+  if (SEQ_MODE && OC::g_ui.read_immediate(OC::CONTROL_BUTTON_UP)) { // SHOAL: g_ prefix (name clashes with app ui members)
 
     if (edit_page_ == _SCALE) 
       edit_page_ = _ROOT; // switch to root
@@ -633,7 +633,7 @@ void ScaleEditor<Owner>::BeginEditing(bool mode) {
   if (mode) { // == meta-Q
     edit_this_scale_ = owner_->get_scale_select();
     mask_ = owner_->get_scale_mask(edit_this_scale_);
-    OC::ui._preemptScreensaver(true);
+    OC::g_ui._preemptScreensaver(true); // SHOAL: g_ prefix (name clashes with app ui members)
   }
   else { 
     mask_ = owner_->get_scale_mask(DUMMY); 
@@ -642,8 +642,8 @@ void ScaleEditor<Owner>::BeginEditing(bool mode) {
 
 template <typename Owner>
 void ScaleEditor<Owner>::Close() {
-  ui.SetButtonIgnoreMask();
-  OC::ui._preemptScreensaver(false);
+  g_ui.SetButtonIgnoreMask(); // SHOAL: g_ prefix (name clashes with app ui members)
+  OC::g_ui._preemptScreensaver(false); // SHOAL: g_ prefix (name clashes with app ui members)
   owner_ = nullptr;
   edit_this_scale_ = 0;
   edit_page_ = _SCALE;

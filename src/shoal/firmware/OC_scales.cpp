@@ -5,8 +5,8 @@
 
 namespace OC {
 
-Scale user_scales[Scales::SCALE_USER_LAST];
-Scale dummy_scale;
+// SHOAL: g_user_scales lives in shoal::Context (g_ prefix: the name clashes with a GlobalSettings member).
+// SHOAL: dummy_scale lives in shoal::Context.
 
 /*static*/
 const int Scales::NUM_SCALES = OC::Scales::SCALE_USER_LAST + sizeof(braids::scales) / sizeof(braids::scales[0]);
@@ -14,13 +14,13 @@ const int Scales::NUM_SCALES = OC::Scales::SCALE_USER_LAST + sizeof(braids::scal
 /*static*/
 void Scales::Init() {
   for (size_t i = 0; i < SCALE_USER_LAST; ++i)
-    memcpy(&user_scales[i], &braids::scales[1], sizeof(Scale));
+    memcpy(&g_user_scales[i], &braids::scales[1], sizeof(Scale)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
 }
 
 /*static*/
 const Scale &Scales::GetScale(int index) {
   if (index < SCALE_USER_LAST)
-    return user_scales[index];
+    return g_user_scales[index]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
   else
     return braids::scales[index - SCALE_USER_LAST];
 }

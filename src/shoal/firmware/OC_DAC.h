@@ -68,20 +68,20 @@ public:
   
   static void set_all(uint32_t value) {
     for (int i = DAC_CHANNEL_A; i < DAC_CHANNEL_LAST; ++i)
-      values_[i] = USAT16(value);
+      values_()[i] = USAT16(value); // SHOAL: per-instance state
   }
 
   template <DAC_CHANNEL channel>
   static void set(uint32_t value) {
-    values_[channel] = USAT16(value);
+    values_()[channel] = USAT16(value); // SHOAL: per-instance state
   }
 
   static void set(DAC_CHANNEL channel, uint32_t value) {
-    values_[channel] = USAT16(value);
+    values_()[channel] = USAT16(value); // SHOAL: per-instance state
   }
 
   static uint32_t value(size_t index) {
-    return values_[index];
+    return values_()[index]; // SHOAL: per-instance state
   }
 
   // Calculate DAC value from semitone, where 0 = C1 = 0V, C2 = 12 = 1V
@@ -105,9 +105,9 @@ public:
     const int32_t octave = pitch / (12 << 7);
     const int32_t fractional = pitch - octave * (12 << 7);
 
-    int32_t sample = calibration_data_->calibrated_octaves[channel][octave];
+    int32_t sample = calibration_data_()->calibrated_octaves[channel][octave]; // SHOAL: per-instance state
     if (fractional) {
-      int32_t span = calibration_data_->calibrated_octaves[channel][octave + 1] - sample;
+      int32_t span = calibration_data_()->calibrated_octaves[channel][octave + 1] - sample; // SHOAL: per-instance state
       sample += (fractional * span) / (12 << 7);
     }
 
@@ -162,9 +162,9 @@ public:
     const int32_t octave = pitch / (12 << 7);
     const int32_t fractional = pitch - octave * (12 << 7);
 
-    int32_t sample = calibration_data_->calibrated_octaves[channel][octave];
+    int32_t sample = calibration_data_()->calibrated_octaves[channel][octave]; // SHOAL: per-instance state
     if (fractional) {
-      int32_t span = calibration_data_->calibrated_octaves[channel][octave + 1] - sample;
+      int32_t span = calibration_data_()->calibrated_octaves[channel][octave + 1] - sample; // SHOAL: per-instance state
       sample += (fractional * span) / (12 << 7);
     }
 
@@ -190,7 +190,7 @@ public:
 
   // Set integer voltage value, where 0 = 0V, 1 = 1V
   static void set_octave(DAC_CHANNEL channel, int v) {
-    set(channel, calibration_data_->calibrated_octaves[channel][kOctaveZero + v]);
+    set(channel, calibration_data_()->calibrated_octaves[channel][kOctaveZero + v]); // SHOAL: per-instance state
   }
 
   // Set all channels to integer voltage value, where 0 = 0V, 1 = 1V
@@ -202,46 +202,48 @@ public:
   }
 
   static uint32_t get_zero_offset(DAC_CHANNEL channel) {
-    return calibration_data_->calibrated_octaves[channel][kOctaveZero];
+    return calibration_data_()->calibrated_octaves[channel][kOctaveZero]; // SHOAL: per-instance state
   }
 
   static uint32_t get_octave_offset(DAC_CHANNEL channel, int octave) {
-    return calibration_data_->calibrated_octaves[channel][kOctaveZero + octave];
+    return calibration_data_()->calibrated_octaves[channel][kOctaveZero + octave]; // SHOAL: per-instance state
   }
 
   static void Update() {
 
     // SHOAL: no SPI transfer; the shim reads values_ (see value()).
 
-    size_t tail = history_tail_;
-    history_[DAC_CHANNEL_A][tail] = values_[DAC_CHANNEL_A];
-    history_[DAC_CHANNEL_B][tail] = values_[DAC_CHANNEL_B];
-    history_[DAC_CHANNEL_C][tail] = values_[DAC_CHANNEL_C];
-    history_[DAC_CHANNEL_D][tail] = values_[DAC_CHANNEL_D];
-    history_tail_ = (tail + 1) % kHistoryDepth;
+    size_t tail = history_tail_(); // SHOAL: per-instance state
+    history_()[DAC_CHANNEL_A][tail] = values_()[DAC_CHANNEL_A]; // SHOAL: per-instance state
+    history_()[DAC_CHANNEL_B][tail] = values_()[DAC_CHANNEL_B]; // SHOAL: per-instance state
+    history_()[DAC_CHANNEL_C][tail] = values_()[DAC_CHANNEL_C]; // SHOAL: per-instance state
+    history_()[DAC_CHANNEL_D][tail] = values_()[DAC_CHANNEL_D]; // SHOAL: per-instance state
+    history_tail_() = (tail + 1) % kHistoryDepth; // SHOAL: per-instance state
   }
 
   template <DAC_CHANNEL channel>
   static void getHistory(uint16_t *dst){
-    size_t head = (history_tail_ + 1) % kHistoryDepth;
+    size_t head = (history_tail_() + 1) % kHistoryDepth; // SHOAL: per-instance state
 
     size_t count = kHistoryDepth - head;
-    const uint16_t *src = history_[channel] + head;
+    const uint16_t *src = history_()[channel] + head; // SHOAL: per-instance state
     while (count--)
       *dst++ = *src++;
 
     count = head;
-    src = history_[channel];
+    src = history_()[channel]; // SHOAL: per-instance state
     while (count--)
       *dst++ = *src++;
   }
 
 private:
-  static CalibrationData *calibration_data_;
-  static uint32_t values_[DAC_CHANNEL_LAST];
-  static uint16_t history_[DAC_CHANNEL_LAST][kHistoryDepth];
-  static volatile size_t history_tail_;
-  static uint8_t DAC_scaling[DAC_CHANNEL_LAST];
+  // SHOAL: the static data members live in the per-instance shoal::Context;
+  // these accessors return the current instance's (FirmwareContext.inc).
+  static shoal::Ref<CalibrationData *> calibration_data_();
+  static shoal::Ref<uint32_t[DAC_CHANNEL_LAST]> values_();
+  static shoal::Ref<uint16_t[DAC_CHANNEL_LAST][kHistoryDepth]> history_();
+  static shoal::Ref<volatile size_t> history_tail_();
+  static shoal::Ref<uint8_t[DAC_CHANNEL_LAST]> DAC_scaling();
 };
 
 }; // namespace OC

@@ -3,8 +3,8 @@
 
 namespace OC {
 
-    Pattern user_patterns[Patterns::PATTERN_USER_ALL];
-    Pattern dummy_pattern;
+    // SHOAL: g_user_patterns lives in shoal::Context (g_ prefix: the name clashes with a GlobalSettings member).
+    // SHOAL: dummy_pattern lives in shoal::Context.
 
     /*static*/
     const int Patterns::NUM_PATTERNS = OC::Patterns::PATTERN_USER_LAST; // = 4
@@ -13,7 +13,7 @@ namespace OC {
     // 
     void Patterns::Init() {
       for (size_t i = 0; i < OC::Patterns::PATTERN_USER_ALL ; ++i)
-        memcpy(&user_patterns[i], &OC::patterns[0], sizeof(Pattern));
+        memcpy(&g_user_patterns[i], &OC::patterns[0], sizeof(Pattern)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
     }
     
     const char* const pattern_names_short[] = {

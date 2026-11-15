@@ -25,7 +25,7 @@ static constexpr uint16_t DAC_OFFSET = 4890; // DAC offset, initial approx., ish
 
 namespace OC {
 // SHOAL: calibration_storage deleted; Shoal never stores calibration.
-CalibrationData calibration_data;
+// SHOAL: g_calibration_data lives in shoal::Context (g_ prefix: the name clashes with Init parameters).
 };
 
 // SHOAL: kCalibrationAdcSmoothing and calibration_data_loaded (calibration UI) deleted.
@@ -69,12 +69,12 @@ const OC::CalibrationData kCalibrationDefaults = {
 };
 
 void calibration_reset() {
-  memcpy(&OC::calibration_data, &kCalibrationDefaults, sizeof(OC::calibration_data));
+  memcpy(&OC::g_calibration_data, &kCalibrationDefaults, sizeof(OC::g_calibration_data)); // SHOAL: g_ prefix (name clashes with Init parameters)
   for (int i = 0; i < OCTAVES; ++i) {
-    OC::calibration_data.dac.calibrated_octaves[0][i] += DAC_OFFSET;
-    OC::calibration_data.dac.calibrated_octaves[1][i] += DAC_OFFSET;
-    OC::calibration_data.dac.calibrated_octaves[2][i] += DAC_OFFSET;
-    OC::calibration_data.dac.calibrated_octaves[3][i] += DAC_OFFSET;
+    OC::g_calibration_data.dac.calibrated_octaves[0][i] += DAC_OFFSET; // SHOAL: g_ prefix (name clashes with Init parameters)
+    OC::g_calibration_data.dac.calibrated_octaves[1][i] += DAC_OFFSET; // SHOAL: g_ prefix (name clashes with Init parameters)
+    OC::g_calibration_data.dac.calibrated_octaves[2][i] += DAC_OFFSET; // SHOAL: g_ prefix (name clashes with Init parameters)
+    OC::g_calibration_data.dac.calibrated_octaves[3][i] += DAC_OFFSET; // SHOAL: g_ prefix (name clashes with Init parameters)
   }
 }
 
@@ -82,7 +82,7 @@ void calibration_reset() {
 // nothing is loaded from EEPROM, and the pitch CV scale gets its default.
 void calibration_load() {
   calibration_reset();
-  OC::calibration_data.adc.pitch_cv_scale = OC::ADC::kDefaultPitchCVScale;
+  OC::g_calibration_data.adc.pitch_cv_scale = OC::ADC::kDefaultPitchCVScale; // SHOAL: g_ prefix (name clashes with Init parameters)
 }
 
 // SHOAL: calibration_save() and the calibration UI (OC::Ui::Calibrate and its

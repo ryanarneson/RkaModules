@@ -59,7 +59,7 @@ public:
   void DebugStats();
   void Calibrate();
   void AppSettings();
-  UiMode DispatchEvents(OC::App *app);
+  UiMode DispatchEvents(const OC::App *app); // SHOAL: const (available_apps is a read-only table)
 
   void Poll();
   void _Poke();
@@ -148,7 +148,8 @@ private:
 
 };
 
-extern Ui ui;
+SHOAL_STATE(Ui, g_ui) // SHOAL: per-instance state (shoal::Context)
+#define g_ui g_ui_ref()
 
 }; // namespace OC
 

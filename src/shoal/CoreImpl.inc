@@ -1,66 +1,55 @@
 // shoal::Core on top of the firmware, and the definitions behind the shim
 // headers. Included last by Firmware.cpp, so every firmware name is visible.
 //
-// Task 2: one global firmware instance. All shim hardware state lives in
-// shoal::hw::state; Task 3 moves it (and the firmware globals) per instance.
+// Each Core owns a shoal::Context (FirmwareContext.inc) holding all firmware
+// and shim state; every Core member function that reaches firmware code makes
+// that context current with a shoal::Scope first.
 #include <cmath>
+#include <memory>
 
 #include "Core.hpp"
+#include "CoreTest.hpp"
 #include "Volts.hpp"
 
 namespace shoal {
 namespace hw {
 
-constexpr int kNumPins = 64;
-constexpr int kAdcOffsetHardware = 2730;
-
-// What the fake Teensy's peripherals see.
-struct State {
-	uint8_t pins[kNumPins];                // pin levels, read by digitalReadFast
-	uint16_t adc12[kNumChannels];          // 12-bit codes on the CV inputs
-	uint8_t eeprom[EEPROMClass::kLength];  // EEPROM image
-	uint32_t rng;                          // Arduino random() state
-
-	void reset() {
-		memset(pins, HIGH, sizeof(pins));
-		for (auto& code : adc12)
-			code = kAdcOffsetHardware; // 0 V
-		memset(eeprom, 0xff, sizeof(eeprom)); // erased flash reads 0xff
-		rng = 1;
-	}
-};
-
-State state;
+// The current instance's fake hardware.
+inline State& state() {
+	return current()->hw;
+}
 
 } // namespace hw
 } // namespace shoal
 
 // ---- Shim definitions -------------------------------------------------------
 
-ShoalSerial Serial;
-FreqMeasureClass FreqMeasure;
+const ShoalSerial Serial{};
+const FreqMeasureClass FreqMeasure{};
 
 void pinMode(uint8_t, uint8_t) { }
 
 int digitalReadFast(uint8_t pin) {
-	return pin < shoal::hw::kNumPins ? shoal::hw::state.pins[pin] : HIGH;
+	return pin < shoal::hw::kNumPins ? shoal::hw::state().pins[pin] : HIGH;
 }
 
 void digitalWriteFast(uint8_t pin, uint8_t value) {
 	if (pin < shoal::hw::kNumPins)
-		shoal::hw::state.pins[pin] = value ? HIGH : LOW;
+		shoal::hw::state().pins[pin] = value ? HIGH : LOW;
 }
 
+// Both count from the shim's 64-bit tick counter, so millis() wraps at 2^32 ms
+// (as on hardware), not when the firmware's 32-bit OC::CORE::ticks does.
 uint32_t micros() {
-	return OC::CORE::ticks * OC_CORE_TIMER_RATE;
+	return (uint32_t) (shoal::hw::state().ticks * OC_CORE_TIMER_RATE);
 }
 
 uint32_t millis() {
-	return (uint32_t) ((uint64_t) OC::CORE::ticks * OC_CORE_TIMER_RATE / 1000u);
+	return (uint32_t) (shoal::hw::state().ticks * OC_CORE_TIMER_RATE / 1000u);
 }
 
 void randomSeed(uint32_t seed) {
-	shoal::hw::state.rng = seed;
+	shoal::hw::state().rng = seed;
 }
 
 // Arduino semantics: random(n) is in [0, n), 0 when n <= 0;
@@ -68,7 +57,7 @@ void randomSeed(uint32_t seed) {
 int32_t random(int32_t howbig) {
 	if (howbig <= 0)
 		return 0;
-	uint32_t& s = shoal::hw::state.rng;
+	uint32_t& s = shoal::hw::state().rng;
 	s = s * 1664525u + 1013904223u;
 	return (int32_t) ((((uint64_t) s) * (uint32_t) howbig) >> 32);
 }
@@ -80,11 +69,11 @@ int32_t random(int32_t howsmall, int32_t howbig) {
 }
 
 uint16_t shoal_adc_code12(int channel) {
-	return shoal::hw::state.adc12[channel & 3];
+	return shoal::hw::state().adc12[channel & 3];
 }
 
 uint8_t* shoal_eeprom_data() {
-	return shoal::hw::state.eeprom;
+	return shoal::hw::state().eeprom;
 }
 
 // ---- shoal::Core ------------------------------------------------------------
@@ -92,6 +81,8 @@ uint8_t* shoal_eeprom_data() {
 namespace shoal {
 
 struct Core::Impl {
+	// Value-initialised: zeroed first, like the globals it replaces.
+	std::unique_ptr<Context> ctx{ new Context() };
 	float cv[kNumChannels] = {};
 	Schmitt gates[kNumChannels];
 	bool edges[kNumChannels] = {};  // rising edges latched since the last tick
@@ -99,10 +90,15 @@ struct Core::Impl {
 	uint32_t uiMicros = 0;           // tick time since the last UI poll
 	uint32_t mainTicks = 0;          // ticks since the last main-loop pass
 
+	Impl() {
+		Scope scope(ctx.get());
+		shoal_boot();
+	}
+
 	// Present the latched inputs to the firmware for the coming tick.
 	void applyInputs() {
 		for (int ch = 0; ch < kNumChannels; ch++)
-			hw::state.adc12[ch] = (uint16_t) voltsToAdc12(cv[ch], hw::kAdcOffsetHardware);
+			hw::state().adc12[ch] = (uint16_t) voltsToAdc12(cv[ch], hw::kAdcOffsetHardware);
 		if (edges[0]) OC::DigitalInputs::clock<OC::DIGITAL_INPUT_1>();
 		if (edges[1]) OC::DigitalInputs::clock<OC::DIGITAL_INPUT_2>();
 		if (edges[2]) OC::DigitalInputs::clock<OC::DIGITAL_INPUT_3>();
@@ -111,19 +107,18 @@ struct Core::Impl {
 		for (int ch = 0; ch < kNumChannels; ch++) {
 			edges[ch] = false;
 			// Trigger inputs are active low.
-			hw::state.pins[kTriggerPins[ch]] = gates[ch].high ? LOW : HIGH;
+			hw::state().pins[kTriggerPins[ch]] = gates[ch].high ? LOW : HIGH;
 		}
 	}
 };
 
 Core::Core() : impl_(new Impl) {
-	hw::state.reset();
-	OC::CORE::ticks = 0;
-	OC::CORE::app_isr_enabled = false;
-	shoal_boot();
 }
 
 Core::~Core() {
+	// Firmware objects have no destructors that reach firmware state, but
+	// make this instance current anyway in case one ever does.
+	Scope scope(impl_->ctx.get());
 	delete impl_;
 }
 
@@ -142,17 +137,19 @@ void Core::setInputRange(InputRange) {
 }
 
 void Core::tick() {
+	Scope scope(impl_->ctx.get());
 	impl_->applyInputs();
 	// The tick ISR starts by sending the codes set since the last tick to the
 	// DAC, which then holds them for the whole tick.
 	for (int ch = 0; ch < kNumChannels; ch++)
 		impl_->dac[ch] = OC::DAC::value(ch);
+	hw::state().ticks++;  // shoal_tick() advances OC::CORE::ticks in step
 	shoal_tick();
 
 	impl_->uiMicros += OC_CORE_TIMER_RATE;
 	if (impl_->uiMicros >= OC_UI_TIMER_RATE) {
 		impl_->uiMicros -= OC_UI_TIMER_RATE;
-		OC::ui.Poll();
+		OC::g_ui.Poll();
 	}
 	if (++impl_->mainTicks >= 17) {
 		impl_->mainTicks = 0;
@@ -196,10 +193,12 @@ bool Core::pixel(const uint8_t*, int, int) {
 }
 
 int Core::app() const {
+	Scope scope(impl_->ctx.get());
 	return OC::apps::index_of(OC::global_settings.current_app_id);
 }
 
 void Core::selectApp(int index) {
+	Scope scope(impl_->ctx.get());
 	if (index < 0 || index >= kNumApps || index == app())
 		return;
 	OC::apps::current_app->HandleAppEvent(OC::APP_EVENT_SUSPEND);
@@ -256,10 +255,26 @@ void Core::resetToDefaults() {
 }
 
 void Core::seed(uint32_t s) {
+	Scope scope(impl_->ctx.get());
 	randomSeed(s);
 	stmlib::Random::Seed(s);
 }
 
 static_assert(kNumApps == NUM_AVAILABLE_APPS, "app count");
 
+void CoreTest::setTicks(Core& c, uint64_t ticks) {
+	Scope scope(c.impl_->ctx.get());
+	hw::state().ticks = ticks;
+	OC::CORE::ticks_ref() = (uint32_t) ticks;
+}
+
+uint32_t CoreTest::millis(Core& c) {
+	Scope scope(c.impl_->ctx.get());
+	return ::millis();
+}
+
 } // namespace shoal
+
+bool shoal_test_current_is_null() {
+	return shoal::current() == nullptr;
+}

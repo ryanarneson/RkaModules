@@ -15,7 +15,8 @@ public:
   static const Autotune_data &GetAutotune_data(int channel);
 };
 
-extern Autotune_data auto_calibration_data[DAC_CHANNEL_LAST];
+SHOAL_STATE(Autotune_data[DAC_CHANNEL_LAST], g_auto_calibration_data) // SHOAL: per-instance state (shoal::Context)
+#define g_auto_calibration_data g_auto_calibration_data_ref()
 };
 
 #endif // OC_AUTOTUNE_H_

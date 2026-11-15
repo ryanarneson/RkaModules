@@ -233,13 +233,16 @@ SETTINGS_DECLARE(PolyLfo, POLYLFO_SETTING_LAST) {
   { 3, 0, 5, "TR4: MULT", tr4_multiplier, settings::STORAGE_TYPE_U8 }, 
  };
 
-PolyLfo poly_lfo;
-struct {
+SHOAL_STATE(PolyLfo, poly_lfo) // SHOAL: per-instance state (shoal::Context)
+#define poly_lfo poly_lfo_ref()
+struct PolyLfoState { // SHOAL: named type; the state lives in shoal::Context
 
   POLYLFO_SETTINGS left_edit_mode;
   menu::ScreenCursor<menu::kScreenLines> cursor;
 
-} poly_lfo_state;
+};
+SHOAL_STATE(PolyLfoState, poly_lfo_state) // SHOAL: per-instance state (shoal::Context)
+#define poly_lfo_state poly_lfo_state_ref()
 
 void FASTRUN POLYLFO_isr() {
 
@@ -369,7 +372,8 @@ void POLYLFO_loop() {
 }
 
 static const size_t kSmallPreviewBufferSize = 32;
-uint16_t preview_buffer[kSmallPreviewBufferSize];
+SHOAL_STATE(uint16_t[kSmallPreviewBufferSize], preview_buffer) // SHOAL: per-instance state (shoal::Context)
+#define preview_buffer preview_buffer_ref()
 
 void POLYLFO_menu() {
 

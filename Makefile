@@ -46,10 +46,13 @@ panels:
 # Each src/<module>/test_*.cpp builds to build/test/<module>/test_*.
 TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_*.cpp)))
 .PHONY: test
-test: $(TEST_BINS)
+test: shoal-globals $(TEST_BINS)
 	@for t in $(TEST_BINS); do ./$$t || exit 1; done
 
-SHOAL_FW_FLAGS = -std=c++17 -fwrapv -fno-strict-aliasing -Isrc/shoal/shim -Isrc/shoal/firmware
+# -fno-unsafe-math-optimizations undoes compile.mk's -funsafe-math-optimizations
+# for the firmware, so the plugin and the tests share floating-point semantics.
+SHOAL_FW_FLAGS = -std=c++17 -fwrapv -fno-strict-aliasing -fno-unsafe-math-optimizations \
+	-Isrc/shoal/shim -Isrc/shoal/firmware
 SHOAL_TEST_FLAGS = $(SHOAL_FW_FLAGS) -O1 -g -fsanitize=address,undefined \
 	-fno-sanitize=alignment,shift-base -fno-sanitize-recover=all
 SHOAL_DEPS = $(shell find src/shoal -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.ino' -o -name '*.cpp' \) ! -name 'test_*.cpp')
@@ -61,6 +64,12 @@ build/src/shoal/Firmware.cpp.o: FLAGS += $(SHOAL_FW_FLAGS)
 build/test/shoal/Firmware.o: src/shoal/Firmware.cpp $(SHOAL_DEPS)
 	@mkdir -p $(@D)
 	$(CXX) $(SHOAL_TEST_FLAGS) -Isrc -c $< -o $@
+
+# The firmware object must hold no writable global state: every mutable
+# firmware global lives in the per-instance shoal::Context.
+.PHONY: shoal-globals
+shoal-globals: build/test/shoal/Firmware.o
+	tools/check_shoal_globals.sh $<
 
 build/test/shoal/test_shim: src/shoal/test_shim.cpp $(SHOAL_DEPS)
 	@mkdir -p $(@D)

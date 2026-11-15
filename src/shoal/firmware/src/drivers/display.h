@@ -31,7 +31,9 @@
 
 namespace display {
 
-extern FrameBuffer<SH1106_128x64_Driver::kFrameSize, 2> frame_buffer;
+typedef FrameBuffer<SH1106_128x64_Driver::kFrameSize, 2> FrameBufferType; // SHOAL: SHOAL_STATE takes one macro argument
+SHOAL_STATE(FrameBufferType, frame_buffer) // SHOAL: per-instance state (shoal::Context)
+#define frame_buffer frame_buffer_ref()
 // SHOAL: no display driver (the paged SH1106 transfer and AdjustOffset are
 // deleted). Nothing reads frames out, so Flush/Update do nothing and each
 // finished frame is consumed at once (GRAPHICS_END_FRAME).
@@ -48,7 +50,8 @@ static inline void Update() {
 
 };
 
-extern weegfx::Graphics graphics;
+SHOAL_STATE(weegfx::Graphics, graphics) // SHOAL: per-instance state (shoal::Context)
+#define graphics graphics_ref()
 
 // SHOAL: a frame is always writeable, so `wait` never blocks; END_FRAME
 // marks it written and read, leaving it as the latest finished frame.

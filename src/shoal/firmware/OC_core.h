@@ -8,8 +8,10 @@
 
 namespace OC {
   namespace CORE {
-  extern volatile uint32_t ticks;
-  extern volatile bool app_isr_enabled;
+  // SHOAL: ticks and app_isr_enabled live in the per-instance shoal::Context;
+  // no name macros (ticks is a common local name), uses call the accessors.
+  SHOAL_STATE(volatile uint32_t, ticks)
+  SHOAL_STATE(volatile bool, app_isr_enabled)
 
   }; // namespace CORE
 
@@ -21,7 +23,7 @@ namespace OC {
     }
 
     uint32_t Update() {
-      uint32_t now = OC::CORE::ticks;
+      uint32_t now = OC::CORE::ticks_ref(); // SHOAL: per-instance state
       uint32_t ticks = now - last_ticks;
       last_ticks = now;
       return ticks;

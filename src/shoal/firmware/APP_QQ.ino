@@ -1184,8 +1184,10 @@ public:
   OC::ScaleEditor<QuantizerChannel> scale_editor;
 };
 
-QuadQuantizer qq_state;
-QuantizerChannel quantizer_channels[4];
+SHOAL_STATE(QuadQuantizer, qq_state) // SHOAL: per-instance state (shoal::Context)
+#define qq_state qq_state_ref()
+SHOAL_STATE(QuantizerChannel[4], quantizer_channels) // SHOAL: per-instance state (shoal::Context)
+#define quantizer_channels quantizer_channels_ref()
 
 void QQ_init() {
 
@@ -1461,7 +1463,8 @@ void QQ_downButtonLong() {
   selected_channel.update_scale_mask(0xFFFF, 0x0);
 }
 
-int32_t history[5];
+SHOAL_STATE(int32_t[5], g_history) // SHOAL: per-instance state (shoal::Context)
+#define g_history g_history_ref()
 static const weegfx::coord_t kBottom = 60;
 
 inline int32_t render_pitch(int32_t pitch, weegfx::coord_t x, weegfx::coord_t width) {
@@ -1475,7 +1478,7 @@ inline int32_t render_pitch(int32_t pitch, weegfx::coord_t x, weegfx::coord_t wi
 void QuantizerChannel::RenderScreensaver(weegfx::coord_t start_x) const {
 
   // History
-  scrolling_history_.Read(history);
+  scrolling_history_.Read(g_history); // SHOAL: g_ prefix (name clashes with APP_REFS locals)
   weegfx::coord_t scroll_pos = (scrolling_history_.get_scroll_pos() * 6) >> 8;
 
   // Top: Show gate & CV (or register bits)
@@ -1522,12 +1525,12 @@ void QuantizerChannel::RenderScreensaver(weegfx::coord_t start_x) const {
     graphics.setPixel(x, y);
 
   x = start_x + 1;
-  render_pitch(history[0], x, scroll_pos); x += scroll_pos;
-  render_pitch(history[1], x, 6); x += 6;
-  render_pitch(history[2], x, 6); x += 6;
-  render_pitch(history[3], x, 6); x += 6;
+  render_pitch(g_history[0], x, scroll_pos); x += scroll_pos; // SHOAL: g_ prefix (name clashes with APP_REFS locals)
+  render_pitch(g_history[1], x, 6); x += 6; // SHOAL: g_ prefix (name clashes with APP_REFS locals)
+  render_pitch(g_history[2], x, 6); x += 6; // SHOAL: g_ prefix (name clashes with APP_REFS locals)
+  render_pitch(g_history[3], x, 6); x += 6; // SHOAL: g_ prefix (name clashes with APP_REFS locals)
 
-  int32_t octave = render_pitch(history[4], x, 6 - scroll_pos);
+  int32_t octave = render_pitch(g_history[4], x, 6 - scroll_pos); // SHOAL: g_ prefix (name clashes with APP_REFS locals)
   graphics.drawBitmap8(start_x + 28, kBottom - octave * 4 - 1, OC::kBitmapLoopMarkerW, OC::bitmap_loop_markers_8 + OC::kBitmapLoopMarkerW);
 }
 

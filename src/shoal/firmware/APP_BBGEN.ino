@@ -280,7 +280,8 @@ public:
   SmoothedValue<int32_t, kCvSmoothing> cv4;
 };
 
-QuadBouncingBalls bbgen;
+SHOAL_STATE(QuadBouncingBalls, bbgen) // SHOAL: per-instance state (shoal::Context)
+#define bbgen bbgen_ref()
 
 void BBGEN_init() {
   bbgen.Init();

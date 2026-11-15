@@ -58,8 +58,10 @@ private:
 
 extern const char *const scale_names[];
 extern const char *const scale_names_short[];
-extern Scale user_scales[OC::Scales::SCALE_USER_LAST];
-extern Scale dummy_scale;
+SHOAL_STATE(Scale[OC::Scales::SCALE_USER_LAST], g_user_scales) // SHOAL: per-instance state (shoal::Context)
+#define g_user_scales g_user_scales_ref()
+SHOAL_STATE(Scale, dummy_scale) // SHOAL: per-instance state (shoal::Context)
+#define dummy_scale dummy_scale_ref()
 extern const char *const voltage_scalings[];
 
 };

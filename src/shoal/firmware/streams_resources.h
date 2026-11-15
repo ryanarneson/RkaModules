@@ -42,7 +42,7 @@ namespace streams {
 
 //typedef uint8_t ResourceId;
 //
-extern const char* string_table[];
+extern const char* const string_table[]; // SHOAL: const table (read-only data)
 //
 //extern const int16_t* waveforms_table[];
 //

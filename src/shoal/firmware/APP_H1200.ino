@@ -492,7 +492,8 @@ namespace H1200 {
   typedef uint32_t UiAction;
 };
 
-H1200Settings h1200_settings;
+SHOAL_STATE(H1200Settings, h1200_settings) // SHOAL: per-instance state (shoal::Context)
+#define h1200_settings h1200_settings_ref()
 
 class H1200State {
 public:
@@ -675,7 +676,8 @@ public:
  
 };
 
-H1200State h1200_state;
+SHOAL_STATE(H1200State, h1200_state) // SHOAL: per-instance state (shoal::Context)
+#define h1200_state h1200_state_ref()
 
 void FASTRUN H1200_clock(uint32_t triggers) {
 

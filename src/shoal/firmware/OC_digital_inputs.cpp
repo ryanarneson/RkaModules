@@ -4,11 +4,7 @@
 #include "OC_gpio.h"
 #include "OC_options.h"
 
-/*static*/
-uint32_t OC::DigitalInputs::clocked_mask_;
-
-/*static*/
-volatile uint32_t OC::DigitalInputs::clocked_[DIGITAL_INPUT_LAST];
+// SHOAL: clocked_mask_ and clocked_ live in shoal::Context.
 
 // SHOAL: the TR1..TR4 pin-change ISRs are deleted. The shim calls
 // clock<input>() for each rising trigger edge before the tick's Scan(), and
@@ -19,8 +15,8 @@ void OC::DigitalInputs::Init() {
 
   // SHOAL: pin setup and attachInterrupt() deleted.
 
-  clocked_mask_ = 0;
-  std::fill(clocked_, clocked_ + DIGITAL_INPUT_LAST, 0);
+  clocked_mask_() = 0; // SHOAL: per-instance state
+  std::fill(clocked_(), clocked_() + DIGITAL_INPUT_LAST, 0); // SHOAL: per-instance state
 
   // Assume the priority of pin change interrupts is lower or equal to the
   // thread where ::Scan function is called. Otherwise a safer mechanism is
@@ -46,7 +42,7 @@ void OC::DigitalInputs::reInit() {
 
 /*static*/
 void OC::DigitalInputs::Scan() {
-  clocked_mask_ =
+  clocked_mask_() = // SHOAL: per-instance state
     ScanInput<DIGITAL_INPUT_1>() |
     ScanInput<DIGITAL_INPUT_2>() |
     ScanInput<DIGITAL_INPUT_3>() |

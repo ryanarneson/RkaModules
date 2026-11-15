@@ -165,12 +165,15 @@ SETTINGS_DECLARE(LorenzGenerator, LORENZ_SETTING_LAST) {
   {streams::LORENZ_OUTPUT_Y2, streams::LORENZ_OUTPUT_X1, streams::LORENZ_OUTPUT_LAST - 1, "Out D ", lorenz_output_names, settings::STORAGE_TYPE_U8},
 };
 
-LorenzGenerator lorenz_generator;
-struct {
+SHOAL_STATE(LorenzGenerator, lorenz_generator) // SHOAL: per-instance state (shoal::Context)
+#define lorenz_generator lorenz_generator_ref()
+struct LorenzGeneratorState { // SHOAL: named type; the state lives in shoal::Context
   bool selected_generator;
 
   menu::ScreenCursor<menu::kScreenLines> cursor;
-} lorenz_generator_state;
+};
+SHOAL_STATE(LorenzGeneratorState, lorenz_generator_state) // SHOAL: per-instance state (shoal::Context)
+#define lorenz_generator_state lorenz_generator_state_ref()
 
 void FASTRUN LORENZ_isr() {
 

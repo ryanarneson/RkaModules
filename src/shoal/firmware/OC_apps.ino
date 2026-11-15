@@ -35,7 +35,7 @@
 }
 
 #ifdef BORING_APP_NAMES
-OC::App available_apps[] = {
+constexpr OC::App available_apps[] = { // SHOAL: read-only table (constexpr, so DEFAULT_APP_ID is a constant)
   DECLARE_APP('A','S', "ASR", ASR, ASR_isr),
   DECLARE_APP('H','A', "Triads", H1200, H1200_isr),
   DECLARE_APP('A','T', "Vectors", Automatonnetz, Automatonnetz_isr),
@@ -51,7 +51,7 @@ OC::App available_apps[] = {
   DECLARE_APP('R','F', "Voltages", REFS, REFS_isr)
 };
 #else 
-OC::App available_apps[] = {
+constexpr OC::App available_apps[] = { // SHOAL: read-only table (constexpr, so DEFAULT_APP_ID is a constant)
   DECLARE_APP('A','S', "CopierMaschine", ASR, ASR_isr),
   DECLARE_APP('H','A', "Harrington 1200", H1200, H1200_isr),
   DECLARE_APP('A','T', "Automatonnetz", Automatonnetz, Automatonnetz_isr),
@@ -110,11 +110,15 @@ struct AppData {
 typedef PageStorage<EEPROMStorage, EEPROM_GLOBALSETTINGS_START, EEPROM_GLOBALSETTINGS_END, GlobalSettings> GlobalSettingsStorage;
 typedef PageStorage<EEPROMStorage, EEPROM_APPDATA_START, EEPROM_APPDATA_END, AppData> AppDataStorage;
 
-GlobalSettings global_settings;
-GlobalSettingsStorage global_settings_storage;
+SHOAL_STATE(GlobalSettings, global_settings) // SHOAL: per-instance state (shoal::Context)
+#define global_settings global_settings_ref()
+SHOAL_STATE(GlobalSettingsStorage, global_settings_storage) // SHOAL: per-instance state (shoal::Context)
+#define global_settings_storage global_settings_storage_ref()
 
-AppData app_settings;
-AppDataStorage app_data_storage;
+SHOAL_STATE(AppData, app_settings) // SHOAL: per-instance state (shoal::Context)
+#define app_settings app_settings_ref()
+SHOAL_STATE(AppDataStorage, app_data_storage) // SHOAL: per-instance state (shoal::Context)
+#define app_data_storage app_data_storage_ref()
 
 static constexpr int DEFAULT_APP_INDEX = 0;
 static const uint16_t DEFAULT_APP_ID = available_apps[DEFAULT_APP_INDEX].id;
@@ -122,10 +126,10 @@ static const uint16_t DEFAULT_APP_ID = available_apps[DEFAULT_APP_INDEX].id;
 void save_global_settings() {
   SERIAL_PRINTLN("Save global settings");
 
-  memcpy(global_settings.user_scales, OC::user_scales, sizeof(OC::user_scales));
-  memcpy(global_settings.user_patterns, OC::user_patterns, sizeof(OC::user_patterns));
-  memcpy(global_settings.user_chords, OC::user_chords, sizeof(OC::user_chords));
-  memcpy(global_settings.auto_calibration_data, OC::auto_calibration_data, sizeof(OC::auto_calibration_data));
+  memcpy(global_settings.user_scales, OC::g_user_scales, sizeof(OC::g_user_scales)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
+  memcpy(global_settings.user_patterns, OC::g_user_patterns, sizeof(OC::g_user_patterns)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
+  memcpy(global_settings.user_chords, OC::g_user_chords, sizeof(OC::g_user_chords)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
+  memcpy(global_settings.auto_calibration_data, OC::g_auto_calibration_data, sizeof(OC::g_auto_calibration_data)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
   // scaling settings:
   global_settings.DAC_scaling = OC::DAC::store_scaling();
   
@@ -182,7 +186,7 @@ void restore_app_data() {
       break;
     }
 
-    App *app = apps::find(chunk->id);
+    const App *app = apps::find(chunk->id); // SHOAL: const (available_apps is a read-only table)
     if (!app) {
       SERIAL_PRINTLN("App %02x not found, ignoring chunk...", app->id);
       if (!chunk->length)
@@ -224,9 +228,9 @@ void set_current_app(int index) {
   global_settings.current_app_id = current_app->id;
 }
 
-App *current_app = &available_apps[DEFAULT_APP_INDEX];
+// SHOAL: current_app (initially &available_apps[DEFAULT_APP_INDEX]) lives in shoal::Context.
 
-App *find(uint16_t id) {
+const App *find(uint16_t id) { // SHOAL: const (available_apps is a read-only table)
   for (auto &app : available_apps)
     if (app.id == id) return &app;
   return nullptr;
@@ -255,7 +259,7 @@ void Init(bool reset_settings) {
   global_settings.DAC_scaling = VOLTAGE_SCALING_1V_PER_OCT; 
 
   if (reset_settings) {
-    if (ui.ConfirmReset()) {
+    if (g_ui.ConfirmReset()) { // SHOAL: g_ prefix (name clashes with app ui members)
       SERIAL_PRINTLN("Erase EEPROM ...");
       EEPtr d = EEPROM_GLOBALSETTINGS_START;
       size_t len = EEPROMStorage::LENGTH - EEPROM_GLOBALSETTINGS_START;
@@ -282,11 +286,11 @@ void Init(bool reset_settings) {
     } else {
       SERIAL_PRINTLN("Loaded settings from page_index %d, current_app_id is %02x",
                     global_settings_storage.page_index(),global_settings.current_app_id);
-      memcpy(user_scales, global_settings.user_scales, sizeof(user_scales));
-      memcpy(user_patterns, global_settings.user_patterns, sizeof(user_patterns));
-      memcpy(user_chords, global_settings.user_chords, sizeof(user_chords));
-      memcpy(auto_calibration_data, global_settings.auto_calibration_data, sizeof(auto_calibration_data));
-      DAC::choose_calibration_data(); // either use default data, or auto_calibration_data
+      memcpy(g_user_scales, global_settings.user_scales, sizeof(g_user_scales)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
+      memcpy(g_user_patterns, global_settings.user_patterns, sizeof(g_user_patterns)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
+      memcpy(g_user_chords, global_settings.user_chords, sizeof(g_user_chords)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
+      memcpy(g_auto_calibration_data, global_settings.auto_calibration_data, sizeof(g_auto_calibration_data)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
+      DAC::choose_calibration_data(); // either use default data, or g_auto_calibration_data // SHOAL: g_ prefix (name clashes with GlobalSettings members)
       DAC::restore_scaling(global_settings.DAC_scaling); // recover output scaling settings
     }
 
@@ -311,7 +315,7 @@ void Init(bool reset_settings) {
   }
 
   SERIAL_PRINTLN("Encoder acceleration: %s", global_settings.encoders_enable_acceleration ? "enabled" : "disabled");
-  ui.encoders_enable_acceleration(global_settings.encoders_enable_acceleration);
+  g_ui.encoders_enable_acceleration(global_settings.encoders_enable_acceleration); // SHOAL: g_ prefix (name clashes with app ui members)
 
   set_current_app(current_app_index);
   current_app->HandleAppEvent(APP_EVENT_RESUME);

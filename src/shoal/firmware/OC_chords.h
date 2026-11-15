@@ -99,7 +99,8 @@ public:
 };
 
 
-extern Chord user_chords[OC::Chords::CHORDS_USER_LAST];
+SHOAL_STATE(Chord[OC::Chords::CHORDS_USER_LAST], g_user_chords) // SHOAL: per-instance state (shoal::Context)
+#define g_user_chords g_user_chords_ref()
 };
 
 #endif // OC_CHORDS_H_

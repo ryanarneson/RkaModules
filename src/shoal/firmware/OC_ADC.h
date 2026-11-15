@@ -50,28 +50,28 @@ public:
 
   template <ADC_CHANNEL channel>
   static int32_t value() {
-    return calibration_data_->offset[channel] - (smoothed_[channel] >> kAdcValueShift);
+    return calibration_data_()->offset[channel] - (smoothed_()[channel] >> kAdcValueShift); // SHOAL: per-instance state
   }
 
   static int32_t value(ADC_CHANNEL channel) {
-    return calibration_data_->offset[channel] - (smoothed_[channel] >> kAdcValueShift);
+    return calibration_data_()->offset[channel] - (smoothed_()[channel] >> kAdcValueShift); // SHOAL: per-instance state
   }
 
   static uint32_t raw_value(ADC_CHANNEL channel) {
-    return raw_[channel] >> kAdcValueShift;
+    return raw_()[channel] >> kAdcValueShift; // SHOAL: per-instance state
   }
 
   static uint32_t smoothed_raw_value(ADC_CHANNEL channel) {
-    return smoothed_[channel] >> kAdcValueShift;
+    return smoothed_()[channel] >> kAdcValueShift; // SHOAL: per-instance state
   }
 
   static int32_t pitch_value(ADC_CHANNEL channel) {
-    return (value(channel) * calibration_data_->pitch_cv_scale) >> 12;
+    return (value(channel) * calibration_data_()->pitch_cv_scale) >> 12; // SHOAL: per-instance state
   }
 
   static int32_t raw_pitch_value(ADC_CHANNEL channel) {
-    int32_t value = calibration_data_->offset[channel] - raw_value(channel);
-    return (value * calibration_data_->pitch_cv_scale) >> 12;
+    int32_t value = calibration_data_()->offset[channel] - raw_value(channel); // SHOAL: per-instance state
+    return (value * calibration_data_()->pitch_cv_scale) >> 12; // SHOAL: per-instance state
   }
 
   static void CalibratePitch(int32_t c2, int32_t c4);
@@ -81,18 +81,20 @@ private:
   template <ADC_CHANNEL channel>
   static void update(uint32_t value) {
     value = (value  >> (kAdcScanResolution - kAdcResolution)) << kAdcSmoothBits;
-    raw_[channel] = value;
+    raw_()[channel] = value; // SHOAL: per-instance state
     // division should be shift if kAdcSmoothing is power-of-two
-    value = (smoothed_[channel] * (kAdcSmoothing - 1) + value) / kAdcSmoothing;
-    smoothed_[channel] = value;
+    value = (smoothed_()[channel] * (kAdcSmoothing - 1) + value) / kAdcSmoothing; // SHOAL: per-instance state
+    smoothed_()[channel] = value; // SHOAL: per-instance state
   }
 
   // SHOAL: adc_, ready_ and scan_channel_ deleted; scan_count_ paces Scan_DMA().
-  static uint32_t scan_count_;
-  static CalibrationData *calibration_data_;
+  // SHOAL: the static data members live in the per-instance shoal::Context;
+  // these accessors return the current instance's (FirmwareContext.inc).
+  static shoal::Ref<uint32_t> scan_count_();
+  static shoal::Ref<CalibrationData *> calibration_data_();
 
-  static uint32_t raw_[ADC_CHANNEL_LAST];
-  static uint32_t smoothed_[ADC_CHANNEL_LAST];
+  static shoal::Ref<uint32_t[ADC_CHANNEL_LAST]> raw_(); // SHOAL: per-instance state
+  static shoal::Ref<uint32_t[ADC_CHANNEL_LAST]> smoothed_(); // SHOAL: per-instance state
 
   // SHOAL: SCA_CHANNEL_ID (ADC mux ids for the DMA) deleted.
 };

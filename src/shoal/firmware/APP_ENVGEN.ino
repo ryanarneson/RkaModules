@@ -839,7 +839,8 @@ public:
   SmoothedValue<int32_t, kCvSmoothing> cv4;
 };
 
-QuadEnvelopeGenerator envgen;
+SHOAL_STATE(QuadEnvelopeGenerator, envgen) // SHOAL: per-instance state (shoal::Context)
+#define envgen envgen_ref()
 
 void ENVGEN_init() {
   envgen.Init();
@@ -888,12 +889,16 @@ static constexpr weegfx::coord_t kPreviewBottomY = 32 + kPreviewH - 1;
 static constexpr weegfx::coord_t kLoopMarkerY = 28;
 static constexpr weegfx::coord_t kCurrentSegmentCursorY = 26;
 
-int16_t preview_values[128 + 64];
-uint16_t preview_segment_starts[peaks::kMaxNumSegments];
-uint16_t preview_loop_points[peaks::kMaxNumSegments];
+SHOAL_STATE(int16_t[128 + 64], preview_values) // SHOAL: per-instance state (shoal::Context)
+#define preview_values preview_values_ref()
+SHOAL_STATE(uint16_t[peaks::kMaxNumSegments], preview_segment_starts) // SHOAL: per-instance state (shoal::Context)
+#define preview_segment_starts preview_segment_starts_ref()
+SHOAL_STATE(uint16_t[peaks::kMaxNumSegments], preview_loop_points) // SHOAL: per-instance state (shoal::Context)
+#define preview_loop_points preview_loop_points_ref()
 static constexpr uint16_t kPreviewTerminator = 0xffff;
 
-settings::value_attr segment_editing_attr = { 128, 0, 255, "DOH!", NULL, settings::STORAGE_TYPE_U16 };
+SHOAL_STATE(settings::value_attr, segment_editing_attr) // SHOAL: per-instance state (shoal::Context)
+#define segment_editing_attr segment_editing_attr_ref()
 
 void ENVGEN_menu_preview() {
   auto const &env = envgen.selected();
@@ -1195,7 +1200,8 @@ void ENVGEN_handleEncoderEvent(const UI::Event &event) {
   }
 }
 
-int16_t fast_preview_values[peaks::kFastPreviewWidth + 32];
+SHOAL_STATE(int16_t[peaks::kFastPreviewWidth + 32], fast_preview_values) // SHOAL: per-instance state (shoal::Context)
+#define fast_preview_values fast_preview_values_ref()
 
 template <int index, weegfx::coord_t startx, weegfx::coord_t y>
 void RenderFastPreview() {

@@ -68,7 +68,8 @@ struct App {
 
 namespace apps {
 
-  extern App *current_app;
+  SHOAL_STATE(const App *, current_app) // SHOAL: per-instance state (shoal::Context); const App
+#define current_app current_app_ref()
 
   void Init(bool reset_settings);
 
@@ -78,7 +79,7 @@ namespace apps {
       current_app->isr();
   }
 
-  App *find(uint16_t id);
+  const App *find(uint16_t id); // SHOAL: const (available_apps is a read-only table)
   int index_of(uint16_t id);
 
 }; // namespace apps

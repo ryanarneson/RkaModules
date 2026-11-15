@@ -3,7 +3,7 @@
 
 namespace OC {
 
-    Autotune_data auto_calibration_data[DAC_CHANNEL_LAST];
+    // SHOAL: g_auto_calibration_data lives in shoal::Context (g_ prefix: the name clashes with a GlobalSettings member).
 
     /*static*/
     const int AUTOTUNE::NUM_DAC_CHANNELS = DAC_CHANNEL_LAST;
@@ -11,10 +11,10 @@ namespace OC {
     /*static*/
     void AUTOTUNE::Init() {
       for (size_t i = 0; i < DAC_CHANNEL_LAST; i++)
-        memcpy(&auto_calibration_data[i], &OC::autotune_data_default[0], sizeof(Autotune_data));
+        memcpy(&g_auto_calibration_data[i], &OC::autotune_data_default[0], sizeof(Autotune_data)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
     }
     /*static*/
     const Autotune_data &AUTOTUNE::GetAutotune_data(int channel) {
-        return auto_calibration_data[channel];
+        return g_auto_calibration_data[channel]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
     }
 } // namespace OC

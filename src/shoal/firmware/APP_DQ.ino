@@ -1145,8 +1145,10 @@ public:
   OC::ScaleEditor<DQ_QuantizerChannel> scale_editor;
 };
 
-DualQuantizer dq_state;
-DQ_QuantizerChannel dq_quantizer_channels[NUMCHANNELS];
+SHOAL_STATE(DualQuantizer, dq_state) // SHOAL: per-instance state (shoal::Context)
+#define dq_state dq_state_ref()
+SHOAL_STATE(DQ_QuantizerChannel[NUMCHANNELS], dq_quantizer_channels) // SHOAL: per-instance state (shoal::Context)
+#define dq_quantizer_channels dq_quantizer_channels_ref()
 
 void DQ_init() {
 
@@ -1474,7 +1476,8 @@ void DQ_downButtonLong() {
   selected_channel.set_scale_at_slot(selected_channel.get_scale(scale_slot), 0xFFFF, selected_channel.get_root(scale_slot), selected_channel.get_transpose(scale_slot), scale_slot);
 }
 
-int32_t dq_history[5];
+SHOAL_STATE(int32_t[5], dq_history) // SHOAL: per-instance state (shoal::Context)
+#define dq_history dq_history_ref()
 static const weegfx::coord_t dq_kBottom = 60;
 
 inline int32_t dq_render_pitch(int32_t pitch, weegfx::coord_t x, weegfx::coord_t width) {

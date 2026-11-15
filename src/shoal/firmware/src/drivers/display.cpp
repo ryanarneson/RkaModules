@@ -23,11 +23,11 @@
 #include <Arduino.h>
 #include "display.h"
 
-weegfx::Graphics graphics;
+// SHOAL: graphics lives in shoal::Context.
 
 namespace display {
 
-FrameBuffer<SH1106_128x64_Driver::kFrameSize, 2> frame_buffer;
+// SHOAL: frame_buffer lives in shoal::Context.
 // SHOAL: display driver and AdjustOffset() deleted (no SH1106).
 
 void Init() {

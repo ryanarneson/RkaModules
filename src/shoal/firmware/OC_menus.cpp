@@ -10,9 +10,11 @@ namespace OC {
 
 static constexpr weegfx::coord_t note_circle_r = 28;
 
-static struct coords {
+struct coords { // SHOAL: named type; the table lives in shoal::Context
   weegfx::coord_t x, y;
-} circle_pos_lut[12];
+};
+SHOAL_STATE(coords[12], circle_pos_lut) // SHOAL: per-instance state (shoal::Context)
+#define circle_pos_lut circle_pos_lut_ref()
 
 static void init_circle_lut() {
   static const float pi = 3.14159265358979323846f;
@@ -66,10 +68,16 @@ void screensaver() {
 
 static const size_t kScopeDepth = 64;
 
-uint16_t scope_history[DAC::kHistoryDepth];
-uint16_t averaged_scope_history[DAC_CHANNEL_LAST][kScopeDepth];
-size_t averaged_scope_tail = 0;
-DAC_CHANNEL scope_update_channel = DAC_CHANNEL_A;
+// SHOAL: per-instance state (shoal::Context); averaged_scope_tail starts at 0,
+// scope_update_channel at DAC_CHANNEL_A.
+SHOAL_STATE(uint16_t[DAC::kHistoryDepth], scope_history)
+#define scope_history scope_history_ref()
+SHOAL_STATE(uint16_t[DAC_CHANNEL_LAST][kScopeDepth], averaged_scope_history)
+#define averaged_scope_history averaged_scope_history_ref()
+SHOAL_STATE(size_t, averaged_scope_tail)
+#define averaged_scope_tail averaged_scope_tail_ref()
+SHOAL_STATE(DAC_CHANNEL, scope_update_channel)
+#define scope_update_channel scope_update_channel_ref()
 
 template <size_t size>
 inline uint16_t calc_average(const uint16_t *data) {

@@ -297,7 +297,7 @@ public:
         auto_freq_count_ = 0;
         _f_result = true;
         ticks_since_last_freq_ = 0x0;
-        OC::ui._Poke();
+        OC::g_ui._Poke(); // SHOAL: g_ prefix (name clashes with app ui members)
         for (auto &sh : history_)
           sh.Update();
       }
@@ -432,7 +432,7 @@ public:
       case OC::AUTO_CALIBRATION_STEP_LAST:
       // step through the octaves:
       if (ticks_since_last_freq_ > 2000) {
-        int32_t new_auto_calibration_point = OC::calibration_data.dac.calibrated_octaves[dac_channel_][octaves_cnt_] + auto_calibration_data_[octaves_cnt_];
+        int32_t new_auto_calibration_point = OC::g_calibration_data.dac.calibrated_octaves[dac_channel_][octaves_cnt_] + auto_calibration_data_[octaves_cnt_]; // SHOAL: g_ prefix (name clashes with Init parameters)
         // write to DAC and update data
         if (new_auto_calibration_point >= 65536 || new_auto_calibration_point < 0) {
           auto_error_ = true;
@@ -468,12 +468,12 @@ public:
       {
         F_correction_factor_ = 0x1; // don't go so fast
         auto_frequency();
-        OC::DAC::set(dac_channel_, OC::calibration_data.dac.calibrated_octaves[dac_channel_][OC::DAC::kOctaveZero]);
+        OC::DAC::set(dac_channel_, OC::g_calibration_data.dac.calibrated_octaves[dac_channel_][OC::DAC::kOctaveZero]); // SHOAL: g_ prefix (name clashes with Init parameters)
       }
       break;
       case OC::DAC_VOLT_0_BASELINE:
       // set DAC to 0.000V, default calibration:
-      OC::DAC::set(dac_channel_, OC::calibration_data.dac.calibrated_octaves[dac_channel_][OC::DAC::kOctaveZero]);
+      OC::DAC::set(dac_channel_, OC::g_calibration_data.dac.calibrated_octaves[dac_channel_][OC::DAC::kOctaveZero]); // SHOAL: g_ prefix (name clashes with Init parameters)
       break;
       case OC::DAC_VOLT_TARGET_FREQUENCIES:
       case OC::AUTO_CALIBRATION_STEP_LAST:
@@ -482,7 +482,7 @@ public:
       default: 
       // set DAC to calibration point + error
       {
-        int32_t _default_calibration_point = OC::calibration_data.dac.calibrated_octaves[dac_channel_][autotuner_step_ - OC::DAC_VOLT_3m];
+        int32_t _default_calibration_point = OC::g_calibration_data.dac.calibrated_octaves[dac_channel_][autotuner_step_ - OC::DAC_VOLT_3m]; // SHOAL: g_ prefix (name clashes with Init parameters)
         OC::DAC::set(dac_channel_, _default_calibration_point + auto_DAC_offset_error_);
       }
       break;
@@ -735,7 +735,8 @@ private:
   elapsedMillis milliseconds_since_last_freq_;
 };
 
-ReferencesApp references_app;
+SHOAL_STATE(ReferencesApp, references_app) // SHOAL: per-instance state (shoal::Context)
+#define references_app references_app_ref()
 
 // App stubs
 void REFS_init() {

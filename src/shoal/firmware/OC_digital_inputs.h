@@ -40,17 +40,17 @@ public:
 
   // @return mask of all pins cloked since last call, reset state
   static inline uint32_t clocked() {
-    return clocked_mask_;
+    return clocked_mask_(); // SHOAL: per-instance state
   }
 
   // @return mask if pin clocked since last call and reset state
   template <DigitalInput input> static inline uint32_t clocked() {
-    return clocked_mask_ & (0x1 << input);
+    return clocked_mask_() & (0x1 << input); // SHOAL: per-instance state
   }
 
   // @return mask if pin clocked since last call, reset state
   static inline uint32_t clocked(DigitalInput input) {
-    return clocked_mask_ & (0x1 << input);
+    return clocked_mask_() & (0x1 << input); // SHOAL: per-instance state
   }
 
   template <DigitalInput input> static inline bool read_immediate() {
@@ -62,7 +62,7 @@ public:
   }
 
   template <DigitalInput input> static inline void clock() {
-    clocked_[input] = 1;
+    clocked_()[input] = 1; // SHOAL: per-instance state
   }
 
 private:
@@ -78,13 +78,15 @@ private:
     return 0;
   }
 
-  static uint32_t clocked_mask_;
-  static volatile uint32_t clocked_[DIGITAL_INPUT_LAST];
+  // SHOAL: the static data members live in the per-instance shoal::Context;
+  // these accessors return the current instance's (FirmwareContext.inc).
+  static shoal::Ref<uint32_t> clocked_mask_();
+  static shoal::Ref<volatile uint32_t[DIGITAL_INPUT_LAST]> clocked_();
 
   template <DigitalInput input>
   static uint32_t ScanInput() {
-    if (clocked_[input]) {
-      clocked_[input] = 0;
+    if (clocked_()[input]) { // SHOAL: per-instance state
+      clocked_()[input] = 0; // SHOAL: per-instance state
       return DIGITAL_INPUT_MASK(input);
     } else {
       return 0;

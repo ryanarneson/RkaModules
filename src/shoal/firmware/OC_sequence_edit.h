@@ -34,7 +34,7 @@ public:
     if (OC::Patterns::PATTERN_NONE == pattern)
       return;
 
-    pattern_ = mutable_pattern_ = &OC::user_patterns[pattern];
+    pattern_ = mutable_pattern_ = &OC::g_user_patterns[pattern]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
     pattern_name_ = OC::pattern_names_short[pattern];
     // Serial.print("Editing user pattern "); 
     // Serial.println(pattern_name_);
@@ -188,7 +188,7 @@ void PatternEditor<Owner>::Draw() {
     }
 
     if (i == cursor_pos_) {
-      if (OC::ui.read_immediate(OC::CONTROL_BUTTON_L))
+      if (OC::g_ui.read_immediate(OC::CONTROL_BUTTON_L)) // SHOAL: g_ prefix (name clashes with app ui members)
         graphics.drawFrame(x - 3, y - 5, 10, 10);
       else 
         graphics.drawFrame(x - 2, y - 4, 8, 8);
@@ -233,7 +233,7 @@ void PatternEditor<Owner>::HandleButtonEvent(const UI::Event &event) {
       break;
       case OC::CONTROL_BUTTON_DOWN:
       {
-        if (OC::ui.read_immediate(OC::CONTROL_BUTTON_L)) 
+        if (OC::g_ui.read_immediate(OC::CONTROL_BUTTON_L)) // SHOAL: g_ prefix (name clashes with app ui members)
           clear_mask();
         else
           paste_sequence(); 
@@ -241,7 +241,7 @@ void PatternEditor<Owner>::HandleButtonEvent(const UI::Event &event) {
       break;
       case OC::CONTROL_BUTTON_L: 
       {
-        if (OC::ui.read_immediate(OC::CONTROL_BUTTON_DOWN)) 
+        if (OC::g_ui.read_immediate(OC::CONTROL_BUTTON_DOWN)) // SHOAL: g_ prefix (name clashes with app ui members)
           clear_mask();
         else
           copy_sequence();
@@ -276,7 +276,7 @@ void PatternEditor<Owner>::HandleEncoderEvent(const UI::Event &event) {
           num_slots_ = num_slots;
            if (event.value > 0) {
             // erase  slots when expanding?
-            if (OC::ui.read_immediate(OC::CONTROL_BUTTON_L)) {
+            if (OC::g_ui.read_immediate(OC::CONTROL_BUTTON_L)) { // SHOAL: g_ prefix (name clashes with app ui members)
                mask &= ~(~(0xffff << (num_slots_ - cursor_pos_)) << cursor_pos_);
                owner_->set_pitch_at_step(edit_this_sequence_, num_slots_, 0x0); 
             }
@@ -295,7 +295,7 @@ void PatternEditor<Owner>::HandleEncoderEvent(const UI::Event &event) {
       // Q? might be better to actually add whatever is in the scale
       // or semitone/finetune?
       int16_t delta = event.value;
-      if (OC::ui.read_immediate(OC::CONTROL_BUTTON_L)) 
+      if (OC::g_ui.read_immediate(OC::CONTROL_BUTTON_L)) // SHOAL: g_ prefix (name clashes with app ui members)
        pitch += delta; // fine
       else
         pitch += (delta << 7); // semitone
@@ -416,7 +416,7 @@ void PatternEditor<Owner>::BeginEditing() {
 
 template <typename Owner>
 void PatternEditor<Owner>::Close() {
-  ui.SetButtonIgnoreMask();
+  g_ui.SetButtonIgnoreMask(); // SHOAL: g_ prefix (name clashes with app ui members)
   owner_ = nullptr;
 }
 

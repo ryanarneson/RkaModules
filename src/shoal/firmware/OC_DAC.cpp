@@ -33,26 +33,27 @@
 *
 */
 
-#include "OC_DAC.h"
+#include "OC_DAC.h" // SHOAL: util/util_SPIFIFO.h include deleted (no SPI)
 #include "OC_gpio.h"
 #include "OC_options.h"
 #include "OC_calibration.h"
 #include "OC_autotune_presets.h"
 #include "OC_autotune.h"
+// SHOAL: SPICLOCK_30MHz deleted (no SPI)
 
 namespace OC {
 
 /*static*/
 void DAC::Init(CalibrationData *calibration_data) {
 
-  calibration_data_ = calibration_data;
+  calibration_data_() = calibration_data; // SHOAL: per-instance state
   
   restore_scaling(0x0);
 
   // SHOAL: DAC pin, Vbias (VOR) and SPI setup deleted.
 
-  history_tail_ = 0;
-  memset(history_, 0, sizeof(uint16_t) * kHistoryDepth * DAC_CHANNEL_LAST);
+  history_tail_() = 0; // SHOAL: per-instance state
+  memset(history_(), 0, sizeof(uint16_t) * kHistoryDepth * DAC_CHANNEL_LAST); // SHOAL: per-instance state
 
   set_all(0xffff);
   Update();
@@ -70,14 +71,14 @@ void DAC::set_auto_channel_calibration_data(uint8_t channel_id) {
   
   if (channel_id < DAC_CHANNEL_LAST) {
   
-    OC::Autotune_data *_autotune_data = &OC::auto_calibration_data[channel_id];
+    OC::Autotune_data *_autotune_data = &OC::g_auto_calibration_data[channel_id]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
     if (_autotune_data->use_auto_calibration_ == 0xFF)  { // = data available ?
       
         _autotune_data->use_auto_calibration_ = 0x01; // = use auto data 
         // update data:
         const OC::Autotune_data &autotune_data = OC::AUTOTUNE::GetAutotune_data(channel_id);
         for (int i = 0; i < OCTAVES + 1; i++)
-          calibration_data_->calibrated_octaves[channel_id][i] = autotune_data.auto_calibrated_octaves[i];
+          calibration_data_()->calibrated_octaves[channel_id][i] = autotune_data.auto_calibrated_octaves[i]; // SHOAL: per-instance state
     } 
   }
 }
@@ -90,9 +91,9 @@ void DAC::set_default_channel_calibration_data(uint8_t channel_id) {
 
     // reset data
     for (int i = 0; i < OCTAVES + 1; i++) 
-      calibration_data_->calibrated_octaves[channel_id][i] = OC::calibration_data.dac.calibrated_octaves[channel_id][i];
+      calibration_data_()->calibrated_octaves[channel_id][i] = OC::g_calibration_data.dac.calibrated_octaves[channel_id][i]; // SHOAL: per-instance state
     // + update info
-    OC::Autotune_data *autotune_data = &OC::auto_calibration_data[channel_id];
+    OC::Autotune_data *autotune_data = &OC::g_auto_calibration_data[channel_id]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
     if (autotune_data->use_auto_calibration_ == 0xFF || autotune_data->use_auto_calibration_ == 0x01)
       autotune_data->use_auto_calibration_ = 0xFF; // = data available, but not used
     else 
@@ -107,7 +108,7 @@ void DAC::update_auto_channel_calibration_data(uint8_t channel_id, int8_t octave
   if (channel_id < DAC_CHANNEL_LAST) {
 
       // write data
-      OC::Autotune_data *autotune_data = &OC::auto_calibration_data[channel_id];
+      OC::Autotune_data *autotune_data = &OC::g_auto_calibration_data[channel_id]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
       autotune_data->auto_calibrated_octaves[octave] = pitch_data;
       // + update info
       if (octave == OCTAVES) {
@@ -122,10 +123,10 @@ void DAC::reset_auto_channel_calibration_data(uint8_t channel_id) {
   // reset data
   if (channel_id < DAC_CHANNEL_LAST) {
     SERIAL_PRINTLN("reset channel# %d calibration data", (int)(channel_id + 1));
-    OC::Autotune_data *autotune_data = &OC::auto_calibration_data[channel_id];
+    OC::Autotune_data *autotune_data = &OC::g_auto_calibration_data[channel_id]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
     autotune_data->use_auto_calibration_ = 0x0;
     for (int i = 0; i < OCTAVES + 1; i++)
-      autotune_data->auto_calibrated_octaves[i] = OC::calibration_data.dac.calibrated_octaves[channel_id][i];
+      autotune_data->auto_calibrated_octaves[i] = OC::g_calibration_data.dac.calibrated_octaves[channel_id][i]; // SHOAL: g_ prefix (name clashes with Init parameters)
   }
 }
 /*static*/
@@ -154,13 +155,13 @@ void DAC::choose_calibration_data() {
 }
 /*static*/
 uint8_t DAC::get_voltage_scaling(uint8_t channel_id) {
-  return DAC_scaling[channel_id];
+  return DAC_scaling()[channel_id]; // SHOAL: per-instance state
 }
 /*static*/
 void DAC::set_scaling(uint8_t scaling, uint8_t channel_id) {
 
   if (channel_id < DAC_CHANNEL_LAST)
-    DAC_scaling[channel_id] = scaling;
+    DAC_scaling()[channel_id] = scaling; // SHOAL: per-instance state
 }
 /*static*/
 void DAC::restore_scaling(uint32_t scaling) {
@@ -177,20 +178,12 @@ uint32_t DAC::store_scaling() {
   uint32_t _scaling = 0;
   // merge values into uint32_t : 
   for (int i = 0; i < DAC_CHANNEL_LAST; i++)
-    _scaling |= (DAC_scaling[i] << (i * 8)); 
+    _scaling |= (DAC_scaling()[i] << (i * 8)); // SHOAL: per-instance state
   return _scaling;
 }
 // SHOAL: init_Vbias() and set_Vbias() (VOR hardware registers) deleted.
-/*static*/
-DAC::CalibrationData *DAC::calibration_data_ = nullptr;
-/*static*/
-uint32_t DAC::values_[DAC_CHANNEL_LAST];
-/*static*/
-uint16_t DAC::history_[DAC_CHANNEL_LAST][DAC::kHistoryDepth];
-/*static*/ 
-volatile size_t DAC::history_tail_;
-/*static*/ 
-uint8_t DAC::DAC_scaling[DAC_CHANNEL_LAST];
+// SHOAL: calibration_data_, values_, history_, history_tail_ and DAC_scaling
+// live in shoal::Context.
 }; // namespace OC
 
 // SHOAL: set8565_CHA..D() and SPI_init() (SPI hardware) deleted.

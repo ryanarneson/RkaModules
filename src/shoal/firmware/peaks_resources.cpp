@@ -37,7 +37,7 @@ namespace peaks {
 static const char str_dummy[] = "dummy";
 
 
-const char* string_table[] = {
+const char* const string_table[] = { // SHOAL: const table (read-only data)
   str_dummy,
 };
 
@@ -1194,7 +1194,7 @@ const uint16_t lut_svf_scale[] = {
 };
 */
 
-const uint16_t* lookup_table_table[] = {
+const uint16_t* const lookup_table_table[] = { // SHOAL: const table (read-only data)
   // lut_delay_times,
   lut_gravity,
   lut_env_linear,

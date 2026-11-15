@@ -732,7 +732,7 @@ public:
 
       display_num_chords_ = num_chords;
       // active chord:
-      OC::Chord *active_chord = &OC::user_chords[active_chord_ + num_progression * OC::Chords::NUM_CHORDS];
+      OC::Chord *active_chord = &OC::g_user_chords[active_chord_ + num_progression * OC::Chords::NUM_CHORDS]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
       
       int8_t _base_note = active_chord->base_note;
       int8_t _octave = active_chord->octave;
@@ -1043,8 +1043,10 @@ public:
   int left_encoder_value;
 };
 
-ChordQuantizer chords_state;
-Chords chords;
+SHOAL_STATE(ChordQuantizer, chords_state) // SHOAL: per-instance state (shoal::Context)
+#define chords_state chords_state_ref()
+SHOAL_STATE(Chords, chords) // SHOAL: per-instance state (shoal::Context)
+#define chords chords_ref()
 
 void CHORDS_init() {
 

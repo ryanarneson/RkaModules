@@ -42,13 +42,13 @@ namespace frames {
 
 typedef uint8_t ResourceId;
 
-extern const char* string_table[];
+extern const char* const string_table[]; // SHOAL: const table (read-only data)
 
 // extern const uint16_t* lookup_table_table[];
 
-extern const uint32_t* lookup_table_hr_table[];
+extern const uint32_t* const lookup_table_hr_table[]; // SHOAL: const table (read-only data)
 
-extern const uint8_t* wt_table[];
+extern const uint8_t* const wt_table[]; // SHOAL: const table (read-only data)
 
 // extern const uint16_t lut_easing_in_quartic[];
 // extern const uint16_t lut_easing_out_quartic[];

@@ -794,8 +794,10 @@ public:
   OC::ScaleEditor<ASR> scale_editor;
 };
 
-ASRState asr_state;
-ASR asr;
+SHOAL_STATE(ASRState, asr_state) // SHOAL: per-instance state (shoal::Context)
+#define asr_state asr_state_ref()
+SHOAL_STATE(ASR, asr) // SHOAL: per-instance state (shoal::Context)
+#define asr asr_ref()
 
 void ASR_init() {
 
@@ -1029,7 +1031,8 @@ void ASR_menu() {
     asr_state.scale_editor.Draw(); 
 }
 
-uint16_t channel_history[ASR::kHistoryDepth];
+SHOAL_STATE(uint16_t[ASR::kHistoryDepth], channel_history) // SHOAL: per-instance state (shoal::Context)
+#define channel_history channel_history_ref()
 
 void ASR_screensaver() {
 

@@ -1,21 +1,19 @@
 #include "OC_ADC.h"
-#include "OC_gpio.h"
+#include "OC_gpio.h" // SHOAL: DMAChannel.h include deleted (no DMA)
 #include <algorithm>
 
 namespace OC {
 
-/*static*/ ADC::CalibrationData *ADC::calibration_data_;
-/*static*/ uint32_t ADC::raw_[ADC_CHANNEL_LAST];
-/*static*/ uint32_t ADC::smoothed_[ADC_CHANNEL_LAST];
-/*static*/ uint32_t ADC::scan_count_; // SHOAL: replaces the DMA state
+// SHOAL: calibration_data_, raw_, smoothed_ and scan_count_ (which replaces
+// the DMA state) live in shoal::Context.
 
 /*static*/ void ADC::Init(CalibrationData *calibration_data) {
 
   // SHOAL: ADC driver setup and DMA buffer deleted.
-  calibration_data_ = calibration_data;
-  std::fill(raw_, raw_ + ADC_CHANNEL_LAST, 0);
-  std::fill(smoothed_, smoothed_ + ADC_CHANNEL_LAST, 0);
-  scan_count_ = 0;
+  calibration_data_() = calibration_data; // SHOAL: per-instance state
+  std::fill(raw_(), raw_() + ADC_CHANNEL_LAST, 0); // SHOAL: per-instance state
+  std::fill(smoothed_(), smoothed_() + ADC_CHANNEL_LAST, 0); // SHOAL: per-instance state
+  scan_count_() = 0; // SHOAL: per-instance state
 }
 
 // SHOAL: DMA_ISR() and Init_DMA() deleted. Scan_DMA() takes new samples on
@@ -23,9 +21,9 @@ namespace OC {
 // tick), as 16-bit values from the shim's 12-bit CV codes.
 /*static*/void FASTRUN ADC::Scan_DMA() {
 
-  if (++scan_count_ >= 3)
+  if (++scan_count_() >= 3) // SHOAL: per-instance state
   {
-    scan_count_ = 0;
+    scan_count_() = 0; // SHOAL: per-instance state
     update<ADC_CHANNEL_1>(shoal_adc_code12(ADC_CHANNEL_1) << 4);
     update<ADC_CHANNEL_2>(shoal_adc_code12(ADC_CHANNEL_2) << 4);
     update<ADC_CHANNEL_3>(shoal_adc_code12(ADC_CHANNEL_3) << 4);
@@ -40,7 +38,7 @@ namespace OC {
   // *vague handwaving*
   if (c2 < c4) {
     int32_t scale = (24 * 128 * 4096L) / (c4 - c2);
-    calibration_data_->pitch_cv_scale = scale;
+    calibration_data_()->pitch_cv_scale = scale; // SHOAL: per-instance state
   }
 }
 

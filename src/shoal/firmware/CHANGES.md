@@ -76,6 +76,41 @@ Each change is marked `// SHOAL:` in the file.
 - `extern/stmlib_utils_random.cpp`: include path fixed
   (`utils/stmlib_utils_random.h` does not exist).
 
+## Per-instance state (stage 1, Task 3)
+
+Every mutable global lives in one `shoal::Context` per `shoal::Core`
+(`../FirmwareContext.inc`, convention in `../shim/Context.hpp`). Each change
+is marked `// SHOAL:`.
+
+- Namespace-scope globals: the definition and any `extern` become
+  `SHOAL_STATE(T, name)` plus `#define name name_ref()`, so uses are
+  unchanged. Files: `OC_autotune.*`, `OC_chords.*`, `OC_menus.cpp`,
+  `OC_patterns.*`, `OC_scales.*`, `OC_ui.*` (`MENU_REDRAW`'s `extern` too),
+  `OC_apps.h`/`.ino`, `OC_calibration.h`/`.ino`, `o_c_REV.ino`,
+  `src/drivers/display.*`, and every `APP_*.ino`.
+- Renamed with a `g_` prefix because the macro would hit another identifier:
+  `OC::user_scales`, `user_patterns`, `user_chords`, `auto_calibration_data`
+  (`GlobalSettings` members), `OC::ui` (the apps' `ui` members),
+  `OC::calibration_data` (`ADC::Init`/`DAC::Init` parameters), and
+  `APP_QQ.ino`'s `history` (`APP_REFS.ino` locals). All uses renamed.
+- Static data members of `OC::ADC`, `OC::DAC`, `OC::DigitalInputs` and
+  `stmlib::Random` became private static accessors returning a reference
+  (`values_()`, ...); uses call them. `OC::CORE::ticks` and
+  `app_isr_enabled` (`OC_core.h`) are reached through `ticks_ref()` and
+  `app_isr_enabled_ref()` (no macro: `ticks` is a common local name).
+- Anonymous state structs named so `Context` can hold them:
+  `OC::coords` (`OC_menus.cpp`), `LorenzGeneratorState` (`APP_LORENZ.ino`),
+  `PolyLfoState` (`APP_POLYLFO.ino`). `display::FrameBufferType` typedef
+  added (`SHOAL_STATE` takes one macro argument).
+- Read-only tables made `const`: `string_table`, `lookup_table_table`,
+  `lookup_table_hr_table`, `wt_table` (`frames_`, `peaks_`,
+  `streams_resources.*`), `tonnetz::transform_names_str` and
+  `transformations` (`tonnetz/tonnetz.h`), `clock_fraction_names` and
+  `cell_event_masks` (`APP_AUTOMATONNETZ.ino`). `available_apps`
+  (`OC_apps.ino`) is `constexpr` (so `DEFAULT_APP_ID` is a constant), and
+  `apps::current_app`, `apps::find` and `Ui::DispatchEvents` use
+  `const App*`.
+
 ## Shim-side substitutions (no firmware edit)
 
 - `extern/dspinst.h` compiles to nothing: `shim/dspinst.h`, included first,
@@ -84,9 +119,13 @@ Each change is marked `// SHOAL:` in the file.
   `src/drivers/FreqMeasure/OC_FreqMeasure.h` (for `APP_REFS.ino`) resolve to
   stand-ins under `shim/`. FreqMeasure never has a reading.
 - `typeof` is `__typeof__`; `F_CPU`, `FASTRUN`, `DMAMEM`, interrupts,
-  `__LDREXW`/`__STREXW`, `millis`/`micros` (from the tick counter), `delay`
+  `__LDREXW`/`__STREXW`, `millis`/`micros` (from a per-instance 64-bit tick
+  counter, so `millis()` wraps at 2^32 ms as on hardware), `delay`
   (no-op), `random`, `elapsedMillis`, `Serial` and EEPROM come from
-  `shim/Arduino.h` and `shim/EEPROM.h`.
+  `shim/Arduino.h` and `shim/EEPROM.h`. A default-constructed
+  `elapsedMillis` starts at 0 (`millis()` at boot) instead of reading
+  `millis()`, because firmware objects are built with their context, before
+  any context is current (`APP_REFS.ino`'s `ReferencesApp` holds one).
 
 ## Desktop-CPU guards
 

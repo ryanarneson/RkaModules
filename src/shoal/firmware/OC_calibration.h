@@ -69,7 +69,8 @@ static_assert(sizeof(CalibrationData) == 116, "Calibration data size changed!");
 
 typedef PageStorage<EEPROMStorage, EEPROM_CALIBRATIONDATA_START, EEPROM_CALIBRATIONDATA_END, CalibrationData> CalibrationStorage;
 
-extern CalibrationData calibration_data;
+SHOAL_STATE(CalibrationData, g_calibration_data) // SHOAL: per-instance state (shoal::Context); g_ prefix (name clashes with Init parameters)
+#define g_calibration_data g_calibration_data_ref()
 
 }; // namespace OC
 

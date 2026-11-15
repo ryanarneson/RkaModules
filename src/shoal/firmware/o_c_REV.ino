@@ -29,13 +29,13 @@
 //                      calibration UI or timers;
 //   shoal_tick()       the body of CORE_timer_ISR (called every 60 us);
 //   shoal_main_pass()  one pass of the loop() body, without the draw.
-// The UI timer ISR is OC::ui.Poll(), called by the shim every 1 ms.
+// The UI timer ISR is OC::g_ui.Poll(), called by the shim every 1 ms.
 
 #include <EEPROM.h>
 
 #include "OC_apps.h"
 #include "OC_core.h"
-#include "OC_DAC.h"
+#include "OC_DAC.h" // SHOAL: OC_debug.h include deleted
 #include "OC_gpio.h"
 #include "OC_ADC.h"
 #include "OC_calibration.h"
@@ -44,17 +44,19 @@
 #include "OC_ui.h"
 #include "OC_version.h"
 #include "OC_options.h"
-#include "src/drivers/display.h"
-#include "util/util_debugpins.h"
+#include "src/drivers/display.h" // SHOAL: src/drivers/ADC/OC_util_ADC.h include deleted
+#include "util/util_debugpins.h" // SHOAL: VBiasManager.h include deleted
 
-unsigned long LAST_REDRAW_TIME = 0;
-uint_fast8_t MENU_REDRAW = true;
-OC::UiMode ui_mode = OC::UI_MODE_MENU;
+SHOAL_STATE(unsigned long, LAST_REDRAW_TIME) // SHOAL: per-instance state (shoal::Context)
+#define LAST_REDRAW_TIME LAST_REDRAW_TIME_ref()
+// SHOAL: MENU_REDRAW lives in shoal::Context (initially true).
+SHOAL_STATE(OC::UiMode, ui_mode) // SHOAL: per-instance state (shoal::Context)
+#define ui_mode ui_mode_ref()
 const bool DUMMY = false;
 
 /*  ------------------------ core timer ISR ---------------------------   */
-volatile bool OC::CORE::app_isr_enabled = false;
-volatile uint32_t OC::CORE::ticks = 0;
+// SHOAL: OC::CORE::app_isr_enabled (initially false) and OC::CORE::ticks
+// (initially 0) live in shoal::Context.
 
 void FASTRUN shoal_tick() {
   // DAC and display share SPI. By first updating the DAC values, then starting
@@ -72,8 +74,8 @@ void FASTRUN shoal_tick() {
   // need extra precautions.
   OC::DigitalInputs::Scan();
 
-  ++OC::CORE::ticks;
-  if (OC::CORE::app_isr_enabled)
+  ++OC::CORE::ticks_ref(); // SHOAL: per-instance state
+  if (OC::CORE::app_isr_enabled_ref()) // SHOAL: per-instance state
     OC::apps::ISR();
 }
 
@@ -81,8 +83,8 @@ void FASTRUN shoal_tick() {
 
 void shoal_boot() {
   OC::DigitalInputs::Init();
-  OC::ADC::Init(&OC::calibration_data.adc); // Yes, it's using the calibration_data before it's loaded...
-  OC::DAC::Init(&OC::calibration_data.dac);
+  OC::ADC::Init(&OC::g_calibration_data.adc); // Yes, it's using the calibration_data before it's loaded... // SHOAL: g_ prefix (name clashes with Init parameters)
+  OC::DAC::Init(&OC::g_calibration_data.dac); // SHOAL: g_ prefix (name clashes with Init parameters)
 
   display::Init();
 
@@ -92,17 +94,17 @@ void shoal_boot() {
   calibration_load();
 
   OC::menu::Init();
-  OC::ui.Init();
-  OC::ui.configure_encoders(OC::calibration_data.encoder_config());
+  OC::g_ui.Init(); // SHOAL: g_ prefix (name clashes with app ui members)
+  OC::g_ui.configure_encoders(OC::g_calibration_data.encoder_config()); // SHOAL: g_ prefix (names clash with app ui members, Init parameters)
 
   ui_mode = OC::UI_MODE_MENU;
-  OC::ui.set_screensaver_timeout(OC::calibration_data.screensaver_timeout);
+  OC::g_ui.set_screensaver_timeout(OC::g_calibration_data.screensaver_timeout); // SHOAL: g_ prefix (names clash with app ui members, Init parameters)
 
   // initialize apps
   OC::apps::Init(false);
 
   // from the start of loop()
-  OC::CORE::app_isr_enabled = true;
+  OC::CORE::app_isr_enabled_ref() = true; // SHOAL: per-instance state
 }
 
 /*  ---------    main loop  --------  */
@@ -111,7 +113,7 @@ void FASTRUN shoal_main_pass() {
 
     // don't change current_app while it's running
     if (OC::UI_MODE_APP_SETTINGS == ui_mode) {
-      OC::ui.AppSettings();
+      OC::g_ui.AppSettings(); // SHOAL: g_ prefix (name clashes with app ui members)
       ui_mode = OC::UI_MODE_MENU;
     }
 
@@ -119,7 +121,7 @@ void FASTRUN shoal_main_pass() {
     OC::apps::current_app->loop();
 
     // UI events
-    OC::UiMode mode = OC::ui.DispatchEvents(OC::apps::current_app);
+    OC::UiMode mode = OC::g_ui.DispatchEvents(OC::apps::current_app); // SHOAL: g_ prefix (name clashes with app ui members)
 
     // State transition for app
     if (mode != ui_mode) {

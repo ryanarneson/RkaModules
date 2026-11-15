@@ -31,7 +31,6 @@
 
 namespace stmlib {
 
-/* static */
-uint32_t Random::rng_state_ = 0x21;
+// SHOAL: rng_state_ (initially 0x21) lives in shoal::Context.
 
 }  // namespace stmlib

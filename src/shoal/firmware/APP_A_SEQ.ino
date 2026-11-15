@@ -52,14 +52,20 @@ const uint32_t TICK_JITTER = 0xFFFFFFF;  // 1/16 : threshold/double triggers rej
 const uint32_t TICK_SCALE  = 0xC0000000; // 0.75 for signed_multiply_32x32               
 const uint32_t COPYTIMEOUT = 200000; // in ticks
 
-uint32_t ticks_src1 = 0; // main clock frequency (top)
-uint32_t ticks_src2 = 0; // sec. clock frequency (bottom)
+SHOAL_STATE(uint32_t, ticks_src1) // SHOAL: per-instance state (shoal::Context)
+#define ticks_src1 ticks_src1_ref()
+SHOAL_STATE(uint32_t, ticks_src2) // SHOAL: per-instance state (shoal::Context)
+#define ticks_src2 ticks_src2_ref()
 
 // copy sequence, global
-uint8_t copy_sequence = 0;  
-uint8_t copy_length = OC::Patterns::kMax;
-uint16_t copy_mask = 0xFFFF;
-uint64_t copy_timeout = COPYTIMEOUT;
+SHOAL_STATE(uint8_t, copy_sequence) // SHOAL: per-instance state (shoal::Context)
+#define copy_sequence copy_sequence_ref()
+SHOAL_STATE(uint8_t, copy_length) // SHOAL: per-instance state (shoal::Context)
+#define copy_length copy_length_ref()
+SHOAL_STATE(uint16_t, copy_mask) // SHOAL: per-instance state (shoal::Context)
+#define copy_mask copy_mask_ref()
+SHOAL_STATE(uint64_t, copy_timeout) // SHOAL: per-instance state (shoal::Context)
+#define copy_timeout copy_timeout_ref()
 
 const uint64_t multipliers_[] = {
   
@@ -262,7 +268,8 @@ enum SQ_AUX_MODES {
   SQ_AUX_MODES_LAST
 };
 
-uint64_t ext_frequency[SEQ_CHANNEL_TRIGGER_NONE + 1];
+SHOAL_STATE(uint64_t[SEQ_CHANNEL_TRIGGER_NONE + 1], ext_frequency) // SHOAL: per-instance state (shoal::Context)
+#define ext_frequency ext_frequency_ref()
 
 class SEQ_Channel : public settings::SettingsBase<SEQ_Channel, SEQ_CHANNEL_SETTING_LAST> {
 public:
@@ -617,7 +624,7 @@ public:
 
     uint8_t _channel_offset = !channel_id_ ? 0x0 : OC::Patterns::NUM_PATTERNS; 
     
-    OC::Pattern *read_pattern_ = &OC::user_patterns[seq + _channel_offset];
+    OC::Pattern *read_pattern_ = &OC::g_user_patterns[seq + _channel_offset]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
     return read_pattern_->notes[step];
   }
 
@@ -625,7 +632,7 @@ public:
 
     uint8_t _channel_offset = !channel_id_ ? 0x0 : OC::Patterns::NUM_PATTERNS;
     
-    OC::Pattern *write_pattern_ = &OC::user_patterns[seq + _channel_offset];
+    OC::Pattern *write_pattern_ = &OC::g_user_patterns[seq + _channel_offset]; // SHOAL: g_ prefix (name clashes with GlobalSettings members)
     write_pattern_->notes[step] = pitch;
   }
 
@@ -636,7 +643,7 @@ public:
   void clear_user_pattern(uint8_t seq) {
     
     uint8_t _channel_offset = !channel_id_ ? 0x0 : OC::Patterns::NUM_PATTERNS;
-    memcpy(&OC::user_patterns[seq + _channel_offset], &OC::patterns[0], sizeof(OC::Pattern));
+    memcpy(&OC::g_user_patterns[seq + _channel_offset], &OC::patterns[0], sizeof(OC::Pattern)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
   }
 
   void copy_seq(uint8_t seq, uint8_t len, uint16_t mask) {
@@ -659,7 +666,7 @@ public:
        // copy mask:
        update_pattern_mask(copy_mask, seq);
        // copy note values:
-       memcpy(&OC::user_patterns[sequence], &OC::user_patterns[copy_sequence], sizeof(OC::Pattern));
+       memcpy(&OC::g_user_patterns[sequence], &OC::g_user_patterns[copy_sequence], sizeof(OC::Pattern)); // SHOAL: g_ prefix (name clashes with GlobalSettings members)
        // give more time for more pasting...
        copy_timeout = 0;
        
@@ -2049,8 +2056,10 @@ public:
   OC::ScaleEditor<SEQ_Channel> scale_editor;
 };
 
-SEQ_State seq_state;
-SEQ_Channel seq_channel[NUM_CHANNELS];
+SHOAL_STATE(SEQ_State, seq_state) // SHOAL: per-instance state (shoal::Context)
+#define seq_state seq_state_ref()
+SHOAL_STATE(SEQ_Channel[NUM_CHANNELS], seq_channel) // SHOAL: per-instance state (shoal::Context)
+#define seq_channel seq_channel_ref()
 
 void SEQ_init() {
 

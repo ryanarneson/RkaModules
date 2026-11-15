@@ -440,7 +440,8 @@ public:
   SmoothedValue<int32_t, kCvSmoothing> cv4;
 };
 
-QuadByteBeats bytebeatgen;
+SHOAL_STATE(QuadByteBeats, bytebeatgen) // SHOAL: per-instance state (shoal::Context)
+#define bytebeatgen bytebeatgen_ref()
 
 void BYTEBEATGEN_init() {
   bytebeatgen.Init();
@@ -573,7 +574,8 @@ void BYTEBEATGEN_debug() {
 }
 #endif // BYTEBEATGEN_DEBUG
 
-uint8_t bb_history[ByteBeat::kHistoryDepth];
+SHOAL_STATE(uint8_t[ByteBeat::kHistoryDepth], bb_history) // SHOAL: per-instance state (shoal::Context)
+#define bb_history bb_history_ref()
 
 void BYTEBEATGEN_screensaver() {
 
