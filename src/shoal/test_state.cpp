@@ -200,10 +200,10 @@ void clockCopier(Core& c, const float* volts, int n) {
 }
 
 // Sequence positions and shift-register contents are not in the image. The
-// CopierMaschine only writes its outputs when clocked (a fresh core's outputs
-// are the DAC's power-on code until then, and a restored core keeps what the
-// DAC held), so the reset shows on the first clock: a fresh core shifts the
-// sample in over an empty buffer, and so must the restored one.
+// CopierMaschine only writes its outputs when clocked (until then a fresh or
+// restored core's outputs are 0 V), so the reset shows on the first clock: a
+// fresh core shifts the sample in over an empty buffer, and so must the
+// restored one.
 void testRunningStateResets() {
 	Core fresh;
 	const float one[1] = { 5.f };
@@ -343,6 +343,65 @@ void testResetSavesAFreshImage() {
 		ref.save(refImg.data());
 		CHECK(again == refImg, "%s: and saves what a fresh core restoring it saves", what);
 		CHECK(snapshot(c) == snapshot(src), "%s: restored settings", what);
+	}
+}
+
+bool allAtZeroVolts(Core& c) {
+	for (int ch = 0; ch < shoal::kNumChannels; ch++)
+		if (c.outCode(ch) != shoal::kZeroVoltCode)
+			return false;
+	return true;
+}
+
+// Outputs return to 0 V on resetToDefaults and restore, before any tick and
+// after the first, as on a new core (CopierMaschine writes only when clocked).
+void testOutputsZeroAfterResetAndRestore() {
+	for (int how = 0; how < 2; how++) {
+		const char* what = how == 0 ? "reset" : "restore";
+		Core c;
+		const float volts[4] = { 1.f, 2.f, 3.f, 4.f };
+		clockCopier(c, volts, 4);
+		CHECK(std::fabs(c.out(0) - 4.f) < 0.01f && std::fabs(c.out(3) - 1.f) < 0.01f, "%s: the copier ran: A %.3f D %.3f",
+			what, c.out(0), c.out(3));
+		std::vector<uint8_t> img(kImage);
+		c.save(img.data());
+		if (how == 0)
+			c.resetToDefaults();
+		else
+			CHECK(c.restore(img.data()), "restore");
+		CHECK(allAtZeroVolts(c), "%s: before a tick, codes %u %u %u %u", what, c.outCode(0), c.outCode(1), c.outCode(2),
+			c.outCode(3));
+		c.tick();
+		CHECK(allAtZeroVolts(c), "%s: after a tick, codes %u %u %u %u", what, c.outCode(0), c.outCode(1), c.outCode(2),
+			c.outCode(3));
+	}
+}
+
+// restore succeeds only when both the global settings page and the app data
+// page load; with either page damaged the core is a new core's defaults.
+void testRestoreNeedsBothPages() {
+	Core fresh;
+	std::vector<uint8_t> want(kImage);
+	fresh.save(want.data());
+	Core a;
+	scramble(a, 7);
+	std::vector<uint8_t> valid(kImage);
+	a.save(valid.data());
+	Core c;
+	CHECK(c.restore(valid.data()), "a good image restores");
+	for (int page = 0; page < 2; page++) {
+		const bool appData = page == 1;
+		const char* what = appData ? "app data page" : "global settings page";
+		size_t pageOff, dataOff, dataSize;
+		CoreTest::pageLayout(appData, pageOff, dataOff, dataSize);
+		std::vector<uint8_t> img = valid;
+		img[dataOff + 4] ^= 0x5a;
+		Core d;
+		CHECK(!d.restore(img.data()), "%s damaged: rejected", what);
+		CHECK(d.app() == 0, "%s damaged: app %d", what, d.app());
+		std::vector<uint8_t> got(kImage);
+		d.save(got.data());
+		CHECK(got == want, "%s damaged: saves what a fresh core saves", what);
 	}
 }
 
@@ -687,5 +746,7 @@ int main() {
 	testResetSavesAFreshImage();
 	testInputRangeSurvives();
 	testRestoreClosesAppMenu();
+	testOutputsZeroAfterResetAndRestore();
+	testRestoreNeedsBothPages();
 	return rkatest::finish("test_state");
 }

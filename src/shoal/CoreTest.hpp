@@ -24,7 +24,8 @@ struct CoreTest {
 	// OC::ADC::smoothed_raw_value(ch): the firmware's smoothed 12-bit code.
 	static uint32_t smoothedCode(Core& c, int ch);
 	// The setting index (as in Core::setting) under the menu cursor of
-	// CopierMaschine (app 0); -1 for any other app.
+	// CopierMaschine (app 0) or of Quantermain (app 3, its selected channel);
+	// -1 for any other app.
 	static int menuSetting(Core& c);
 	// The firmware's storage pages inside a state image: the global settings
 	// page or the app data page (page 0 of each, where a first save puts it).
@@ -47,6 +48,9 @@ struct CoreTest {
 	// 16-note scale, span 1536, notes 96 * i, all enabled; out[i] receives
 	// Process(pitches[i], 0, 0).
 	static void quantizerRun(const int32_t* pitches, int n, int32_t* out);
+	// The same with the 16 notes `notes` (span 1536, all enabled), as given:
+	// unsorted notes are allowed (the firmware's Configure does not sort).
+	static void quantizerRun(const int16_t* notes, const int32_t* pitches, int n, int32_t* out);
 	// Clock a util::IntegerSequence (the firmware's IntSq source) for core c:
 	// sequence `seq`, loop start `start`, length `length`, stride 1, no
 	// Brownian motion, modulus 256 (no wrap); out[i] receives the i-th

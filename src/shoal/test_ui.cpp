@@ -67,8 +67,9 @@ int settingIndex(Core& c, const char* name) {
 	return -1;
 }
 
-// Scroll app 0's menu cursor down onto setting `index`, one detent at a time
-// (bounded by the number of settings). False if it never got there.
+// Scroll the menu cursor of app 0, or of app 3's selected channel, down onto
+// setting `index`, one detent at a time (bounded by the number of settings).
+// False if it never got there.
 bool scrollTo(Core& c, int index) {
 	for (int k = 0; k <= c.settingCount(); k++) {
 		if (CoreTest::menuSetting(c) == index)
@@ -453,6 +454,26 @@ void testSwitchUnderLoad() {
 	}
 }
 
+// A huge turn queues at most 256 detents per encoder (Core::turnEncoder);
+// the rest is dropped. Quantermain's "Fine" (-999..999, default 0) has room
+// for all of them, so the move shows the cap, not the setting's clamp.
+void testEncoderQueueBounded() {
+	Core c;
+	c.selectApp(kQuantermain);
+	c.setEncoderAcceleration(false);
+	run(c, 0.1);
+	const int idx = settingIndex(c, "Fine");
+	CHECK(idx >= 0, "Quantermain has a Fine setting");
+	CHECK(scrollTo(c, idx), "cursor reached the Fine row");
+	press(c, shoal::BUTTON_R, 0.05);
+	const int v0 = c.setting(0, idx);
+	c.turnEncoder(shoal::ENCODER_R, 100000);
+	run(c, 1.0);
+	const int moved = c.setting(0, idx) - v0;
+	CHECK(allFinite(c), "outputs finite");
+	CHECK(moved == 256, "moved %d, want the 256-detent cap", moved);
+}
+
 void testHostileControls() {
 	Core c;
 	c.turnEncoder(shoal::ENCODER_R, INT_MIN);
@@ -482,5 +503,6 @@ int main() {
 	testHeldButtonChord();
 	testSwitchUnderLoad();
 	testHostileControls();
+	testEncoderQueueBounded();
 	return rkatest::finish("test_ui");
 }

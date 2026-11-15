@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "testing.hpp"
+#include "shoal/Core.hpp" // shoal::TickClock
 
 #include "Arduino.h"
 #include "EEPROM.h"

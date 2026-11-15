@@ -74,8 +74,10 @@ Each change is marked `// SHOAL:` in the file.
   (the setup sequence without delays, splash, calibration or timers),
   `shoal_tick()` (the body of `CORE_timer_ISR`) and `shoal_main_pass()` (one
   pass of the loop body without the draw). Debug-profiling and VOR includes
-  removed. `shoal_boot()` returns whether `apps::Init` loaded app data
-  (the core boots a fresh instance to restore an image).
+  removed. `shoal_boot()` returns `apps::Init`'s `InitResult`: whether the
+  global settings page and the app data page loaded (the core boots a fresh
+  instance to restore an image, and accepts it only if both did; stage 2,
+  Task 1).
 - `src/drivers/display.h`, `display.cpp`: SH1106 paged driver and
   `AdjustOffset` deleted; `Flush`/`Update` do nothing; `GRAPHICS_END_FRAME`
   also marks the frame read, so a frame is always available to draw into.
@@ -147,6 +149,35 @@ is marked `// SHOAL:`.
   `millis()`, because firmware objects are built with their context, before
   any context is current (`APP_REFS.ino`'s `ReferencesApp` holds one).
 
+## Saved-image layout (stage 2, Task 1)
+
+- `OC_apps.ino`: `static_assert`s pin `sizeof` and every member offset of
+  `GlobalSettings` (684 bytes) and `AppData` (1008 bytes, `used` at 1000:
+  `size_t` is 8 bytes on every desktop target, 4 on the Teensy), and the
+  sizes and `Scale` offsets of the user data they hold, as laid out on
+  macOS arm64, Linux x86_64 and Windows x86_64 (MinGW). A build that lays
+  them out differently fails instead of writing images other builds reject.
+
+## Build flags (stage 2, Task 1)
+
+- `-funsigned-char` (`SHOAL_FW_FLAGS` in `tests.mk`, used by the plugin, the
+  tests and the bench): plain `char` is unsigned on the Teensy (ARM EABI)
+  and signed on x86 and Apple arm64. With and without the flag every test
+  gives the same result on macOS arm64 (whose `char` is signed without it),
+  so the flag is kept for the hardware's semantics; no observed behaviour
+  depended on it.
+- `-fvisibility=hidden` on the plugin's `Firmware.cpp` object only (Makefile):
+  the firmware's symbols are no longer exported from `plugin.dylib`.
+
+## Deliberate deviations
+
+- Outputs start at 0 V (DAC code 24551). The Teensy powers up with every DAC
+  channel at code 0xffff (`DAC::Init` calls `set_all(0xffff)`; about +6.2
+  V) until the app writes; Shoal sets all four channels to 0 V after boot,
+  `resetToDefaults` and `restore`, through `OC::DAC::set_all`, by the user's
+  decision of 2026-11-15. No firmware file changes: `Core::Impl`
+  (`../CoreImpl.inc`) does it after `shoal_boot()`.
+
 ## Desktop-CPU guards
 
 - Drawing changes no firmware state (Task 5 review). Upstream's menu draw
@@ -169,8 +200,10 @@ is marked `// SHOAL:`.
 - `frames_poly_lfo.cpp` (Quadraturia, any settings): `PolyLfo::Render` read
   `dac_code_[i-1]` at `i == 0` (index -1). The value is multiplied by
   `am_depths[0]`, which is always 0, so it now reads 0 instead.
-- `OC_apps.ino`, `OC_apps.h` (`apps::Init`): returns `bool`, true when the app
-  data page loaded (`Core::restore`'s result); upstream returns `void`.
+- `OC_apps.ino`, `OC_apps.h` (`apps::Init`): returns `apps::InitResult`
+  (new struct: `global_settings_loaded`, `app_data_loaded`), which pages
+  loaded; `Core::restore` succeeds only when both did. Upstream returns
+  `void`. (Stage 1 returned a `bool` for the app data page only.)
 - `OC_apps.ino` (`save_app_data`): the chunks are written starting at app 0
   instead of a random app. Upstream's random start (so that no app is always
   the one dropped when they do not all fit) made every save differ in bytes
@@ -207,6 +240,10 @@ is marked `// SHOAL:`.
   Euclidean length reaches 32 (in range), which read past the 1023-entry
   table. The cycle length `num_steps + 1` and the rotation keep the caller's
   value, and position 32 reads as a rest, as the Teensy's shift gives.
+  Stage 2 review: the read past the table is outside the object (the Teensy
+  read whatever followed the table in flash), so the last row (32-step
+  patterns) for `num_steps` 32 is Shoal's choice, not a reproduced Teensy
+  result; no caller passes more than 32. Comment corrected to say so.
 - `OC_input_maps.h` (`InputMaps::GetInputMap`): the index is clamped to the
   18 rows of the table; Sequins passes its sequence length (up to 32), which
   read past the table. Row 17 is the empty map.

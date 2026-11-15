@@ -71,7 +71,9 @@ namespace apps {
   SHOAL_STATE(const App *, current_app) // SHOAL: per-instance state (shoal::Context); const App
 #define current_app current_app_ref()
 
-  bool Init(bool reset_settings); // SHOAL: returns whether the app data loaded
+  // SHOAL: which storage pages loaded (Core::restore needs both).
+  struct InitResult { bool global_settings_loaded; bool app_data_loaded; }; // SHOAL
+  InitResult Init(bool reset_settings); // SHOAL: returns which pages loaded
 
   inline void ISR() __attribute__((always_inline));
   inline void ISR() {

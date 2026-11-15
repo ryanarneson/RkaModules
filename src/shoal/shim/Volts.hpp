@@ -1,6 +1,6 @@
 #pragma once
-// Voltage <-> hardware-code conversions and the trigger/clock primitives the
-// Shoal core needs. Header-only, Rack-free, no firmware includes.
+// Voltage <-> hardware-code conversions and the trigger primitive the Shoal
+// core needs (the tick clock is shoal::TickClock in Core.hpp). Header-only, Rack-free, no firmware includes.
 #include <cmath>
 #include <cstdint>
 
@@ -39,24 +39,6 @@ struct Schmitt {
 			return true;
 		}
 		return false;
-	}
-};
-
-// Converts engine samples into 60 us firmware ticks (16,666.67 Hz).
-struct TickClock {
-	static constexpr double kTickHz = 1e6 / 60.0;
-	double ratio = kTickHz / 48000.0;
-	double phase = 0.0;
-
-	void setSampleRate(double hz) {
-		ratio = kTickHz / (hz > 0.0 ? hz : 48000.0);
-	}
-	// Ticks due for one sample. Fractional remainder carries over.
-	int advance() {
-		phase += ratio;
-		int n = (int) phase;
-		phase -= n;
-		return n;
 	}
 };
 

@@ -61,7 +61,26 @@ struct ProbeGuard { ~ProbeGuard(); };
 void probe_may_throw();
 void probe_use() { ProbeGuard g; probe_may_throw(); }
 EOF
-cat >"$tmp/thread_local_ok.cpp" <<'EOF'
+cat >"$tmp/current_context_ok.cpp" <<'EOF'
+// The one allowed thread-local: shoal::current()'s context pointer, as in
+// FirmwareContext.inc.
+namespace shoal {
+struct Context;
+Context*& current() {
+	static thread_local Context* context = nullptr;
+	return context;
+}
+}
+EOF
+cat >"$tmp/second_thread_local.cpp" <<'EOF'
+// The allowed thread-local plus one more: the second must be rejected.
+namespace shoal {
+struct Context;
+Context*& current() {
+	static thread_local Context* context = nullptr;
+	return context;
+}
+}
 thread_local int probe_thread_local;
 int probe_use() { return probe_thread_local++; }
 EOF
@@ -97,7 +116,8 @@ expect const_ok pass
 expect writable_global fail probe_writable_global
 expect writable_static_member fail 'ProbeClass::probe_static_member'
 expect zero_global fail probe_zero_global
-expect thread_local_ok pass
+expect current_context_ok pass
+expect second_thread_local fail probe_thread_local
 expect eh_personality_ok pass
 
 if [ $failures -ne 0 ]; then
