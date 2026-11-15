@@ -134,9 +134,11 @@ zoom. Its components are `rka::HeroKnob`, `rka::FaceKnob`, `rka::LimbKnob`,
 lettered in D-DIN Condensed only, from `tools/fonts/`: `make panels` shows
 Inkscape that folder and nothing else, and stops if Inkscape would set the
 text in any other face. Besides component clearance the generator fails a
-layout whose trace grazes a control it does not belong to, whose traces
-cross, whose foot mark overlaps a component or tile, or whose lettering
-overlaps a component.
+layout whose trace grazes a control or tile it does not belong to, runs
+under a screen or through lettering, or bends more than once; whose traces
+cross or touch; or whose lettering (the foot mark included) overlaps a
+component, other lettering, a screen, the limb, or a face or tile it does
+not sit on. A misspelt key in a description fails too.
 
 ### Changing a panel
 

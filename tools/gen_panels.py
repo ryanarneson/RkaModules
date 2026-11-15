@@ -32,6 +32,7 @@ Usage: python3 tools/gen_panels.py [--inkscape PATH] [--specimen | --preview] [r
 import argparse
 import math
 import os
+import shutil
 import struct
 import subprocess
 import sys
@@ -503,13 +504,15 @@ def check_screens(name, spec):
     for sname, sx, sy, sw, sh in spec.get("screens", []):
         if sx < 0 or sy < 0 or sx + sw > w or sy + sh > PANEL_H:
             sys.exit(f"{name}: screen SCREEN_{sname} is outside the panel")
+        x0, y0, x1, y1 = sx, sy, sx + sw, sy + sh
+        if is_instrument(spec):
+            # The bezel and ruler are drawn outside the screen's rectangle.
+            x0, y0, x1, y1 = screen_keepout(spec, (sname, sx, sy, sw, sh))
         for kind, cname, x, y, _ in spec["components"]:
             r = RADII[component_size(spec, name, kind, cname)] + CLEARANCE
-            if is_instrument(spec):
-                r += SCREEN_BEZEL   # drawn outside the screen's rectangle
             # Distance from the centre to the rectangle.
-            dx = max(sx - x, 0.0, x - (sx + sw))
-            dy = max(sy - y, 0.0, y - (sy + sh))
+            dx = max(x0 - x, 0.0, x - x1)
+            dy = max(y0 - y, 0.0, y - y1)
             if dx * dx + dy * dy < r * r:
                 sys.exit(f"{name}: {kind.upper()} {cname} overlaps screen SCREEN_{sname}")
 
@@ -536,7 +539,8 @@ def check_screens(name, spec):
 #                     arc from a0 to a1 degrees, ticked on its outer side
 #                     every `step` degrees, longer every `major` ticks
 #   faces             id -> dict(r=, ticks=, major=, sweep=270, numerals=None):
-#                     the enamel dial face under a control
+#                     the enamel dial face under a control; without `major`
+#                     every tick is the same (an encoder: sweep=360)
 #   tiles             [dict(port=id, name=, light=id, left=, right=, top=,
 #                     bottom=, name_at=(dx, dy), name_size=)]: an output's
 #                     ivory tile; only `port` is required
@@ -574,11 +578,11 @@ INSTRUMENT = {
     "": dict(ground="#15171c", construction="#2c3340", brass="#c9a46a", ivory="#efe6d2",
              ink="#1c1a16", dim="#8a8474", knob="#23262d", glass="#05080c", signal="#6fd6e0",
              knob_ring="#343842", brass_shade="#6b5838", cap="#2e323a", hole="#000000",
-             unlit="#2b4f55", glint="#d8f6f9"),
+             unlit="#2b4f55"),
     "-dark": dict(ground="#0d0e12", construction="#1e232c", brass="#9c7f52", ivory="#bab3a3",
                   ink="#161511", dim="#757062", knob="#1a1c22", glass="#030508", signal="#6fd6e0",
                   knob_ring="#282b33", brass_shade="#52432b", cap="#23262c", hole="#000000",
-                  unlit="#213c41", glint="#d8f6f9"),
+                  unlit="#213c41"),
 }
 # C++ constant -> palette key (RkaTheme::BRASS, RkaTheme::BRASS_DARK, ...).
 INSTRUMENT_WIDGET_COLOURS = (("GROUND", "ground"), ("BRASS", "brass"), ("IVORY", "ivory"),
@@ -587,6 +591,11 @@ INSTRUMENT_WIDGET_COLOURS = (("GROUND", "ground"), ("BRASS", "brass"), ("IVORY",
 
 FOOT_MARK = "R K A · INSTRUMENTS"
 SCREEN_BEZEL = 0.45      # mm of brass round a screen, outside its rectangle
+RULER_GAP, RULER_MINOR, RULER_MAJOR = 0.4, 0.6, 1.3   # a screen's pixel ruler: off the bezel, tick lengths
+RULER_NUMERAL = 2.0      # mm: as the dim labels; smaller did not read at 100 % in Rack
+TRACE_WIDTH = 0.25       # mm; counted in a trace's clearances
+BEND_TOLERANCE = 0.05    # mm off the straight line before a trace counts as bent
+ORIGIN_ARM = 1.6         # mm: half the width of an origin's crosshair
 LABEL_CLEARANCE = 0.2    # mm between lettering and any component
 TILE = dict(left=4.4, right=4.4, top=7.2, bottom=4.6)   # mm from the port's centre
 
@@ -684,6 +693,16 @@ def rect_distance(a, b):
     return math.hypot(dx, dy)
 
 
+def segment_rect_distance(a, b, rect):
+    """Distance from the segment a-b to a rectangle (x0, y0, x1, y1): 0 if
+    it enters or touches it."""
+    x0, y0, x1, y1 = rect
+    if point_rect_distance(a[0], a[1], rect) == 0 or point_rect_distance(b[0], b[1], rect) == 0:
+        return 0.0
+    corners = ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
+    return min(segment_distance(a, b, corners[i], corners[(i + 1) % 4]) for i in range(4))
+
+
 def limb_ticks(limb):
     """[(degrees, is_major)] for a limb: a tick at every multiple of `step`
     from a0 to a1; every `major`-th multiple is a long one."""
@@ -694,11 +713,25 @@ def limb_ticks(limb):
 
 def face_ticks(face):
     """[(degrees of turn, is_major)] for a dial face: `ticks` equal divisions
-    of `sweep` degrees, centred on straight up; every `major`-th is long.
-    A full circle does not repeat its first tick."""
+    of `sweep` degrees, centred on straight up; every `major`-th is long,
+    or none if the face has no `major` (an endless encoder's detents measure
+    nothing). A full circle does not repeat its first tick."""
     sweep = face.get("sweep", 270)
+    major = face.get("major")
     count = face["ticks"] + (0 if sweep >= 360 else 1)
-    return [(-sweep / 2 + sweep * i / face["ticks"], i % face["major"] == 0) for i in range(count)]
+    return [(-sweep / 2 + sweep * i / face["ticks"], bool(major) and i % major == 0) for i in range(count)]
+
+
+def limb_segments(limb):
+    """A limb as straight strokes: its ticks, and its arc as chords from
+    tick to tick. For keeping lettering off it."""
+    (cx, cy), r = limb["c"], limb["r"]
+    angles = [limb["a0"]] + [deg for deg, _ in limb_ticks(limb)] + [limb["a1"]]
+    out = [(arc_point(cx, cy, r, a), arc_point(cx, cy, r, b)) for a, b in zip(angles, angles[1:]) if b > a]
+    for deg, major in limb_ticks(limb):
+        length = limb.get("major_len", 2.0) if major else limb.get("minor_len", 1.0)
+        out.append((arc_point(cx, cy, r, deg), arc_point(cx, cy, r + length, deg)))
+    return out
 
 
 # --- Lettering: metrics read from the typeface itself, so a label's box is
@@ -842,6 +875,20 @@ def tile_rect(tile, c):
     return c.x - e["left"], c.y - e["top"], c.x + e["right"], c.y + e["bottom"]
 
 
+def screen_keepout(spec, screen):
+    """The rectangle a screen takes on the panel: its glass, its bezel and,
+    on the sides that have one, its ruler's ticks."""
+    sname, x, y, w, h = screen
+    x0, y0, x1, y1 = x - SCREEN_BEZEL, y - SCREEN_BEZEL, x + w + SCREEN_BEZEL, y + h + SCREEN_BEZEL
+    ruler = spec.get("rulers", {}).get(sname)
+    if ruler:
+        if "l" in ruler.get("sides", "lb"):
+            x0 -= RULER_GAP + RULER_MAJOR
+        if "b" in ruler.get("sides", "lb"):
+            y1 += RULER_GAP + RULER_MAJOR
+    return x0, y0, x1, y1
+
+
 def on_face_or_tile(spec, by, c):
     """Whether a component sits on ivory (a dial face or a tile) rather than
     on the ground."""
@@ -862,7 +909,8 @@ def trace_name(trace):
 
 def trace_centres(name, spec, trace):
     """A trace's polyline through the centres of its components and its
-    elbow, after checking its shape."""
+    elbow, after checking its shape: it may bend once, at its elbow or under
+    a control it passes."""
     by = {c.id: c for c in comps_of(name, spec)}
     label = trace_name(trace)
     for n in trace:
@@ -870,9 +918,13 @@ def trace_centres(name, spec, trace):
             sys.exit(f"{name}: {label} names {n}, which is not a component")
     if len(trace) < 2 or not isinstance(trace[0], str) or not isinstance(trace[-1], str):
         sys.exit(f"{name}: {label} must start at a component and end at one")
-    if sum(1 for n in trace if not isinstance(n, str)) > 1:
-        sys.exit(f"{name}: {label} has more than one elbow")
-    return [(by[n].x, by[n].y) if isinstance(n, str) else (float(n[0]), float(n[1])) for n in trace]
+    centres = [(by[n].x, by[n].y) if isinstance(n, str) else (float(n[0]), float(n[1])) for n in trace]
+    # A bend hidden under a control it passes is an elbow like any other.
+    bends = [str(trace[i]) for i in range(1, len(centres) - 1)
+             if point_segment_distance(centres[i], centres[i - 1], centres[i + 1]) > BEND_TOLERANCE]
+    if len(bends) > 1:
+        sys.exit(f"{name}: {label} has more than one elbow: it bends at {' and at '.join(bends)}")
+    return centres
 
 
 def trace_points(name, spec, trace):
@@ -976,27 +1028,58 @@ def instrument_texts(name, spec):
     for sname, sx, sy, sw, sh in spec.get("screens", []):
         ruler = spec.get("rulers", {}).get(sname)
         if ruler and ruler.get("numerals"):
-            y = sy + sh + SCREEN_BEZEL + 0.4 + 1.3 + 0.7 + cap_height(1.4)
+            y = sy + sh + SCREEN_BEZEL + RULER_GAP + RULER_MAJOR + 0.7 + cap_height(RULER_NUMERAL)
             for px in range(0, round(sw / ruler["px"]) + 1, 32):
-                out.append(Text(sx + px * ruler["px"], y, str(px), 1.4, "dim", "normal", "middle", 0.0,
+                out.append(Text(sx + px * ruler["px"], y, str(px), RULER_NUMERAL, "dim", "normal", "middle", 0.0,
                                 f'numeral "{px}" under SCREEN_{sname}'))
     return out
 
 
 # --- Checks. Each fails the build with a message naming the parts. ---
 
+INSTRUMENT_KEYS = {"look", "dir", "hp", "title", "subtitle", "nameplate", "mark", "components", "sizes",
+                   "origins", "circles", "radii", "limbs", "faces", "tiles", "traces", "screens", "rulers",
+                   "label_at", "label_colour", "label_size", "label_gap", "label_dx", "label_dy", "notes",
+                   "preview"}
+FACE_KEYS = {"r", "ticks", "major", "sweep", "numerals", "tick_r", "minor_len", "major_len", "numeral_r",
+             "numeral_size"}
+TILE_KEYS = {"port", "name", "light", "left", "right", "top", "bottom", "name_at", "name_size"}
+LIMB_KEYS = {"c", "r", "a0", "a1", "step", "major", "minor_len", "major_len"}
+RULER_KEYS = {"px", "sides", "numerals"}
+PREVIEW_KEYS = {"turn", "lit", "frame"}
+
+
+def check_keys(name, what, d, allowed, required=()):
+    """A misspelt key would otherwise be ignored in silence."""
+    for key in d:
+        if key not in allowed:
+            sys.exit(f"{name}: {what} has an unknown key {key!r} (it may have: {', '.join(sorted(allowed))})")
+    for key in required:
+        if key not in d:
+            sys.exit(f"{name}: {what} needs {key!r}")
+
+
 def check_references(name, spec):
+    check_keys(name, "the panel", spec, INSTRUMENT_KEYS, ("dir", "hp", "title", "components"))
     ids = {c.id for c in comps_of(name, spec)}
     for key in ("sizes", "faces", "label_at", "label_colour", "label_size", "label_gap", "label_dx", "label_dy",
                 "preview"):
         for ref in spec.get(key, {}):
             if ref not in ids:
                 sys.exit(f"{name}: `{key}` names {ref}, which is not a component")
+    for fid, face in spec.get("faces", {}).items():
+        check_keys(name, f"the face of {fid}", face, FACE_KEYS, ("r", "ticks"))
+    for limb in spec.get("limbs", []):
+        check_keys(name, "a limb", limb, LIMB_KEYS, ("c", "r", "a0", "a1", "step", "major"))
+    for ref, state in spec.get("preview", {}).items():
+        check_keys(name, f"the preview of {ref}", state, PREVIEW_KEYS)
     screens = {s[0] for s in spec.get("screens", [])}
-    for ref in spec.get("rulers", {}):
+    for ref, ruler in spec.get("rulers", {}).items():
         if ref not in screens:
             sys.exit(f"{name}: `rulers` names {ref}, which is not a screen")
+        check_keys(name, f"the ruler of SCREEN_{ref}", ruler, RULER_KEYS, ("px",))
     for tile in spec.get("tiles", []):
+        check_keys(name, f"the tile of {tile.get('port', '?')}", tile, TILE_KEYS, ("port",))
         for key in ("port", "light"):
             if key in tile and tile[key] not in ids:
                 sys.exit(f"{name}: a tile names {tile[key]}, which is not a component")
@@ -1008,13 +1091,15 @@ def check_references(name, spec):
 
 def check_faces(name, spec):
     """A component is either on a dial face, clear of its rim, or off it,
-    clear of its bezel; and faces keep clear of each other."""
+    clear of its bezel; and faces keep clear of each other, of tiles and of
+    screens."""
     comps = comps_of(name, spec)
     by = {c.id: c for c in comps}
     faces = list(spec.get("faces", {}).items())
     for i, (fid, face) in enumerate(faces):
         f = by[fid]
-        if face_tick_radius(face, f) + 1.7 > face["r"]:
+        longest = max(face.get("minor_len", 0.9), face.get("major_len", 1.7) if face.get("major") else 0.0)
+        if face_tick_radius(face, f) + longest > face["r"]:
             sys.exit(f"{name}: the face of {fid} (radius {face['r']}) is too small for its scale")
         for c in comps:
             d = math.hypot(c.x - f.x, c.y - f.y)
@@ -1027,11 +1112,17 @@ def check_faces(name, spec):
             gap = math.hypot(o.x - f.x, o.y - f.y) - face_edge(face) - face_edge(other)
             if gap < CLEARANCE:
                 sys.exit(f"{name}: the dial faces of {fid} and {oid} are {gap:.2f} mm apart (need {CLEARANCE})")
+        for tile in spec.get("tiles", []):
+            if point_rect_distance(f.x, f.y, tile_rect(tile, by[tile["port"]])) < face_edge(face) + CLEARANCE:
+                sys.exit(f"{name}: the dial face of {fid} overlaps the tile of {tile['port']}")
+        for screen in spec.get("screens", []):
+            if point_rect_distance(f.x, f.y, screen_keepout(spec, screen)) < face_edge(face) + CLEARANCE:
+                sys.exit(f"{name}: the dial face of {fid} overlaps SCREEN_{screen[0]}")
 
 
 def check_tiles(name, spec):
     """A tile holds its port (and its light, if it names one), stays on the
-    panel, and keeps clear of every other component and tile."""
+    panel, and keeps clear of every other component, tile and screen."""
     comps = comps_of(name, spec)
     by = {c.id: c for c in comps}
     w = spec["hp"] * HP
@@ -1052,60 +1143,105 @@ def check_tiles(name, spec):
         for other, orect in tiles[i + 1:]:
             if rect_distance(rect, orect) < CLEARANCE:
                 sys.exit(f"{name}: the tiles of {port} and {other['port']} overlap")
+        for screen in spec.get("screens", []):
+            if rect_distance(rect, screen_keepout(spec, screen)) < CLEARANCE:
+                sys.exit(f"{name}: the tile of {port} overlaps SCREEN_{screen[0]}")
 
 
 def check_traces(name, spec):
-    """A trace keeps CLEARANCE from every control it does not belong to (to
-    the bezel, for one on a dial face), and no two traces cross or touch."""
+    """A trace, as drawn and counting its width, keeps CLEARANCE from every
+    control it does not belong to (to the bezel, for one on a dial face) and
+    from every tile whose port it does not belong to; it runs under no
+    screen and through no lettering; and no two traces cross or touch."""
     comps = comps_of(name, spec)
+    by = {c.id: c for c in comps}
+    texts = instrument_texts(name, spec) + [foot_mark(spec)]
+    half = TRACE_WIDTH / 2
     drawn = []
     for trace in spec.get("traces", []):
         label = trace_name(trace)
-        centres = trace_centres(name, spec, trace)
         own = {n for n in trace if isinstance(n, str)}
-        for a, b in zip(centres, centres[1:]):
+        points = trace_points(name, spec, trace)
+        for a, b in zip(points, points[1:]):
             for c in comps:
                 if c.id in own:
                     continue
-                gap = point_segment_distance((c.x, c.y), a, b) - edge_radius(spec, c)
+                gap = point_segment_distance((c.x, c.y), a, b) - edge_radius(spec, c) - half
                 if gap < CLEARANCE:
                     sys.exit(f"{name}: {label} passes {gap:.2f} mm from {c.id}, which it does not belong to "
                              f"(need {CLEARANCE})")
-        drawn.append((label, trace_points(name, spec, trace)))
+            for tile in spec.get("tiles", []):
+                if tile["port"] not in own and \
+                        segment_rect_distance(a, b, tile_rect(tile, by[tile["port"]])) - half < CLEARANCE:
+                    sys.exit(f"{name}: {label} crosses the tile of {tile['port']}, which it does not belong to")
+            for screen in spec.get("screens", []):
+                if segment_rect_distance(a, b, screen_keepout(spec, screen)) - half < CLEARANCE:
+                    sys.exit(f"{name}: {label} runs under SCREEN_{screen[0]}")
+            for t in texts:
+                if segment_rect_distance(a, b, text_box(t)) - half < LABEL_CLEARANCE:
+                    sys.exit(f"{name}: {label} runs through {t.what}")
+        drawn.append((label, points))
     for i, (la, pa) in enumerate(drawn):
         for lb, pb in drawn[i + 1:]:
             for a, b in zip(pa, pa[1:]):
                 for c, d in zip(pb, pb[1:]):
-                    if segment_distance(a, b, c, d) < CLEARANCE:
+                    if segment_distance(a, b, c, d) - 2 * half < CLEARANCE:
                         sys.exit(f"{name}: {la} and {lb} cross or touch")
 
 
-def check_foot(name, spec):
-    """The foot mark fits the panel and overlaps no component, face or tile."""
+def check_lettering(name, spec):
+    """Every piece of lettering, the foot mark included, stays on the panel
+    and clear of every component, of every other piece of lettering, of
+    screens (with their rulers), limbs and origin marks, and of every dial
+    face and tile unless it lies wholly on it. Lettering on ivory is ink;
+    off it, it is not."""
     comps = comps_of(name, spec)
     by = {c.id: c for c in comps}
-    box = text_box(foot_mark(spec))
-    if box[0] < 1.0 or box[2] > spec["hp"] * HP - 1.0:
-        sys.exit(f"{name}: the foot mark does not fit the panel's width; shorten it with `mark`")
-    for c in comps:
-        if point_rect_distance(c.x, c.y, box) < edge_radius(spec, c) + CLEARANCE:
-            sys.exit(f"{name}: the foot mark overlaps {c.id}")
-    for tile in spec.get("tiles", []):
-        if rect_distance(box, tile_rect(tile, by[tile["port"]])) < CLEARANCE:
-            sys.exit(f"{name}: the foot mark overlaps the tile of {tile['port']}")
-
-
-def check_labels(name, spec):
-    """No lettering overlaps a component or leaves the panel."""
-    comps = comps_of(name, spec)
     w = spec["hp"] * HP
-    for t in instrument_texts(name, spec):
+    faces = [(fid, face, by[fid]) for fid, face in spec.get("faces", {}).items()]
+    tiles = [(t["port"], tile_rect(t, by[t["port"]])) for t in spec.get("tiles", [])]
+    limbs = [seg for limb in spec.get("limbs", []) for seg in limb_segments(limb)]
+    boxes = []
+    for t in instrument_texts(name, spec) + [foot_mark(spec)]:
         box = text_box(t)
+        foot = t.what == "the foot mark"
+        clear = CLEARANCE if foot else LABEL_CLEARANCE
+        if foot and (box[0] < 1.0 or box[2] > w - 1.0):
+            sys.exit(f"{name}: the foot mark does not fit the panel's width; shorten it with `mark`")
         if box[0] < 0 or box[1] < 0 or box[2] > w or box[3] > PANEL_H:
             sys.exit(f"{name}: {t.what} runs off the panel")
         for c in comps:
-            if point_rect_distance(c.x, c.y, box) < c.r + LABEL_CLEARANCE:
+            if point_rect_distance(c.x, c.y, box) < c.r + clear:
                 sys.exit(f"{name}: {t.what} overlaps {c.id}")
+        on_ivory = False
+        for fid, face, f in faces:
+            corners = ((box[0], box[1]), (box[2], box[1]), (box[0], box[3]), (box[2], box[3]))
+            if all(math.hypot(x - f.x, y - f.y) <= face["r"] - face_bezel(face) / 2 for x, y in corners):
+                on_ivory = True
+            elif point_rect_distance(f.x, f.y, box) < face_edge(face) + clear:
+                sys.exit(f"{name}: {t.what} overlaps the dial face of {fid}")
+        for port, rect in tiles:
+            if rect[0] <= box[0] and box[2] <= rect[2] and rect[1] <= box[1] and box[3] <= rect[3]:
+                on_ivory = True
+            elif rect_distance(box, rect) < clear:
+                sys.exit(f"{name}: {t.what} overlaps the tile of {port}")
+        if on_ivory and t.colour != "ink":
+            sys.exit(f"{name}: {t.what} is {t.colour} on ivory; lettering on a face or tile is ink")
+        if not on_ivory and t.colour == "ink":
+            sys.exit(f"{name}: {t.what} is ink on the ground; ink is for lettering on a face or tile")
+        for screen in spec.get("screens", []):
+            if rect_distance(box, screen_keepout(spec, screen)) < clear:
+                sys.exit(f"{name}: {t.what} overlaps SCREEN_{screen[0]}")
+        for a, b in limbs:
+            if segment_rect_distance(a, b, box) < clear:
+                sys.exit(f"{name}: {t.what} overlaps the limb")
+        for x, y in spec.get("origins", []):
+            if point_rect_distance(x, y, box) < ORIGIN_ARM + clear:
+                sys.exit(f"{name}: {t.what} overlaps the origin mark at ({x}, {y})")
+        for other, obox in boxes:
+            if rect_distance(box, obox) < LABEL_CLEARANCE:
+                sys.exit(f"{name}: {other.what} and {t.what} overlap")
+        boxes.append((t, box))
 
 
 def check_panel(name, spec):
@@ -1118,8 +1254,7 @@ def check_panel(name, spec):
         check_faces(name, spec)
         check_tiles(name, spec)
         check_traces(name, spec)
-        check_foot(name, spec)
-        check_labels(name, spec)
+        check_lettering(name, spec)
 
 
 # --- Drawing the panel ---
@@ -1171,8 +1306,8 @@ def screen_svg(sname, x, y, w, h, ruler, pal):
     out = [f'<rect x="{num(x - b / 2)}" y="{num(y - b / 2)}" width="{num(w + b)}" height="{num(h + b)}" '
            f'rx="0.8" fill="{pal["glass"]}" stroke="{pal["brass"]}" stroke-width="{num(b)}"/>']
     if ruler:
-        px, off = ruler["px"], b + 0.4
-        for major, length, width in ((False, 0.6, 0.15), (True, 1.3, 0.25)):
+        px, off = ruler["px"], b + RULER_GAP
+        for major, length, width in ((False, RULER_MINOR, 0.15), (True, RULER_MAJOR, 0.25)):
             segs = []
             if "b" in ruler.get("sides", "lb"):
                 segs += [(x + i * px, y + h + off, x + i * px, y + h + off + length)
@@ -1204,13 +1339,14 @@ def instrument_svg(name, spec, pal):
     for limb in spec.get("limbs", []):
         out += limb_svg(limb, pal)
     for x, y in spec.get("origins", []):
-        out.append(stroke_path([(x - 1.6, y, x + 1.6, y), (x, y - 1.6, x, y + 1.6)], pal["brass"], 0.2))
+        out.append(stroke_path([(x - ORIGIN_ARM, y, x + ORIGIN_ARM, y), (x, y - ORIGIN_ARM, x, y + ORIGIN_ARM)],
+                               pal["brass"], 0.2))
         out.append(f'<circle cx="{num(x)}" cy="{num(y)}" r="0.8" fill="none" stroke="{pal["brass"]}" '
                    f'stroke-width="0.2"/>')
     # Signal traces, under the controls.
     for trace in spec.get("traces", []):
         d = "L".join(f"{num(x)} {num(y)}" for x, y in trace_points(name, spec, trace))
-        out.append(f'<path d="M{d}" fill="none" stroke="{pal["dim"]}" stroke-width="0.25" '
+        out.append(f'<path d="M{d}" fill="none" stroke="{pal["dim"]}" stroke-width="{num(TRACE_WIDTH)}" '
                    f'stroke-linejoin="round"/>')
     # A seat of bare ground under each control that is not on ivory: it
     # masks the limb, traces and construction lines passing beneath, since a
@@ -1250,10 +1386,11 @@ KNOBS = {
     "Encoder": ("enc", "brass", None, 0.0, True),
 }
 KNURL_PITCH = 0.65   # mm from tick to tick round the knurl
-# The encoder turns 1/24 of a turn per detent and has no index: with 8 more
-# ticks than a multiple of 24, each detent visibly shifts its knurl a third
-# of a tick, in the direction it was turned.
-KNURL_TICKS = {"Encoder": 56}
+# The encoder turns 1/24 of a turn per detent and has no index, so its knurl
+# is all that shows a turn. 55 ticks: each detent shifts the knurl 7/24 of a
+# tick (0.23 mm) in the direction turned, and as 55 and 24 share no factor
+# the picture does not repeat until a full turn.
+KNURL_TICKS = {"Encoder": 55}
 # Size -> the artwork a component of that size is drawn with, bottom first;
 # of a knob's two layers the second turns.
 ART_LAYERS = {
@@ -1310,9 +1447,7 @@ def component_art(pal):
         f'<circle cx="{num(r)}" cy="{num(r)}" r="{num(r - 0.15)}" fill="{pal["knob"]}" stroke="{pal["brass"]}" '
         f'stroke-width="0.3"/>',
         disc(r, 2.0, pal["cap"])])
-    art["Cap_lit"] = (2 * r, 2 * r, [
-        disc(r, 2.0, pal["signal"]),
-        f'<circle cx="{num(r - 0.6)}" cy="{num(r - 0.6)}" r="0.5" fill="{pal["glint"]}"/>'])
+    art["Cap_lit"] = (2 * r, 2 * r, [disc(r, 2.0, pal["signal"])])
 
     # Light: a dark seat holding an unlit lens; JewelLight draws the lit one.
     r = RADII["jewel"]
@@ -1419,7 +1554,7 @@ SPECIMEN = dict(
     faces={
         "PARAM_RATE": dict(r=16.4, ticks=50, major=5, numerals=list(range(11))),
         "PARAM_SPREAD": dict(r=7.3, ticks=20, major=5),
-        "WIDGET_ENC": dict(r=10.4, ticks=24, major=6, sweep=360),
+        "WIDGET_ENC": dict(r=10.4, ticks=24, sweep=360, minor_len=1.3),   # one tick per detent
     },
     tiles=[dict(port="OUTPUT_SIN"), dict(port="OUTPUT_TRI")]
     + [dict(port=f"OUTPUT_{n}", light=f"LIGHT_{n}", left=11.0, right=5.0, top=4.6, bottom=4.6,
@@ -1492,6 +1627,17 @@ def check_inkscape_typeface(inkscape, env, root):
                      f"{got:.2f} where the typeface's is {want:.2f}. Refusing to convert with a substitute.")
 
 
+def need_inkscape(inkscape):
+    """The Inkscape to run, or one sentence and a failed build."""
+    found = shutil.which(inkscape)
+    if not found:
+        sys.exit(f"Inkscape is needed to turn panel lettering into paths (`make panels`, `make specimen`) and "
+                 f"was not found: looked for {inkscape!r}"
+                 + ("" if os.sep in inkscape else " on PATH")
+                 + ". Install it, or pass its path: make panels INKSCAPE=/path/to/inkscape")
+    return found
+
+
 def text_to_path(inkscape, src, out, env=None):
     out.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run([inkscape, str(src), "--export-text-to-path", "--export-plain-svg",
@@ -1531,6 +1677,8 @@ def main():
                     help="only draw each Instrument module with its components in place, to build/preview/")
     args = ap.parse_args()
     root = Path(args.root)
+    if args.inkscape:
+        args.inkscape = need_inkscape(args.inkscape)
 
     if args.specimen:
         write_preview(root, "Specimen", SPECIMEN, root / "build" / "specimen", args.inkscape)

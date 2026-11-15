@@ -127,10 +127,21 @@ class Geometry(unittest.TestCase):
         self.assertAlmostEqual(ticks[0][0], -135.0)
         self.assertAlmostEqual(ticks[-1][0], 135.0)
         self.assertEqual([i for i, (_, major) in enumerate(ticks) if major], [0, 5, 10])
-        # All the way round (an encoder): the last tick would repeat the first.
-        ticks = g.face_ticks(dict(r=10, ticks=24, major=6, sweep=360))
+        # All the way round (an encoder): the last tick would repeat the
+        # first, and with no `major` every tick is the same.
+        ticks = g.face_ticks(dict(r=10, ticks=24, sweep=360))
         self.assertEqual(len(ticks), 24)
         self.assertAlmostEqual(ticks[1][0] - ticks[0][0], 15.0)
+        self.assertEqual([major for _, major in ticks], [False] * 24)
+
+    def test_segment_to_rectangle(self):
+        rect = (10, 10, 20, 14)
+        self.assertEqual(g.segment_rect_distance((0, 12), (30, 12), rect), 0.0)      # through
+        self.assertEqual(g.segment_rect_distance((12, 11), (13, 13), rect), 0.0)     # inside
+        self.assertEqual(g.segment_rect_distance((0, 0), (15, 12), rect), 0.0)       # ends inside
+        self.assertAlmostEqual(g.segment_rect_distance((5, 0), (5, 30), rect), 5.0)  # beside
+        self.assertAlmostEqual(g.segment_rect_distance((0, 17), (30, 17), rect), 3.0)
+        self.assertAlmostEqual(g.segment_rect_distance((23, 18), (30, 30), rect), 5.0)   # 3-4-5 off a corner
 
 
 class Lettering(unittest.TestCase):
@@ -243,7 +254,191 @@ class Traces(unittest.TestCase):
         self.assertIn("PARAM_NOPE", failure(self, "T", s))
 
 
+class TraceShape(unittest.TestCase):
+    def test_a_bend_under_a_passed_control_is_the_one_elbow(self):
+        s = spec(components=[("input", "A", 10.0, 110.0, None), ("param", "A_ATT", 25.0, 90.0, None),
+                             ("param", "A", 25.0, 40.0, None)],
+                 traces=[["INPUT_A", "PARAM_A_ATT", "PARAM_A"]])
+        g.check_panel("T", s)
+
+    def test_a_hidden_second_bend_fails(self):
+        s = spec(components=[("input", "A", 10.0, 110.0, None), ("param", "A_ATT", 25.0, 90.0, None),
+                             ("param", "A", 10.0, 40.0, None)],
+                 traces=[["INPUT_A", "PARAM_A_ATT", (25.0, 60.0), "PARAM_A"]])
+        msg = failure(self, "T", s)
+        self.assertIn("elbow", msg)
+        self.assertIn("PARAM_A_ATT", msg)
+        self.assertIn("(25.0, 60.0)", msg)
+
+    def test_a_point_on_the_straight_line_is_not_a_bend(self):
+        s = spec(components=[("input", "A", 10.0, 110.0, None), ("param", "A", 40.0, 40.0, None)],
+                 traces=[["INPUT_A", (10.0, 90.0), (10.0, 80.0), "PARAM_A"]])
+        g.check_panel("T", s)
+
+    def test_a_light_on_the_dial_the_trace_runs_to_is_not_grazed(self):
+        # Sway's rate light sits on the Rate face, on the line from straight
+        # below to the dial's centre; the trace stops at the bezel, short of it.
+        def dial(extra):
+            return spec(components=[("input", "A", 21.0, 110.0, None), ("param", "R", 21.0, 34.0, None),
+                                    ("light", "R", 21.0, 45.2, None)] + extra,
+                        sizes={"PARAM_R": "hero"}, faces={"PARAM_R": dict(r=16.4, ticks=50, major=5)},
+                        traces=[["INPUT_A", "PARAM_R"]])
+        g.check_panel("T", dial([]))
+        # A control beside the drawn part of the same trace still fails.
+        msg = failure(self, "T", dial([("param", "O", 25.5, 80.0, None)]))
+        self.assertIn("PARAM_O", msg)
+        self.assertIn("INPUT_A", msg)
+
+    def test_the_width_of_the_stroke_counts(self):
+        def beside(x):
+            return spec(components=[("input", "A", 10.0, 100.0, None), ("param", "K", 10.0, 40.0, None),
+                                    ("param", "O", x, 70.0, None)], traces=[["INPUT_A", "PARAM_K"]])
+        clear = g.RADII["limb"] + g.CLEARANCE + g.TRACE_WIDTH / 2
+        self.assertGreater(g.TRACE_WIDTH, 0.2)
+        g.check_panel("T", beside(10.0 + clear + 0.01))
+        # 0.31 mm from the trace's centre line, but only 0.185 from its edge.
+        self.assertIn("PARAM_O", failure(self, "T", beside(10.0 + g.RADII["limb"] + 0.31)))
+
+    def test_an_elbow_touching_another_trace_fails(self):
+        def pair(elbow_x):
+            return spec(components=[("input", "A", 10.0, 100.0, None), ("param", "A", 10.0, 40.0, None),
+                                    ("input", "B", 30.0, 100.0, None), ("param", "B", 30.0, 40.0, None)],
+                        traces=[["INPUT_A", "PARAM_A"], ["INPUT_B", (elbow_x, 70.0), "PARAM_B"]])
+        g.check_panel("T", pair(10.0 + g.CLEARANCE + g.TRACE_WIDTH + 0.01))
+        for x in (10.0, 10.1, 10.0 + g.CLEARANCE + g.TRACE_WIDTH - 0.01):
+            msg = failure(self, "T", pair(x))
+            for part in ("INPUT_A", "PARAM_A", "INPUT_B", "PARAM_B", "cross or touch"):
+                self.assertIn(part, msg)
+
+    def test_traces_sharing_a_line_fail(self):
+        s = spec(components=[("input", "A", 10.0, 110.0, None), ("param", "A", 40.0, 30.0, None),
+                             ("input", "B", 25.0, 100.0, None), ("param", "B", 10.0, 20.0, None)],
+                 traces=[["INPUT_A", (10.0, 60.0), "PARAM_A"], ["INPUT_B", (10.0, 85.0), "PARAM_B"]])
+        msg = failure(self, "T", s)
+        for part in ("INPUT_A", "PARAM_A", "INPUT_B", "PARAM_B", "cross or touch"):
+            self.assertIn(part, msg)
+
+
+class TraceObstacles(unittest.TestCase):
+    def column(self, **kw):
+        return spec(components=[("input", "A", 10.0, 110.0, None), ("param", "A", 10.0, 40.0, None)]
+                    + kw.pop("more", []), traces=[["INPUT_A", "PARAM_A"]], **kw)
+
+    def test_trace_under_a_screen_fails(self):
+        g.check_panel("T", self.column(screens=[("S", 20.0, 60.0, 20.0, 10.0)]))
+        msg = failure(self, "T", self.column(screens=[("S", 5.0, 60.0, 20.0, 10.0)]))
+        for part in ("trace INPUT_A > PARAM_A", "SCREEN_S"):
+            self.assertIn(part, msg)
+
+    def test_trace_through_a_screens_ruler_fails(self):
+        screens = [("S", 12.4, 60.0, 20.8, 10.4)]
+        g.check_panel("T", self.column(screens=screens))
+        msg = failure(self, "T", self.column(screens=screens, rulers={"S": dict(px=0.65, sides="l")}))
+        self.assertIn("SCREEN_S", msg)
+
+    def test_trace_through_a_note_fails(self):
+        g.check_panel("T", self.column(notes=[(13.0, 75.0, "BESIDE", 2.0, "ivory", "start")]))
+        msg = failure(self, "T", self.column(notes=[(10.0, 75.0, "OVERLAP", 2.0, "ivory")]))
+        for part in ("trace INPUT_A > PARAM_A", 'note "OVERLAP"'):
+            self.assertIn(part, msg)
+
+    def test_trace_through_the_label_under_its_knob_fails(self):
+        comps = [("input", "A", 10.0, 110.0, None), ("param", "A", 10.0, 40.0, "LONGNAME")]
+        g.check_panel("T", spec(components=comps, traces=[["INPUT_A", "PARAM_A"]]))
+        msg = failure(self, "T", spec(components=comps, traces=[["INPUT_A", "PARAM_A"]],
+                                      label_at={"PARAM_A": "below"}))
+        for part in ("trace INPUT_A > PARAM_A", 'label "LONGNAME"'):
+            self.assertIn(part, msg)
+
+    def test_trace_through_the_label_over_its_jack_fails(self):
+        comps = [("input", "A", 10.0, 110.0, "IN"), ("param", "A", 10.0, 40.0, None)]
+        g.check_panel("T", spec(components=comps, traces=[["INPUT_A", "PARAM_A"]], label_at={"INPUT_A": "left"}))
+        msg = failure(self, "T", spec(components=comps, traces=[["INPUT_A", "PARAM_A"]]))
+        for part in ("trace INPUT_A > PARAM_A", 'label "IN"'):
+            self.assertIn(part, msg)
+
+    def test_trace_across_a_wide_tile_fails(self):
+        more = [("output", "X", 20.0, 80.0, "X")]
+        g.check_panel("T", self.column(more=more, tiles=[dict(port="OUTPUT_X")]))
+        msg = failure(self, "T", self.column(more=more, tiles=[dict(port="OUTPUT_X", left=11.0)]))
+        for part in ("trace INPUT_A > PARAM_A", "tile of OUTPUT_X"):
+            self.assertIn(part, msg)
+
+
 class FootMarkAndLabels(unittest.TestCase):
+    def test_two_notes_overlapping_fail_naming_both(self):
+        g.check_panel("T", spec(notes=[(20.0, 60.0, "ALPHA", 2.0, "ivory"), (20.5, 63.0, "BETA", 2.0, "ivory")]))
+        msg = failure(self, "T", spec(notes=[(20.0, 60.0, "ALPHA", 2.0, "ivory"),
+                                             (20.5, 60.3, "BETA", 2.0, "ivory")]))
+        for part in ('note "ALPHA"', 'note "BETA"', "overlap"):
+            self.assertIn(part, msg)
+
+    def test_label_over_another_label_fails(self):
+        def pair(dx):
+            return spec(components=[("input", "A", 20.0, 60.0, "CLOCK"), ("input", "B", 20.0 + dx, 60.0, "RESET")])
+        g.check_panel("T", pair(9.4))
+        msg = failure(self, "T", pair(9.4) | dict(label_dx={"INPUT_B": -5.0}))
+        for part in ('label "CLOCK"', 'label "RESET"'):
+            self.assertIn(part, msg)
+
+    def test_foot_mark_over_a_screen_fails(self):
+        g.check_panel("T", spec(screens=[("S", 10.0, 100.0, 40.0, 4.0)]))
+        msg = failure(self, "T", spec(screens=[("S", 10.0, 120.0, 40.0, 4.0)]))
+        self.assertIn("foot mark", msg)
+        self.assertIn("SCREEN_S", msg)
+
+    def test_foot_mark_over_a_note_fails(self):
+        msg = failure(self, "T", spec(notes=[(30.48, 125.6, "HELLO", 2.0, "ivory")]))
+        self.assertIn("foot mark", msg)
+        self.assertIn('note "HELLO"', msg)
+
+    def test_lettering_over_a_screen_or_its_ruler_fails(self):
+        screens = [("S", 12.4, 60.0, 20.8, 10.4)]
+        note = [(9.5, 66.0, "IN", 2.0, "dim")]
+        g.check_panel("T", spec(screens=screens, notes=note))
+        msg = failure(self, "T", spec(screens=screens, notes=note, rulers={"S": dict(px=0.65, sides="l")}))
+        self.assertIn('note "IN"', msg)
+        self.assertIn("SCREEN_S", msg)
+        msg = failure(self, "T", spec(screens=screens, notes=[(20.0, 66.0, "IN", 2.0, "dim")]))
+        self.assertIn("SCREEN_S", msg)
+
+    def test_lettering_and_dial_faces(self):
+        def dial(note):
+            return spec(components=[("param", "R", 30.0, 60.0, None)], sizes={"PARAM_R": "hero"},
+                        faces={"PARAM_R": dict(r=16.4, ticks=50, major=5)}, notes=[note])
+        g.check_panel("T", dial((30.0, 74.0, "ON", 2.0, "ink")))         # wholly on the face
+        g.check_panel("T", dial((30.0, 80.0, "OFF", 2.0, "ivory")))      # clear of it
+        msg = failure(self, "T", dial((30.0, 77.0, "EDGE", 2.0, "ivory")))
+        self.assertIn('note "EDGE"', msg)
+        self.assertIn("dial face of PARAM_R", msg)
+        msg = failure(self, "T", dial((30.0, 74.0, "PALE", 2.0, "ivory")))
+        self.assertIn('note "PALE"', msg)
+        self.assertIn("ivory on ivory", msg)
+        msg = failure(self, "T", dial((30.0, 80.0, "DARK", 2.0, "ink")))
+        self.assertIn('note "DARK"', msg)
+        self.assertIn("ink on the ground", msg)
+
+    def test_lettering_over_a_foreign_tile_fails(self):
+        def tiled(note_x):
+            return spec(components=[("output", "X", 30.0, 60.0, "X")], tiles=[dict(port="OUTPUT_X")],
+                        notes=[(note_x, 64.4, "NEAR", 2.0, "dim", "end")])
+        g.check_panel("T", tiled(25.0))
+        msg = failure(self, "T", tiled(26.5))
+        self.assertIn('note "NEAR"', msg)
+        self.assertIn("tile of OUTPUT_X", msg)
+
+    def test_lettering_over_the_limb_or_an_origin_fails(self):
+        limb = [dict(c=(30.0, 20.0), r=40.0, a0=-30, a1=30, step=2, major=5)]
+        g.check_panel("T", spec(limbs=limb, notes=[(30.0, 57.0, "ABOVE", 2.0, "ivory")]))
+        for y in (60.5, 62.0):   # on the arc; among the ticks outside it
+            msg = failure(self, "T", spec(limbs=limb, notes=[(30.0, y, "ONIT", 2.0, "ivory")]))
+            self.assertIn('note "ONIT"', msg)
+            self.assertIn("limb", msg)
+        g.check_panel("T", spec(origins=[(30.0, 20.0)], notes=[(30.0, 25.0, "CLEAR", 2.0, "ivory")]))
+        msg = failure(self, "T", spec(origins=[(30.0, 20.0)], notes=[(30.0, 22.0, "PIVOT", 2.0, "ivory")]))
+        self.assertIn('note "PIVOT"', msg)
+        self.assertIn("origin", msg)
+
     def test_foot_mark_clear_of_a_jack_passes(self):
         g.check_panel("T", spec(components=[("input", "J", 30.48, 115.0, None)]))
 
@@ -316,6 +511,75 @@ class Clearance(unittest.TestCase):
                     self.assertAlmostEqual(h / 2, g.RADII[size], places=9, msg=layer)
 
 
+class Areas(unittest.TestCase):
+    def test_component_on_a_screens_ruler_fails(self):
+        def beside(rulers):
+            return spec(components=[("input", "J", 7.0, 66.0, None)], screens=[("S", 12.4, 60.0, 20.8, 10.4)],
+                        rulers=rulers)
+        g.check_panel("T", beside({}))
+        msg = failure(self, "T", beside({"S": dict(px=0.65, sides="l")}))
+        self.assertIn("INPUT J", msg)
+        self.assertIn("SCREEN_S", msg)
+
+    def test_dial_face_over_a_tile_or_a_screen_fails(self):
+        def dial(**kw):
+            comps = [("param", "R", 30.0, 40.0, None)] + kw.pop("more", [])
+            return spec(components=comps, sizes={"PARAM_R": "hero"},
+                        faces={"PARAM_R": dict(r=16.0, ticks=50, major=5)}, **kw)
+        g.check_panel("T", dial(more=[("output", "X", 30.0, 64.0, "X")], tiles=[dict(port="OUTPUT_X")]))
+        msg = failure(self, "T", dial(more=[("output", "X", 30.0, 63.0, "X")], tiles=[dict(port="OUTPUT_X")]))
+        self.assertIn("PARAM_R", msg)
+        self.assertIn("tile of OUTPUT_X", msg)
+        g.check_panel("T", dial(screens=[("S", 10.0, 58.0, 40.0, 10.0)]))
+        msg = failure(self, "T", dial(screens=[("S", 10.0, 56.5, 40.0, 10.0)]))
+        self.assertIn("PARAM_R", msg)
+        self.assertIn("SCREEN_S", msg)
+
+    def test_tile_over_a_screen_fails(self):
+        def tiled(y):
+            return spec(components=[("output", "X", 30.0, y, "X")], tiles=[dict(port="OUTPUT_X")],
+                        screens=[("S", 10.0, 60.0, 40.0, 10.0)])
+        g.check_panel("T", tiled(79.0))
+        msg = failure(self, "T", tiled(77.5))
+        self.assertIn("tile of OUTPUT_X", msg)
+        self.assertIn("SCREEN_S", msg)
+
+
+class Descriptions(unittest.TestCase):
+    def test_misspelt_keys_fail_naming_the_key(self):
+        comps = [("param", "R", 30.0, 40.0, None), ("output", "X", 30.0, 100.0, "X")]
+        good = dict(components=comps, sizes={"PARAM_R": "hero"},
+                    faces={"PARAM_R": dict(r=16.0, ticks=50, major=5)}, tiles=[dict(port="OUTPUT_X")])
+        g.check_panel("T", spec(**good))
+        cases = (
+            (dict(good, faces={"PARAM_R": dict(r=16.0, ticks=50, major=5, tick_radius=11.0)}), "tick_radius", "PARAM_R"),
+            (dict(good, tiles=[dict(port="OUTPUT_X", botom=7.0)]), "botom", "OUTPUT_X"),
+            (dict(good, label_colur={"PARAM_R": "dim"}), "label_colur", "panel"),
+            (dict(good, limbs=[dict(c=(30.0, 0.0), r=20, a0=0, a1=9, step=1, major=5, minor=2)]), "minor", "limb"),
+            (dict(good, screens=[("S", 5.0, 60.0, 20.8, 10.4)], rulers={"S": dict(px=0.65, side="b")}), "side", "SCREEN_S"),
+            (dict(good, preview={"PARAM_R": dict(turned=30)}), "turned", "PARAM_R"),
+        )
+        for bad, key, where in cases:
+            msg = failure(self, "T", spec(**bad))
+            self.assertIn(repr(key), msg)
+            self.assertIn(where, msg)
+            self.assertIn("unknown key", msg)
+
+    def test_missing_required_key_fails(self):
+        s = spec(components=[("param", "R", 30.0, 40.0, None)], sizes={"PARAM_R": "hero"},
+                 faces={"PARAM_R": dict(r=16.0)})
+        self.assertIn("'ticks'", failure(self, "T", s))
+
+    def test_missing_inkscape_is_one_sentence(self):
+        for missing in ("/no/such/folder/inkscape", "inkscape-that-is-not-installed"):
+            with self.assertRaises(SystemExit) as cm:
+                g.need_inkscape(missing)
+            self.assertIn("Inkscape is needed", cm.exception.code)
+            self.assertIn(missing, cm.exception.code)
+            self.assertNotIn("\n", cm.exception.code)
+        self.assertEqual(g.need_inkscape(sys.executable), sys.executable)
+
+
 class Artwork(unittest.TestCase):
     def all_svgs(self):
         out = dict(g.component_files())
@@ -342,6 +606,24 @@ class Artwork(unittest.TestCase):
             steps = [b - a for a, b in zip(angles, angles[1:])]
             self.assertLess(max(steps) - min(steps), 0.01, name)
             self.assertAlmostEqual(steps[0], 2 * math.pi / len(ticks), places=2, msg=name)
+
+    def test_encoder_knurl_does_not_repeat_within_a_turn(self):
+        count = g.KNURL_TICKS["Encoder"]
+        self.assertEqual(math.gcd(count, 24), 1)      # 24 detents a turn
+        shift = (count / 24) % 1                      # of a tick, per detent
+        self.assertGreater(shift, 0.25)
+        self.assertLess(shift, 0.4)                   # under half: reads as forward
+        _, _, els = g.component_art(g.INSTRUMENT[""])["Encoder"]
+        self.assertEqual(len(re.findall(r"M[-\d.]+ ", [e for e in els if "knurl" in e][0])), count)
+
+    def test_encoder_face_has_one_even_tick_per_detent(self):
+        face = g.SPECIMEN["faces"]["WIDGET_ENC"]
+        self.assertEqual([major for _, major in g.face_ticks(face)], [False] * 24)
+
+    def test_the_lit_cap_is_one_centred_disc(self):
+        w, h, els = g.component_art(g.INSTRUMENT[""])["Cap_lit"]
+        self.assertEqual(len(els), 1)
+        self.assertIn(f'cx="{g.num(w / 2)}" cy="{g.num(h / 2)}"', els[0])
 
     def test_dark_variants_exist_and_differ(self):
         files = g.component_files()

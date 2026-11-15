@@ -55,6 +55,28 @@ using CyanLight = TCyanLight<>;
 // Latching push button with an amber light inside (mode switches).
 using AmberLatch = componentlibrary::VCVLightLatch<componentlibrary::MediumSimpleLight<AmberLight>>;
 
+// The press and release of a momentary button that shift-click latches
+// (HoldButton, CapButton). `latching`: the press that started this drag
+// latched the button, so it stays down on release.
+inline void holdPress(ParamQuantity* pq, bool& latching) {
+	if (!pq)
+		return;
+	// Down at a press means latched (or loaded down): this click releases it.
+	if (pq->getValue() > 0.f) {
+		latching = false;
+		pq->setMin();
+		return;
+	}
+	latching = (APP->window->getMods() & RACK_MOD_MASK) == GLFW_MOD_SHIFT;
+	pq->setMax();
+}
+
+inline void holdRelease(ParamQuantity* pq, bool& latching) {
+	if (pq && !latching)
+		pq->setMin();
+	latching = false;
+}
+
 // A 6 mm momentary button with an amber light. Click: down while held.
 // Shift-click: latches down until the next click of either kind (which only
 // releases it). The light is on while the param is above 0. Configure the
@@ -73,28 +95,13 @@ struct HoldButton : app::ParamWidget {
 	}
 
 	void onDragStart(const DragStartEvent& e) override {
-		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
-			return;
-		ParamQuantity* pq = getParamQuantity();
-		if (!pq)
-			return;
-		// Down at a press means latched (or loaded down): this click releases it.
-		if (pq->getValue() > 0.f) {
-			latching = false;
-			pq->setMin();
-			return;
-		}
-		latching = (APP->window->getMods() & RACK_MOD_MASK) == GLFW_MOD_SHIFT;
-		pq->setMax();
+		if (e.button == GLFW_MOUSE_BUTTON_LEFT)
+			holdPress(getParamQuantity(), latching);
 	}
 
 	void onDragEnd(const DragEndEvent& e) override {
-		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
-			return;
-		ParamQuantity* pq = getParamQuantity();
-		if (pq && !latching)
-			pq->setMin();
-		latching = false;
+		if (e.button == GLFW_MOUSE_BUTTON_LEFT)
+			holdRelease(getParamQuantity(), latching);
 	}
 
 	// No double-click reset: a button has nothing to reset.
@@ -437,7 +444,8 @@ struct Toggle2 : app::SvgSwitch {
 };
 
 // A 6.4 mm button: a dark body in a brass rim. Its cap lights cyan, on the
-// layer Rack keeps bright in a dimmed room, by as much as lit() says.
+// layer Rack keeps bright in a dimmed room, by as much as lit() says. A flat
+// disc of light with no halo, as JewelLight.
 struct Cap : app::ParamWidget {
 	std::shared_ptr<window::Svg> body[2];
 	std::shared_ptr<window::Svg> glow;
@@ -492,28 +500,13 @@ struct CapButton : Cap {
 	}
 
 	void onDragStart(const DragStartEvent& e) override {
-		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
-			return;
-		ParamQuantity* pq = getParamQuantity();
-		if (!pq)
-			return;
-		// Down at a press means latched (or loaded down): this click releases it.
-		if (pq->getValue() > 0.f) {
-			latching = false;
-			pq->setMin();
-			return;
-		}
-		latching = (APP->window->getMods() & RACK_MOD_MASK) == GLFW_MOD_SHIFT;
-		pq->setMax();
+		if (e.button == GLFW_MOUSE_BUTTON_LEFT)
+			holdPress(getParamQuantity(), latching);
 	}
 
 	void onDragEnd(const DragEndEvent& e) override {
-		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
-			return;
-		ParamQuantity* pq = getParamQuantity();
-		if (pq && !latching)
-			pq->setMin();
-		latching = false;
+		if (e.button == GLFW_MOUSE_BUTTON_LEFT)
+			holdRelease(getParamQuantity(), latching);
 	}
 };
 
@@ -580,6 +573,9 @@ struct TJewelLight : TBase {
 			window::svgDraw(args.vg, svg->handle);
 	}
 
+	// No halo, as the lit button caps have none: the look has no glow.
+	void drawHalo(const widget::Widget::DrawArgs& args) override {}
+
 	void drawLight(const widget::Widget::DrawArgs& args) override {
 		if (this->color.a <= 0.f)
 			return;
@@ -593,7 +589,9 @@ struct TJewelLight : TBase {
 using JewelLight = TJewelLight<>;
 
 // The endless encoder in the Instrument look: 14.5 mm, knurled, no index
-// (it has no end stops). The knurl turns 1/24 turn per detent taken.
+// (it has no end stops). The knurl turns 1/24 turn per detent taken; it has
+// 55 ticks, so each detent shifts it 7/24 of a tick and the picture does not
+// repeat within a turn.
 struct KnurlEncoder : Encoder {
 	std::shared_ptr<window::Svg> body[2], knurl[2];
 
