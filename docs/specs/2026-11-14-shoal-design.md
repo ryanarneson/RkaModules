@@ -20,6 +20,13 @@ References:
   `cfbffab`, `OC_VERSION` v1.3.6). This is the ground truth for behaviour.
 - **User manual v1.3**, `~/ws/reference/o_c_user_manual-1.3.html`. Because
   the real firmware runs, the manual applies as written.
+- **Predefined scales**, `~/ws/reference/scales.html`, from the o_C
+  documentation site: every built-in scale with each note in cents and in
+  the firmware's pitch units (128 per semitone). An independent check for
+  the quantiser tests.
+- **Piqued envelope zoo**, `~/ws/reference/envelope.html`, from the same
+  site: the envelope types and how each responds to a trigger, a gate and a
+  long gate. The local copy has the list but not the diagrams.
 - **Benn Jordan's emulation**, shown in the stream "282: The God Module,
   Emulated" (youtube.com/watch?v=m0Ccw5l_HSc) and in the screenshot
   `~/ws/reference/o_c.png`. Shoal borrows its layout and its two UI modes.
