@@ -368,7 +368,7 @@ Three habits behind most of them:
 | CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes (`make shoal-bench`) | Yes (`make bench`) | Yes (`make bench`) |
 | No libm call per sample, knobs still | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Not checked | Yes (`make libm-calls`) | Yes (`make libm-calls`) |
 | No writable global state | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make shoal-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) |
-| Smoke screenshot | Yes | Yes | Yes | Yes | Not yet |
+| Smoke screenshot | Yes | Yes | Yes | Yes | Yes |
 
 Fog also has `make fog-soak` (opt-in, minutes, not in `make test`): every
 mode at v = 1 and three corners of Size, Damp and Drift, 10 minutes of noise

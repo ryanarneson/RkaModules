@@ -54,6 +54,17 @@
         "Utility"
       ],
       "keywords": "vca amplifier ambient"
+    },
+    {
+      "slug": "Fog",
+      "name": "Fog",
+      "description": "Stereo reverb for enormous, dark, slowly blooming spaces: time-based decay, bloom, drift, four modes",
+      "tags": [
+        "Reverb",
+        "Effect",
+        "Stereo"
+      ],
+      "keywords": "reverb ambient space shimmer"
     }
   ]
 }
