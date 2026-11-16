@@ -16,10 +16,16 @@
 // - The dry path never touches the RateDivider, so it has no delay at any
 //   sample rate; above 96 kHz the wet arrives a few samples late.
 // - Mix is an equal-power crossfade, exactly dry at 0 and exactly wet at 1.
-//   Dry kill forces Mix to 1, over the knob and its CV.
+//   Dry kill forces Mix to 1, over the knob and its CV. The effective Mix
+//   ramps over 5 ms, so a CV step or the dry kill switch does not click.
 // - Safety: every input and parameter is sanitised where it enters (NaN and
 //   infinity read 0). The limiter is on the wet only: the identity up to
 //   +/-8 V, then a tanh knee that ends at +/-10 V.
+// - Level: the wet is trimmed by wetTrim() and given a low tilt (tilt()), so
+//   +/-5 V drones (saw, square, sine at 55-220 Hz, white noise) at noon peak
+//   at or under the limiter's knee and keep their RMS within 10 dB of the
+//   input's. Peaks of a tonal drone through a drifting tail build up (crest
+//   about 3.5 against the static response's 2).
 // - Mode: the voicing follows FogFrame::mode. A change fades the wet out
 //   over 50 ms, clears and reconfigures the network, and fades it in.
 // - Only setSampleRate() allocates. process() allocates nothing and calls
@@ -76,6 +82,14 @@ struct FogEngine {
 	static float limitKnee() { return 8.f; }
 	static float limitCeil() { return 10.f; }
 	static float maxRate() { return 768000.f; }
+	// Fixed trim on the wet (a fraction): keeps +/-5 V drones under the
+	// limiter's knee at noon.
+	static float wetTrim() { return 0.566f; }
+	// And a low tilt on the wet: the lows (undamped, so most coherent in the
+	// tail) are cut by tiltDepth below about tiltHz, 1 above. Tones at
+	// 55-220 Hz, the hottest case, lose a little more than broadband noise.
+	static float tiltHz() { return 2800.f; }
+	static float tiltDepth() { return 0.3f; }
 
 	// Test only: bypass the limiter.
 	bool limiterEnabled = true;
@@ -91,11 +105,10 @@ struct FogEngine {
 	}
 
 	// A rate that is not finite or <= 0 is ignored (the last good one stays;
-	// 48 kHz before any). One above 768 kHz counts as 768 kHz. May allocate.
+	// 48 kHz before any), and so is one above 768 kHz. May allocate.
 	void setSampleRate(float hz) {
-		if (!(hz > 0.f && hz <= FLT_MAX))
+		if (!(hz > 0.f && hz <= maxRate()))
 			return;
-		hz = hz <= maxRate() ? hz : maxRate();
 		if (hz == hostRate && ready)
 			return;
 		hostRate = hz;
@@ -105,7 +118,9 @@ struct FogEngine {
 		bloomL.setup(hz);
 		bloomR.setup(hz);
 		fadeStep = 1.f / (0.05f * hz + 1.f);
+		mixStep = 1.f / (0.005f * hz + 1.f);
 		setLowCutCoeffs();
+		tiltCoeff = 1.f - (float) std::exp(-6.283185307179586 * tiltHz() / hz);
 		reset();
 	}
 
@@ -118,6 +133,8 @@ struct FogEngine {
 		for (int c = 0; c < 2; c++)
 			for (int i = 0; i < 2; i++)
 				cutZ[c][i] = 0.0;
+		tiltZ[0] = tiltZ[1] = 0.f;
+		mixSnap = true;
 		fade = 1.f;
 		fadeState = 0;
 	}
@@ -181,8 +198,8 @@ struct FogEngine {
 			net.setControls(vis, size, dampK, drift, rateSel);
 			net.process(l, r, ol, orr);
 		});
-		wetL = fogFinite(wetL);
-		wetR = fogFinite(wetR);
+		wetL = tilt(0, fogFinite(wetL) * wetTrim());
+		wetR = tilt(1, fogFinite(wetR) * wetTrim());
 		if (limiterEnabled) {
 			wetL = limit(wetL);
 			wetR = limit(wetR);
@@ -191,13 +208,31 @@ struct FogEngine {
 		wetR *= fade;
 
 		// Equal-power mix: cos and sin of Mix pi/2 (exactly 1 and 0 at Mix 0).
-		const float dg = fastSin2pi(0.25f * (1.f - mix));
-		const float wg = fastSin2pi(0.25f * mix);
+		// The effective Mix ramps linearly (5 ms) to its target, so a stepped
+		// CV or the dry kill switch does not click; it lands exactly on it.
+		if (mixSnap) {
+			mixSm = mix;
+			mixSnap = false;
+		}
+		if (mixSm < mix)
+			mixSm = mixSm + mixStep < mix ? mixSm + mixStep : mix;
+		else if (mixSm > mix)
+			mixSm = mixSm - mixStep > mix ? mixSm - mixStep : mix;
+		const float dg = fastSin2pi(0.25f * (1.f - mixSm));
+		const float wg = fastSin2pi(0.25f * mixSm);
 		res.outL = dg * dryL + wg * wetL;
 		res.outR = dg * dryR + wg * wetR;
 	}
 
 	// ---- parts ----
+
+	// x minus tiltDepth of its one-pole low-pass (tiltHz).
+	float tilt(int ch, float x) {
+		tiltZ[ch] += tiltCoeff * (x - tiltZ[ch]);
+		if (tiltZ[ch] < 1e-20f && tiltZ[ch] > -1e-20f)
+			tiltZ[ch] = 0.f;
+		return x - tiltDepth() * tiltZ[ch];
+	}
 
 	// x unchanged up to the knee, then a tanh that ends at the ceiling.
 	static float limit(float x) {
@@ -247,6 +282,9 @@ struct FogEngine {
 	bool ready = false;
 	double cutCoef[2][5] = {};
 	double cutZ[2][2] = {};
+	float tiltCoeff = 0.f, tiltZ[2] = {};
+	float mixSm = 0.f, mixStep = 1.f;
+	bool mixSnap = true; // the next process() starts the ramp at its target
 	float fade = 1.f, fadeStep = 0.f;
 	int fadeState = 0; // 0 steady, 1 fading out, 2 fading in
 };

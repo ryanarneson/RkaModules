@@ -243,7 +243,8 @@ void unplugKeepsTail() {
 	// signal, so a step in the output could only come from the unplug.
 	float lp = 0.f;
 	double preStep = 0, preV = 0;
-	for (int i = 0; i < (int) (2 * RATE); i++) {
+	// Run 2 s, then until the input is clipped at its peak: the cut falls there.
+	for (int i = 0; i < (int) (2 * RATE) || (lp < 1.f && lp > -1.f); i++) {
 		lp += 0.013f * (uniform() * 30.f - lp);
 		const FogResult o = r.step(lp > 1.f ? 1.f : lp < -1.f ? -1.f : lp);
 		if (i > (int) RATE) {
@@ -272,6 +273,37 @@ void unplugKeepsTail() {
 	std::printf("  unplug_keeps_tail: max step %.3f V (while plugged: %.3f), tail RMS %.3f -> %.3f\n", maxStep, preStep, early, late);
 }
 
+void rateIgnored() {
+	FogEngine e;
+	const float bad[] = {0.f, -48000.f, 1e6f, 768001.f, INFINITY, NAN};
+	for (float b : bad) {
+		e.setSampleRate(b);
+		CHECK(e.hostRate == 48000.f, "rate %g was accepted (now %g)", b, e.hostRate);
+	}
+	e.setSampleRate(96000.f);
+	e.setSampleRate(1e6f);
+	CHECK(e.hostRate == 96000.f, "after 96 kHz, 1e6 changed the rate to %g", e.hostRate);
+}
+
+void mixRampNoClick() {
+	// A held 5 V DC input, dry kill toggled on and off: the dry path ramps.
+	Rig r;
+	r.f.params[FogFrame::MIX] = 0.f;
+	for (int i = 0; i < (int) (10 * RATE); i++)
+		r.step(5.f);
+	double maxStep = 0, prev = 5.0;
+	for (int k = 0; k < 4; k++) {
+		r.f.dryKill = (k & 1) == 0;
+		for (int i = 0; i < 4800; i++) {
+			const FogResult o = r.step(5.f);
+			maxStep = std::fmax(maxStep, std::fabs(o.outL - prev));
+			prev = o.outL;
+		}
+	}
+	CHECK(maxStep <= 0.05, "dry kill toggled on 5 V DC: largest step %g V, want <= 0.05", maxStep);
+	std::printf("  mix_ramp_no_click: largest step %.4f V\n", maxStep);
+}
+
 void lowCut() {
 	double wet[2] = {};
 	for (int cut = 0; cut < 2; cut++) {
@@ -298,32 +330,63 @@ void lowCut() {
 	std::printf("  low_cut: 30 Hz wet %.2f dB with the 50 Hz cut vs Off\n", db);
 }
 
-void limiterIdleAt5v() {
-	Rig a, b;
-	a.f.params[FogFrame::MIX] = b.f.params[FogFrame::MIX] = 1.f;
-	b.eng.limiterEnabled = false;
-	double peak = 0;
-	int diff = 0;
-	for (int i = 0; i < (int) (20 * RATE); i++) {
-		// A +/-5 V saw drone at 110 Hz.
-		const float x = 5.f * (2.f * (float) std::fmod(i * 110.0 / RATE, 1.0) - 1.f);
-		const FogResult oa = a.step(x), ob = b.step(x);
-		diff += (oa.outL != ob.outL) + (oa.outR != ob.outR);
-		const double m = std::fmax(std::fabs(ob.outL), std::fabs(ob.outR));
-		peak = m > peak ? m : peak;
+// One +/-5 V drone sample: shape 0 saw, 1 square, 2 sine, 3 white noise.
+float drone(int shape, double hz, int i) {
+	const double ph = std::fmod(i * hz / RATE, 1.0);
+	switch (shape) {
+		case 0: return 5.f * (float) (2.0 * ph - 1.0);
+		case 1: return ph < 0.5 ? 5.f : -5.f;
+		case 2: return 5.f * (float) std::sin(2.0 * PI * ph);
+		default: return 5.f * uniform();
 	}
-	CHECK(diff == 0, "limiter acted on a +/-5 V drone in %d samples (unlimited peak %g V)", diff, peak);
-	// And it does act on a hot one: the same drone at 16x.
-	Rig h;
-	h.f.params[FogFrame::MIX] = 1.f;
+}
+
+void limiterIdleAt5v() {
+	// True noon: every main knob at 0.5, Mix 1, HAAR. The limiter must not
+	// act on any +/-5 V drone (wet peak <= 8 V, the knee), and the wet RMS
+	// stays within 10 dB of the input's.
+	const char* names[] = {"saw", "square", "sine", "noise"};
+	const double hzs[] = {55.0, 110.0, 220.0};
+	double worstPeak = 0, worstDb = 1e9;
+	for (int shape = 0; shape < 4; shape++) {
+		for (int h = 0; h < (shape == 3 ? 1 : 3); h++) {
+			Rig r;
+			r.eng.limiterEnabled = false;
+			r.f.params[FogFrame::MIX] = 1.f;
+			for (int p = FogFrame::VISIBILITY; p <= FogFrame::DRIFT; p++)
+				r.f.params[p] = 0.5f;
+			std::vector<float> in, wet;
+			double peak = 0;
+			const int N = (int) (15 * RATE);
+			for (int i = 0; i < N; i++) {
+				const float x = drone(shape, hzs[h], i);
+				const FogResult o = r.step(x);
+				if (i >= N / 3) {
+					in.push_back(x);
+					wet.push_back(o.outL);
+					wet.push_back(o.outR);
+					peak = std::fmax(peak, std::fmax(std::fabs(o.outL), std::fabs(o.outR)));
+				}
+			}
+			const double db = 20.0 * std::log10(rms(wet) / rms(in));
+			CHECK(peak <= FogEngine::limitKnee(), "%s %g Hz: wet peak %g V exceeds the %g V knee", names[shape], hzs[h], peak,
+			      FogEngine::limitKnee());
+			CHECK(db >= -10.0, "%s %g Hz: wet RMS %g dB re input, want >= -10", names[shape], hzs[h], db);
+			worstPeak = std::fmax(worstPeak, peak);
+			worstDb = std::fmin(worstDb, db);
+			std::printf("  limiter_idle_at_5v %-6s %3.0f Hz: wet peak %5.2f V, RMS %+.2f dB re input\n", names[shape], hzs[h], peak, db);
+		}
+	}
+	// And it does act on a hot one: a 16x saw.
+	Rig hot;
+	hot.f.params[FogFrame::MIX] = 1.f;
 	double hp = 0;
 	for (int i = 0; i < (int) (10 * RATE); i++) {
-		const float x = 80.f * (2.f * (float) std::fmod(i * 110.0 / RATE, 1.0) - 1.f);
-		const FogResult o = h.step(x);
+		const FogResult o = hot.step(16.f * drone(0, 110.0, i));
 		hp = std::fmax(hp, std::fmax(std::fabs(o.outL), std::fabs(o.outR)));
 	}
 	CHECK(hp <= 10.f && hp > 8.f, "hot drone limited to %g V, want in (8, 10]", hp);
-	std::printf("  limiter_idle_at_5v: unlimited peak %.2f V at 5 V drone; 80 V drone limited to %.3f V\n", peak, hp);
+	std::printf("  limiter_idle_at_5v: worst peak %.2f V, lowest RMS %+.2f dB; 80 V saw limited to %.3f V\n", worstPeak, worstDb, hp);
 }
 
 } // namespace
@@ -337,6 +400,8 @@ int main() {
 	monoNormals();
 	polyInputBounded();
 	unplugKeepsTail();
+	rateIgnored();
+	mixRampNoClick();
 	lowCut();
 	limiterIdleAt5v();
 	return rkatest::finish("test_engine");
