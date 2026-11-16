@@ -115,8 +115,8 @@ struct Network {
 		}
 		const int maxD = (int) ((longest * maxScale() + maxModMs()) * 0.001f * r) + 8;
 		for (int i = 0; i < MAX_LINES; i++)
-			line[i].allocate(maxD);
-		diffuser.allocate(r, 1.f);
+			line[i].allocate(maxD, (uint32_t) (Diffuser<8>::MAX_STAGES * 8 + i));
+		diffuser.allocate(r, 1.f, 0); // stagger 0..31; the network's lines take 32..47
 	}
 
 	void configure(const Voicing& v, float innerRate) {

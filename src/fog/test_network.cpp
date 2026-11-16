@@ -392,11 +392,48 @@ void driftDepthPerRate() {
 	}
 }
 
+// Every delay line's write position sits in its own L1 cache set (index
+// (pos >> 4) & 63), so the 48 lines do not evict each other as they advance
+// in lockstep. Also after clear(), which must restore the staggered start.
+void linesUseDistinctCacheSets() {
+	Controls c;
+	Rig rig(c);
+	for (int pass = 0; pass < 2; pass++) {
+		bool seen[64] = {};
+		int count = 0, dup = 0;
+		auto note = [&](const rka::DelayLine& d) {
+			const int set = (int) ((d.pos >> 4) & 63u);
+			if (seen[set])
+				dup++;
+			seen[set] = true;
+			count++;
+		};
+		for (int i = 0; i < Network::MAX_LINES; i++)
+			note(rig.net.line[i]);
+		for (int s = 0; s < 4; s++)
+			for (int i = 0; i < 8; i++)
+				note(rig.net.diffuser.lines[s][i]);
+		CHECK(count == 48, "counted %d lines", count);
+		CHECK(dup == 0, "pass %d: %d lines share a cache set with another", pass, dup);
+		rig.net.clear(); // second pass: the start survives clear()
+	}
+	// The output is the same from the staggered start: an impulse still
+	// comes back at its delay.
+	rka::DelayLine d;
+	d.allocate(1000, 5);
+	CHECK(d.pos != 0, "stagger 5 left pos at 0");
+	d.write(1.f);
+	for (int k = 0; k < 99; k++)
+		d.write(0.f);
+	CHECK(d.readInt(99) == 1.f, "impulse not read back at its delay");
+}
+
 } // namespace
 
 int main() {
 	const auto t0 = std::chrono::steady_clock::now();
 	measureSelfCheck();
+	linesUseDistinctCacheSets();
 	t60MatchesVisibility();
 	t60HoldsAcrossSize();
 	t60LowHoldsWithDamp();

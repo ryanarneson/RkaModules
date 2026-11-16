@@ -106,15 +106,18 @@ struct fog {
 	static const int BENCH_CASES = 4;
 	static BenchCase<Instance> benchCase(int k) {
 		// Budgets: about twice what an Apple M-series Mac measured, rounded
-		// up to the next 0.05 (idle 1.09, outputs 1.09, busy 1.32, busyIce 1.32;
-		// Fog's 16 lines run whatever the input, so idle is not cheap). Elsewhere: three times as
+		// up to the next 0.05 (idle 0.55, outputs 0.56, busy 0.69, busyIce 0.69, after the delay lines' write
+		// positions were staggered; before, 1.09, 1.09, 1.32, 1.32;
+		// Fog's 16 lines run whatever the input, so idle is not cheap). Idle and
+		// outputs are set lower than twice (0.95, not 1.15) so that the old,
+		// cache-aliased lines (1.03-1.11) fail them. Elsewhere: three times as
 		// much, provisional (not yet measured on x86-64).
 		const BenchCase<Instance> cases[BENCH_CASES] = {
 			// name     inputs   Apple arm64  elsewhere
-			{"idle", idle, 2.2, 6.6},
-			{"outputs", outputs, 2.2, 6.6},
-			{"busy", busy, 2.7, 8.1},
-			{"busyIce", busyIce, 2.7, 8.1},
+			{"idle", idle, 0.95, 2.85},
+			{"outputs", outputs, 0.95, 2.85},
+			{"busy", busy, 1.4, 4.2},
+			{"busyIce", busyIce, 1.4, 4.2},
 		};
 		return cases[k];
 	}

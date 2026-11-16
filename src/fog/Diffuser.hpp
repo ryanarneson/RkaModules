@@ -28,11 +28,13 @@ struct Diffuser {
 		return s >> 8; // 24 bits
 	}
 
-	void allocate(float sampleRate, float maxScale) {
+	// staggerBase: line (s, i) gets stagger index staggerBase + s * N + i, so
+	// no two lines share a cache set (see DelayLine::allocate).
+	void allocate(float sampleRate, float maxScale, uint32_t staggerBase = 0) {
 		const int maxD = (int) (MAX_STAGE_MS * 0.001f * sampleRate * maxScale) + 4;
 		for (int s = 0; s < MAX_STAGES; s++)
 			for (int i = 0; i < N; i++)
-				lines[s][i].allocate(maxD);
+				lines[s][i].allocate(maxD, staggerBase + (uint32_t) (s * N + i));
 		stages = 0;
 	}
 

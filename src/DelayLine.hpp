@@ -14,10 +14,19 @@ struct DelayLine {
 	uint32_t mask = 0;
 	uint32_t pos = 0;
 	int maxDel = 0;
+	uint32_t start = 0; // where pos starts and returns to on clear()
 
 	// Room for delays up to maxDelaySamples (plus the interpolator's guard
 	// samples), rounded up to a power of two, zeroed. Never call from process().
-	void allocate(int maxDelaySamples) {
+	//
+	// stagger offsets the write position's start by stagger * 67 cache lines
+	// (16 floats each), masked. Many large power-of-two buffers are page
+	// aligned, and lines that all advance by one per sample from pos 0 write
+	// to the same L1 cache set and evict each other. Give each line of a
+	// module a different stagger index so their sets differ (67 is odd, so
+	// consecutive indices spread over 64 or 256 sets). A ring of zeros read
+	// relative to pos behaves the same from any start: output is unchanged.
+	void allocate(int maxDelaySamples, uint32_t stagger = 0) {
 		if (maxDelaySamples < 1)
 			maxDelaySamples = 1;
 		uint32_t n = 8;
@@ -25,14 +34,15 @@ struct DelayLine {
 			n <<= 1;
 		buf.assign(n, 0.f);
 		mask = n - 1;
-		pos = 0;
+		start = (stagger * 67u * 16u) & mask;
+		pos = start;
 		maxDel = (int) n - 1;
 	}
 
 	void clear() {
 		for (size_t i = 0; i < buf.size(); i++)
 			buf[i] = 0.f;
-		pos = 0;
+		pos = start;
 	}
 
 	int maxDelay() const {
