@@ -136,7 +136,7 @@ bench: build/bench/bench
 # pre-optimisation references, built with the plugin's floating-point and
 # architecture flags so they check what the plugin computes.
 PLUGIN_MATH_TEST_FLAGS = -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR)
-PLUGIN_MATH_TESTS = build/test/fathom/test_fast_math build/test/fathom/test_engine build/test/sway/test_engine build/test/sluice/test_engine build/test/fog/test_blocks build/test/fog/test_network build/test/fog/test_engine build/test/fog/test_modes build/test/fog/test_stereo
+PLUGIN_MATH_TESTS = build/test/fathom/test_fast_math build/test/fathom/test_engine build/test/sway/test_engine build/test/sluice/test_engine build/test/fog/test_blocks build/test/fog/test_network build/test/fog/test_engine build/test/fog/test_modes build/test/fog/test_stereo build/test/hadal/test_layers
 $(filter $(TEST_BINS),$(PLUGIN_MATH_TESTS)): build/test/%: src/%.cpp $(wildcard src/*.hpp $(MODULES:%=src/%/*.hpp) $(MODULES:%=src/%/testdata/ref/*.hpp))
 	@mkdir -p $(@D)
 	$(CXX) $(PLUGIN_MATH_TEST_FLAGS) -Isrc -I$(<D) $< -o $@
