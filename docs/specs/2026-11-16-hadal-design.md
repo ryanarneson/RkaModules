@@ -1,7 +1,7 @@
 # Hadal: design
 
-Date: 2026-11-16. Status: draft for the user's approval; a reviewer's builder check is done
-and its two questions are settled as designer's calls.
+Date: 2026-11-16. Status: approved by the user, after a reviewer's
+builder check whose two questions are settled as designer's calls.
 
 Hadal is a rumble-and-noise bed, 10 HP, in the Instrument look. It is
 the sixth `rka` module and the third of the ideas in `docs/future/` to be
