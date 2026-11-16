@@ -249,10 +249,22 @@ each knob moves its quantity the right way, by at least a stated amount.
 | **HAAR** | dense, smooth, enormous wash; the default | Supermassive's darker modes | the most lines, deep diffusion, long base lengths |
 | **FRET** | dark and slow-building; the space rises behind the sound | Valhalla Room LV-426 | heavier built-in damping, a slower Bloom curve, low-mid emphasis |
 | **SMOKE** | echo-led: distinct repeats that blur into the wash | Supermassive's echo modes, Greyhole | fewer, longer lines, with diffusion inside the loop after each repeat (as Greyhole puts it) |
-| **ICE** | sparse and glassy, with a faint octave-up shimmer in the tail | shimmer reverbs | a pitch shifter at +12 semitones in the feedback, at a fixed low amount, and brighter damping |
+| **ICE** | sparse and glassy, with a faint octave-up shimmer in the tail | shimmer reverbs | brighter damping, and a +12-semitone shimmer in two parts: a small cascade in the feedback, and a fixed feed-forward octave on the wet that is audible at every Visibility |
 
 - **Names:** the modes are named for kinds of sea fog (haar, sea fret,
   sea smoke, ice fog). ADVECTION was renamed ICE to keep it short.
+- **ICE's shimmer:** two parts, the user's choice (design A).
+  - **In the feedback, a small cascade** (octaves of octaves): a crossfade
+    into the loop that can never add energy, however the octave lines up
+    with a held note's harmonics, so no tail outlasts the T60 law. Its
+    amount follows the loop's loss per pass, so it costs ICE's decay a
+    fixed share (ICE's T60 runs about 13 % short) and fades as the tail
+    lengthens.
+  - **On the wet, a fixed octave:** each wet side is shifted up an octave
+    once, after the loop, and added at a fixed level. It is never fed back,
+    so it follows the tail's envelope, and it keeps the octave about
+    11-14 dB under a held note from noon to DENSE (it must not fall more
+    than 4 dB between them).
 - **Switching modes while running:** the wet signal fades out over about
   50 ms, the network is cleared and the new mode starts clean, with no
   click (*designer's call*).

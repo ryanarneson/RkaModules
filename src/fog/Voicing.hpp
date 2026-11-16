@@ -25,6 +25,8 @@ struct Voicing {
 	float shimmer;      // octave-up in the loop (0 = none; ICE): what the shifter's
 	                    // crossfade takes from the note a pass, as a fraction of the
 	                    // loop's own loss a pass (Network.hpp)
+	float shimmerOut;   // the feed-forward octave's level on the wet (0 = none; ICE),
+	                    // added as shimmerOut x the octave of each wet side
 	float brightness;   // lighter damping (0 = HAAR): Damp d acts as (1 - brightness) d
 	int toneKind;       // the feed's tone stage
 	float toneHz, toneDb, toneQ;
@@ -45,7 +47,7 @@ inline const Voicing& voicing(Mode m) {
 		 4, {13.f, 29.f, 47.f, 71.f},
 		 0.f, 0.f,
 		 0.f, {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f},
-		 0.f, 0.f,
+		 0.f, 0.f, 0.f,
 		 TONE_NONE, 0.f, 0.f, 0.f,
 		 1.f},
 		// FRET (LV-426): dark and slow to build. 16 lines about 20 % longer
@@ -60,7 +62,7 @@ inline const Voicing& voicing(Mode m) {
 		 4, {17.f, 37.f, 59.f, 89.f},
 		 0.35f, 1.f,
 		 0.f, {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f},
-		 0.f, 0.f,
+		 0.f, 0.f, 0.f,
 		 TONE_PEAK, 300.f, 4.f, 0.7f,
 		 1.02f},
 		// SMOKE (Greyhole, Supermassive's echo modes): 8 lines clustered within
@@ -74,24 +76,25 @@ inline const Voicing& voicing(Mode m) {
 		 2, {3.f, 7.f, 0.f, 0.f},
 		 0.f, 0.f,
 		 0.6f, {6.1f, 8.3f, 10.7f, 12.9f, 15.1f, 17.3f, 19.7f, 21.9f},
-		 0.f, 0.f,
+		 0.f, 0.f, 0.f,
 		 TONE_NONE, 0.f, 0.f, 0.f,
 		 0.955f},
 		// ICE: sparse and glassy. 16 lines a little shorter than HAAR's
 		// (47-162 ms), only two short input stages (sparser onset), half
 		// HAAR's damping at every Damp, +3 dB above 3 kHz on the feed, and a
-		// +12-semitone shifter in the loop at a fixed low amount: 0.16 makes
-		// ICE's T60 about 13 % shorter than Visibility's at every setting,
-		// and puts the octave about 15 dB under a held note in the tail at
-		// noon (12-18 dB over 110-880 Hz), fainter for longer tails and
-		// smaller Size (the crossfade's bound ties the octave to the loss a
-		// pass: Network.hpp).
+		// +12-semitone shimmer in two parts (Network.hpp). In the loop, a
+		// small cascade (shimmer 0.16): ICE's T60 is about 13 % shorter than
+		// Visibility's at every setting, and this octave fades as the tail
+		// lengthens (-15 dB under a held note at noon, -34 dB at DENSE). On
+		// the wet, a fixed feed-forward octave (shimmerOut 0.35), shifted
+		// once and never fed back: together they put the octave 11-14 dB
+		// under a held 440 Hz note at Visibility 0.5 to 1.
 		{16,
 		 {47.3f, 53.9f, 61.1f, 67.7f, 74.9f, 82.3f, 89.9f, 97.1f, 104.9f, 112.3f, 120.7f, 128.9f, 137.3f, 145.1f, 153.7f, 161.9f},
 		 2, {9.f, 23.f, 0.f, 0.f},
 		 0.f, 0.f,
 		 0.f, {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f},
-		 0.16f, 0.5f,
+		 0.16f, 0.35f, 0.5f,
 		 TONE_HIGH_SHELF, 3000.f, 3.f, 0.7071f,
 		 0.715f},
 	};

@@ -348,8 +348,10 @@ long badState(const Rig& r) {
 			scan(n.diffuser.lines[s][i]);
 	for (int i = 0; i < rka::fog::Network::LOOP_AP; i++)
 		scan(n.loopAp[i]);
-	scan(n.shiftBuf);
-	bad += !okValue(n.shimLp1) + !okValue(n.shimLp2) + !okValue(n.shimHp1) + !okValue(n.shimHp2);
+	for (const rka::fog::OctaveShifter* sh : {&n.shifter, &n.octL, &n.octR}) {
+		scan(sh->buf);
+		bad += !okValue(sh->lp1) + !okValue(sh->lp2) + !okValue(sh->hp1) + !okValue(sh->hp2);
+	}
 	for (int c = 0; c < 2; c++)
 		for (int i = 0; i < 2; i++)
 			bad += !okValue(r.eng.toneZ[c][i]);

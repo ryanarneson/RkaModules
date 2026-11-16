@@ -184,8 +184,8 @@ instance, Apple M-series Mac:
 | Fathom measured (was) | 0.02 (0.58) | 0.55 (0.58) | 0.59 (0.59) |
 | Sluice budget | 0.2 | 0.15 | 2.15 |
 | Sluice measured | 0.077 | 0.066 | 1.07 |
-| Fog budget | 0.15 | 0.15 | 1.55 |
-| Fog measured (was) | 0.06 (0.55) | 0.06 (0.56) | 0.77 (0.72) |
+| Fog budget | 0.15 | 0.15 | 1.6 |
+| Fog measured (was) | 0.06 (0.55) | 0.06 (0.56) | 0.78 (0.72) |
 
 Sluice also has a mixDown case (as busy, but only D connected): budget 2.25,
 measured 1.11. Its budgets are about twice the measurement, rounded up to
@@ -198,10 +198,10 @@ the next 0.05: 0.15). Its quiet case (+/-3 mV noise into both inputs, knobs at
 their defaults, no CV) keeps the engine awake and measures 0.57-0.66; its
 budget is 0.95, under twice, so the cache-aliased delay lines (1.03-1.11)
 fail it. Fog's lines run whenever it is awake; its busy is stereo noise, all five CVs moving at full attenuverter, Bloom and
-Drift up, Mix 0.5, in HAAR (0.77, 0.82 at 16 instances; it was 0.72 before
-the four voicings were tuned). busyIce is the same in ICE, with its shifter
-in the loop: 0.73 (0.75 at 16), budget 1.5; it has two diffuser stages to
-HAAR's four. The spec's target is busy under 3 %.
+Drift up, Mix 0.5, in HAAR (0.78, 0.85 at 16 instances; it was 0.72 before
+the four voicings were tuned and the wet leveller landed). busyIce is the
+same in ICE, with its in-loop and feed-forward shifters: 0.83 (0.86 at 16),
+budget 1.65. The spec's target is busy under 3 %.
 
 The idle and outputs budgets are set so the pre-issue-#8 engines fail
 them on the Mac. Sway busy and Fathom outputs and busy cost the same

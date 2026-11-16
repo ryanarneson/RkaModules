@@ -393,8 +393,8 @@ void driftDepthPerRate() {
 }
 
 // Every delay line's write position sits in its own L1 cache set (index
-// (pos >> 4) & 63), so the 57 lines (the diffuser's 32, the network's 16,
-// SMOKE's 8 in-loop allpasses and ICE's shifter) do not evict each other as
+// (pos >> 4) & 63), so the 59 lines (the diffuser's 32, the network's 16,
+// SMOKE's 8 in-loop allpasses and ICE's three shifters) do not evict each other as
 // they advance in lockstep. Also after clear(), which must restore the
 // staggered start.
 void linesUseDistinctCacheSets() {
@@ -417,8 +417,10 @@ void linesUseDistinctCacheSets() {
 				note(rig.net.diffuser.lines[s][i]);
 		for (int i = 0; i < Network::LOOP_AP; i++)
 			note(rig.net.loopAp[i]);
-		note(rig.net.shiftBuf);
-		CHECK(count == 57, "counted %d lines", count);
+		note(rig.net.shifter.buf);
+		note(rig.net.octL.buf);
+		note(rig.net.octR.buf);
+		CHECK(count == 59, "counted %d lines", count);
 		CHECK(dup == 0, "pass %d: %d lines share a cache set with another", pass, dup);
 		rig.net.clear(); // second pass: the start survives clear()
 	}

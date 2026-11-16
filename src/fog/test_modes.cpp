@@ -8,6 +8,7 @@
 #include "Bloom.hpp"
 #include "FogEngine.hpp"
 #include "Network.hpp"
+#include "Shifter.hpp"
 #include "Voicing.hpp"
 #include "test_measure.hpp"
 #include "testing.hpp"
@@ -321,9 +322,9 @@ void iceShimmer() {
 // The network's tail (0.5-2.5 s after the input stops) of a 3 s, 1 V sine at
 // hz (raised-cosine ends, 100 ms), Visibility, Size and Drift at noon, Damp 0
 // (so the octave is not darkened against its note).
-void netSineTail(int m, double hz, std::vector<float>& L, std::vector<float>& R) {
+void netSineTail(int m, double hz, std::vector<float>& L, std::vector<float>& R, float vis = 0.5f) {
 	Controls c;
-	c.vis = 0.5f;
+	c.vis = vis;
 	c.damp = 0.f;
 	NetRig* rig = new NetRig(m, c);
 	const int n = (int) (3 * RATE), ramp = (int) (0.1 * RATE);
@@ -353,14 +354,16 @@ void netSineTail(int m, double hz, std::vector<float>& L, std::vector<float>& R)
 // 220 Hz: the note 2 dB low, its octave 3 dB high, whatever the shifter),
 // so one tone reads the network, not the shifter; the three-note cluster
 // averages that down.
-double octaveDb(int m, double hz) {
+double octaveDb(int m, double hz, float vis = 0.5f, double* octAbs = nullptr) {
 	double note = 0, oct = 0;
 	std::vector<float> L, R;
 	for (double k : {0.985, 1.0, 1.015}) {
-		netSineTail(m, hz * k, L, R);
+		netSineTail(m, hz * k, L, R, vis);
 		note += bandPower(L, hz * k) + bandPower(R, hz * k);
 		oct += bandPower(L, 2.0 * hz * k) + bandPower(R, 2.0 * hz * k);
 	}
+	if (octAbs)
+		*octAbs = 10.0 * std::log10(oct + 1e-30);
 	return 10.0 * std::log10((oct + 1e-30) / (note + 1e-30));
 }
 
@@ -390,6 +393,27 @@ void iceOctaveEveryPitch() {
 	}
 	CHECK(med >= haar + 30.0, "ICE median octave %+.1f dB, HAAR %+.1f dB: want >= 30 dB above", med, haar);
 	std::printf("  ice_octave_every_pitch: median %+.1f dB re note, HAAR %+.1f dB\n", med, haar);
+}
+
+// ICE's octave stays audible however long the tail (the feed-forward octave
+// on the wet): under a held 440 Hz note at Visibility 0.5, 0.75 and 1, the
+// 880 Hz carrier is 13 +/- 4 dB under the note, it falls no more than 4 dB
+// from noon to fully right, and it is at least 20 dB above HAAR's 880 Hz
+// (whose octave is only leakage). The in-loop cascade alone gave -15, -27
+// and -34 dB.
+void iceOctaveAudibleLong() {
+	double first = 0;
+	for (float v : {0.5f, 0.75f, 1.f}) {
+		double iceAbs = 0, haarAbs = 0;
+		const double d = octaveDb(rka::fog::ICE, 440.0, v, &iceAbs);
+		octaveDb(rka::fog::HAAR, 440.0, v, &haarAbs);
+		if (v == 0.5f)
+			first = d;
+		CHECK(d >= -17.0 && d <= -9.0, "ICE v %g: 880 Hz carrier %+.1f dB re the 440 Hz note, want -13 +/- 4", v, d);
+		CHECK(iceAbs >= haarAbs + 20.0, "ICE v %g: 880 Hz %.1f dB, HAAR %.1f dB, want >= 20 dB above", v, iceAbs, haarAbs);
+		CHECK(first - d <= 4.0, "ICE v %g: octave %+.1f dB, %.1f dB under noon's, want <= 4", v, d, first - d);
+		std::printf("  ice_octave_audible_long v %.2f: octave %+.1f dB re note, %+.1f dB re HAAR's 880 Hz\n", v, d, iceAbs - haarAbs);
+	}
 }
 
 // The shifter's high-pass keeps the bass out of the octave: a 30 Hz note's
@@ -433,8 +457,13 @@ double fitSlope(const std::vector<double>& y, double dt) {
 
 // The decay (dB/s) of a network's tail after 10 s of a held input: the line
 // energy every 2 s from 2 to 18 s into the silence, fitted by a straight
-// line in dB. outSlope gets the same for the output (both sides, 2 s
-// windows), for the record. kind: 0 sine at hz, 1 saw at hz.
+// line in dB. outSlope gets the output's (both sides, the energy over 1 s
+// windows from 2 to 34 s, 32 of them, fitted the same way). The output of a
+// single pure tone beats slowly as the network's modes drift in and out of
+// phase at the taps: with ICE's shimmer entirely off, its 880 Hz output at
+// Size 1 fitted -0.56 dB/s over 2-18 s while its lines fell at -0.75; over
+// 2-34 s the two agree (-0.75).
+// kind: 0 sine at hz, 1 saw at hz.
 double tailSlope(int m, const Controls& c, float rate, int kind, double hz, double* outSlope = nullptr, double holdS = 10.0) {
 	NetRig* rig = new NetRig(m, c, rate);
 	float l, r;
@@ -446,26 +475,27 @@ double tailSlope(int m, const Controls& c, float rate, int kind, double hz, doub
 		rig->net.process(x, x, l, r);
 	}
 	std::vector<double> state, out;
-	for (int w = 0; w < 10; w++) {
+	for (int w = 0; w < 34; w++) {
 		double sum = 0;
-		for (int i = 0; i < (int) (2 * rate); i++) {
+		for (int i = 0; i < (int) rate; i++) {
 			rig->net.process(0.f, 0.f, l, r);
 			sum += (double) l * l + (double) r * r;
 		}
-		if (w >= 1) {
-			state.push_back(10.0 * std::log10(lineEnergy(rig->net) + 1e-300));
+		if (w >= 2)
 			out.push_back(10.0 * std::log10(sum + 1e-300));
-		}
+		if (w >= 1 && w < 18 && (w & 1)) // every 2 s, from 2 to 18 s
+			state.push_back(10.0 * std::log10(lineEnergy(rig->net) + 1e-300));
 	}
 	delete rig;
 	if (outSlope)
-		*outSlope = fitSlope(out, 2.0);
+		*outSlope = fitSlope(out, 1.0);
 	return fitSlope(state, 2.0);
 }
 
 // ICE's tail obeys the T60 law on tones, where its octave is coherent with
-// the note's own harmonics (the energy in its lines falls at least as fast;
-// its output, a projection of them, cannot outlast them): sines at 110-3520 Hz (562 and 880 Hz among them),
+// the note's own harmonics: the energy in its lines falls at least as fast,
+// and so does its output, the feed-forward octave included (fitted over
+// 32 one-second windows): sines at 110-3520 Hz (562 and 880 Hz among them),
 // Visibility fully right, Size 0 and 1, Damp 0, Drift 0, at 48 and 96 kHz. Each tail falls at
 // least as fast as the law allows at its slow end (T60 x 1.15, the spec's
 // tolerance, as fog-soak uses).
@@ -486,6 +516,9 @@ void iceTonalDecay() {
 				const double s = tailSlope(rka::fog::ICE, c, rate, 0, hz, &o);
 				CHECK(s <= law, "ICE %g kHz Size %g, %g Hz sine: tail falls %.3f dB/s, the law %.3f (T60 %.0f s, want <= %.0f)", rate / 1000,
 				      size, hz, s, law, -60.0 / s, 1.15 * specT60(v));
+				// The output, feed-forward octave included, follows the tail.
+				CHECK(o <= law, "ICE %g kHz Size %g, %g Hz sine: output falls %.3f dB/s, the law %.3f (T60 %.0f s)", rate / 1000, size, hz, o,
+				      law, -60.0 / o);
 				if (s > worst) {
 					worst = s;
 					std::snprintf(where, sizeof where, "%g kHz, Size %g, %g Hz (output's fit %.3f)", rate / 1000, size, hz, o);
@@ -494,6 +527,51 @@ void iceTonalDecay() {
 			}
 	std::printf("  ice_tonal_decay: slowest tail %.3f dB/s at %s (law at its slow end %.3f; slowest output fit %.3f)\n", worst, where,
 	            law, worstOut);
+}
+
+// The in-loop crossfade never gains, whatever the phase between the octave
+// and the note's own 2nd harmonic: a tone at f plus its 2nd harmonic at 24
+// phases, through an OctaveShifter and shimmerCrossfade() at a = 0.5: in
+// every 50 ms window (a grain; a loop pass is 16-500 ms) after the first
+// 0.5 s, the output RMS is no more than the input's. The old a s - b m form
+// (b = 0.6 a^2, i.e. (1 - b) m + a s) reached 1.15 there, where the octave
+// lined up with the harmonic (0.97 over the whole 2 s, which hid it).
+void shimmerCrossfadeNeverGains() {
+	double worst = 0;
+	double worstHz = 0, worstPh = 0;
+	for (double hz : {100.0, 150.0, 200.0, 300.0, 440.0, 1000.0})
+		for (int k = 0; k < 24; k++) {
+			const double ph = 2.0 * PI * k / 24.0;
+			rka::fog::OctaveShifter* sh = new rka::fog::OctaveShifter;
+			sh->allocate(RATE, 0u);
+			sh->configure(RATE, 7u);
+			double sx = 0, sy = 0;
+			int wn = 0;
+			const int win = (int) (0.05 * RATE);
+			for (int i = 0; i < (int) (2.5 * RATE); i++) {
+				const double t = (double) i / RATE;
+				const float x = (float) (std::sin(2.0 * PI * hz * t) + std::sin(2.0 * PI * 2.0 * hz * t + ph));
+				const float y = rka::fog::shimmerCrossfade(x, sh->process(x), 0.5f);
+				if (i >= (int) (0.5 * RATE)) {
+					sx += (double) x * x;
+					sy += (double) y * y;
+					if (++wn == win) {
+						const double r = std::sqrt(sy / sx);
+						if (r > worst) {
+							worst = r;
+							worstHz = hz;
+							worstPh = k * 15.0;
+						}
+						sx = sy = 0;
+						wn = 0;
+					}
+				}
+			}
+			delete sh;
+		}
+	CHECK(worst <= 1.0, "crossfade output RMS %.4f x the input's in a 50 ms window at %g Hz, harmonic at %g deg: want <= 1", worst, worstHz,
+	      worstPh);
+	std::printf("  shimmer_crossfade_never_gains: worst 50 ms output/input RMS %.4f (%g Hz, harmonic at %g deg)\n", worst, worstHz, worstPh);
 }
 
 // ---- switching ----
@@ -666,6 +744,33 @@ void modeRapidToggle() {
 	delete r;
 }
 
+// A return to a mode starts it clean too: ICE's tail, input stopped, then
+// HAAR, then back to ICE at once. From the moment ICE is back, the output is
+// silence (nothing of the old ICE tail, which ICE's feed-forward shifters
+// last held, replays).
+void modeReturnStartsClean() {
+	Rig* r = new Rig(rka::fog::ICE);
+	r->f.params[FogFrame::VISIBILITY] = FOG_V;
+	for (int i = 0; i < (int) (2 * RATE); i++)
+		r->step(3.f * (float) std::sin(2.0 * PI * 440.0 * i / RATE));
+	r->f.mode = rka::fog::HAAR;
+	int guard = 0;
+	while ((r->eng.mode != rka::fog::HAAR || r->eng.fadeState != 0) && guard++ < (int) RATE)
+		r->step(0.f);
+	r->f.mode = rka::fog::ICE;
+	double peak = 0;
+	bool back = false;
+	for (int i = 0; i < (int) (0.3 * RATE); i++) {
+		const FogResult o = r->step(0.f);
+		back = back || r->eng.mode == rka::fog::ICE;
+		if (back)
+			peak = std::fmax(peak, std::fmax(std::fabs(o.outL), std::fabs(o.outR)));
+	}
+	CHECK(back && peak == 0.0, "back in ICE: output peak %g V, want silence", peak);
+	std::printf("  mode_return_starts_clean: ICE -> HAAR -> ICE, peak after the return %g V\n", peak);
+	delete r;
+}
+
 // ---- safety, every mode ----
 
 // test_network's always_decays: v = 1, Damp 0; 10 s of noise (Drift 1), or
@@ -755,12 +860,15 @@ int main() {
 	smokeHasEchoes();
 	iceShimmer();
 	iceOctaveEveryPitch();
+	iceOctaveAudibleLong();
+	shimmerCrossfadeNeverGains();
 	iceBassKeptOut();
 	iceTonalDecay();
 	modeSwitchClickFree();
 	modeStartsSnapped();
 	modeSwitchWhileAsleep();
 	modeRapidToggle();
+	modeReturnStartsClean();
 	alwaysDecays();
 	polyInputBounded();
 	const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
