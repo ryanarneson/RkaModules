@@ -718,19 +718,19 @@ void levellerIdleWhenQuiet() {
 // The tail decays as it would without the leveller: a +/-5 V saw at 110 Hz
 // held 15 s at Visibility 1, Size 0.5, the other knobs at noon, Mix 1, then
 // stopped. In every mode, the output in 1 s windows from 1 to 13 s after the
-// stop, against the same run with the leveller off, is at most 1.5 dB above
+// stop, against the same run with the leveller off, stays within 1.5 dB of
 // that ratio in the first second after the stop (where the gain has stopped
-// moving: the leveller holds it while the input is absent), and at most
-// 2.5 dB below it. 1.5 dB is the spread the two runs' own beating gives (the
+// moving: the leveller holds it while the input is absent). 1.5 dB is the spread the two runs' own beating gives (the
 // held gain lands on a slightly different point of the wander each time, up
 // to 1.3 dB measured); a gain that releases at its 3 s while the tail falls
-// lifts the tail back up as fast as it decays, +4 to +7 dB by 12 s. Below,
-// the attack is never held: a tail that peaks above the held drone is
-// turned down like any other peak. Since the low band (Network.hpp) SMOKE's
+// lifts the tail back up as fast as it decays, +4 to +7 dB by 12 s. The
+// attack is never held: a tail that peaks above the held drone is turned
+// down like any other peak, and since the low band (Network.hpp) SMOKE's
 // does: its sustained 110 Hz no longer piles up on one side (the louder
-// side's peak, which the leveller follows, fell from 18.7 to 13.9 V), and
-// its first repeats after the stop reach 16.2 V, so its tail sits 1.5 dB
-// under the unlevelled one's from 5 s on. And FRET: from 1 to 2 s after
+// side's peak, which the leveller follows, fell from 18.7 to about 14 V),
+// and its first repeats after the stop reach about 16 V. So for SMOKE the
+// gain must never rise from 1 s after the stop, and its step down (the window's mean
+// gain against the first second's) is taken out before the 1.5 dB bound. And FRET: from 1 to 2 s after
 // the stop the gain never rises (it is not released; it may still fall by
 // the attack, under 0.01 dB here); a new note (a 1 V sine, 220 Hz) then
 // releases it again, at its own 3 s: at least 2 dB within 6 s (measured
@@ -745,7 +745,7 @@ void levellerHoldsInTail() {
 	double worst = 0;
 	char where[64] = "";
 	for (int m = 0; m < 4; m++) {
-		std::vector<float> out[2];
+		std::vector<float> out[2], gain;
 		for (int pass = 0; pass < 2; pass++) {
 			Rig* r = new Rig;
 			startIn(*r, m);
@@ -758,16 +758,38 @@ void levellerHoldsInTail() {
 			r->eng.levellerEnabled = pass == 0;
 			for (int i = 0; i < hold + after; i++) {
 				const FogResult o = r->step(i < hold ? drone(0, 110.0, i) : 0.f);
-				if (i >= hold)
+				if (i >= hold) {
 					out[pass].push_back(o.outL);
+					if (pass == 0)
+						gain.push_back(r->eng.levelGain);
+				}
 			}
 			delete r;
 		}
 		const double ref = windowDb(out[0], 0, sec) - windowDb(out[1], 0, sec);
+		// SMOKE: from 1 s after the stop (the feed's follower has let go by
+		// 0.3 s) the gain never rises, and what it fell by (window mean
+		// against the first second's) is taken out of d.
+		const bool smoke = m == rka::fog::SMOKE;
+		float gTop = 0.f;
+		for (size_t i = sec; i < gain.size(); i++)
+			gTop = gain[i] > gTop ? gain[i] : gTop;
+		if (smoke)
+			CHECK(gTop <= gain[sec], "SMOKE: the leveller's gain rose in the tail, %.4f at 1 s after the stop, up to %.4f", gain[sec], gTop);
+		auto meanGainDb = [&](size_t a, size_t b) {
+			double sum = 0;
+			for (size_t i = a; i < b; i++)
+				sum += gain[i];
+			return 20.0 * std::log10(sum / (double) (b - a));
+		};
+		const double g0 = meanGainDb(0, sec);
 		for (int k = 1; k < 13; k++) {
-			const double d = windowDb(out[0], k * sec, (k + 1) * sec) - windowDb(out[1], k * sec, (k + 1) * sec) - ref;
-			CHECK(d <= 1.5 && d >= -2.5, "%s: %d-%d s after the stop, the levelled tail is %+.2f dB against the unlevelled one, want -2.5 to +1.5",
-			      MODE_NAMES[m], k, k + 1, d);
+			const double step = smoke ? meanGainDb(k * sec, (k + 1) * sec) - g0 : 0.0;
+			const double d = windowDb(out[0], k * sec, (k + 1) * sec) - windowDb(out[1], k * sec, (k + 1) * sec) - ref - step;
+			CHECK(std::fabs(d) <= 1.5, "%s: %d-%d s after the stop, the levelled tail is %+.2f dB against the unlevelled one%s, want within 1.5", MODE_NAMES[m],
+			      k, k + 1, d, smoke ? " (less the gain's step down)" : "");
+			if (smoke && k == 12)
+				std::printf("  leveller_holds_in_tail: SMOKE's gain steps down %.2f dB in the tail (its repeats peak over the held drone), never up\n", step);
 			if (std::fabs(d) > std::fabs(worst)) {
 				worst = d;
 				std::snprintf(where, sizeof where, "%s, %d-%d s", MODE_NAMES[m], k, k + 1);

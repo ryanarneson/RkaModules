@@ -9,7 +9,7 @@
 //   +--- write line i+1 <-- Householder mix (I - 2/N 11^T), then a shift <-+
 //
 //   wet L, R = two orthogonal +/-1 tap patterns over the line reads,
-//              times a level from the T60, above 200 Hz; below it, one
+//              times a level from the T60, above 300 Hz; below it, one
 //              more tap through a phase pair (the low band, below).
 //
 // - The low band. At one frequency the network is a fixed linear map, so a
@@ -20,7 +20,7 @@
 //   a 33 Hz drone came out at a correlation of -0.9 in one mode and +0.5 in
 //   another, with the sides up to 10 dB apart; the shorter the tail, the
 //   more of the held sound is the first, unblurred pass, and the worse.
-//   Below 200 Hz each side's taps are cut (a 4th-order Butterworth
+//   Below 300 Hz each side's taps are cut (a 4th-order Butterworth
 //   high-pass) and replaced by one third tap pattern (Hadamard row 15),
 //   low-passed by the matching Butterworth (the two bands' powers sum to 1,
 //   which suits uncorrelated bands) and fed through a phase pair: two
@@ -30,6 +30,15 @@
 //   correlation of cos 80 = +0.17 (+0.05 to +0.30), and its mono sum loses
 //   about 2 dB, whatever the tone, mode, Drift or tail (test_stereo). The
 //   T60s are untouched: every tap pattern decays at the network's rate.
+//   300 Hz, not lower: the high-pass's leak of the sides' own (random)
+//   phase spoils the targets for an octave below the split (at 200 Hz,
+//   105-195 Hz missed at 96 of 152 points at Drift 0), and the pair holds
+//   80 degrees to 600 Hz. The price is one shared signal under 300 Hz: its
+//   level from note to note is one tap sum's (at Drift 0 a 5.6 dB spread
+//   over 20-100 Hz, against the two sides' summed 3.3 dB before). No fixed
+//   output stage can do better and keep the sides level on every tone:
+//   level on every input means one source, and one source's level is one
+//   sum's (test_stereo's bass_evenness; the fix round 1 report).
 //
 // The modes are voicings (Voicing.hpp): line count and lengths, diffusion,
 // how Damp maps, and two in-loop extras:
@@ -140,7 +149,7 @@ struct Network {
 	static float shimmerMaxA() { return 0.5f; }
 	// The low band: the crossover, and the phase pair's poles (Hz), two
 	// first-order allpasses a branch (see the top).
-	static float lowSplitHz() { return 200.f; }
+	static float lowSplitHz() { return 300.f; }
 	static float pairHz(int branch, int k) {
 		return branch == 0 ? (k == 0 ? 6.965f : 159.461f) : (k == 0 ? 30.966f : 711.28f);
 	}
@@ -173,7 +182,7 @@ struct Network {
 	// The low band (see the top): the crossover's two Butterworth sections
 	// (b0, b1, b2, a1, a2) for the high-pass on each side and the low-pass on
 	// tapLow, their states, and the phase pair's first-order allpasses.
-	// Double: in float, a 200 Hz section (and a 7 Hz allpass) at 48-96 kHz
+	// Double: in float, a 300 Hz section (and a 7 Hz allpass) at 48-96 kHz
 	// amplifies its own rounding to about -76 dB under the signal.
 	double hpC[2][5] = {}, lpC[2][5] = {};
 	double hpZ[2][2][2] = {}, lpZ[2][2] = {}; // [side][section][state], [section][state]
