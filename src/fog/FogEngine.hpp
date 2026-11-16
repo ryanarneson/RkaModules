@@ -21,13 +21,12 @@
 // - Safety: every input and parameter is sanitised where it enters (NaN and
 //   infinity read 0). The limiter is on the wet only: the identity up to
 //   +/-9 V, then a tanh knee that ends at +/-10 V.
-// - Level: the wet is trimmed by wetTrim() (-6 dB). At noon, +/-5 V saw, sine
-//   and noise drones then stay under the limiter's knee (9 V), and square
-//   waves may enter it (they stay within 10 V). Peaks of a tonal drone through
-//   a drifting tail build up (crest about 3.5 against the static response's 2).
+// - Level: the wet is level-matched to the dry on average (full Mix is about as
+//   loud as dry for noise) by wetMakeup(). Loud resonant drones may reach the
+//   limiter's knee (9 V) and are soft-limited to 10 V.
 // - Mode: the voicing follows FogFrame::mode. A change fades the wet out
 //   over 50 ms, clears and reconfigures the network, and fades it in.
-// - Sleep: once the feed into the network and the wet out of it have both
+// - Sleep: once the feed into the network and the wet out of it (after the make-up, so QUIET is -114 dB at the output) have both
 //   stayed under QUIET (1e-5 V) for the hold (the longer of 0.25 s and twice
 //   the longest ring in the network, so no stale ring contents survive a
 //   sleep and the sparse echoes of CLEAR at Size 1 do not fall asleep between
@@ -89,8 +88,19 @@ struct FogEngine {
 	static float limitKnee() { return 9.f; }
 	static float limitCeil() { return 10.f; }
 	static float maxRate() { return 768000.f; }
-	// Fixed trim on the wet (a fraction), -6 dB.
-	static float wetTrim() { return 0.501f; }
+	// The wet's make-up gain (a fraction): level-matches the wet to the dry
+	// for noise at Mix 1 (the network settles a few dB under unity, more at
+	// high Visibility). A smooth function of Visibility and Size, scaled by
+	// the voicing's own factor; polynomial, so no libm.
+	static float wetMakeup(float vis, float size, float voicingMakeup) {
+		// Measured (noise, +/-5 V, noon knobs): the gain that levels the wet at
+		// Mix 1 is 1.125 at Visibility 0 up to 2.13 at 1 (a quadratic), and
+		// falls about 0.27 per unit of Size around noon (1.78 at Size 0, 1.35
+		// at Size 1, at Visibility 0.5).
+		const float v = vis >= 0.f ? (vis <= 1.f ? vis : 1.f) : 0.f;
+		const float s = size >= 0.f ? (size <= 1.f ? size : 1.f) : 0.f;
+		return voicingMakeup * (1.125f + v * (0.755f + 0.246f * v)) * (1.f + 0.27f * (0.5f - s));
+	}
 
 	// Below this (V) the feed and the wet count as silence: -114 dB re 5 V.
 	static float quiet() { return 1e-5f; }
@@ -239,16 +249,19 @@ struct FogEngine {
 				net.setControls(vis, size, dampK, drift, rateSel);
 				net.process(l, r, ol, orr);
 			});
-			wetL = fogFinite(wetL);
-			wetR = fogFinite(wetR);
+			if (vis != makeupVis || size != makeupSize) { // control rate: only when a knob moved
+				makeupVis = vis;
+				makeupSize = size;
+				makeup = wetMakeup(vis, size, vo.wetMakeup);
+			}
+			wetL = fogFinite(wetL) * makeup;
+			wetR = fogFinite(wetR) * makeup;
 			if (feedQuiet && wetL < Q && wetL > -Q && wetR < Q && wetR > -Q) {
 				if (++quietCount >= hold)
 					asleep_ = true;
 			}
 			else
 				quietCount = 0;
-			wetL *= wetTrim();
-			wetR *= wetTrim();
 			if (limiterEnabled) {
 				wetL = limit(wetL);
 				wetR = limit(wetR);
@@ -328,6 +341,7 @@ struct FogEngine {
 	bool mixSnap = true; // the next process() starts the ramp at its target
 	float fade = 1.f, fadeStep = 0.f;
 	int fadeState = 0; // 0 steady, 1 fading out, 2 fading in
+	float makeup = 1.f, makeupVis = -1.f, makeupSize = -1.f;
 	bool asleep_ = false;
 	int quietCount = 0;
 	int hold = 12000;

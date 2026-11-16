@@ -239,7 +239,7 @@ void unplugKeepsTail() {
 	r.f.params[FogFrame::MIX] = 1.f;
 	r.f.params[FogFrame::VISIBILITY] = 0.642f;
 	// Low-passed noise (one pole near 100 Hz), clipped at +/-1 V (the wet's own slope at
-	// 2.5 V already reaches 0.65 V per sample while plugged): a smooth
+	// 2.5 V already reaches 0.75 V per sample while plugged, with the level-matched wet): a smooth
 	// signal, so a step in the output could only come from the unplug.
 	float lp = 0.f;
 	double preStep = 0, preV = 0;
@@ -266,7 +266,7 @@ void unplugKeepsTail() {
 		prev = o.outL;
 	}
 	const double early = rms(L, 0, 4800), late = rms(L, L.size() - 4800, L.size());
-	CHECK(maxStep < 0.5, "unplug: largest sample step %g V, want < 0.5", maxStep);
+	CHECK(maxStep < 1.0, "unplug: largest sample step %g V, want < 1.0", maxStep);
 	CHECK(maxStep <= 1.1 * preStep, "unplug: step %g V exceeds the plugged-in slope %g V", maxStep, preStep);
 	CHECK(early > 0.05, "unplug: tail RMS in the first 100 ms is %g, zeroed", early);
 	CHECK(late < early, "unplug: the tail does not decay (%g -> %g)", early, late);
@@ -341,45 +341,78 @@ float drone(int shape, double hz, int i) {
 	}
 }
 
-void limiterIdleAt5v() {
-	// True noon: every main knob at 0.5, Mix 1, HAAR. The limiter must not
-	// act on a saw, sine or noise drone (unlimited wet peak <= 9 V, the
-	// knee); squares may enter the knee but stay within 10 V; every wet RMS
-	// is within 12 dB of the input's.
-	const char* names[] = {"saw", "square", "sine", "noise"};
-	const double hzs[] = {55.0, 110.0, 220.0};
-	double worstPeak = 0, worstDb = 1e9;
-	for (int shape = 0; shape < 4; shape++) {
-		for (int h = 0; h < (shape == 3 ? 1 : 3); h++) {
-			Rig r;
-			r.eng.limiterEnabled = shape == 1; // squares may enter the knee
-			r.f.params[FogFrame::MIX] = 1.f;
-			for (int p = FogFrame::VISIBILITY; p <= FogFrame::DRIFT; p++)
-				r.f.params[p] = 0.5f;
-			std::vector<float> in, wet;
-			double peak = 0;
-			const int N = (int) (30 * RATE);
-			for (int i = 0; i < N; i++) {
-				const float x = drone(shape, hzs[h], i);
-				const FogResult o = r.step(x);
-				if (i >= N / 3) {
-					in.push_back(x);
-					wet.push_back(o.outL);
-					wet.push_back(o.outR);
-					peak = std::fmax(peak, std::fmax(std::fabs(o.outL), std::fabs(o.outR)));
-				}
-			}
-			const double db = 20.0 * std::log10(rms(wet) / rms(in));
-			if (shape == 1)
-				CHECK(peak <= 10.0, "%s %g Hz: wet peak %g V exceeds 10 V", names[shape], hzs[h], peak);
-			else
-				CHECK(peak <= FogEngine::limitKnee(), "%s %g Hz: wet peak %g V exceeds the %g V knee", names[shape], hzs[h], peak,
-				      FogEngine::limitKnee());
-			CHECK(db >= -12.0, "%s %g Hz: wet RMS %g dB re input, want >= -12", names[shape], hzs[h], db);
-			worstPeak = std::fmax(worstPeak, peak);
-			worstDb = std::fmin(worstDb, db);
-			std::printf("  limiter_idle_at_5v %-6s %3.0f Hz: wet peak %5.2f V, RMS %+.2f dB re input\n", names[shape], hzs[h], peak, db);
+// Output RMS (both channels) over the last two thirds of `seconds` of +/-5 V
+// noise through the engine at the given knobs (Damp, Bloom and Drift at noon
+// unless set), against the input's RMS, in dB.
+double noiseLevelDb(float vis, float size, float mix, double seconds = 30.0) {
+	Rig r;
+	r.f.params[FogFrame::MIX] = mix;
+	r.f.params[FogFrame::VISIBILITY] = vis;
+	r.f.params[FogFrame::SIZE] = size;
+	r.f.params[FogFrame::DAMP] = 0.5f;
+	r.f.params[FogFrame::BLOOM] = 0.5f;
+	r.f.params[FogFrame::DRIFT] = 0.5f;
+	std::vector<float> in, out;
+	const int N = (int) (seconds * RATE);
+	for (int i = 0; i < N; i++) {
+		const float x = 5.f * uniform();
+		const FogResult o = r.step(x);
+		if (i >= N / 3) {
+			in.push_back(x);
+			out.push_back(o.outL);
+			out.push_back(o.outR);
 		}
+	}
+	return 20.0 * std::log10(rms(out) / rms(in));
+}
+
+// Full wet is level-matched to dry: for noise at Mix 1 the output RMS is
+// within 1.5 dB of the input's at Visibility 0 to 1 (Size noon) and at Size 0
+// and 1 (Visibility noon), the other knobs at noon.
+void wetMatchedLevel() {
+	const float pts[][2] = {{0.f, .5f}, {.25f, .5f}, {.5f, .5f}, {.75f, .5f}, {1.f, .5f}, {.5f, 0.f}, {.5f, 1.f}};
+	for (const auto& p : pts) {
+		const double db = noiseLevelDb(p[0], p[1], 1.f);
+		CHECK(std::fabs(db) <= 1.5, "Visibility %g Size %g: wet RMS %+.2f dB re input, want within 1.5", p[0], p[1], db);
+		std::printf("  wet_matched_level v %.2f size %.2f: %+.2f dB\n", p[0], p[1], db);
+	}
+}
+
+// The loudness does not dip across Mix: noise, noon knobs, Visibility 0.5.
+void levelAcrossMix() {
+	const float mixes[] = {0.f, .25f, .5f, .75f, 1.f};
+	for (float m : mixes) {
+		const double db = noiseLevelDb(.5f, .5f, m, 20.0);
+		CHECK(std::fabs(db) <= 2.0, "Mix %g: output RMS %+.2f dB re input, want within 2", m, db);
+		std::printf("  level_across_mix Mix %.2f: %+.2f dB\n", m, db);
+	}
+}
+
+// The ceiling: nothing exceeds 10 V, for hot (+/-5 V) saw, square, sine and
+// noise through the longest, brightest, most resonant setting. Reports how
+// often the limiter engages (output above the 9 V knee).
+void outputCeiling() {
+	const char* names[] = {"saw", "square", "sine", "noise"};
+	for (int shape = 0; shape < 4; shape++) {
+		Rig r;
+		r.f.params[FogFrame::MIX] = 1.f;
+		r.f.params[FogFrame::VISIBILITY] = 1.f;
+		r.f.params[FogFrame::SIZE] = 1.f;
+		r.f.params[FogFrame::DAMP] = 0.f;
+		r.f.params[FogFrame::BLOOM] = 1.f;
+		r.f.params[FogFrame::DRIFT] = 0.5f;
+		double peak = 0;
+		long over = 0, n = 0;
+		const int N = (int) (30 * RATE);
+		for (int i = 0; i < N; i++) {
+			const FogResult o = r.step(drone(shape, 110.0, i));
+			const double a = std::fmax(std::fabs(o.outL), std::fabs(o.outR));
+			peak = std::fmax(peak, a);
+			over += a > FogEngine::limitKnee();
+			n++;
+		}
+		CHECK(peak <= FogEngine::limitCeil(), "%s: output peak %g V exceeds %g V", names[shape], peak, FogEngine::limitCeil());
+		std::printf("  output_ceiling %-6s: peak %.3f V, over the knee %.2f%% of samples\n", names[shape], peak, 100.0 * over / n);
 	}
 	// And it does act on a hot one: a 16x saw.
 	Rig hot;
@@ -390,7 +423,7 @@ void limiterIdleAt5v() {
 		hp = std::fmax(hp, std::fmax(std::fabs(o.outL), std::fabs(o.outR)));
 	}
 	CHECK(hp <= 10.f && hp > 8.f, "hot drone limited to %g V, want in (8, 10]", hp);
-	std::printf("  limiter_idle_at_5v: worst peak %.2f V, lowest RMS %+.2f dB; 80 V saw limited to %.3f V\n", worstPeak, worstDb, hp);
+	std::printf("  output_ceiling: 80 V saw limited to %.3f V\n", hp);
 }
 
 // ---- Sleep ----
@@ -450,7 +483,7 @@ SleepRun runToSleep(float vis, bool impulse, int burst, int total) {
 		const FogResult o = r.step(x);
 		out.push_back(o.outL);
 		outR.push_back(o.outR);
-		const float q = FogEngine::quiet() * FogEngine::wetTrim();
+		const float q = FogEngine::quiet();
 		if (i >= 1 && (std::fabs(o.outL) >= q || std::fabs(o.outR) >= q) && i >= burst)
 			s.lastLoud = i;
 		if (r.eng.asleep())
@@ -491,10 +524,10 @@ void noSleepInTail() {
 }
 
 // No click when it falls asleep: the step in the output there stays under
-// 2 QUIET x the wet gain (the trim; Mix 1).
+// 2 QUIET (Mix 1; the sleep tests the wet after the make-up).
 void sleepNoClick() {
 	const SleepRun d = runToSleep(1.f, false, (int) RATE, (int) (400 * RATE));
-	const double lim = 2.0 * FogEngine::quiet() * FogEngine::wetTrim();
+	const double lim = 2.0 * FogEngine::quiet();
 	CHECK(d.sleepAt > 2, "never slept");
 	CHECK(d.maxStepAtSleep < lim, "step at the sleep transition %g V, want < %g", d.maxStepAtSleep, lim);
 	std::printf("  sleep_no_click: step at sleep %.3g V (limit %.3g)\n", d.maxStepAtSleep, lim);
@@ -594,7 +627,9 @@ int main() {
 	rateIgnored();
 	mixRampNoClick();
 	lowCut();
-	limiterIdleAt5v();
+	wetMatchedLevel();
+	levelAcrossMix();
+	outputCeiling();
 	sleepAfterHold();
 	noSleepInTail();
 	sleepNoClick();

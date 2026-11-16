@@ -20,6 +20,7 @@ struct Voicing {
 	float loopDiffuse;  // diffusion inside the loop (0 = none; SMOKE)
 	float shimmer;      // octave-up amount in the loop (0 = none; ICE)
 	float brightness;   // brighter damping (0 = HAAR)
+	float wetMakeup;    // scale on the engine's wet make-up (1 = HAAR)
 };
 
 // HAAR: 16 lines, long and spread over a little under 1.5 octaves
@@ -30,7 +31,7 @@ struct Voicing {
 	{                                                                                              \
 		16, {53.1f, 58.7f, 64.3f, 70.9f, 76.3f, 83.1f, 88.9f, 95.3f, 102.7f, 109.1f, 116.9f, 123.7f, \
 		     131.3f, 139.7f, 147.1f, 155.9f},                                                      \
-		    4, {13.f, 29.f, 47.f, 71.f}, 0.f, 0.f, 0.f, 0.f, 0.f                                   \
+		    4, {13.f, 29.f, 47.f, 71.f}, 0.f, 0.f, 0.f, 0.f, 0.f, 1.f                               \
 	}
 
 inline const Voicing& voicing(Mode m) {

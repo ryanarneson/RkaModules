@@ -260,10 +260,15 @@ each knob moves its quantity the right way, by at least a stated amount.
 ### Wet level
 
 The user's ruling ("for now"): the wet level is evened out across
-Visibility.
-- **Under a held drone:** the wet signal stays at about the same level
-  from CLEAR to DENSE, within ±3 dB, at the plugin's audio standard: a
-  ±5 V input gives a wet signal of about ±5 V at noon settings.
+Visibility, and full wet is level-matched to dry.
+- **Matched to dry:** at full Mix, noise at ±5 V gives an output about as
+  loud as the input on average (within ±1.5 dB), at every Visibility and
+  Size, with the other knobs at noon. Loudness does not dip as Mix goes up
+  (within ±2 dB across Mix). A make-up gain on the wet, a smooth function
+  of Visibility and Size, does this. The earlier −6 dB trim is gone.
+- **Loud drones:** a held tonal drone (a saw, a sine) can be louder than
+  its input, because the tail's peaks build up. Loud resonant drones reach
+  the limiter: the 9 V knee and 10 V ceiling soft-limit them.
 - **The cost:** a short sound (a ping, a pluck) is quieter at DENSE than
   at CLEAR, because its energy is spread over a much longer tail.
 - **If revisited:** this could later become a menu choice.
@@ -339,7 +344,9 @@ each test shown to fail against a deliberate mutation:
   target, not in `make test`, because of its length.
 - **Even wet level.** A held ±5 V drone (pink noise or a saw) at each
   word of Visibility, in HAAR: the wet level stays within ±3 dB of the
-  level at noon. The limiter does not act at ±5 V input.
+  level at noon. (Superseded by the matched-level test: noise at Mix 1
+  is within ±1.5 dB of the input at the listed Visibility and Size
+  points.) No output sample exceeds 10 V.
 - **Stereo.** IN L alone fills both outputs, and the two output channels
   are decorrelated (correlation well below 1).
 - **Mix and dry kill.** Fully left is bit-exact dry. Fully right and dry
