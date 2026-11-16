@@ -36,6 +36,13 @@ layout.
   changed>"` bumps REVISION in `plugin.json`, logs it under "Test builds" in
   `CHANGELOG.md` and commits, so one version = one commit. Mac and Windows
   packages from the same commit share it. Decided 2026-11-16.
+- The repo holds unit tests only. Test results beyond unit testing
+  (testbed runs, recordings, measurement reports, QA docs) live on the share,
+  `/Volumes/share1/VCVRACK/`, never in the repo; audio is git-ignored
+  (`*.wav`, `*.flac`, ...) as a backstop. The Fog-vs-LV-426 testbed is
+  `/Volumes/share1/VCVRACK/fog-testbed/` (`run_all.py <version>` writes
+  `runs-<version>/`); only its Python venv is local
+  (`~/ws/plugins/fog-testbed/venv`).
 - The repo is meant to work unchanged on Linux and macOS. Keep tools/
   scripts portable: no GNU-only flags (`sed -i`, `timeout` without the
   gtimeout fallback, `readlink -f`), and check `uname -s` before using a
