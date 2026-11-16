@@ -25,8 +25,10 @@ inline float skewPhase(float p, float skew) {
 
 // Triangle fold back into [-1, 1].
 inline float fold(float x) {
-	const float m = std::fmod(x + 1.f, 4.f);
-	return 1.f - std::fabs((m < 0.f ? m + 4.f : m) - 2.f);
+	// (x + 1) mod 4 in [0, 4), by floor rather than libm's fmod.
+	const float u = x + 1.f;
+	const float m = u - 4.f * std::floor(u * 0.25f);
+	return 1.f - std::fabs(std::max(0.f, std::min(m, 4.f)) - 2.f);
 }
 
 // dt is the phase increment per sample (0 disables anti-aliasing); pw is
@@ -50,10 +52,12 @@ inline float shape(float p, float skew, float morph, float smooth, float pw, flo
 			default: return sqrBlep(q, pw, dq);
 		}
 	};
-	float y = wave(k) + (wave(k + 1) - wave(k)) * x;
+	const float a = wave(k);
+	float y = a + (wave(k + 1) - a) * x;
 
+	// sin(pi / 2 y) = sin(2 pi (y / 4)).
 	if (smooth < 0.f)
-		y += (std::sin(float(M_PI) / 2.f * y) - y) * -smooth;
+		y += (fastSin2pi(0.25f * y) - y) * -smooth;
 	else if (smooth > 0.f)
 		y = fold(y * (1.f + 3.f * smooth));
 	return y;

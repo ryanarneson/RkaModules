@@ -1,4 +1,5 @@
 #pragma once
+#include "FastMath.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -26,10 +27,11 @@ inline double clampHz(double hz, float sampleRate) {
 	return std::min(hz, 0.45 * sampleRate);
 }
 
-// Clamp the exponent so wild CV can't produce inf or denormals.
+// Clamp the exponent so wild CV can't produce inf or denormals. The exp2 is
+// FastMath.hpp's, within 1e-15 of libm's.
 inline double expToHz(float exponent, float sampleRate) {
 	const float e = std::max(-24.f, std::min(exponent, 14.f));
-	return clampHz(std::exp2(double(e)), sampleRate);
+	return clampHz(fastExp2D(double(e)), sampleRate);
 }
 
 // Bipolar: [-1, 1] -> [-5, 5] V. Unipolar: [-1, 1] -> [0, 10] V.

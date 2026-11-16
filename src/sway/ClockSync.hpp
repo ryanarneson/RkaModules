@@ -14,8 +14,11 @@ static const float CLOCK_RATIOS[15] = {
 };
 
 // RATE (plus FM volts, one step per volt) rounded to a ratio index.
+// Halves round away from zero, as lround; clamped first, so no libm call
+// and no out-of-range conversion (NaN lands on 7).
 inline int ratioIndex(float rate, float fm) {
-	const int i = int(std::lround(rate + fm));
+	const double x = std::fmax(std::fmin(double(rate + fm), 7.0), -7.0);
+	const int i = x >= 0.0 ? int(x + 0.5) : -int(-x + 0.5);
 	return std::max(-7, std::min(i, 7));
 }
 

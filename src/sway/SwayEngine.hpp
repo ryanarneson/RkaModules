@@ -71,6 +71,17 @@ struct SwayEngine {
 	bool clocked = false;
 	RateLight rateLightCalc;
 
+private:
+	// updateRates()'s cache.
+	bool ratesKnown = false;
+	bool sharedFm = false;
+	float knownRate = 0.f;
+	Range knownRange = RANGE_NORMAL;
+	float knownSampleRate = 0.f;
+	float knownFm[VoiceBank::SIZE] = {};
+
+public:
+
 	// Each knob's range (max - min) for modulated(), as the module's
 	// configParam sets it.
 	static float span(int param) {
@@ -95,6 +106,42 @@ struct SwayEngine {
 	static float modulated(const SwayFrame& f, int param, int input, int att, int c) {
 		const float cv = f.inputs[input].poly(c) / 10.f * f.params[att];
 		return f.params[param] + cv * span(param);
+	}
+
+	// Each channel's clock ratio and free-running frequency from RATE, the
+	// range and its FM, worked out again only when one of those changes,
+	// and once for all channels when FM is mono or unplugged.
+	void updateRates(const SwayFrame& f, float rate, Range r, float sampleRate) {
+		const bool same = ratesKnown && rate == knownRate && r == knownRange && sampleRate == knownSampleRate;
+		ratesKnown = true;
+		knownRate = rate;
+		knownRange = r;
+		knownSampleRate = sampleRate;
+		const SwayPort& fmIn = f.inputs[SwayFrame::FM];
+		const float att = f.params[SwayFrame::FM_ATT];
+		if (fmIn.channels >= 2) {
+			sharedFm = false;
+			for (int c = 0; c < VoiceBank::SIZE; c++) {
+				const float fm = fmIn.v[c] * att;
+				if (same && fm == knownFm[c])
+					continue;
+				knownFm[c] = fm;
+				voiceInputs[c].ratio = ratioIndex(rate, fm);
+				voiceInputs[c].freeHz = expToHz(rateExponent(rate, fm, r), sampleRate);
+			}
+			return;
+		}
+		const float fm = (fmIn.channels == 1 ? fmIn.v[0] : 0.f) * att;
+		if (same && fm == knownFm[0] && sharedFm)
+			return;
+		const int ratio = ratioIndex(rate, fm);
+		const double hz = expToHz(rateExponent(rate, fm, r), sampleRate);
+		for (int c = 0; c < VoiceBank::SIZE; c++) {
+			knownFm[c] = fm;
+			voiceInputs[c].ratio = ratio;
+			voiceInputs[c].freeHz = hz;
+		}
+		sharedFm = true;
 	}
 
 	void process(const SwayFrame& f, float sampleTime, float sampleRate, SwayResult& res) {
@@ -123,17 +170,32 @@ struct SwayEngine {
 		wasClockConnected = clockConnected;
 
 		// Timing inputs for every channel; poly() lets a mono cable drive
-		// them all.
+		// them all. An unplugged trigger input is 0 V on every channel
+		// (Rack holds it there), which leaves each trigger low.
+		const SwayPort& resetIn = f.inputs[SwayFrame::RESET];
+		const SwayPort& holdIn = f.inputs[SwayFrame::HOLD];
+		const SwayPort& clockIn = f.inputs[SwayFrame::CLOCK];
 		for (int c = 0; c < VoiceBank::SIZE; c++) {
 			VoiceInput& in = voiceInputs[c];
-			in.reset = resetTriggers[c].process(f.inputs[SwayFrame::RESET].poly(c), 0.1f, 1.f);
-			holdTriggers[c].process(f.inputs[SwayFrame::HOLD].poly(c), 0.1f, 1.f);
+			if (resetIn.channels > 0)
+				in.reset = resetTriggers[c].process(resetIn.poly(c), 0.1f, 1.f);
+			else {
+				resetTriggers[c].s = SchmittTrigger::LOW;
+				in.reset = false;
+			}
+			if (holdIn.channels > 0)
+				holdTriggers[c].process(holdIn.poly(c), 0.1f, 1.f);
+			else
+				holdTriggers[c].s = SchmittTrigger::LOW;
 			in.hold = holdTriggers[c].isHigh();
-			in.edge = clockTriggers[c].process(f.inputs[SwayFrame::CLOCK].poly(c), 0.1f, 1.f);
-			const float fm = f.inputs[SwayFrame::FM].poly(c) * f.params[SwayFrame::FM_ATT];
-			in.ratio = ratioIndex(rate, fm);
-			in.freeHz = expToHz(rateExponent(rate, fm, r), sampleRate);
+			if (clockIn.channels > 0)
+				in.edge = clockTriggers[c].process(clockIn.poly(c), 0.1f, 1.f);
+			else {
+				clockTriggers[c].s = SchmittTrigger::LOW;
+				in.edge = false;
+			}
 		}
+		updateRates(f, rate, r, sampleRate);
 		bank.tick(voiceInputs, clockConnected, oneShot, sampleTime, sampleRate);
 		clocked = clockConnected && bank.voices[0].clock.locked();
 
@@ -157,13 +219,18 @@ struct SwayEngine {
 			// Band-limit edges only where they can alias.
 			const float dt = r == RANGE_AUDIO ? float(voice.freq * sampleTime) : 0.f;
 
-			res.out[SwayFrame::SIN][c] = lfoVolts(waveSin(p), unipolar);
-			res.out[SwayFrame::TRI][c] = lfoVolts(waveTri(p), unipolar);
-			res.out[SwayFrame::SAW][c] = lfoVolts(sawBlep(p, dt), unipolar);
-			res.out[SwayFrame::SQR][c] = lfoVolts(sqrBlep(p, pw, dt), unipolar);
-			res.out[SwayFrame::MORPH_OUT][c] = lfoVolts(shape(p, skew, morph, smooth, pw, dt), unipolar);
-			res.out[SwayFrame::RAND][c] = lfoVolts(voice.random.value(float(voice.phasor.phase), glide), unipolar);
-			res.out[SwayFrame::EOC][c] = eocPulses[c].process(sampleTime) ? 10.f : 0.f;
+			// Only the patched outputs are worked out; the rest read 0 V.
+			const bool* used = f.outputConnected;
+			res.out[SwayFrame::SIN][c] = used[SwayFrame::SIN] ? lfoVolts(waveSin(p), unipolar) : 0.f;
+			res.out[SwayFrame::TRI][c] = used[SwayFrame::TRI] ? lfoVolts(waveTri(p), unipolar) : 0.f;
+			res.out[SwayFrame::SAW][c] = used[SwayFrame::SAW] ? lfoVolts(sawBlep(p, dt), unipolar) : 0.f;
+			res.out[SwayFrame::SQR][c] = used[SwayFrame::SQR] ? lfoVolts(sqrBlep(p, pw, dt), unipolar) : 0.f;
+			res.out[SwayFrame::MORPH_OUT][c] = used[SwayFrame::MORPH_OUT] ? lfoVolts(shape(p, skew, morph, smooth, pw, dt), unipolar) : 0.f;
+			res.out[SwayFrame::RAND][c] = used[SwayFrame::RAND] ? lfoVolts(voice.random.value(float(voice.phasor.phase), glide), unipolar) : 0.f;
+			// The pulse runs on unpatched, so a cable plugged in mid-pulse
+			// sees what is left of it, not a stale one.
+			const bool eoc = eocPulses[c].process(sampleTime);
+			res.out[SwayFrame::EOC][c] = eoc ? 10.f : 0.f;
 		}
 		res.channels = channels;
 	}
