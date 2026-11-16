@@ -9,15 +9,17 @@ last section lists where they fall short.
 
 | Command | What it does | Needs |
 |---|---|---|
-| `make test` | Builds and runs every `src/<module>/test_*.cpp`, and the Shoal globals check | A C++17 compiler |
+| `make test` | Builds and runs every `src/<module>/test_*.cpp`, the Shoal and engine globals checks, the libm check (Linux) and the bench declarations check | A C++17 compiler |
 | `make -f tests.mk test TEST_WERROR=-Werror CXX=g++` | The same, as CI runs it on Linux | No Rack SDK |
 | `make` | Builds the plugin | Rack SDK (`RACK_DIR`) |
 | `make smoke` | Loads the plugin in Rack with a temporary user folder and screenshots every module to `build/screenshots/` | Rack SDK, Rack |
 | `make shoal-globals` | Fails if the firmware object holds writable global state | |
 | `make shoal-fuzz` | 50 more seeds of the random fault sweep | |
 | `make shoal-bench` | CPU share per app, including drawing and saving | |
-| `make bench` | CPU share of Sway's and Fathom's engines, 1, 4 and 16 instances; fails over budget | A C++ compiler |
-| `make libm-calls` | Fails if Sway's or Fathom's engines call libm per sample with the knobs still (in `make test`) | Linux (GNU ld) |
+| `make bench` | CPU share of every module's engine that has a `src/<module>/bench.inc`, in each of its cases at 1, 4 and 16 instances; fails over a case's budget, if cost grows with the count, or if there are no modules | A C++ compiler |
+| `make libm-calls` | Fails if any declared engine calls libm per sample in a case its `bench.inc` marks knobs-still (in `make test`) | Linux (GNU ld) |
+| `make engine-globals` | Fails if any declared engine holds writable global state (in `make test`) | |
+| `make bench-modules` | Fails if a folder has a `*Engine.hpp` but no `bench.inc`, or a `bench.inc` lacks idle/outputs/busy, a budget, or a knobs-still libm case (in `make test`) | |
 | `tools/cross_build.sh` | Linux and Windows builds in Docker | Colima running |
 
 Before calling any change done: `make test`, `make`, `make smoke`, and for a
@@ -137,8 +139,9 @@ sample until the allocation counter existed.
 Two instances with different seeds give different results and never affect
 each other. No writable global state: `make shoal-globals` inspects the
 object file's data sections and fails on any, and has its own tests
-(`tools/test_check_shoal_globals.sh`). A new module with file-level or
-`static` mutable state needs the same guarantee.
+(`tools/test_check_shoal_globals.sh`). A module with an engine gets the
+same check from `make engine-globals` once it has a `bench.inc` (see
+"Adding a module").
 
 ### 9. Behaviour on the target is the reference
 
@@ -154,20 +157,24 @@ A bench reports CPU share per mode, including the costs that hide outside the
 DSP loop (drawing, periodic saves, UI model building). Shoal's budget is 2 %
 of a core per instance at 48 kHz; every app measures under 0.2 %.
 
-`make bench` times Sway's and Fathom's engines (`SwayEngine.hpp`,
-`FathomEngine.hpp`, the code the modules run) with the plugin's compile
-flags, at 1, 4 and 16 instances run in turn each sample as Rack runs them,
-in three cases: idle (no cables, knobs at defaults), outputs (every output
-patched, no inputs) and busy (Sway: 16 channels, a moving CV on every
-input; Fathom: full detune, drift and spread, a moving CV on every input).
-It fails if an instance is over its budget at 1 or at 16 instances, or if
-an instance at 16 costs more than 1.5 times what one alone costs plus
-0.01 % of a core (the slack is for timer noise on the near-free cases).
-Budgets and measurements, % of one core at 48 kHz per instance, Apple
-M-series Mac. Every other machine gets three times these budgets, and
-those are provisional: the only x86-64 runs so far were emulated (Rosetta
-under Docker), so they need measuring on native hardware
-(`src/bench/bench.cpp`).
+`make bench` times every module that declares its engine in
+`src/<module>/bench.inc` (what goes in it: `src/bench/BenchModule.hpp`;
+tests.mk finds the files, and `src/bench/bench.cpp` names no module). Each
+runs with the plugin's compile flags, at 1, 4 and 16 instances run in turn
+each sample as Rack runs them, in the cases the declaration lists: idle
+(no cables, knobs at defaults), outputs (every output patched, no inputs)
+and busy (the module's heaviest realistic use; Sway: 16 channels, a
+moving CV on every input; Fathom: full detune, drift and spread, a moving
+CV on every input), and any more it adds. It fails if an instance is over
+the case's budget at 1 or at 16 instances, or if an instance at 16 costs
+more than 1.5 times what one alone costs plus 0.01 % of a core (the slack
+is for timer noise on the near-free cases). Each case declares two
+budgets: one for Apple arm64 Macs, where they are measured, and one for
+every other machine. Sway's and Fathom's other-machine budgets are three
+times the Mac's, and provisional: the only x86-64 runs so far were
+emulated (Rosetta under Docker), so they need measuring on native
+hardware. Budgets and measurements, % of one core at 48 kHz per
+instance, Apple M-series Mac:
 
 | | idle | outputs | busy |
 |---|---|---|---|
@@ -184,10 +191,11 @@ only a gross regression.
 Timing on macOS or Linux cannot see what made Windows slow, so
 `make libm-calls` (part of `make test`, Linux only: it needs GNU ld's
 `--wrap`, and is skipped with a message elsewhere) counts the C maths
-library calls the engines make, with every libm entry point they could
-reach wrapped. With the knobs still, after a warm-up, it requires zero
-per sample: Fathom idle and with outputs patched, Sway idle, with outputs
-patched and with a still mono FM cable. With a knob moving, calls are
+library calls every declared engine makes, with every libm entry point it
+could reach wrapped, in the cases its `bench.inc` lists for it. In a case
+marked knobs-still it requires zero per sample after a warm-up (today:
+Fathom idle and with outputs patched; Sway idle, with outputs patched and
+with a still mono FM cable). In a case with a knob moving, calls are
 reported, not failed. The pre-issue-#8 engines made 25 (Fathom) and 44
 (Sway) per sample.
 
@@ -200,8 +208,16 @@ percent per idle instance. Keep libm out of per-sample paths (use
 block or on change what does not need per-sample precision.
 
 Instances share no mutable state: `make engine-globals` (part of
-`make test`) fails if the engines' object file holds writable global
-state, as `make shoal-globals` does for Shoal's firmware.
+`make test`) fails if an object that calls every declared engine's
+`process` and `reset` holds writable global state, as
+`make shoal-globals` does for Shoal's firmware.
+
+`make bench-modules` (part of `make test`) keeps a module from slipping
+past all three: it fails, naming the module, if a folder has a
+`*Engine.hpp` but no `bench.inc`, or if a declaration lacks an idle,
+outputs or busy case, either budget of a case, or a knobs-still libm
+case. Shoal is outside this (its firmware is benched by
+`make shoal-bench` and checked by `make shoal-globals`).
 
 ### 11. Build everywhere before merge
 
@@ -244,6 +260,39 @@ that a test checks. No clamping and carrying on.
 What only a person can verify goes in a numbered list at the end of the plan
 and is handed over with the build. State plainly what has not been tried with
 a real mouse or in a live Rack. Automated checks do not stand in for them.
+
+## Adding a module
+
+A new module with per-sample DSP gets the CPU bench, the libm check and
+the globals check by declaring its engine; nothing in `src/bench/` or
+`tests.mk` changes.
+
+1. Put the per-sample logic in a Rack-free engine, `src/<folder>/<Name>Engine.hpp`
+   (`rka::<Name>Engine`, fed a frame of params and port voltages), and have
+   the module's `process()` only fill the frame, call the engine and write
+   the results, as `Sway.cpp` and `Fathom.cpp` do.
+2. Write `src/<folder>/bench.inc` (copy `src/sway/bench.inc` or
+   `src/fathom/bench.inc`; `src/bench/BenchModule.hpp` lists what it
+   defines): a `struct rkabench::<folder>` with an `Instance` (the engine
+   and its inputs at the module's defaults, with `process`, `reset` and
+   `probe`), the bench cases idle, outputs and busy (each a function that
+   sets the inputs for sample t, one-time set-up under `t == 0`), each
+   case's budget for Apple arm64 and elsewhere, and the libm cases, at
+   least one with the knobs still. Measure before setting budgets
+   (`make bench`, three runs) and leave about 1.5x room or more.
+3. In per-sample paths use `src/FastMath.hpp` instead of libm, and work out
+   per block, or only when its input changes, what does not need
+   per-sample precision.
+4. Optimising existing code: freeze a copy of the code before the change in
+   `src/<folder>/testdata/ref/` (namespace `rkaref`, a "never edit"
+   header) and add a `test_engine.cpp` that renders the same input
+   through both and bounds the difference, as `src/fathom/test_engine.cpp`
+   and `src/sway/test_engine.cpp` do; add it to `PLUGIN_MATH_TESTS` in
+   `tests.mk` so it builds with the plugin's floating-point flags.
+5. Then, with no other change: `make test` runs `bench-modules`,
+   `engine-globals` and (on Linux, so in CI) `libm-calls` for it, and
+   `make bench` times it and checks its budgets. Add the folder to
+   `MODULES` in the Makefile and fill in its column of the table below.
 
 ## Review
 
@@ -301,7 +350,9 @@ Three habits behind most of them:
 | Golden saved-state image | No (params only) | No (params only) | Yes |
 | Allocation check on the audio path | No | No | Yes |
 | Thread tests | Not needed (no shared state) | Not needed | Yes |
-| CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes |
+| CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes (`make shoal-bench`) |
+| No libm call per sample, knobs still | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Not checked |
+| No writable global state | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make shoal-globals`) |
 | Smoke screenshot | Yes | Yes | Yes |
 
 ## Future work

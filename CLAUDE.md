@@ -46,6 +46,9 @@ layout.
 - DSP lives in Rack-free headers in `src/<folder>/` with tests in
   `src/<folder>/test_*.cpp` (using `src/testing.hpp`). Modules only map params/ports/polyphony onto the
   core.
+- A new module with an engine follows `TESTING.md`, "Adding a module":
+  `src/<folder>/bench.inc` gets it `make bench`, `libm-calls` and
+  `engine-globals` with no other change.
 - Shoal's core is the vendored O&C firmware in `src/shoal/firmware/`;
   change it only with a `// SHOAL:` mark and a `CHANGES.md` line;
   `make shoal-globals` must stay clean.
