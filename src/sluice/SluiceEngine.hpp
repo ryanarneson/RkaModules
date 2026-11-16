@@ -1,6 +1,8 @@
 #pragma once
 #include "FastMath.hpp"
 
+#include <cfloat>
+
 // Rack-free per-sample logic of the Sluice module (four VCAs): everything
 // its process() does between reading the ports and writing them. The module
 // fills a SluiceFrame from its params and ports; the bench and the tests
@@ -14,6 +16,12 @@
 // voice. Nothing clips and nothing scales the sum.
 namespace rka {
 
+// x, or 0 when x is NaN or infinite. The comparisons fail for NaN, so no
+// libm call is needed.
+inline float sluiceFinite(float x) {
+	return x >= -FLT_MAX && x <= FLT_MAX ? x : 0.f;
+}
+
 // One port as Rack holds it: 16 voltages and a channel count (0 when
 // unplugged).
 struct SluicePort {
@@ -21,9 +29,9 @@ struct SluicePort {
 	int channels = 0;
 
 	// rack::Input::getPolyVoltage: a mono cable drives every channel, and
-	// channels beyond the count read 0.
+	// channels beyond the count read 0. NaN and infinity read 0.
 	float poly(int c) const {
-		return channels == 1 ? v[0] : c < channels ? v[c] : 0.f;
+		return sluiceFinite(channels == 1 ? v[0] : c < channels ? v[c] : 0.f);
 	}
 };
 
@@ -114,7 +122,7 @@ public:
 		const SluicePort* src = nullptr;
 		for (int r = 0; r < ROWS; r++) {
 			// Level, smoothed.
-			const float t = f.params[SluiceFrame::LEVEL_A + r];
+			const float t = sluiceFinite(f.params[SluiceFrame::LEVEL_A + r]);
 			if (fresh)
 				offset[r] = 0.f;
 			else {
@@ -146,7 +154,7 @@ public:
 					knownP[r][c] = p;
 					knownGain[r][c] = sluiceCurve(p, exp);
 				}
-				const float x = inChannels > 0 ? src->v[c] : 0.f;
+				const float x = inChannels > 0 ? src->poly(c) : 0.f;
 				own[r][c] = x * knownGain[r][c];
 			}
 			ownChannels[r] = voices;

@@ -34,6 +34,11 @@ DSP_TEST_FLAGS = -std=c++17 -O2 -Wall -Wextra $(TEST_WERROR)
 
 # Specific rules before the generic build/test/% (GNU make 3.81 takes the
 # first matching pattern rule).
+# Sluice's hostile-input test: the sanitizers, and the counting operator new.
+build/test/sluice/test_hostile: src/sluice/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/sluice/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/sluice $< -o $@
+
 build/test/shoal/Firmware.o: src/shoal/Firmware.cpp $(SHOAL_DEPS)
 	@mkdir -p $(@D)
 	$(CXX) $(SHOAL_TEST_FLAGS) -Isrc -c $< -o $@

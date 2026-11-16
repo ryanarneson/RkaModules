@@ -182,6 +182,14 @@ instance, Apple M-series Mac:
 | Sway measured (was) | 0.19 (0.50) | 0.27 (0.50) | 1.6 (1.6) |
 | Fathom budget | 0.1 | 1.2 | 1.2 |
 | Fathom measured (was) | 0.02 (0.58) | 0.55 (0.58) | 0.59 (0.59) |
+| Sluice budget | 0.2 | 0.15 | 2.15 |
+| Sluice measured | 0.077 | 0.066 | 1.07 |
+
+Sluice also has a mixDown case (as busy, but only D connected): budget 2.25,
+measured 1.11. Its budgets are about twice the measurement, rounded up to
+the next 0.05, and are written for a new engine, so nothing "was" to record.
+Busy is 16 voices on every row with a moving CV on every row, Levels 0.5,
+Exp. Its other-machine budgets are three times the Mac's, as the others are.
 
 The idle and outputs budgets are set so the pre-issue-#8 engines fail
 them on the Mac. Sway busy and Fathom outputs and busy cost the same
@@ -194,7 +202,8 @@ Timing on macOS or Linux cannot see what made Windows slow, so
 library calls every declared engine makes, with every libm entry point it
 could reach wrapped, in the cases its `bench.inc` lists for it. In a case
 marked knobs-still it requires zero per sample after a warm-up (today:
-Fathom idle and with outputs patched; Sway idle, with outputs patched and
+Fathom idle and with outputs patched; Sluice idle, outputs and busy;
+Sway idle, with outputs patched and
 with a still mono FM cable). In a case with a knob moving, calls are
 reported, not failed. The pre-issue-#8 engines made 25 (Fathom) and 44
 (Sway) per sample.
@@ -340,20 +349,20 @@ Three habits behind most of them:
 
 ## What each module has today
 
-| | Sway | Fathom | Shoal |
-|---|---|---|---|
-| Rack-free core with offline tests | Yes | Yes | Yes |
-| `-Wall -Wextra`, `-Werror` in CI | Yes | Yes | No (vendored firmware warns) |
-| Sanitizers | No | No | Yes |
-| Hostile-input and sample-rate sweeps | Partly | Partly | Yes |
-| Random fuzz with seeds | No | No | Yes |
-| Golden saved-state image | No (params only) | No (params only) | Yes |
-| Allocation check on the audio path | No | No | Yes |
-| Thread tests | Not needed (no shared state) | Not needed | Yes |
-| CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes (`make shoal-bench`) |
-| No libm call per sample, knobs still | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Not checked |
-| No writable global state | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make shoal-globals`) |
-| Smoke screenshot | Yes | Yes | Yes |
+| | Sway | Fathom | Shoal | Sluice |
+|---|---|---|---|---|
+| Rack-free core with offline tests | Yes | Yes | Yes | Yes |
+| `-Wall -Wextra`, `-Werror` in CI | Yes | Yes | No (vendored firmware warns) | Yes |
+| Sanitizers | No | No | Yes | Partly (`test_hostile` only) |
+| Hostile-input and sample-rate sweeps | Partly | Partly | Yes | Yes (NaN, infinity, 1e30, a sample-rate change) |
+| Random fuzz with seeds | No | No | Yes | No |
+| Golden saved-state image | No (params only) | No (params only) | Yes | No (params only) |
+| Allocation check on the audio path | No | No | Yes | Yes |
+| Thread tests | Not needed (no shared state) | Not needed | Yes | Not needed |
+| CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes (`make shoal-bench`) | Yes (`make bench`) |
+| No libm call per sample, knobs still | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Not checked | Yes (`make libm-calls`) |
+| No writable global state | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make shoal-globals`) | Yes (`make engine-globals`) |
+| Smoke screenshot | Yes | Yes | Yes | Not yet |
 
 ## Future work
 
