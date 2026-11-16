@@ -31,6 +31,11 @@ layout.
   Colima (`colima start --vm-type vz --vz-rosetta`).
 - Release packages from `tools/mac_dist.sh` and `tools/cross_build.sh` land
   in `packages/`, not `build/`: `make clean` wipes `build/`.
+- Every build handed to the user for testing (`make install`, mac_dist,
+  cross_build) gets a new version first: `tools/bump_version.sh "<what
+  changed>"` bumps REVISION in `plugin.json`, logs it under "Test builds" in
+  `CHANGELOG.md` and commits, so one version = one commit. Mac and Windows
+  packages from the same commit share it. Decided 2026-11-16.
 - The repo is meant to work unchanged on Linux and macOS. Keep tools/
   scripts portable: no GNU-only flags (`sed -i`, `timeout` without the
   gtimeout fallback, `readlink -f`), and check `uname -s` before using a
