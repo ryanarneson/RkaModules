@@ -1,5 +1,9 @@
 # Changelog
 
+## Test builds
+
+- 2.0.1 (2026-11-16): Fog: cache-stagger CPU fix, silence sleep, matched wet level, wet leveller, FRET/SMOKE/ICE voicings, ICE feed-forward octave
+
 ## 2.0.0 (unreleased)
 
 - New module: **Sway**, a 12 HP polyphonic LFO:
