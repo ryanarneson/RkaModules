@@ -632,6 +632,41 @@ class EveryCVPathTraced(unittest.TestCase):
             self.assertIn(jack, msg)
 
 
+class Ropes(unittest.TestCase):
+    def rope(self, **kw):
+        return spec(components=[("input", "A", 10.0, 40.0, None), ("input", "B", 10.0, 70.0, None)]
+                    + kw.pop("extra", []),
+                    ropes=kw.pop("ropes", [[(10.0, 20.0), "INPUT_A", "INPUT_B"]]), **kw)
+
+    def test_rope_is_drawn_in_brass(self):
+        s = self.rope()
+        g.check_panel("T", s)
+        svg = g.panel_svg("T", s, g.INSTRUMENT[""])
+        paths = [p for p in re.findall(r"<path [^>]*>", svg)
+                 if 'stroke="#c9a46a"' in p and 'stroke-width="0.4"' in p]
+        self.assertEqual(len(paths), 1)
+        d = paths[0]
+        for pt in ("10 20", "10 40", "10 70"):
+            self.assertIn(pt, d)
+
+    def test_rope_names_unknown_component(self):
+        msg = failure(self, "T", self.rope(ropes=[[(10.0, 20.0), "INPUT_Z"]]))
+        self.assertIn("rope", msg)
+        self.assertIn("INPUT_Z", msg)
+
+    def test_rope_grazing_other_component_fails(self):
+        # A port (radius 4.0) 4.0 mm off the rope's line, which is 0.4 wide: a 0.2 mm gap.
+        msg = failure(self, "T", self.rope(extra=[("input", "C", 14.0, 55.0, None)]))
+        self.assertIn("INPUT_C", msg)
+
+    def test_rope_clear_of_other_component_passes(self):
+        g.check_panel("T", self.rope(extra=[("input", "C", 20.0, 55.0, None)]))
+
+    def test_rope_key_accepted(self):
+        self.assertIn("ropes", g.INSTRUMENT_KEYS)
+        g.check_references("T", self.rope())
+
+
 class Screws(unittest.TestCase):
     """Rack's screws, at the positions the description gives, keep clear of
     everything on the panel."""

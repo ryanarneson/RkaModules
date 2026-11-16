@@ -157,6 +157,10 @@ def _shoal_push(encoder, deg):
     return tuple(round(v, 2) for v in arc_point(*encoder, _SH_PUSH, deg))
 
 
+_SL_O = (6.4, 21.0)                              # Sluice's origin; the rope hangs from it
+_SL_ROWS = [33.0, 55.5, 78.0, 100.5]
+_SL_OUT_DY = 1.6                                 # an output sits this far below its row
+
 PANELS = {
     "Sway": dict(
         dir="sway",
@@ -315,6 +319,36 @@ PANELS = {
         # Not in the mockup: as Sway, clear of the nameplate.
         screws=screws_at(28, "tr", "bl", "br"),
     ),
+    # Sluice, four VCAs. Rings struck from the origin above the first input;
+    # a brass rope drops from it through the four signal inputs, which are
+    # the only thing the channels share. Each row runs input, Level, CV
+    # input, output on a tile; the lamp reads the channel's gain.
+    "Sluice": dict(
+        dir="sluice",
+        hp=10,
+        title="SLUICE",
+        subtitle="QUAD VCA",
+        components=[
+            # (kind, name, x mm, y mm, label)
+            ("param", "CURVE", 40.0, 12.0, None),
+        ]
+        + [("param", f"LEVEL_{n}", 19.0, y, "LEVEL" if n == "A" else None) for n, y in zip("ABCD", _SL_ROWS)]
+        + [("input", n, 6.4, y, None) for n, y in zip("ABCD", _SL_ROWS)]
+        + [("input", f"{n}_CV", 31.5, y, "CV" if n == "A" else None) for n, y in zip("ABCD", _SL_ROWS)]
+        + [("output", n, 43.6, y + _SL_OUT_DY, n) for n, y in zip("ABCD", _SL_ROWS)]
+        + [("light", n, 37.4, y - 3.4, None) for n, y in zip("ABCD", _SL_ROWS)],
+        sizes={"PARAM_CURVE": "toggle"} | {f"PARAM_LEVEL_{n}": "face" for n in "ABCD"},
+        origins=[_SL_O],
+        circles=[(*_SL_O, r) for r in (30, 50, 70, 90, 110)],
+        # 10 divisions; heavier at 0, 5 and 10; no numerals.
+        faces={f"PARAM_LEVEL_{n}": dict(r=6.6, ticks=10, major=5, tick_r=4.9, major_len=1.6) for n in "ABCD"},
+        tiles=[dict(port=f"OUTPUT_{n}") for n in "ABCD"],
+        traces=[[f"INPUT_{n}", f"PARAM_LEVEL_{n}", f"INPUT_{n}_CV", f"OUTPUT_{n}"] for n in "ABCD"],
+        ropes=[[_SL_O, "INPUT_A", "INPUT_B", "INPUT_C", "INPUT_D"]],
+        notes=[(40.0, 6.9, "EXP", 1.4, "dim"), (40.0, 19.6, "LIN", 1.4, "dim")],
+        preview={f"PARAM_LEVEL_{r}": dict(turn=-135) for r in "ABCD"} | {"PARAM_CURVE": dict(frame=1)},
+        screws=screws_at(10, "tr", "bl"),
+    ),
 }
 
 def layout_hpp(name, spec):
@@ -423,6 +457,9 @@ def check_screens(name, spec):
 #   traces            [[id, ..., id]]: a signal trace from a jack through
 #                     the controls on its way to the one it moves; an (x, y)
 #                     among the ids is an elbow (at most one)
+#   ropes             [[(x, y), id, ..., id]]: a brass rope from an anchor
+#                     (usually an origin) through the named components'
+#                     centres, top to bottom, drawn under the controls
 #   screens           [(name, x, y, w, h)]: a window the module draws in, in
 #                     mm, drawn as glass in a brass bezel outside it
 #   rulers            screen name -> dict(px=mm per pixel, sides="lb",
@@ -472,6 +509,7 @@ FOOT_MARK = "R K A · INSTRUMENTS"
 SCREEN_BEZEL = 0.45      # mm of brass round a screen, outside its rectangle
 RULER_GAP, RULER_MINOR, RULER_MAJOR = 0.4, 0.6, 1.3   # a screen's pixel ruler: off the bezel, tick lengths
 RULER_NUMERAL = 2.0      # mm: as the dim labels; smaller did not read at 100 % in Rack
+ROPE_WIDTH = 0.4         # mm; counted in a rope's clearances
 TRACE_WIDTH = 0.25       # mm; counted in a trace's clearances
 BEND_TOLERANCE = 0.05    # mm off the straight line before a trace counts as bent
 ORIGIN_ARM = 1.6         # mm: half the width of an origin's crosshair
@@ -883,8 +921,8 @@ def instrument_texts(name, spec):
 # --- Checks. Each fails the build with a message naming the parts. ---
 
 INSTRUMENT_KEYS = {"dir", "hp", "title", "subtitle", "nameplate", "mark", "components", "sizes",
-                   "origins", "circles", "radii", "limbs", "faces", "tiles", "traces", "screens", "rulers",
-                   "label_at", "label_colour", "label_size", "label_gap", "label_dx", "label_dy", "notes",
+                   "origins", "circles", "radii", "limbs", "faces", "tiles", "traces", "ropes", "screens",
+                   "rulers", "label_at", "label_colour", "label_size", "label_gap", "label_dx", "label_dy", "notes",
                    "preview", "screws"}
 FACE_KEYS = {"r", "ticks", "major", "sweep", "numerals", "tick_r", "minor_len", "major_len", "numeral_r",
              "numeral_size"}
@@ -1032,6 +1070,31 @@ def check_traces(name, spec):
                 for c, d in zip(pb, pb[1:]):
                     if segment_distance(a, b, c, d) - 2 * half < CLEARANCE:
                         sys.exit(f"{name}: {la} and {lb} cross or touch")
+
+
+def check_ropes(name, spec):
+    """A rope runs through the components it names, and keeps CLEARANCE, as
+    drawn, from every other component, dial face and tile."""
+    comps = comps_of(name, spec)
+    by = {c.id: c for c in comps}
+    for rope in spec.get("ropes", []):
+        own = set(rope[1:])
+        for cid_ in rope[1:]:
+            if cid_ not in by:
+                sys.exit(f"{name}: a rope names {cid_}, which is not a component")
+        points = [tuple(rope[0])] + [(by[i].x, by[i].y) for i in rope[1:]]
+        for a, b in zip(points, points[1:]):
+            for c in comps:
+                if c.id in own:
+                    continue
+                gap = point_segment_distance((c.x, c.y), a, b) - edge_radius(spec, c) - ROPE_WIDTH / 2
+                if gap < CLEARANCE:
+                    sys.exit(f"{name}: a rope passes {gap:.2f} mm from {c.id}, which it does not run "
+                             f"through (need {CLEARANCE})")
+            for tile in spec.get("tiles", []):
+                if tile["port"] not in own and \
+                        segment_rect_distance(a, b, tile_rect(tile, by[tile["port"]])) - ROPE_WIDTH / 2 < CLEARANCE:
+                    sys.exit(f"{name}: a rope crosses the tile of {tile['port']}, which it does not run through")
 
 
 def check_lettering(name, spec):
@@ -1207,6 +1270,7 @@ def check_panel(name, spec):
     check_tiles(name, spec)
     check_limbs(name, spec)
     check_traces(name, spec)
+    check_ropes(name, spec)
     check_cv_traced(name, spec)
     check_lettering(name, spec)
     check_screws(name, spec)
@@ -1302,6 +1366,11 @@ def panel_svg(name, spec, pal):
     for trace in spec.get("traces", []):
         d = "L".join(f"{num(x)} {num(y)}" for x, y in trace_points(name, spec, trace))
         out.append(f'<path d="M{d}" fill="none" stroke="{pal["dim"]}" stroke-width="{num(TRACE_WIDTH)}" '
+                   f'stroke-linejoin="round"/>')
+    # Ropes, brass, over the traces and under the seats.
+    for rope in spec.get("ropes", []):
+        d = "L".join(f"{num(x)} {num(y)}" for x, y in [tuple(rope[0])] + [(by[i].x, by[i].y) for i in rope[1:]])
+        out.append(f'<path d="M{d}" fill="none" stroke="{pal["brass"]}" stroke-width="{num(ROPE_WIDTH)}" '
                    f'stroke-linejoin="round"/>')
     # A seat of bare ground under each control that is not on ivory: it
     # masks the limb, traces and construction lines passing beneath, since a
