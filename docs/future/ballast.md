@@ -29,3 +29,5 @@ around it.
 control; CV over level; mute or solo; whether inputs
 are polyphonic; stereo inputs; whether the limb's degree numbers should
 mean something real (pan law) or go.
+
+**DC blocker.** Sluice is DC-coupled and has none; the output of this module is the place for one, once (from the Sluice spec, "For later modules").

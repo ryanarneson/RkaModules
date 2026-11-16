@@ -42,6 +42,18 @@
         "Hardware clone"
       ],
       "keywords": "ornament crime o_c ornaments copiermaschine"
+    },
+    {
+      "slug": "Sluice",
+      "name": "Sluice",
+      "description": "Quad VCA: four DC-coupled polyphonic VCAs, CV added to level, inputs normalled down, outputs mixed down, linear or exponential",
+      "tags": [
+        "VCA",
+        "Mixer",
+        "Polyphonic",
+        "Utility"
+      ],
+      "keywords": "vca amplifier ambient"
     }
   ]
 }

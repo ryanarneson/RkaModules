@@ -70,7 +70,7 @@ are Doldrums, Rigging, Hadal and Sluice.
 | [Doldrums](doldrums.md) | Spectral freeze and stretch | A ship becalmed | 10 HP |
 | [Rigging](rigging.md) | Resonator bank | Wind in the rigging | 12 HP |
 | [Hadal](hadal.md) | Rumble and noise bed | The deepest ocean zone | 8 HP |
-| [Sluice](sluice.md) | Four VCAs | A sluice gate | 10 HP |
+| [Sluice](sluice.md) | Four VCAs (built) | A sluice gate | 10 HP |
 | [Doppler](doppler.md) | Frequency shifter | The Doppler effect | 8 HP |
 | [Rust](rust.md) | Decay and wear | Rust | 8 HP |
 | [Helm](helm.md) | Scene morph: eight scenes, six outputs | A ship's wheel | 12 HP |
