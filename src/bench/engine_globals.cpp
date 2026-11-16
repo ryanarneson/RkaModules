@@ -6,6 +6,7 @@
 // emitted here. Instances must share nothing mutable: Rack may run two on
 // different engine threads, where shared state would race, and a shared
 // written cache line would cost both.
+#include "bench/BenchModule.hpp"
 #include "modules.inc"
 
 #define X(m)                                                                    \

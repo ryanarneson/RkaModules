@@ -19,6 +19,7 @@
 //                                  still
 //   bench <module> <case> <count> [seconds]
 //                                  one case, for a profiler
+#include "bench/BenchModule.hpp"
 #include "modules.inc"
 
 #include <chrono>

@@ -10,6 +10,7 @@
 // regression issue #8 was about, and timing on macOS or Linux cannot see
 // it. (Not named test_*.cpp: tests.mk's generic test rule would build it
 // without the wrap flags.)
+#include "bench/BenchModule.hpp"
 #include "modules.inc"
 #include "testing.hpp"
 
@@ -80,7 +81,7 @@ long total() {
 	return n;
 }
 
-void report(const std::string& name, bool mustBeZero) {
+[[maybe_unused]] void report(const std::string& name, bool mustBeZero) {
 	const long n = total();
 	char list[512] = "";
 	for (int i = 0; i < CALLS_LEN; i++)
