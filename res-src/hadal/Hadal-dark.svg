@@ -29,11 +29,11 @@
 <circle cx="25.4" cy="32" r="16" fill="#bab3a3" stroke="#9c7f52" stroke-width="0.7"/>
 <path d="M17.072 37.352L16.314 37.839 M16.124 35.46L15.281 35.774 M15.601 33.409L14.71 33.537 M15.901 29.211L15.037 28.957 M16.711 27.255L15.921 26.824 M17.918 25.517L17.238 24.928 M21.287 22.995L20.914 22.176 M23.296 22.326L23.104 21.447 M25.4 22.1L25.4 21.2 M29.513 22.995L29.886 22.176 M31.333 24.075L31.872 23.354 M32.882 25.517L33.562 24.928 M34.899 29.211L35.763 28.957 M35.275 31.294L36.172 31.23 M35.199 33.409L36.09 33.537 M33.728 37.352L34.486 37.839 M32.4 39L33.037 39.637" fill="none" stroke="#161511" stroke-width="0.16"/>
 <path d="M18.4 39L17.198 40.202 M15.525 31.294L13.83 31.172 M19.467 24.075L18.448 22.714 M27.504 22.326L27.866 20.665 M34.089 27.255L35.581 26.441 M34.676 35.46L36.269 36.054" fill="none" stroke="#161511" stroke-width="0.28"/>
-<rect x="21" y="91.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
-<rect x="30.75" y="91.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
-<rect x="40.5" y="91.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
-<rect x="30.75" y="107.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
-<rect x="40.5" y="107.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<rect x="21" y="94.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<rect x="30.75" y="94.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<rect x="40.5" y="94.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<rect x="30.75" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<rect x="40.5" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
 <text x="5.00" y="10.00" font-family="D-DIN Condensed" font-size="5.2" font-weight="normal" letter-spacing="1.4" text-anchor="start" fill="#bab3a3">HADAL</text>
 <text x="5.00" y="13.80" font-family="D-DIN Condensed" font-size="1.7" font-weight="normal" letter-spacing="0.45" text-anchor="start" fill="#757062">RUMBLE &amp; NOISE</text>
 <text x="16.80" y="40.73" font-family="D-DIN Condensed" font-size="1.9" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511" transform="rotate(-135 16.67 40.73)">0</text>
@@ -47,11 +47,11 @@
 <text x="15.78" y="54.87" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">HISS</text>
 <text x="35.27" y="54.87" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">CRACKLE</text>
 <text x="45.02" y="49.30" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">DRIFT</text>
-<text x="25.52" y="94.30" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">RUMBLE</text>
-<text x="35.27" y="94.30" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">HISS</text>
-<text x="45.02" y="94.30" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">CRACKLE</text>
-<text x="35.27" y="110.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">L</text>
-<text x="45.02" y="110.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">R</text>
+<text x="25.52" y="97.30" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">RUMBLE</text>
+<text x="35.27" y="97.30" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">HISS</text>
+<text x="45.02" y="97.30" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">CRACKLE</text>
+<text x="35.27" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">L</text>
+<text x="45.02" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">R</text>
 <text x="1.30" y="89.00" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#757062">CV</text>
 <text x="25.52" y="42.60" font-family="D-DIN Condensed" font-size="1.3" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">KM</text>
 <text x="25.65" y="125.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.5" text-anchor="middle" fill="#757062">R K A · INSTRUMENTS</text>
@@ -71,10 +71,10 @@
 <circle id="input-DEPTH_CV" cx="25.4" cy="83.0" r="1" fill="#00ff00"/>
 <circle id="input-CRACKLE_CV" cx="35.15" cy="83.0" r="1" fill="#00ff00"/>
 <circle id="input-DRIFT_CV" cx="44.9" cy="83.0" r="1" fill="#00ff00"/>
-<circle id="output-RUMBLE" cx="25.4" cy="99.0" r="1" fill="#0000ff"/>
-<circle id="output-HISS" cx="35.15" cy="99.0" r="1" fill="#0000ff"/>
-<circle id="output-CRACKLE" cx="44.9" cy="99.0" r="1" fill="#0000ff"/>
-<circle id="output-L" cx="35.15" cy="115.0" r="1" fill="#0000ff"/>
-<circle id="output-R" cx="44.9" cy="115.0" r="1" fill="#0000ff"/>
+<circle id="output-RUMBLE" cx="25.4" cy="102.0" r="1" fill="#0000ff"/>
+<circle id="output-HISS" cx="35.15" cy="102.0" r="1" fill="#0000ff"/>
+<circle id="output-CRACKLE" cx="44.9" cy="102.0" r="1" fill="#0000ff"/>
+<circle id="output-L" cx="35.15" cy="116.0" r="1" fill="#0000ff"/>
+<circle id="output-R" cx="44.9" cy="116.0" r="1" fill="#0000ff"/>
 </g>
 </svg>

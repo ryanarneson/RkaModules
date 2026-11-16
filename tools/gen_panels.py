@@ -192,7 +192,8 @@ _HD_X = [round(25.4 + (i - 2) * 9.75, 2) for i in range(5)]
 _HD_COLS = ["RUMBLE", "HISS", "DEPTH", "CRACKLE", "DRIFT"]
 _HD_LIMB = 30
 _HD_ATT_Y, _HD_CV_Y = 72.5, 83.0
-_HD_LAYER_Y, _HD_LR_Y = 99.0, 115.0
+# The house rows: the bottom row of jacks at 116 (Sway, Fathom), the row above at 102 (Sway).
+_HD_LAYER_Y, _HD_LR_Y = 102.0, 116.0
 
 
 def _hadal_on(x):

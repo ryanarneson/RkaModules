@@ -18,10 +18,10 @@ static const rack::math::Vec INPUT_HISS_CV(15.65f, 83.0f);
 static const rack::math::Vec INPUT_DEPTH_CV(25.4f, 83.0f);
 static const rack::math::Vec INPUT_CRACKLE_CV(35.15f, 83.0f);
 static const rack::math::Vec INPUT_DRIFT_CV(44.9f, 83.0f);
-static const rack::math::Vec OUTPUT_RUMBLE(25.4f, 99.0f);
-static const rack::math::Vec OUTPUT_HISS(35.15f, 99.0f);
-static const rack::math::Vec OUTPUT_CRACKLE(44.9f, 99.0f);
-static const rack::math::Vec OUTPUT_L(35.15f, 115.0f);
-static const rack::math::Vec OUTPUT_R(44.9f, 115.0f);
+static const rack::math::Vec OUTPUT_RUMBLE(25.4f, 102.0f);
+static const rack::math::Vec OUTPUT_HISS(35.15f, 102.0f);
+static const rack::math::Vec OUTPUT_CRACKLE(44.9f, 102.0f);
+static const rack::math::Vec OUTPUT_L(35.15f, 116.0f);
+static const rack::math::Vec OUTPUT_R(44.9f, 116.0f);
 static const rack::math::Vec SCREWS[] = {rack::math::Vec(43.18f, 2.54f), rack::math::Vec(7.62f, 125.96f)};
 }
