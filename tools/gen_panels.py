@@ -180,6 +180,25 @@ def _fog_on(x):
     return round(2 * _FG_O[1] - column_on_arc(*_FG_O, _FG_LIMB, x), 2)   # above the hero
 
 
+# Hadal, rumble and noise. DEPTH is the main dial at the top, its face
+# lettered in kilometres (0 to 11, uneven, so the numerals are words at
+# their turns: -135 + 270 km / 11). RUMBLE, HISS, CRACKLE and DRIFT sit on
+# a limb struck from the dial's centre, below it, in the outer columns;
+# the middle column is Depth's own. Five columns: attenuverter, then CV
+# jack, each traced up to its control. The outputs are right-aligned on
+# tiles: the three layers in a row, then L and R in the lower right corner.
+_HD_O = (25.4, 32.0)
+_HD_X = [round(25.4 + (i - 2) * 9.75, 2) for i in range(5)]
+_HD_COLS = ["RUMBLE", "HISS", "DEPTH", "CRACKLE", "DRIFT"]
+_HD_LIMB = 30
+_HD_ATT_Y, _HD_CV_Y = 72.5, 83.0
+_HD_LAYER_Y, _HD_LR_Y = 99.0, 115.0
+
+
+def _hadal_on(x):
+    return round(column_on_arc(*_HD_O, _HD_LIMB, x), 2)   # below the dial
+
+
 PANELS = {
     "Sway": dict(
         dir="sway",
@@ -400,6 +419,39 @@ PANELS = {
         notes=[(1.3, 60.5, "CV", 2.0, "dim", "start")],
         # Every knob at noon, as it opens: Visibility too.
         preview={"PARAM_VISIBILITY": dict(turn=0)},
+        screws=screws_at(10, "tr", "bl"),
+    ),
+    "Hadal": dict(
+        dir="hadal",
+        hp=10,
+        title="HADAL",
+        subtitle="RUMBLE & NOISE",
+        components=[
+            ("param", "DEPTH", *_HD_O, "DEPTH"),
+        ]
+        + [("param", n, x, _hadal_on(x), n) for n, x in zip(_HD_COLS, _HD_X) if n != "DEPTH"]
+        + [("param", n + "_ATT", x, _HD_ATT_Y, None) for n, x in zip(_HD_COLS, _HD_X)]
+        + [("input", n + "_CV", x, _HD_CV_Y, None) for n, x in zip(_HD_COLS, _HD_X)]
+        + [("output", n, x, _HD_LAYER_Y, n) for n, x in zip(["RUMBLE", "HISS", "CRACKLE"], _HD_X[2:])]
+        + [("output", "L", _HD_X[3], _HD_LR_Y, "L"),
+           ("output", "R", _HD_X[4], _HD_LR_Y, "R")],
+        sizes={"PARAM_DEPTH": "hero"},
+        circles=[(*_HD_O, r) for r in (26, 42, 54)],
+        limbs=[dict(c=_HD_O, r=_HD_LIMB, a0=-48, a1=48, step=2, major=5)],
+        # A tick per half kilometre, long every 2 km; the numerals are words
+        # at their turns because 11 does not fall on the 2 km grid.
+        faces={"PARAM_DEPTH": dict(r=16.0, ticks=22, major=4,
+                                   words=[(round(-135 + 270 * km / 11, 1), str(km)) for km in (0, 2, 4, 6, 8, 11)])},
+        tiles=[dict(port=f"OUTPUT_{n}") for n in ("RUMBLE", "HISS", "CRACKLE", "L", "R")],
+        traces=[[f"INPUT_{n}_CV", f"PARAM_{n}_ATT", f"PARAM_{n}"] for n in _HD_COLS],
+        label_at={"PARAM_DEPTH": "face"},
+        notes=[(1.3, _HD_CV_Y + 6.0, "CV", 2.0, "dim", "start"),
+               (_HD_O[0], _HD_O[1] + 10.6, "KM", 1.3, "ink")],
+        # As it opens: Depth at noon (5.5 km), the levels and Drift at their
+        # defaults (Rumble 0.5, Hiss 0.3, Crackle 0, Drift 0.25).
+        preview={"PARAM_DEPTH": dict(turn=0), "PARAM_RUMBLE": dict(turn=0),
+                 "PARAM_HISS": dict(turn=-54), "PARAM_CRACKLE": dict(turn=-135),
+                 "PARAM_DRIFT": dict(turn=-67.5)},
         screws=screws_at(10, "tr", "bl"),
     ),
 }
