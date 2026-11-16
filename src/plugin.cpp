@@ -10,6 +10,7 @@ void init(Plugin* p) {
 	// Add modules here
 	p->addModel(modelSway);
 	p->addModel(modelFathom);
+	p->addModel(modelFog);
 	p->addModel(modelShoal);
 	p->addModel(modelSluice);
 

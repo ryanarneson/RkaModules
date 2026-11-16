@@ -1,7 +1,25 @@
 # Changelog
 
+## Test builds
+
+- 2.0.2 (2026-11-16): Fog: L/R phase fix below 300 Hz, Drift/Damp/Visibility smoothing, wet level scales with decay time, faster leveller attack, factory presets and manual
+- 2.0.1 (2026-11-16): Fog: cache-stagger CPU fix, silence sleep, matched wet level, wet leveller, FRET/SMOKE/ICE voicings, ICE feed-forward octave
+
 ## 2.0.0 (unreleased)
 
+- New module: **Fog**, a 10 HP stereo reverb:
+  - Visibility sets the decay time in seconds, 0.4 s to 80 s, lettered
+    CLEAR to DENSE; the time holds at any Size, and the tail always decays.
+  - Size, Damp, Bloom and Drift with CV and attenuverters, and CV on Mix.
+  - Four modes in the menu: HAAR (dense wash), FRET (dark, slow), SMOKE
+    (echo-led) and ICE (glassy, with an octave shimmer).
+  - Wet level scales with decay time, as in ValhallaRoom, matched to dry at
+    noon Visibility; a wet leveller and limiter keep loud drones in check.
+  - Low cut, drift rate and dry kill in the menu; the low end is
+    mono-compatible below 300 Hz.
+  - Sleeps (near-zero CPU) when the input and tail are quiet.
+  - Four factory presets: Becalmed, Nebula, Harbour, Whiteout.
+  - Drawn as a visibility scale.
 - New module: **Sway**, a 12 HP polyphonic LFO:
   - SIN, TRI, SAW, SQR (pulse width) plus a MORPH output with SKEW, SMOOTH
     (round or wavefold) and MORPH (sin → tri → saw → square).

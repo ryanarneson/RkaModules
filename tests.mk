@@ -39,6 +39,11 @@ build/test/sluice/test_hostile: src/sluice/test_hostile.cpp src/testing.hpp $(wi
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/sluice $< -o $@
 
+# Fog's hostile-input test: the sanitizers, and the counting operator new.
+build/test/fog/test_hostile: src/fog/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/fog/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/fog $< -o $@
+
 build/test/shoal/Firmware.o: src/shoal/Firmware.cpp $(SHOAL_DEPS)
 	@mkdir -p $(@D)
 	$(CXX) $(SHOAL_TEST_FLAGS) -Isrc -c $< -o $@
@@ -131,10 +136,21 @@ bench: build/bench/bench
 # pre-optimisation references, built with the plugin's floating-point and
 # architecture flags so they check what the plugin computes.
 PLUGIN_MATH_TEST_FLAGS = -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR)
-PLUGIN_MATH_TESTS = build/test/fathom/test_fast_math build/test/fathom/test_engine build/test/sway/test_engine build/test/sluice/test_engine
+PLUGIN_MATH_TESTS = build/test/fathom/test_fast_math build/test/fathom/test_engine build/test/sway/test_engine build/test/sluice/test_engine build/test/fog/test_blocks build/test/fog/test_network build/test/fog/test_engine build/test/fog/test_modes build/test/fog/test_stereo
 $(filter $(TEST_BINS),$(PLUGIN_MATH_TESTS)): build/test/%: src/%.cpp $(wildcard src/*.hpp $(MODULES:%=src/%/*.hpp) $(MODULES:%=src/%/testdata/ref/*.hpp))
 	@mkdir -p $(@D)
 	$(CXX) $(PLUGIN_MATH_TEST_FLAGS) -Isrc -I$(<D) $< -o $@
+
+# Opt-in, not part of `make test` (it takes minutes): Fog's soak, built as the
+# plugin is (-O3, the plugin's float flags). Every mode, v = 1, three corners
+# of Size, Damp and Drift: 10 minutes of noise, then 3 minutes of silence;
+# the level stays under the limiter's bound and the tail follows the T60 law.
+build/test/fog/soak: src/fog/soak/soak.cpp $(wildcard src/*.hpp src/fog/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR) -Isrc -Isrc/fog $< -o $@
+.PHONY: fog-soak
+fog-soak: build/test/fog/soak
+	./build/test/fog/soak
 
 # Every declared module's engine holds no writable global state (each
 # instance owns all of its state): the same object check as shoal-globals,

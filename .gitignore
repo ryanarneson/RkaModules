@@ -11,3 +11,12 @@
 /dep
 /dist
 /packages
+
+# Audio recordings (testbed runs, listening captures) never go to GitHub
+*.wav
+*.aif
+*.aiff
+*.flac
+*.mp3
+*.ogg
+*.m4a

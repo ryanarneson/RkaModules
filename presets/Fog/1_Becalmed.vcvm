@@ -1,0 +1,57 @@
+{
+  "plugin": "rka",
+  "model": "Fog",
+  "version": "2.0.1",
+  "params": [
+    {
+      "id": 0,
+      "value": 0.815
+    },
+    {
+      "id": 1,
+      "value": 0.6
+    },
+    {
+      "id": 2,
+      "value": 0.8
+    },
+    {
+      "id": 3,
+      "value": 0.75
+    },
+    {
+      "id": 4,
+      "value": 0.4
+    },
+    {
+      "id": 5,
+      "value": 0.45
+    },
+    {
+      "id": 6,
+      "value": 0
+    },
+    {
+      "id": 7,
+      "value": 0
+    },
+    {
+      "id": 8,
+      "value": 0
+    },
+    {
+      "id": 9,
+      "value": 0
+    },
+    {
+      "id": 10,
+      "value": 0
+    }
+  ],
+  "data": {
+    "mode": 1,
+    "driftRate": 0,
+    "lowCut": 1,
+    "dryKill": false
+  }
+}

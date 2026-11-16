@@ -667,6 +667,51 @@ class Ropes(unittest.TestCase):
         g.check_references("T", self.rope())
 
 
+class FaceWords(unittest.TestCase):
+    def words(self, words, **face):
+        return spec(components=[("param", "V", 30.0, 60.0, None)], sizes={"PARAM_V": "hero"},
+                    faces={"PARAM_V": dict(r=19.0, ticks=50, major=10, words=words, **face)})
+
+    def test_words_drawn_rotated(self):
+        s = self.words([(0, "UP"), (90, "RIGHT")])
+        g.check_panel("T", s)
+        svg = g.panel_svg("T", s, g.INSTRUMENT[""])
+        up = re.search(r"<text [^>]*>UP</text>", svg).group(0)
+        right = re.search(r"<text [^>]*>RIGHT</text>", svg).group(0)
+        for t in (up, right):
+            self.assertIn('font-weight="bold"', t)
+            self.assertIn('fill="#1c1a16"', t)
+        # At the top of the face, in line with the knob, and not turned.
+        x, y = (float(v) for v in re.search(r'x="([\d.]+)" y="([\d.]+)"', up).groups())
+        self.assertAlmostEqual(x, 30.0, delta=0.2)
+        self.assertLess(y, 60.0 - 14.0)
+        self.assertGreater(y, 60.0 - 19.0)
+        self.assertNotIn("transform", up)
+        # At three o'clock, turned a quarter turn about its own start.
+        m = re.search(r'transform="rotate\(90 ([\d.]+) ([\d.]+)\)"', right)
+        self.assertIsNotNone(m, right)
+        self.assertGreater(float(m[1]), 30.0 + 13.0)
+        self.assertAlmostEqual(float(m[2]), 60.0, delta=1.2)
+
+    def test_word_off_face_fails(self):
+        msg = failure(self, "T", self.words([(0, "OUTSIDE")], words_r=21.0))
+        self.assertIn("OUTSIDE", msg)
+
+    def test_words_overlapping_fail(self):
+        msg = failure(self, "T", self.words([(40, "FIRST"), (40, "SECOND")]))
+        self.assertIn("FIRST", msg)
+        self.assertIn("SECOND", msg)
+
+    def test_word_over_the_knob_fails(self):
+        msg = failure(self, "T", self.words([(0, "KNOB")], words_r=8.0))
+        self.assertIn("KNOB", msg)
+
+    def test_words_key_accepted(self):
+        for key in ("words", "words_r", "words_size"):
+            self.assertIn(key, g.FACE_KEYS)
+        g.check_references("T", self.words([(0, "UP")], words_r=15.0, words_size=1.7))
+
+
 class Screws(unittest.TestCase):
     """Rack's screws, at the positions the description gives, keep clear of
     everything on the panel."""
@@ -1049,8 +1094,16 @@ def drawing(svg_text):
         elif "aria-label" in attrs:
             style = dict(kv.split(":", 1) for kv in attrs["style"].split(";"))
             first = re.match(r"\s*[mM]\s*([-\d.]+)[ ,]([-\d.]+)", attrs["d"])
+            point = (float(first[1]), float(first[2]))
+            # A turned word keeps its turn as a transform: the point is where it ends up.
+            turn = re.fullmatch(r"rotate\(([-\d.]+)[ ,]+([-\d.]+)[ ,]+([-\d.]+)\)", attrs.get("transform", ""))
+            if turn:
+                a, cx, cy = (float(v) for v in turn.groups())
+                sa, ca = math.sin(math.radians(a)), math.cos(math.radians(a))
+                point = (cx + (point[0] - cx) * ca - (point[1] - cy) * sa,
+                         cy + (point[0] - cx) * sa + (point[1] - cy) * ca)
             out.append(("text", attrs["aria-label"], style["fill"], float(style["font-size"].rstrip("px")),
-                        style.get("font-weight", "normal"), (float(first[1]), float(first[2]))))
+                        style.get("font-weight", "normal"), point))
         else:
             out.append((tag, attrs))
     return out

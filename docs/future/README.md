@@ -25,7 +25,7 @@ takes one more instrument and builds its panel geometry from it.
 | [Beacon](beacon.md) | Envelope and function generator | A lighthouse | 8 HP |
 | [Ballast](ballast.md) | Four-channel stereo mixer | A clinometer | 12 HP |
 | [Sounding](sounding.md) | Eight-step sequencer | A line of soundings on a chart | 12 HP |
-| [Fog](fog.md) | Reverb | A visibility scale | 10 HP |
+| [Fog](fog.md) | Reverb (built) | A visibility scale | 10 HP |
 | [Sextant](sextant.md) | Scanner and crossfader | A sextant | 8 HP |
 | [Tackle](tackle.md) | Four attenuverters with offset | Block and tackle | 8 HP |
 | [Spindrift](spindrift.md) | Granular cloud, with a grain window | An anemometer | 10 HP |
