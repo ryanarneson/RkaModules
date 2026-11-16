@@ -5,17 +5,24 @@
 // flags (tests.mk). Run with `make test`.
 //
 // Full scale is 5 V (audio is +/-5 V). What may differ: the tanh clip and
-// the sub sine (FastMath.hpp, within 2.5e-7 of libm's), and the drift's gains
-// and pitch ratios (fastExp2, within one float ulp of libm's exp2f and
-// pow). A pitch ratio an ulp apart makes a saw's phase creep by about 1e-8
-// of a cycle per second, a time shift of nanoseconds; and the resonant
-// ladder, near self-oscillation, carries such differences further than
-// a linear filter would. Measured on macOS arm64: every sample within
-// -95 dBFS and the RMS within -128 dBFS. Bounds: every sample within
-// -90 dBFS (160 uV on a 5 V signal, below a 16-bit converter's step) and
-// the RMS within -120 dBFS. The libm functions themselves differ between
-// macOS, glibc and MinGW by such ulps, so the reference moves about as much
-// between platforms.
+// the sub sine (FastMath.hpp, within 1.5e-7 and 2.5e-7 of libm's), and the
+// drift's gains and pitch ratios (fastExp2, within 1.2e-7 relative of
+// libm's exp2f and pow, measured 1.03e-7). That is a pitch error of at
+// most 2e-4 cents and a level error of at most 1e-6 dB per saw, which is
+// the argument that the change is inaudible: both are thousands of times
+// below what an ear resolves (about 1 cent, 0.1 dB).
+//
+// The sample difference these bounds check is not that small, and it is not
+// fixed: a pitch ratio an ulp apart makes a saw's phase creep, so the
+// difference is a time shift that grows with the length of the render
+// (and the resonant ladder, near self-oscillation, carries it further than
+// a linear filter would). Over the 4 to 6 s renders here, measured on
+// macOS arm64 and Linux x86-64: every sample within -95 dBFS, the RMS
+// within -127 dBFS. Bounds: every sample within -90 dBFS (160 uV on a
+// 5 V signal) and the RMS within -120 dBFS; a much longer render would
+// need looser ones, though the pitch and level errors stay as above. The
+// libm functions themselves differ between macOS, glibc and MinGW by such
+// ulps, so the reference moves about as much between platforms.
 #include "FathomEngine.hpp"
 #include "testdata/ref/FathomEngine.hpp"
 #include "testing.hpp"
@@ -82,7 +89,8 @@ struct Diff {
 
 const char* outName[F::OUTPUTS_LEN] = {"LEFT", "RIGHT", "SUB"};
 
-// Renders `seconds` through both engines; `change(f, i, rng)` edits the frame
+// Renders `seconds` (at the starting rate) through both engines;
+// `change(f, i, rng, fs)` edits the frame, and may change the sample rate,
 // before sample i.
 template <typename Change>
 Diff render(const char* name, float fs, double seconds, Change change, double peakBound, double rmsBound) {
@@ -93,9 +101,10 @@ Diff render(const char* name, float fs, double seconds, Change change, double pe
 	rkaref::FathomFrame g;
 	Lcg rng(12345);
 	Diff d;
+	float rate = fs;
 	const long n = long(seconds * fs);
 	for (long i = 0; i < n; i++) {
-		change(f, i, rng);
+		change(f, i, rng, rate);
 		// The reference frame: same params, inputs and menu settings.
 		for (int k = 0; k < F::PARAMS_LEN; k++)
 			g.params[k] = f.params[k];
@@ -105,8 +114,8 @@ Diff render(const char* name, float fs, double seconds, Change change, double pe
 		g.filterType = f.filterType;
 		g.subThroughFilter = f.subThroughFilter;
 		float a[F::OUTPUTS_LEN], b[F::OUTPUTS_LEN];
-		opt.process(f, fs, a);
-		ref.process(g, fs, b);
+		opt.process(f, rate, a);
+		ref.process(g, rate, b);
 		d.add(a, b);
 	}
 	for (int o = 0; o < F::OUTPUTS_LEN; o++) {
@@ -130,9 +139,9 @@ float cv(long i, double hz, float fs, double phase) {
 
 void testNoDrift() {
 	// Knobs at defaults but drift off.
-	render("defaults, no drift", 48000.f, 5.0, [](F& f, long, Lcg&) { f.params[F::DRIFT] = 0.f; }, PEAK_BOUND, RMS_BOUND);
+	render("defaults, no drift", 48000.f, 5.0, [](F& f, long, Lcg&, float&) { f.params[F::DRIFT] = 0.f; }, PEAK_BOUND, RMS_BOUND);
 	// Every CV but V/OCT and DRIFT moving, at full attenuverters.
-	render("CVs, no drift", 48000.f, 5.0, [](F& f, long i, Lcg&) {
+	render("CVs, no drift", 48000.f, 5.0, [](F& f, long i, Lcg&, float&) {
 		f.params[F::DRIFT] = 0.f;
 		f.params[F::DETUNE_ATT] = f.params[F::CUTOFF_ATT] = f.params[F::RES_ATT] = f.params[F::DRIVE_ATT] = 1.f;
 		f.inputs[F::DETUNE_IN] = cv(i, 0.3, 48000.f, 0.0);
@@ -141,7 +150,7 @@ void testNoDrift() {
 		f.inputs[F::DRIVE_IN] = cv(i, 0.23, 48000.f, 0.6);
 	}, PEAK_BOUND, RMS_BOUND);
 	// Steps of every knob and menu setting every 0.25 s, pitch included.
-	render("steps, no drift", 44100.f, 6.0, [](F& f, long i, Lcg& rng) {
+	render("steps, no drift", 44100.f, 6.0, [](F& f, long i, Lcg& rng, float&) {
 		f.params[F::DRIFT] = 0.f;
 		if (i % 11025 != 0)
 			return;
@@ -159,10 +168,10 @@ void testNoDrift() {
 }
 
 void testDrift() {
-	render("defaults", 48000.f, 5.0, [](F&, long, Lcg&) {}, PEAK_BOUND, RMS_BOUND);
+	render("defaults", 48000.f, 5.0, [](F&, long, Lcg&, float&) {}, PEAK_BOUND, RMS_BOUND);
 	// Full detune, drift and spread, every CV moving, V/OCT a slow vibrato
 	// of a few semitones.
-	render("busy", 48000.f, 5.0, [](F& f, long i, Lcg&) {
+	render("busy", 48000.f, 5.0, [](F& f, long i, Lcg&, float&) {
 		f.params[F::DETUNE] = f.params[F::DRIFT] = f.params[F::SPREAD] = 1.f;
 		for (int a : {F::DETUNE_ATT, F::DRIFT_ATT, F::CUTOFF_ATT, F::RES_ATT, F::DRIVE_ATT})
 			f.params[a] = 0.5f;
@@ -171,7 +180,17 @@ void testDrift() {
 			f.inputs[k] = cv(i, 0.1 * k, 48000.f, 0.13 * k);
 		f.subThroughFilter = true;
 	}, PEAK_BOUND, RMS_BOUND);
-	render("busy, 96 kHz, LP12", 96000.f, 4.0, [](F& f, long i, Lcg&) {
+	// The sample rate switching between 44.1 and 96 kHz every 0.5 s (at the
+	// starting rate) while drift and CVs move.
+	render("44.1/96 kHz switching", 44100.f, 5.0, [](F& f, long i, Lcg&, float& fs) {
+		f.params[F::DRIFT] = 1.f;
+		f.params[F::CUTOFF_ATT] = f.params[F::RES_ATT] = 0.5f;
+		f.inputs[F::CUTOFF_IN] = cv(i, 0.4, 44100.f, 0.0);
+		f.inputs[F::RES_IN] = cv(i, 0.15, 44100.f, 0.3);
+		if (i % 22050 == 0)
+			fs = (i / 22050) % 2 ? 96000.f : 44100.f;
+	}, PEAK_BOUND, RMS_BOUND);
+	render("busy, 96 kHz, LP12", 96000.f, 4.0, [](F& f, long i, Lcg&, float&) {
 		f.params[F::DRIFT] = 1.f;
 		f.params[F::DRIFT_ATT] = 1.f;
 		f.inputs[F::DRIFT_IN] = cv(i, 0.2, 96000.f, 0.0);
@@ -185,7 +204,8 @@ void testDrift() {
 // change; and when the cables return, the output stage must start on the
 // settings of now (CUTOFF moved while unpatched), not glide from the old
 // ones, and the body must come back finite and at the reference's level.
-void testUnpatchedBody() {
+// laterFs: the sample rate from 2 s on (while unpatched).
+void testUnpatchedBody(float laterFs) {
 	rka::FathomEngine opt;
 	rkaref::FathomEngine ref;
 	F f;
@@ -195,13 +215,16 @@ void testUnpatchedBody() {
 	// mix to hide the body (SUB OUT ignores the SUB knob).
 	f.params[F::CUTOFF] = 1.f;
 	f.params[F::SUB] = 0.f;
+	// Sample indices are counted at 48 kHz whatever the rate.
 	const float fs = 48000.f;
+	float rate = fs;
 	double subPeak = 0.0, sumA = 0.0, sumB = 0.0, firstA = 0.0, firstB = 0.0;
 	bool finite = true;
 	for (long i = 0; i < long(6 * fs); i++) {
 		const bool patched = i < long(fs) || i >= long(3 * fs);
 		f.outputConnected[F::LEFT] = f.outputConnected[F::RIGHT] = patched;
 		if (i == long(2 * fs)) {
+			rate = laterFs;
 			f.inputs[F::VOCT] = 1.f;
 			f.subOctave = 1;
 			f.params[F::CUTOFF] = 9.f;
@@ -213,8 +236,8 @@ void testUnpatchedBody() {
 			g.inputs[k] = f.inputs[k];
 		g.subOctave = f.subOctave;
 		float a[F::OUTPUTS_LEN], b[F::OUTPUTS_LEN];
-		opt.process(f, fs, a);
-		ref.process(g, fs, b);
+		opt.process(f, rate, a);
+		ref.process(g, rate, b);
 		subPeak = std::fmax(subPeak, std::fabs(double(a[F::SUB_OUT]) - b[F::SUB_OUT]));
 		finite = finite && std::isfinite(a[F::LEFT]) && std::isfinite(a[F::RIGHT]);
 		if (!patched)
@@ -237,8 +260,8 @@ void testUnpatchedBody() {
 	// The saws paused while unpatched, so they beat against each other in
 	// another phase than the reference's: levels agree only to about 1 dB.
 	CHECK(std::fabs(levelDb) < 1.5, "re-patched body level %.2f dB from the reference", levelDb);
-	std::printf("unpatched body: SUB difference %.1f dBFS, re-patched level %.2f dB at once, %.2f dB later\n",
-	            Diff::dbfs(subPeak), firstDb, levelDb);
+	std::printf("unpatched body, %.0f Hz later: SUB difference %.1f dBFS, re-patched level %.2f dB at once, %.2f dB later\n",
+	            laterFs, Diff::dbfs(subPeak), firstDb, levelDb);
 }
 
 // Two instances run in turn each sample, as Rack runs them, the second
@@ -271,7 +294,9 @@ void testInstancesIndependent() {
 int main() {
 	testNoDrift();
 	testDrift();
-	testUnpatchedBody();
+	testUnpatchedBody(48000.f);
+	// The rate changes while the body is paused.
+	testUnpatchedBody(96000.f);
 	testInstancesIndependent();
 	return rkatest::finish("test_engine");
 }
