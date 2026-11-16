@@ -90,7 +90,7 @@ only, as an equal-power crossfade.
 Each CV is added to its knob, and the attenuverter scales it: at full, +/-5 V
 sweeps the knob's whole range, and the sum is clamped to the range. The
 attenuverter defaults to 0, so an unpatched or unscaled CV does nothing. A
-polyphonic CV is summed to one value.
+polyphonic CV uses its first channel only. (Audio inputs are summed.)
 
 **Drift, Damp and Visibility changes are smoothed (about 30 to 40 ms)**, so
 a fast CV on Drift or Damp is filtered, and a stepped one moves smoothly.
@@ -150,9 +150,11 @@ Mix, around 30 %.
 
 ## Sleep
 
-About 1 to 1.4 s after the input and the tail are both quiet, Fog stops
-processing (near-zero CPU), and it wakes on the next sound. The output is
-silence meanwhile.
+Once the input and the wet tail have both fallen to practically nothing
+(under 10 microvolts), and stayed there for about 1.4 s (at 48 kHz, in every
+mode), Fog stops processing, at near-zero CPU, and wakes on the next sound.
+While it sleeps the wet is silent; the dry still passes at any Mix below
+full wet.
 
 ## Presets
 
