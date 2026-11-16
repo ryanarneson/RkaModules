@@ -1,16 +1,17 @@
 // Not run: compiled to an object for `make engine-globals`, which fails if
-// it holds writable global state (tools/check_shoal_globals.sh). It calls
-// every entry point of Sway's and Fathom's engines, so each inline function
-// they reach, and any static it holds, is emitted here. Instances must share
-// nothing mutable: Rack may run two on different engine threads, where
-// shared state would race, and a shared written cache line would cost both.
-#include "fathom/FathomEngine.hpp"
-#include "sway/SwayEngine.hpp"
+// it holds writable global state (tools/check_shoal_globals.sh). For every
+// module with a declaration file (src/<module>/bench.inc, found by
+// tests.mk) it calls the engine's entry points through the declaration's
+// Instance, so each inline function they reach, and any static it holds, is
+// emitted here. Instances must share nothing mutable: Rack may run two on
+// different engine threads, where shared state would race, and a shared
+// written cache line would cost both.
+#include "modules.inc"
 
-void engineGlobalsProbe(rka::SwayEngine& sway, const rka::SwayFrame& sf, rka::SwayResult& sr, rka::FathomEngine& fathom,
-                        const rka::FathomFrame& ff, float* out, float sampleRate) {
-	sway.process(sf, 1.f / sampleRate, sampleRate, sr);
-	sway.reset();
-	fathom.process(ff, sampleRate, out);
-	fathom.reset();
-}
+#define X(m)                                                                    \
+	void engineGlobalsProbe_##m(rkabench::m::Instance& i, float sampleRate) { \
+		i.process(sampleRate);                                                  \
+		i.reset();                                                              \
+	}
+RKA_BENCH_MODULES(X)
+#undef X
