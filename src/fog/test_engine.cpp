@@ -513,9 +513,12 @@ void droneRig(Rig& r, int m, float vis, float size, float mix) {
 // Drones are turned down, not clipped: +/-5 V saw, square and sine at 55,
 // 110 and 220 Hz, every mode, Visibility 0.75 and 1, Size 0.5 and 1, Damp 0,
 // Mix 1, 10 s. After the first 0.5 s, at most 1 % of samples are over the
-// limiter's 9 V knee (without the leveller: 10-54 %), and the peak is at
-// most 10 V. The same drones at Mix noon: at most 1 % of output samples
-// over 9 V (without the leveller: up to 47 %). The wet's spikes (the
+// limiter's 9 V knee (without the leveller: up to 51 %), and the peak is at
+// most 10 V. The same drones at Mix noon (the output worked out from the
+// same wet by the equal-power law): at most 1 % of output samples over 9 V
+// (without the leveller: up to 40 %). The share is of the whole run, and the
+// onset's overshoot is most of it, so a shorter run reads higher (7 s:
+// 1.09 %). The wet's spikes (the
 // network's answer to a bright drone's edges, sharpest at Damp 0) still reach
 // the limiter now and then, and at Mix noon a spike on top of a +/-5 V
 // square's dry can reach 10.6 V: the largest peaks are reported.
@@ -528,14 +531,17 @@ void levellerTurnsDronesDown() {
 			for (float size : {0.5f, 1.f})
 				for (int shape = 0; shape < 3; shape++)
 					for (double hz : {55.0, 110.0, 220.0}) {
-						Rig* a = new Rig, *b = new Rig; // large: on the heap
+						Rig* a = new Rig; // large: on the heap
 						droneRig(*a, m, vis, size, 1.f);
-						droneRig(*b, m, vis, size, 0.5f);
 						long over = 0, overMix = 0;
 						double peak = 0, peakMix = 0, pre = 0;
 						for (int i = 0; i < N; i++) {
 							const float x = drone(shape, hz, i);
-							const FogResult o = a->step(x), q = b->step(x);
+							const FogResult o = a->step(x);
+							// Mix noon from the same wet: mix_law shows the output there
+							// is cos(pi/4) dry + sin(pi/4) wet to 1e-5 V.
+							const float h = 0.70710678f;
+							const FogResult q = {h * x + h * o.outL, h * x + h * o.outR};
 							if (i < from)
 								continue;
 							const double s = std::fmax(std::fabs(o.outL), std::fabs(o.outR));
@@ -568,7 +574,6 @@ void levellerTurnsDronesDown() {
 						worstMixPeak = std::fmax(worstMixPeak, peakMix);
 						worstPre = std::fmax(worstPre, pre);
 						delete a;
-						delete b;
 					}
 	std::printf("  leveller_turns_drones_down: 144 drones, Mix 1: worst %.2f%% over 9 V (%s), peak %.2f V (%s%.1f V before the limiter)\n", worstShare,
 	            where, worstPeak, worstPre >= 99.0 ? "over " : "", worstPre >= 99.0 ? 20.0 : worstPre);
@@ -578,15 +583,17 @@ void levellerTurnsDronesDown() {
 // No pumping: on a steady drone (Drift 0, so the network is time-invariant
 // and its wet is periodic), once the network's build-up is over, the
 // leveller's gain moves by under 1 dB peak to peak in every 1 s window:
-// saws, squares and sines at 55, 110 and 220 Hz, every mode, Visibility
-// 0.75 and 1, Size 0.5, Damp 0, 30 s, windows from 20 s. Only the drones
-// that the leveller turns down by more than 3 dB count (without Drift, most
-// build up less), and every mode must have at least two. With Drift at noon the wet
-// itself wanders by several dB a second (the moving lines sweep the
-// network's resonances across the drone's harmonics), and the leveller
-// follows that: a saw and a square at 110 Hz, Visibility 1, windows from
-// 10 s, are held only to 6.5 dB (measured 5.2; 8.0 with no slow follower,
-// 7.2 with its release at 30 ms).
+// Size 0.5, Damp 0, 30 s, windows from 20 s, on the 15 drones (of saws,
+// squares and sines at 55, 110 and 220 Hz, every mode, Visibility 0.75 and
+// 1) that the leveller turns down by more than 3 dB.
+//
+// A regression guard, not a pumping test: with Drift at noon the drone's
+// wet itself wanders by several dB a second (the moving lines sweep the
+// network's resonances across its harmonics), and the gain follows that
+// wander. It is not pumping: with the limiter off, the output's 100 ms RMS
+// spread is the same with and without the leveller (measured in review). A saw and a square at
+// 110 Hz, Visibility 1, windows from 10 s, are held to 6.5 dB (measured 5.2;
+// 8.0 with no slow follower, 7.2 with its release at 30 ms).
 // The worst 1 s spread from fromS; *early gets the worst from 2 s.
 double gainSpreadDb(int m, int shape, double hz, float vis, float drift, double fromS, double seconds, float* minGain, double* early) {
 	Rig* r = new Rig;
@@ -627,45 +634,52 @@ double gainSpreadDb(int m, int shape, double hz, float vis, float drift, double 
 }
 
 void levellerNoPumping() {
-	double worst = 0, worstNoon = 0, worstEarly = 0, worstNoonEarly = 0;
+	// The steady drones (Drift 0) the leveller turns down by over 3 dB, from
+	// the full set (saw, square, sine at 55, 110, 220 Hz, Visibility 0.75 and
+	// 1, every mode; the rest build up less without Drift): each is checked
+	// to be engaged, so a change that idles one fails here.
+	struct Case {
+		int m, shape;
+		double hz;
+		float vis;
+	};
+	const Case cases[] = {{0, 0, 110, 1.f},  {0, 1, 55, 0.75f}, {0, 1, 55, 1.f},  {0, 1, 110, 0.75f}, {0, 1, 110, 1.f},
+	                      {0, 2, 110, 1.f},  {1, 0, 220, 1.f},  {1, 1, 55, 0.75f}, {1, 1, 110, 0.75f}, {2, 1, 110, 0.75f},
+	                      {2, 1, 220, 0.75f}, {3, 1, 55, 0.75f}, {3, 1, 55, 1.f},  {3, 2, 55, 0.75f},  {3, 2, 55, 1.f}};
+	double worst = 0, worstEarly = 0, worstNoon = 0, worstNoonEarly = 0;
 	char where[96] = "", whereNoon[96] = "";
-	int counted = 0;
-	for (int m = 0; m < 4; m++) {
-		int engaged = 0;
-		for (float vis : {0.75f, 1.f})
-			for (int shape = 0; shape < 3; shape++)
-				for (double hz : {55.0, 110.0, 220.0}) {
-					if (vis == 1.f && hz == 110.0 && shape < 2) {
-						float gn = 1.f;
-						double e = 0;
-						const double dn = gainSpreadDb(m, shape, hz, vis, 0.5f, 10.0, 20.0, &gn, &e);
-						worstNoonEarly = std::fmax(worstNoonEarly, e);
-						CHECK(dn <= 6.5, "%s %s %g Hz v %g Drift noon: leveller gain moves %.2f dB in 1 s, want <= 6.5", MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis, dn);
-						if (dn > worstNoon) {
-							worstNoon = dn;
-							std::snprintf(whereNoon, sizeof whereNoon, "%s %s %g Hz v %g", MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis);
-						}
-					}
-					float g = 1.f;
-					double e = 0;
-					const double d = gainSpreadDb(m, shape, hz, vis, 0.f, 20.0, 30.0, &g, &e);
-					if (!(g < 0.708f))
-						continue;
-					engaged++;
-					worstEarly = std::fmax(worstEarly, e);
-					CHECK(d < 1.0, "%s %s %g Hz v %g Drift 0: leveller gain moves %.2f dB in 1 s, want < 1", MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis, d);
-					if (d > worst) {
-						worst = d;
-						std::snprintf(where, sizeof where, "%s %s %g Hz v %g, gain %.1f dB", MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis, 20.0 * std::log10(g));
-					}
-				}
-		CHECK(engaged >= 2, "%s: only %d steady drones engage the leveller, want >= 2", MODE_NAMES[m], engaged);
-		counted += engaged;
+	for (const Case& c : cases) {
+		float g = 1.f;
+		double e = 0;
+		const double d = gainSpreadDb(c.m, c.shape, c.hz, c.vis, 0.f, 20.0, 30.0, &g, &e);
+		CHECK(g < 0.708f, "%s %s %g Hz v %g Drift 0: the leveller is idle (gain %.3f), the test means nothing", MODE_NAMES[c.m], SHAPE_NAMES[c.shape], c.hz,
+		      c.vis, g);
+		CHECK(d < 1.0, "%s %s %g Hz v %g Drift 0: leveller gain moves %.2f dB in 1 s, want < 1", MODE_NAMES[c.m], SHAPE_NAMES[c.shape], c.hz, c.vis, d);
+		worstEarly = std::fmax(worstEarly, e);
+		if (d > worst) {
+			worst = d;
+			std::snprintf(where, sizeof where, "%s %s %g Hz v %g, gain %.1f dB", MODE_NAMES[c.m], SHAPE_NAMES[c.shape], c.hz, c.vis, 20.0 * std::log10(g));
+		}
 	}
+	// Drift noon: a regression guard on how the gain follows the network's own
+	// wander (not pumping: see above).
+	for (int m = 0; m < 4; m++)
+		for (int shape = 0; shape < 2; shape++) {
+			float gn = 1.f;
+			double e = 0;
+			const double dn = gainSpreadDb(m, shape, 110.0, 1.f, 0.5f, 10.0, 20.0, &gn, &e);
+			worstNoonEarly = std::fmax(worstNoonEarly, e);
+			CHECK(dn <= 6.5, "%s %s 110 Hz v 1 Drift noon (regression guard): leveller gain follows the wander by %.2f dB in 1 s, want <= 6.5", MODE_NAMES[m],
+			      SHAPE_NAMES[shape], dn);
+			if (dn > worstNoon) {
+				worstNoon = dn;
+				std::snprintf(whereNoon, sizeof whereNoon, "%s %s 110 Hz v 1", MODE_NAMES[m], SHAPE_NAMES[shape]);
+			}
+		}
 	std::printf("  leveller_no_pumping: Drift 0, settled (20-30 s), %d drones turned down over 3 dB: worst %.2f dB in 1 s (%s); from 2 s, in the build-up: %.2f dB\n",
-	            counted, worst, where, worstEarly);
-	std::printf("  leveller_no_pumping: Drift noon (saw, square 110 Hz, v 1), 10-20 s: worst %.2f dB in 1 s (%s); from 2 s: %.2f dB\n", worstNoon, whereNoon,
-	            worstNoonEarly);
+	            (int) (sizeof cases / sizeof cases[0]), worst, where, worstEarly);
+	std::printf("  leveller_no_pumping: Drift noon (saw, square 110 Hz, v 1), 10-20 s, the wander followed (regression guard): worst %.2f dB in 1 s (%s); from 2 s: %.2f dB\n",
+	            worstNoon, whereNoon, worstNoonEarly);
 }
 
 // Transparent when quiet: a +/-1 V sine (55, 110, 220 Hz) or +/-1 V noise at
@@ -698,6 +712,84 @@ void levellerIdleWhenQuiet() {
 	std::printf("  leveller_idle_when_quiet: lowest gain %.6f\n", lowest);
 }
 
+// The tail decays as it would without the leveller: a +/-5 V saw at 110 Hz
+// held 15 s at Visibility 1, Size 0.5, the other knobs at noon, Mix 1, then
+// stopped. In every mode, the output in 1 s windows from 1 to 13 s after the
+// stop, against the same run with the leveller off, stays within 1.5 dB of
+// that ratio in the first second after the stop (where the gain has stopped
+// moving: the leveller holds it while the input is absent). 1.5 dB is the
+// spread the two runs' own beating gives (the held gain lands on a slightly
+// different point of the wander each time, up to 1.3 dB measured); a gain
+// that releases at its 3 s while the tail falls lifts the tail back up as
+// fast as it decays, +4 to +7 dB by 12 s. And FRET: from 1 to 2 s after
+// the stop the gain does not move at all; a new note (a 1 V sine, 220 Hz)
+// then releases it again, at its own 3 s: at least 2 dB within 6 s
+// (measured 3.0; it cannot rise faster than the old tail under it falls,
+// which keeps the 5 ms follower up).
+double windowDb(const std::vector<float>& x, size_t a, size_t b) {
+	return 20.0 * std::log10(rms(x, a, b) + 1e-12);
+}
+
+void levellerHoldsInTail() {
+	const int hold = (int) (15 * RATE), after = (int) (14 * RATE), sec = (int) RATE;
+	double worst = 0;
+	char where[64] = "";
+	for (int m = 0; m < 4; m++) {
+		std::vector<float> out[2];
+		for (int pass = 0; pass < 2; pass++) {
+			Rig* r = new Rig;
+			startIn(*r, m);
+			r->f.params[FogFrame::VISIBILITY] = 1.f;
+			r->f.params[FogFrame::SIZE] = 0.5f;
+			r->f.params[FogFrame::DAMP] = 0.5f;
+			r->f.params[FogFrame::BLOOM] = 0.5f;
+			r->f.params[FogFrame::DRIFT] = 0.5f;
+			r->f.params[FogFrame::MIX] = 1.f;
+			r->eng.levellerEnabled = pass == 0;
+			for (int i = 0; i < hold + after; i++) {
+				const FogResult o = r->step(i < hold ? drone(0, 110.0, i) : 0.f);
+				if (i >= hold)
+					out[pass].push_back(o.outL);
+			}
+			delete r;
+		}
+		const double ref = windowDb(out[0], 0, sec) - windowDb(out[1], 0, sec);
+		for (int k = 1; k < 13; k++) {
+			const double d = windowDb(out[0], k * sec, (k + 1) * sec) - windowDb(out[1], k * sec, (k + 1) * sec) - ref;
+			CHECK(std::fabs(d) <= 1.5, "%s: %d-%d s after the stop, the levelled tail is %+.2f dB against the unlevelled one, want within 1.5", MODE_NAMES[m], k,
+			      k + 1, d);
+			if (std::fabs(d) > std::fabs(worst)) {
+				worst = d;
+				std::snprintf(where, sizeof where, "%s, %d-%d s", MODE_NAMES[m], k, k + 1);
+			}
+		}
+	}
+	// A new note in the tail releases the gain.
+	Rig* r = new Rig;
+	startIn(*r, rka::fog::FRET);
+	r->f.params[FogFrame::VISIBILITY] = 1.f;
+	r->f.params[FogFrame::DAMP] = 0.5f;
+	r->f.params[FogFrame::BLOOM] = 0.5f;
+	r->f.params[FogFrame::DRIFT] = 0.5f;
+	r->f.params[FogFrame::MIX] = 1.f;
+	float first = 0.f;
+	for (int i = 0; i < hold + 2 * sec; i++) {
+		r->step(i < hold ? drone(0, 110.0, i) : 0.f);
+		if (i == hold + sec)
+			first = r->eng.levelGain;
+	}
+	const float held = r->eng.levelGain;
+	for (int i = 0; i < 6 * sec; i++)
+		r->step(0.2f * drone(2, 220.0, i));
+	const float later = r->eng.levelGain;
+	delete r;
+	const double rise = 20.0 * std::log10(later / held);
+	CHECK(held < 0.6f && held == first, "in the tail: gain %.3f at 1 s after the stop, %.3f at 2 s, want held (and under 0.6)", first, held);
+	CHECK(rise >= 2.0, "a new note in the tail: gain %.2f dB held, %+.2f dB 6 s later, want it to rise >= 2 dB", 20.0 * std::log10(held), rise);
+	std::printf("  leveller_holds_in_tail: worst %+.2f dB against the unlevelled tail (%s); a new note releases it %+.1f dB in 6 s (from %.1f dB)\n", worst,
+	            where, rise, 20.0 * std::log10(held));
+}
+
 // The leveller starts clean: after a loud drone has pulled its gain down,
 // reset(), setSampleRate() and a mode change each leave it at gain 1 with
 // both followers at 0 (at the mode change: the moment the network is
@@ -710,7 +802,7 @@ void levellerResets() {
 			r.step(drone(1, 220.0, i));
 		return r.eng.levelGain;
 	};
-	auto clear = [](const FogEngine& e) { return e.levelGain == 1.f && e.levelEnv == 0.f && e.levelSlow == 0.f; };
+	auto clear = [](const FogEngine& e) { return e.levelGain == 1.f && e.levelEnv == 0.f && e.levelSlow == 0.f && e.levelFeed == 0.f; };
 	{
 		Rig* r = new Rig;
 		const float g = loud(*r);
@@ -755,7 +847,7 @@ void levellerResets() {
 		while (!r->eng.asleep() && guard++ < (int) (30 * RATE))
 			r->step(0.f);
 		CHECK(r->eng.asleep(), "never slept");
-		r->eng.levelEnv = r->eng.levelSlow = 30.f; // stale
+		r->eng.levelEnv = r->eng.levelSlow = 30.f; // stale, and held (the feed's follower is 0)
 		r->eng.levelGain = 0.2f;
 		r->step(1.f);
 		CHECK(!r->eng.asleep() && r->eng.levelGain == 1.f && r->eng.levelSlow < 1.f,
@@ -978,6 +1070,7 @@ int main() {
 	levellerTurnsDronesDown();
 	levellerNoPumping();
 	levellerIdleWhenQuiet();
+	levellerHoldsInTail();
 	levellerResets();
 	sleepAfterHold();
 	noSleepInTail();

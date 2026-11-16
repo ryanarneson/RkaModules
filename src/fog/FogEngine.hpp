@@ -33,8 +33,12 @@
 //   them. Noise's peaks are lone samples, which barely move the 5 ms
 //   follower: +/-5 V noise at the matched level sits at the threshold (the
 //   points that read up to +0.5 dB come out at about 0 dB, the rest are
-//   untouched), and anything quiet passes at a gain of exactly 1. Its state
-//   starts clean on every wake().
+//   untouched), and anything quiet passes at a gain of exactly 1. While the
+//   feed is absent (its own 5 ms / 50 ms peak follower under 10 mV), the
+//   slow follower does not release: the gain is held, so a tail decays as
+//   it would without the leveller instead of being lifted back up as fast
+//   as it falls. A new feed lets it release again at 3 s. Its state starts
+//   clean on every wake() (so a held gain ends when the engine sleeps).
 // - Mode: the voicing follows FogFrame::mode. The first process() takes its
 //   frame's mode at once (a saved patch loads in its mode, no fade). After
 //   that, a change fades the wet out
@@ -137,6 +141,12 @@ struct FogEngine {
 	static float levelRelease() { return 0.3f; }
 	static float levelSlowAttack() { return 0.05f; }
 	static float levelSlowRelease() { return 3.f; }
+	// Under this (V) on the feed's follower the input counts as absent and
+	// the leveller's gain is held: -54 dB re 5 V. The follower has the 5 ms
+	// attack and a 50 ms release: it bridges a 20 Hz drone's zero crossings,
+	// and a stopped +/-5 V input counts as absent 0.3 s later.
+	static float levelFeedAbsent() { return 0.01f; }
+	static float levelFeedRelease() { return 0.05f; }
 
 	// Test only: bypass the limiter, or the leveller.
 	bool limiterEnabled = true;
@@ -172,6 +182,7 @@ struct FogEngine {
 		levelCoef[1] = 1.f / (levelRelease() * hz + 1.f);
 		levelCoef[2] = 1.f / (levelSlowAttack() * hz + 1.f);
 		levelCoef[3] = 1.f / (levelSlowRelease() * hz + 1.f);
+		levelCoef[4] = 1.f / (levelFeedRelease() * hz + 1.f);
 		setLowCutCoeffs();
 		reset();
 	}
@@ -197,7 +208,7 @@ struct FogEngine {
 	void wake() {
 		asleep_ = false;
 		makeupSnap = true;
-		levelEnv = levelSlow = 0.f;
+		levelEnv = levelSlow = levelFeed = 0.f;
 		levelGain = 1.f;
 		quietCount = 0;
 		updateHold();
@@ -335,7 +346,7 @@ struct FogEngine {
 			else
 				quietCount = 0;
 			if (levellerEnabled)
-				level(wetL, wetR);
+				level(wetL, wetR, feedL, feedR);
 			if (limiterEnabled) {
 				wetL = limit(wetL);
 				wetR = limit(wetR);
@@ -363,14 +374,24 @@ struct FogEngine {
 
 	// ---- parts ----
 
-	// The leveller: both followers, then one gain on L and R. The inputs are
-	// finite (fogFinite above), so the followers are; they are flushed to 0
-	// under 1e-20 V, so a long fade cannot leave them denormal.
-	void level(float& l, float& r) {
+	// The leveller: both followers, then one gain on L and R; the feed's
+	// follower holds the slow one's release while the input is absent. The
+	// inputs are finite (fogFinite above, and the feed is sanitised where it
+	// enters), so the followers are; they are flushed to 0 under 1e-20 V, so a
+	// long fade cannot leave them denormal.
+	void level(float& l, float& r, float feedL, float feedR) {
+		const float fl = feedL >= 0.f ? feedL : -feedL, fr = feedR >= 0.f ? feedR : -feedR;
+		const float fa = fl > fr ? fl : fr;
+		levelFeed += (fa - levelFeed) * (fa > levelFeed ? levelCoef[0] : levelCoef[4]);
+		levelFeed = levelFeed > 1e-20f ? levelFeed : 0.f;
+		const bool held = !(levelFeed >= levelFeedAbsent());
 		const float al = l >= 0.f ? l : -l, ar = r >= 0.f ? r : -r;
 		const float a = al > ar ? al : ar;
 		levelEnv += (a - levelEnv) * (a > levelEnv ? levelCoef[0] : levelCoef[1]);
-		levelSlow += (levelEnv - levelSlow) * (levelEnv > levelSlow ? levelCoef[2] : levelCoef[3]);
+		if (levelEnv > levelSlow)
+			levelSlow += (levelEnv - levelSlow) * levelCoef[2];
+		else if (!held)
+			levelSlow += (levelEnv - levelSlow) * levelCoef[3];
 		levelEnv = levelEnv > 1e-20f ? levelEnv : 0.f;
 		levelSlow = levelSlow > 1e-20f ? levelSlow : 0.f;
 		levelGain = levelSlow > levelTarget() ? levelTarget() / levelSlow : 1.f;
@@ -485,8 +506,9 @@ struct FogEngine {
 	int fadeState = 0; // 0 steady, 1 fading out, 2 fading in
 	float makeup = 1.f, makeupTarget = 1.f, makeupCoef = 1.f; // the applied make-up and its target
 	int makeupCount = 0;
-	float levelCoef[4] = {1.f, 1.f, 1.f, 1.f}; // attack, release, slow attack, slow release
+	float levelCoef[5] = {1.f, 1.f, 1.f, 1.f, 1.f}; // attack, release, slow attack, slow release, feed release
 	float levelEnv = 0.f, levelSlow = 0.f;      // the two followers (V)
+	float levelFeed = 0.f;                      // the feed's follower (V): under 10 mV, the gain is held
 	float levelGain = 1.f;                      // the gain applied to the last wet sample
 	bool makeupSnap = true; // the next awake sample starts the make-up at its target
 	bool asleep_ = false;

@@ -293,7 +293,15 @@ Visibility, and full wet is level-matched to dry.
     build-up) the gain moves under 0.4 dB in any second. With Drift up the
     drone's wet itself wanders by several dB a second, as the moving lines
     sweep the network's resonances across its harmonics, and the gain
-    follows that wander (up to about 5 dB in a second at Visibility 1).
+    follows that wander (up to about 5 dB in a second at Visibility 1);
+    the output's short-term level varies as much without the leveller.
+  - It holds its gain while the input is absent: while a follower on the
+    feed (5 ms attack, 50 ms release) is under 10 mV, the slow follower
+    does not release. So when a loud drone stops, its tail decays as it
+    would without the leveller (within 1.5 dB of it for 13 s, in every
+    mode), instead of the gain lifting it back up as fast as it falls. A
+    new note releases the gain again at the normal 3 s; sleep ends the
+    hold.
   - Its state starts clean whenever the engine starts clean: on reset, a
     new sample rate, a mode change and a wake from sleep. The sleep test
     reads the wet before it.
@@ -384,8 +392,9 @@ each test shown to fail against a deliberate mutation:
 - **Drones are levelled.** In every mode, drones put at most 1 % of samples
   over the 9 V knee at Mix 1 and at Mix noon; the leveller's gain moves
   under 1 dB in any second on a steady drone once settled; it is exactly 1
-  for ±1 V signals; and its state starts clean on reset, a new rate, a
-  mode change and a wake (test_engine).
+  for ±1 V signals; a drone's tail decays as it does without the leveller;
+  and its state starts clean on reset, a new rate, a mode change and a
+  wake (test_engine).
 - **Stereo.** IN L alone fills both outputs, and the two output channels
   are decorrelated (correlation well below 1).
 - **Mix and dry kill.** Fully left is bit-exact dry. Fully right and dry
