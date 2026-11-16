@@ -250,26 +250,36 @@ each clock, quantized to a scale. Feed it one melodic CV and a clock, and
 the four outputs play the same line, each a step later than the last.
 
 - **In.** TRIG 1 is the clock: each trigger samples CV 1 and shifts the
-  chain. TRIG 2 high freezes it, so the outputs cycle through the last
-  "hold (buflen)" values ("Hold / Freeze" does the same by hand). TRIG 3
-  high raises every output an octave and TRIG 4 high lowers it (both read
-  at each clock). CV 2 adds to "buf.index", CV 3 rotates the note mask,
-  and CV 4 goes where "CV4 dest. ->" says (octave; or root, transpose,
-  buffer length, input gain).
-- **Out.** A to D: pitch CV, quantized. A is the newest value and B to D
-  older ones; "buf.index" pushes them further apart in time.
+  chain. TRIG 2, 3 and 4 are all read at each clock. TRIG 2 high freezes
+  the chain, so the outputs cycle through the last "hold (buflen)" values
+  ("Hold / Freeze" does the same by hand). TRIG 3 high raises every output
+  an octave and TRIG 4 high lowers it. CV 2 adds to "buf.index", CV 3
+  rotates the note mask, and CV 4 goes where "CV4 dest. ->" says: oct
+  (octave, the default), root, trns (transpose), buf.l (buffer length) or
+  igain (input gain).
+- **Out.** A to D: pitch CV, quantized. At "buf.index" 0, A is the newest
+  value and B, C, D are one, two and three clocks older. Raising
+  "buf.index" delays all four and, with "Delay type" multiplying, spaces
+  them further apart.
 - **Start with** "Scale", "root", "mask" and "input gain". "CV source"
-  TM, ByteB or IntSq makes the values inside the app instead of sampling
-  CV 1, and CV 1 then modulates that source through its own "CV1" row.
-  With ByteB, only "> BB P2" changes the result (a slip in the firmware).
+  can make the values inside the app instead of sampling CV 1: TM (a
+  Turing-machine-style random shift register, the "LFSR" rows), ByteB (a
+  bytebeat formula) or IntSq (an integer sequence). CV 1 then modulates
+  the source through its own "CV1" row: by default it does nothing for TM
+  and goes to input gain for ByteB and IntSq. With ByteB, "> BB eqn" and
+  "> BB P2" change the result; "> BB P0" and "> BB P1" do nothing (a slip
+  in the firmware: P2's value is used in P0's place).
 - **Hardware mode:** user scale notes (see "What stays in hardware mode").
 
 ### Harrington 1200
 
 Holds a major or minor triad and, on each trigger, moves it to a closely
-related chord that shares notes with it (the P, L and R moves of
-neo-Riemannian theory, and the compound N, S and H). Patch the outputs to
-three or four voices for smooth chord changes driven by gates.
+related chord that shares notes with it. The moves come from
+neo-Riemannian theory: P swaps major and minor on the same root (C major
+to C minor), L and R move one note to reach the chord that shares the
+other two (C major to E minor, C major to A minor), and N, S and H chain
+two or three of them. Patch the outputs to three or four voices for
+smooth chord changes driven by gates.
 
 - **In.** TRIG 1 resets to the root's triad. With "Trigger type" PLR (the
   default), TRIG 2, 3 and 4 apply P, L and R; with NSH they apply N, S and
@@ -279,7 +289,9 @@ three or four voices for smooth chord changes driven by gates.
   assigned: "Transpose CV" (semitones, 1 V/oct), "Octave CV", "Inversion
   CV", "PLR Prior CV", "NSH Prior CV", and "Eucl CV1 map" to "Eucl CV4
   map". "CV sampling" Cont reads them all the time, Trig only on triggers.
-- **Out.** A: the root. B, C, D: the chord's three notes. All pitch CV.
+- **Out.** A: the key's root (set by "Transpose" and "Octave"), which
+  stays put as the chord moves. B, C, D: the chord's three notes. All
+  pitch CV.
   "Output mode" Tune puts the root on all four, for tuning.
 - **Start with** "Transpose", "Root mode", "Inversion", "Trigger type".
   No hardware-only editor; "Reset all settings" restores the defaults.
@@ -292,12 +304,14 @@ chord sequences that wander, or an arpeggiator over them.
 
 - **In.** TRIG 1 is the clock: the playhead moves by "Step X" across and
   "Step Y" down. TRIG 3 high when TRIG 1 arrives sends it back to the
-  start. TRIG 2 steps the arpeggio when "OutA" is arp or strum, and TRIG 4
-  high holds it. CV 1 sets the root (1 V/oct, in semitones) and CV 4 the
-  inversion. CV 2 and CV 3 are not used.
+  start. TRIG 2 steps the arpeggio when "OutA" is arp or strm, and TRIG 4
+  high holds it. CV 1 sets the root (1 V/oct, rounded to semitones) and
+  CV 4 the inversion, both read at each TRIG 1 or TRIG 2. CV 2 and CV 3
+  are not used.
 - **Out.** B, C, D: the chord's three notes, pitch CV. A by "OutA": root
-  (default), trig (a short 5 V trigger at each chord change), arp (a
-  chord note per TRIG 2), strum (the three notes once after each change).
+  (default: CV 1's root plus the cell's offset, not the chord's root),
+  trig (a short 5 V trigger at each chord change), arp (a chord note per
+  TRIG 2), strm (strum: the three notes once after each change).
 - **Start with** "Step X", "Step Y", "Mode", "OutA". A new module's grid
   is filled with random moves, so a clock alone gives chord changes.
   "Reset" sends the playhead to the start and "Clock" moves it one step;
@@ -314,10 +328,12 @@ and so make its own melodies.
 - **In.** Channel A quantizes CV 1 at each TRIG 1, B CV 2 at TRIG 2, and
   so on ("CV Source", "Trigger source"). With "Trigger source" cnt+ or
   cnt- the channel quantizes all the time, and its own TRIG input, while
-  high, moves it an octave up (cnt+) or down (cnt-). A channel reading
+  high, moves it an octave up (cnt+) or down (cnt-), from the next note
+  change. A channel reading
   another channel's CV input can use its own with "CV aux >" (root,
   octave, transpose or mask rotation). The built-in sources need a TRIG
-  input as clock and have their own CV rows ("LFSR prb CV >" and so on).
+  input as clock and have their own CV rows ("LFSR prb CV >" and so on;
+  LFSR is the Turing-machine-style random shift register).
 - **Out.** A to D: each channel's pitch CV.
 - **Start with** "Scale", "Root", "Active notes", "Octave"; "Copy scale
   to other channels" and "Reset mask" act on the tab shown.
@@ -333,8 +349,10 @@ melodies that change key or mode as the patch goes on.
   3 ("CV source", "trigger source"; cnt+ and cnt- as in Quantermain, with
   TRIG 1 and TRIG 3 as the octave gates). With "seq_mode" TR+1 to TR+3,
   TRIG 2 (A) and TRIG 4 (B) step through two to four slots from "scale #".
-  CV 2 (A) and CV 4 (B) go where "CV aux." says: scl# (slot), root, oct,
-  trns or mask. "CV source" Turing uses a built-in shift register.
+  CV 2 (A) and CV 4 (B) go where "CV aux." says: scl# (scale slot), root,
+  oct (octave), trns (transpose) or mask (rotation). It starts at "-", so
+  on a new module CV 2 and CV 4 do nothing. "CV source" Turing uses a
+  built-in random shift register instead of a CV input.
 - **Out.** A and B: each channel's pitch CV. C (for A) and D (for B) by
   "aux.output": gate (default, about +6 V, "--> pw" long, 25 ms), copy
   (the pitch again, "--> aux +/-" octaves away) or asr (the note before).
@@ -352,7 +370,7 @@ modulations: sweeps across a filter bank, panning, rhythmic accents.
   the rate by tapping or a clock, when "Tap tempo" is on. TRIG 4 high
   multiplies or divides the rate by "TR4: MULT" (x2). CV 1 is rate, CV 2
   shape, CV 3 spread, and CV 4 goes where "CV4: DEST" says (cplg, the
-  coupling, by default).
+  coupling between the LFOs, by default).
 - **Out.** A to D: the four LFOs. At the default "Output range" they swing
   from about −3.75 V to +5.2 V, centred near +0.75 V, not 0 V; "Output
   range" narrows the swing and "Offset" raises it.
@@ -370,7 +388,8 @@ modulation.
 
 - **In.** TRIG 1 resets generator 1, TRIG 2 generator 2, TRIG 3 both;
   TRIG 4 high freezes both. CV 1 and CV 3 set the speed of generators 1
-  and 2, CV 2 and CV 4 their "Rho/c".
+  and 2, CV 2 and CV 4 their "Rho/c" (how wild each one's path is: the
+  Lorenz system's rho and the Rössler's c).
 - **Out.** By default A, B carry generator 1's Lorenz x and y, C, D
   generator 2's ("Out A" to "Out D" choose any x, y or z of either
   attractor, or a sum or XOR of two). The x and y outputs swing either
@@ -390,8 +409,9 @@ subset of a clock.
   ("Trigger input", which can also take another channel's end of cycle,
   to chain them). The types with a sustain hold while the gate is high.
   CV 1–4 do nothing until a channel's "CV1 ->" to "CV4 ->" rows send them
-  to a parameter (attack, decay, sustain, release, Euclidean, delay,
-  amplitude, loops); each channel maps them on its own.
+  to a parameter (attack, decay, sustain, release, ADR for all three times
+  at once, Euclidean, delay, amplitude, loops); each channel maps them on
+  its own.
 - **Out.** A to D: the envelopes, 0 V at rest up to +5 V at full
   "Amplitude"; "Inverted" turns them upside down.
 - **Start with** "TYPE" (AD), "Attack", "Decay" (plus "Sustain/Level" and
@@ -407,10 +427,13 @@ modes add an arpeggiator and steps chosen by CV.
 
 - **In.** Both channels clock from TRIG 1 ("clock src" TR1 or TR3; set B
   to TR3 to clock it apart). "reset/mute" is off: RST2 and RST4 reset from
-  TRIG 2 or TRIG 4, and =HI2, =LO2, =HI4, =LO4 skip steps while that input
-  is high or low. "playmode" TR+1 to TR+3 change sequence on TRIG 2 (A) or
-  TRIG 4 (B); S+H#1–4 and CV#1–4 let CV 1–4 pick the step. Otherwise CV
-  1–4 do nothing until assigned under the "CV mapping" heading.
+  TRIG 2 or TRIG 4, and =HI2, =LO2, =HI4, =LO4 mute the channel while that
+  input is high (HI) or low (LO): the sequence holds and no gates play.
+  "playmode" TR+1 to TR+3 change sequence on TRIG 2 (A) or TRIG 4 (B), a
+  gate that is high when the clock arrives; S+H#1–4 (sample and hold) and
+  CV#1–4 let CV 1–4 pick the step, at each clock or all the time.
+  Otherwise CV 1–4 do nothing until assigned under the "CV mapping"
+  heading.
 - **Out.** A and B: each channel's pitch CV. C (for A) and D (for B) by
   "aux. mode": gate (default, about +6 V, "--> pw" long), copy (the pitch,
   "--> aux +/-" octaves away), or an AD, ADR or ADSR envelope, 0 to +5 V.
@@ -457,16 +480,22 @@ A quantizer that harmonizes: at each clock it quantizes a CV and builds a
 four-note chord on it, stepping through progressions of chords you make.
 
 - **In.** TRIG 1 is the clock: it samples CV 1 ("CV source") and updates
-  the chord. TRIG 2 moves to the next chord ("chords trg src" TR2; TR1
-  moves at every clock). TRIG 3 changes progression in the "playmode"
-  TR3+1 to TR3+3. TRIG 4 high sends the progression back to its first
-  chord. CV 1–4 have no other use until assigned under "CV mapping".
+  the chord. TRIG 2, 3 and 4 are read only at a clock. TRIG 2 high at a
+  clock moves to the next chord ("chords trg src" TR2; TR1 moves at every
+  clock). TRIG 3 high at a clock changes progression in the "playmode"
+  TR3+1 to TR3+3, and is the sampling trigger in S+H#1–4 (sample and
+  hold: CV 1–4 picks the chord). TRIG 4 high when the chord advances
+  sends the progression back to its first chord. CV 1–4 have no other use until
+  assigned under "CV mapping".
 - **Out.** A: the base note. B, C, D: the other chord notes. Pitch CV.
 - **Start with** "scale", "root", "progression", "Chords", "playmode".
-  A new module's chords are all the "fifth" quality, one per progression.
-  Chord intervals count steps of the scale, so in the default Semitone
-  scale that "fifth" is a major third; pick a seven-note scale such as
-  Ionian for real fifths.
+  On a new module each progression holds one chord, so TRIG 2 and TRIG 4
+  do nothing until you add chords in the chord editor (hardware mode) or
+  raise the count by CV with "num.chrds CV >".
+  That chord is the "fifth" quality: B doubles A and D doubles C. Chord
+  intervals count steps of the scale, so in the default Semitone scale
+  that "fifth" is a major third; pick a seven-note scale such as Ionian
+  for real fifths.
 - **Hardware mode:** the chords and progressions ("Chords" row), and user
   scale notes.
 
@@ -476,12 +505,15 @@ Fixed reference voltages, one per output, for tuning oscillators and
 checking how well they track.
 
 - **In.** None in Shoal. On the hardware TRIG 4 feeds a frequency and
-  tempo meter, set up by channel D's "Notes/BPM :", "A above mid C",
-  "> mantissa" and "> ppqn"; Shoal does not measure frequencies yet, so
-  the meter reads nothing.
+  tempo meter, set up on channel D's tab: "Notes/BPM :" picks notes or
+  tempo, "A above mid C" and the mantissa row below it (hundredths of a
+  hertz) set the tuning reference, and "> ppqn" the clock's pulses per
+  quarter note. Shoal does not measure frequencies yet, so the meter reads
+  nothing.
 - **Out.** A to D: "Octave" plus "Semitone" as pitch CV (0 V at first).
   A "Mod range oct" other than 0 makes the output jump between that pitch
-  and one that many octaves away, every "Mod rate (s)" seconds.
+  and one that many octaves away, every "Mod rate (s)" seconds (at 0, the
+  default, it flips at audio rate).
 - **Start with** "Octave" and "Semitone".
 - **Hardware mode:** "Autotune", which needs the same frequency reading
   and so has nothing to measure in Shoal.
@@ -502,8 +534,8 @@ checking how well they track.
 ## Good to know
 
 - **Sub-editors are hardware mode.** User scale notes, Sequins steps,
-  Acid Curds chords and Automatonnetz cells are edited
-  in hardware mode, reached from the row that says so (see "What stays in
+  Acid Curds chords, Automatonnetz cells and References' Autotune are
+  edited in hardware mode, reached from the row that says so (see "What stays in
   hardware mode"). While one is open the list shows the brass banner and
   takes no edits.
 - **Harrington 1200, Euclidean rows.** After loading a patch saved with
@@ -537,7 +569,7 @@ checking how well they track.
 ## Not there yet
 
 - Mouse versions of the sub-editors (user scale notes, Sequins steps,
-  Acid Curds chords, Automatonnetz cells).
+  Acid Curds chords, Automatonnetz cells, References' Autotune).
 - Right-click options: the ±5 V input range, encoder acceleration on/off
   and the app choice. The input range is already saved with the patch, so
   patches keep it when the option arrives.
