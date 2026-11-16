@@ -73,6 +73,18 @@ struct fog {
 	// Fog has no output jacks the engine reads: as idle.
 	static void outputs(Instance&, long, const Cv&) {}
 
+	// Low noise (+/-1 mV, far over the engine's sleep threshold) into both
+	// inputs, knobs at their defaults, no CV: the engine stays awake, so this
+	// is the guard for the cache-aliased delay lines that idle used to be.
+	static void quiet(Instance& i, long t, const Cv&) {
+		if (t == 0) {
+			i.frame.inL.channels = 1;
+			i.frame.inR.channels = 1;
+		}
+		i.inV[0][0] = i.next() * 2e-4f;
+		i.inV[1][0] = i.next() * 2e-4f;
+	}
+
 	// Stereo noise in, every CV moving at full attenuverter, Drift and Bloom
 	// up, Mix 0.5, in the mode's voicing. The knobs stay still.
 	static void setBusy(Instance& i, long t, const Cv& cv, int mode) {
@@ -103,19 +115,21 @@ struct fog {
 		setBusy(i, t, cv, rka::fog::ICE);
 	}
 
-	static const int BENCH_CASES = 4;
+	static const int BENCH_CASES = 5;
 	static BenchCase<Instance> benchCase(int k) {
 		// Budgets: about twice what an Apple M-series Mac measured, rounded
-		// up to the next 0.05 (idle 0.55, outputs 0.56, busy 0.69, busyIce 0.69, after the delay lines' write
-		// positions were staggered; before, 1.09, 1.09, 1.32, 1.32;
-		// Fog's 16 lines run whatever the input, so idle is not cheap). Idle and
-		// outputs are set lower than twice (0.95, not 1.15) so that the old,
-		// cache-aliased lines (1.03-1.11) fail them. Elsewhere: three times as
-		// much, provisional (not yet measured on x86-64).
+		// up to the next 0.05 (idle 0.059 and outputs 0.059: the engine sleeps
+		// when nothing is patched; busy 0.72, busyIce 0.72 and quiet 0.55 are
+		// as before, after the delay lines' write positions were staggered;
+		// before that, 1.09, 1.09, 1.32, 1.32 and 1.09). Quiet keeps the old
+		// idle budget, 0.95, so the old, cache-aliased lines (1.03-1.11) fail
+		// it. Elsewhere: three times as much, provisional (not yet measured
+		// on x86-64).
 		const BenchCase<Instance> cases[BENCH_CASES] = {
 			// name     inputs   Apple arm64  elsewhere
-			{"idle", idle, 0.95, 2.85},
-			{"outputs", outputs, 0.95, 2.85},
+			{"idle", idle, 0.15, 0.45},
+			{"outputs", outputs, 0.15, 0.45},
+			{"quiet", quiet, 0.95, 2.85},
 			{"busy", busy, 1.4, 4.2},
 			{"busyIce", busyIce, 1.4, 4.2},
 		};

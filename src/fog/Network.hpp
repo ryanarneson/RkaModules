@@ -149,6 +149,15 @@ struct Network {
 		clear();
 	}
 
+	// The longest current line length, in samples at the inner rate (control
+	// rate: the engine asks every few dozen samples for its sleep hold).
+	float longestLen() const {
+		float m = 0.f;
+		for (int i = 0; i < n; i++)
+			m = len[i] > m ? len[i] : m;
+		return m;
+	}
+
 	// Silences the network. The next setControls() sets Size at once, with
 	// no slew, since there is no tail to swoop.
 	void clear() {

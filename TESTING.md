@@ -184,17 +184,20 @@ instance, Apple M-series Mac:
 | Fathom measured (was) | 0.02 (0.58) | 0.55 (0.58) | 0.59 (0.59) |
 | Sluice budget | 0.2 | 0.15 | 2.15 |
 | Sluice measured | 0.077 | 0.066 | 1.07 |
-| Fog budget | 0.95 | 0.95 | 1.4 |
-| Fog measured (was) | 0.55 (1.09) | 0.56 (1.09) | 0.69 (1.32) |
+| Fog budget | 0.15 | 0.15 | 1.4 |
+| Fog measured (was) | 0.06 (0.55) | 0.06 (0.56) | 0.72 (0.69) |
 
 Sluice also has a mixDown case (as busy, but only D connected): budget 2.25,
 measured 1.11. Its budgets are about twice the measurement, rounded up to
 the next 0.05, and are written for a new engine, so nothing "was" to record.
 Busy is 16 voices on every row with a moving CV on every row, Levels 0.5,
 Exp. Its other-machine budgets are three times the Mac's, as the others are.
-Fog's idle and outputs budgets are under twice the measurement so the
-cache-aliased delay lines (1.05-1.11) fail them. Fog's 16 lines run whatever the input, so idle costs about what outputs does;
-its busy is stereo noise, all five CVs moving at full attenuverter, Bloom and
+Fog sleeps when its input and tail are silent (under 1e-5 V for 0.25 s or
+twice the longest line), so idle and outputs cost 0.06 (twice, rounded up to
+the next 0.05: 0.15). Its quiet case (+/-1 mV noise into both inputs, knobs at
+their defaults, no CV) keeps the engine awake and measures 0.57-0.63; its
+budget is 0.95, under twice, so the cache-aliased delay lines (1.03-1.11)
+fail it. Fog's 16 lines run whenever it is awake; its busy is stereo noise, all five CVs moving at full attenuverter, Bloom and
 Drift up, Mix 0.5 (busyIce, 0.69 too, is the same in ICE; it is a copy of HAAR
 until the voicings are tuned). The spec's target is busy under 3 %.
 

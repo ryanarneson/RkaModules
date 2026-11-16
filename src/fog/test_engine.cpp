@@ -393,6 +393,144 @@ void limiterIdleAt5v() {
 	std::printf("  limiter_idle_at_5v: worst peak %.2f V, lowest RMS %+.2f dB; 80 V saw limited to %.3f V\n", worstPeak, worstDb, hp);
 }
 
+// ---- Sleep ----
+
+// Silence puts the engine to sleep after exactly its hold (at least 0.25 s),
+// and not a sample before.
+void sleepAfterHold() {
+	Rig r;
+	r.f.params[FogFrame::MIX] = 1.f;
+	int k = 0;
+	bool early = false;
+	while (!r.eng.asleep() && k < (int) (30 * RATE)) {
+		r.step(0.f);
+		k++;
+		if (!r.eng.asleep() && k >= r.eng.hold)
+			early = true;
+	}
+	CHECK(r.eng.asleep(), "silence for %d samples did not put the engine to sleep", k);
+	CHECK(!early, "awake at or past the hold (%d samples)", r.eng.hold);
+	CHECK(k == r.eng.hold, "slept after %d samples, want the hold %d", k, r.eng.hold);
+	CHECK(k >= (int) (0.25 * RATE), "slept after %d samples, under 0.25 s", k);
+	// Asleep: the wet is exactly 0, and a quiet input stays asleep.
+	const FogResult o = r.step(0.f);
+	CHECK(o.outL == 0.f && o.outR == 0.f, "asleep output %g, %g, want 0", o.outL, o.outR);
+	CHECK(r.eng.asleep(), "woke on silence");
+	// A sample well under QUIET does not wake it; 1 V (far over, whatever the
+	// low cut and Bloom pass) does.
+	r.step(0.1f * FogEngine::quiet());
+	CHECK(r.eng.asleep(), "woke on a feed under QUIET");
+	r.step(1.f);
+	CHECK(!r.eng.asleep(), "did not wake on a feed of 1 V");
+	std::printf("  sleep_after_hold: slept after %d samples (%.3f s)\n", k, k / RATE);
+}
+
+struct SleepRun {
+	int sleepAt = -1, lastLoud = -1;
+	double maxStepAtSleep = 0;
+	double hold = 0, longest = 0;
+};
+
+// Feeds `burst` samples of +/-5 V noise (or one 5 V impulse when impulse is
+// true), then silence, up to `total` samples; notes when it slept and the
+// last output at or above the wet's QUIET.
+SleepRun runToSleep(float vis, bool impulse, int burst, int total) {
+	Rig r;
+	r.f.params[FogFrame::MIX] = 1.f;
+	r.f.params[FogFrame::VISIBILITY] = vis;
+	r.f.params[FogFrame::SIZE] = 1.f;
+	SleepRun s;
+	std::vector<float> out;
+	for (int i = 0; i < total && s.sleepAt < 0; i++) {
+		float x = 0.f;
+		if (impulse)
+			x = i == 0 ? 5.f : 0.f;
+		else if (i < burst)
+			x = 5.f * uniform();
+		const FogResult o = r.step(x);
+		out.push_back(o.outL);
+		if (i >= 1 && std::fabs(o.outL) >= FogEngine::quiet() * FogEngine::wetTrim() && i >= burst)
+			s.lastLoud = i;
+		if (r.eng.asleep())
+			s.sleepAt = i;
+	}
+	s.hold = r.eng.hold;
+	s.longest = r.eng.net.longestLen() * (float) r.eng.divider.factor();
+	// Steps around the sleep transition.
+	if (s.sleepAt > 2)
+		for (int i = s.sleepAt - 2; i <= s.sleepAt; i++) {
+			const double d = std::fabs(out[i] - out[i - 1]);
+			s.maxStepAtSleep = d > s.maxStepAtSleep ? d : s.maxStepAtSleep;
+		}
+	return s;
+}
+
+// It does not fall asleep while the tail is audible: DENSE after a 1 s noise
+// burst, and CLEAR after one impulse, both at Size 1.
+void noSleepInTail() {
+	const int total = (int) (400 * RATE);
+	const SleepRun d = runToSleep(1.f, false, (int) RATE, total);
+	CHECK(d.sleepAt > 0, "DENSE Size 1: never slept in 400 s");
+	CHECK(d.sleepAt > d.lastLoud, "DENSE Size 1: slept at %d, but the wet was audible at %d", d.sleepAt, d.lastLoud);
+	CHECK(d.sleepAt >= d.lastLoud + (int) d.hold, "DENSE Size 1: slept %d samples after the last audible one, want >= the hold %g",
+		d.sleepAt - d.lastLoud, d.hold);
+	// The hold is the longer of 0.25 s and twice the longest line (Size 1).
+	CHECK(d.hold >= 2.0 * d.longest - 1.0 && d.hold > 0.25 * RATE + 1, "Size 1: hold %g samples, want >= 2 x the longest line (%g) and over 0.25 s", d.hold,
+		d.longest);
+	const SleepRun c = runToSleep(0.f, true, 0, total);
+	CHECK(c.sleepAt > 0, "CLEAR Size 1: never slept in 400 s");
+	CHECK(c.sleepAt > c.lastLoud, "CLEAR Size 1: slept at %d, but the wet was audible at %d", c.sleepAt, c.lastLoud);
+	CHECK(c.sleepAt >= c.lastLoud + (int) c.hold, "CLEAR Size 1: slept %d samples after the last audible one, want >= the hold %g",
+		c.sleepAt - c.lastLoud, c.hold);
+	std::printf("  no_sleep_in_tail: DENSE slept at %.2f s (last audible %.2f s, hold %.2f s); CLEAR at %.2f s (last %.2f s, hold %.2f s)\n",
+		d.sleepAt / RATE, d.lastLoud / RATE, d.hold / RATE, c.sleepAt / RATE, c.lastLoud / RATE, c.hold / RATE);
+}
+
+// No click when it falls asleep: the step in the output there stays under
+// 2 QUIET x the wet gain (the trim; Mix 1).
+void sleepNoClick() {
+	const SleepRun d = runToSleep(1.f, false, (int) RATE, (int) (400 * RATE));
+	const double lim = 2.0 * FogEngine::quiet() * FogEngine::wetTrim();
+	CHECK(d.sleepAt > 2, "never slept");
+	CHECK(d.maxStepAtSleep < lim, "step at the sleep transition %g V, want < %g", d.maxStepAtSleep, lim);
+	std::printf("  sleep_no_click: step at sleep %.3g V (limit %.3g)\n", d.maxStepAtSleep, lim);
+}
+
+// Waking is transparent: with Drift 0, a noise burst after sleeping gives the
+// same output as the same burst on a fresh engine (48 kHz, so the divider
+// has no phase: sample for sample).
+void wakeTransparent() {
+	Rig a, b;
+	for (Rig* r : {&a, &b}) {
+		r->f.params[FogFrame::MIX] = 1.f;
+		r->f.params[FogFrame::DRIFT] = 0.f;
+		r->f.params[FogFrame::BLOOM] = 0.f;
+	}
+	// A: noise, then silence until asleep.
+	for (int i = 0; i < (int) (0.5 * RATE); i++)
+		a.step(3.f * uniform());
+	int guard = 0;
+	while (!a.eng.asleep() && guard++ < (int) (400 * RATE))
+		a.step(0.f);
+	CHECK(a.eng.asleep(), "A never slept");
+	// Then a 0.2 s noise burst and a tail, the same on both. Mix 1, so the
+	// output is the wet alone (Bloom 0 still passes only a few mV of the
+	// first sample, so a burst, not an impulse, shows a lost or late start).
+	double worst = 0, peak = 0;
+	for (int i = 0; i < (int) (3 * RATE); i++) {
+		const float x = i < (int) (0.2 * RATE) ? 3.f * uniform() : 0.f;
+		const FogResult oa = a.step(x), ob = b.step(x);
+		double d = std::fabs(oa.outL - ob.outL);
+		const double dr = std::fabs(oa.outR - ob.outR);
+		d = dr > d ? dr : d;
+		worst = d > worst ? d : worst;
+		peak = std::fabs(ob.outL) > peak ? std::fabs(ob.outL) : peak;
+	}
+	CHECK(peak > 0.1, "the reference engine's response is silent (peak %g)", peak);
+	CHECK(worst < 2e-5, "after sleep the output differs from a fresh engine by %g V, want < 2e-5", worst);
+	std::printf("  wake_transparent: sample-for-sample, worst difference %.3g V (response peak %.2f V)\n", worst, peak);
+}
+
 } // namespace
 
 int main() {
@@ -408,5 +546,9 @@ int main() {
 	mixRampNoClick();
 	lowCut();
 	limiterIdleAt5v();
+	sleepAfterHold();
+	noSleepInTail();
+	sleepNoClick();
+	wakeTransparent();
 	return rkatest::finish("test_engine");
 }

@@ -27,6 +27,13 @@
 //   a drifting tail build up (crest about 3.5 against the static response's 2).
 // - Mode: the voicing follows FogFrame::mode. A change fades the wet out
 //   over 50 ms, clears and reconfigures the network, and fades it in.
+// - Sleep: once the feed into the network and the wet out of it have both
+//   stayed under QUIET (1e-5 V) for the hold (the longer of 0.25 s and twice
+//   the longest line, so the sparse echoes of CLEAR at Size 1 do not fall
+//   asleep between hits), the engine skips the RateDivider and the network
+//   (wet 0) until a feed sample reaches QUIET. Buffers are not cleared: their
+//   contents are already below QUIET. reset(), a new rate and a mode change
+//   wake it.
 // - Only setSampleRate() allocates. process() allocates nothing and calls
 //   no libm.
 #include "Bloom.hpp"
@@ -84,6 +91,9 @@ struct FogEngine {
 	// Fixed trim on the wet (a fraction), -6 dB.
 	static float wetTrim() { return 0.501f; }
 
+	// Below this (V) the feed and the wet count as silence: -114 dB re 5 V.
+	static float quiet() { return 1e-5f; }
+
 	// Test only: bypass the limiter.
 	bool limiterEnabled = true;
 
@@ -128,6 +138,27 @@ struct FogEngine {
 		mixSnap = true;
 		fade = 1.f;
 		fadeState = 0;
+		wake();
+	}
+
+	// Awake, with the quiet count at 0 and the hold refreshed.
+	void wake() {
+		asleep_ = false;
+		quietCount = 0;
+		updateHold();
+		holdTick = 64;
+	}
+
+	bool asleep() const {
+		return asleep_;
+	}
+
+	// Host-rate samples of silence before sleeping.
+	void updateHold() {
+		const float floorS = 0.25f * hostRate;
+		const float tail = 2.f * net.longestLen() * (float) divider.factor();
+		const float h = tail > floorS ? tail : floorS;
+		hold = (int) (h < 1e9f ? h : 1e9f);
 	}
 
 	void process(const FogFrame& f, FogResult& res) {
@@ -146,6 +177,7 @@ struct FogEngine {
 				bloomL.clear();
 				bloomR.clear();
 				fadeState = 2;
+				wake();
 			}
 		}
 		else if (fadeState == 2) {
@@ -186,18 +218,36 @@ struct FogEngine {
 		feedL = (feedL > 1e-20f || feedL < -1e-20f) ? feedL : 0.f;
 		feedR = (feedR > 1e-20f || feedR < -1e-20f) ? feedR : 0.f;
 
-		// The wet, at the inner rate.
-		float wetL, wetR;
-		const int rateSel = f.driftRate ? 1 : 0;
-		divider.process(feedL, feedR, wetL, wetR, [&](float l, float r, float& ol, float& orr) {
-			net.setControls(vis, size, dampK, drift, rateSel);
-			net.process(l, r, ol, orr);
-		});
-		wetL = fogFinite(wetL) * wetTrim();
-		wetR = fogFinite(wetR) * wetTrim();
-		if (limiterEnabled) {
-			wetL = limit(wetL);
-			wetR = limit(wetR);
+		// The wet, at the inner rate; skipped while asleep.
+		float wetL = 0.f, wetR = 0.f;
+		const float Q = quiet();
+		const bool feedQuiet = feedL < Q && feedL > -Q && feedR < Q && feedR > -Q;
+		if (asleep_ && !feedQuiet)
+			wake();
+		if (!asleep_) {
+			const int rateSel = f.driftRate ? 1 : 0;
+			divider.process(feedL, feedR, wetL, wetR, [&](float l, float r, float& ol, float& orr) {
+				net.setControls(vis, size, dampK, drift, rateSel);
+				net.process(l, r, ol, orr);
+			});
+			wetL = fogFinite(wetL);
+			wetR = fogFinite(wetR);
+			if (feedQuiet && wetL < Q && wetL > -Q && wetR < Q && wetR > -Q) {
+				if (++quietCount >= hold)
+					asleep_ = true;
+			}
+			else
+				quietCount = 0;
+			if (--holdTick <= 0) {
+				holdTick = 64;
+				updateHold();
+			}
+			wetL *= wetTrim();
+			wetR *= wetTrim();
+			if (limiterEnabled) {
+				wetL = limit(wetL);
+				wetR = limit(wetR);
+			}
 		}
 		wetL *= fade;
 		wetR *= fade;
@@ -273,6 +323,10 @@ struct FogEngine {
 	bool mixSnap = true; // the next process() starts the ramp at its target
 	float fade = 1.f, fadeStep = 0.f;
 	int fadeState = 0; // 0 steady, 1 fading out, 2 fading in
+	bool asleep_ = false;
+	int quietCount = 0;
+	int hold = 12000;
+	int holdTick = 64;
 };
 
 } // namespace rka
