@@ -177,6 +177,11 @@ It is done with a damping filter in each line's feedback, whose gains are
 derived from the T60 so that Visibility still means the low-frequency
 decay (*designer's call*).
 
+Changes do not click: Damp reaches the filters through the same 30 ms
+smoother as Visibility (a jump used to step every line's filter at once,
+and the step came back a line length later as lone 0.3–0.4 V spikes on a
+1 V tone).
+
 ### Bloom: how the wash arrives
 
 How slowly the wash swells in after a sound arrives. Bloom shapes the
@@ -303,26 +308,30 @@ Visibility: full wet matched dry at every Visibility and Size.)
 - Loudness does not dip as Mix goes up (within ±2 dB across Mix, at noon
   Visibility). A make-up gain on the wet, a smooth function of Visibility
   and Size (the matched level times the square root of T60 / 5.66 s), does
-  this; it follows its target through a 30 ms smoother, and it takes
-  Visibility through the same 30 ms smoother as the network's gains, so
-  moving Visibility or Size does not step the level. The earlier −6 dB trim
-  is gone.
+  this. It takes Visibility from the network's own 30 ms smoother, in step
+  with the network's gains and with no smoothing of its own, so the total
+  wet gain follows one smooth Visibility and a jump never swells the wet
+  (a second smoother here once lagged the network and swelled a 1 → 0 jump
+  5–8 dB for 50–70 ms); Size goes through a 30 ms smoother. Moving
+  Visibility or Size does not step the level. The earlier −6 dB trim is
+  gone.
 - **Loud drones are levelled:** a held tonal drone (a saw, a sine) builds
   up in the network to 4–8 dB over noise, with peaks to 20–50 V at Damp 0.
   The user's ruling: these are turned down, not clipped. A wet leveller, a
   slow automatic gain after the make-up and before the limiter, rides the
   wet down. It is stereo-linked (one gain for L and R, from the louder
   side): a peak follower (5 ms attack, 300 ms release) feeds a slower
-  follower (50 ms attack, 3 s release), and while that is over 6.5 V the
+  follower (10 ms attack, 3 s release), and while that is over 6.5 V the
   gain is 6.5 V divided by it; otherwise exactly 1. The dry signal is never
   touched.
   - Drones (±5 V saw, square and sine at 55–220 Hz, every mode, Visibility
     0.75 and 1, Size 0.5 and 1, Damp 0, Mix 1) put at most 0.2 % of samples
     over the limiter's 9 V knee, where without it up to 51 % were; at Mix
     noon, at most 0.8 % of the output is over 9 V (without it, up to 40 %);
-    with the energy law the wet arrives hotter at 0.75 and 1, the onset
-    gets through for longer, and at Mix noon up to 1.25 % is over 9 V
-    (second by second the same as before from 2 s on). At the levels
+    with the energy law the wet arrives hotter at 0.75 and 1, so the slow
+    follower's attack is 10 ms (it was 50 ms, which let up to 1.25 % over
+    9 V at Mix noon, all in a drone's first seconds); now at most 0.2 % at
+    Mix 1 and 0.63 % at Mix noon. At the levels
     measured with noon Damp, a drone at full wet now comes out 0.4–2.9 dB
     under its input instead of 2–8 dB over it.
   - Noise at noon keeps the matched level: its peaks are lone samples, which barely

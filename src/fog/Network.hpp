@@ -127,12 +127,15 @@
 //   Applied at once, a Visibility jump stepped sqrt(1 - g^2) (0.985 at 0,
 //   0.132 at 1: -17 dB in one sample) while the engine's make-up took 30 ms
 //   to follow, and stepped every line's gain (test_engine's
-//   visibility_step_no_click).
+//   visibility_step_no_click). Damp takes the same one-pole: applied at once,
+//   a Damp jump stepped every line's shelf, and the step, written into the
+//   lines, came back a line length later as lone spikes of 0.3-0.4 V on a
+//   1 V sine (test_engine's damp_step_no_click).
 //
 // Only allocate() allocates. process() calls no libm (fastSin2pi, the
 // Hermite reads) and touches no global. A Drift change updates only the
 // modulation. The gains and damping are recomputed when the (smoothed)
-// Visibility, Damp or the (slewing) length changes, at most once per 32
+// Visibility or Damp or the (slewing) length changes, at most once per 32
 // samples: a change inside that window is applied when it ends, so a
 // control moved every sample (CV) costs one recompute per 32 samples.
 #include "DelayLine.hpp"
@@ -211,7 +214,8 @@ struct Network {
 	// Controls.
 	float vis = 0.5f, size = 0.5f, damp = 0.f, drift = 0.f;
 	float visSm = 0.5f;   // the Visibility the gains use: follows vis (30 ms)
-	float visCoef = 1.f;  // its one-pole, a step per GAIN_EVERY samples
+	float dampSm = 0.f;   // and the Damp: follows damp (30 ms)
+	float visCoef = 1.f;  // their one-pole, a step per GAIN_EVERY samples
 	int driftRate = 0;
 	float t60 = 1.f, ratio = 1.f, depth = 0.f;
 	float scaleTarget = 1.f, scaleOffset = 0.f;
@@ -284,7 +288,7 @@ struct Network {
 		shelfA1 = (wShelf - 1.f) / (wShelf + 1.f);
 		slewCoeff = 1.f / (0.03f * rate + 1.f);
 		depthCoef = 1.f / (0.04f * rate + 1.f);
-		// Visibility's 30 ms one-pole, taken one step a GAIN_EVERY samples.
+		// Visibility's and Damp's 30 ms one-pole, one step a GAIN_EVERY samples.
 		visCoef = (float) GAIN_EVERY / (0.03f * rate + (float) GAIN_EVERY);
 		// Taps: rows 5 and 10 of the Sylvester Hadamard matrix (orthogonal
 		// +/-1 patterns), and the input signs row 3, over n lines.
@@ -346,14 +350,15 @@ struct Network {
 		snapSmoothing();
 	}
 
-	// The smoothed controls (Drift's swing, the wet level) jump to their
+	// The smoothed controls (Drift's swing, Visibility and Damp) jump to their
 	// targets: after a clear, a fresh network's first controls, or a wake.
 	void snapSmoothing() {
 		for (int i = 0; i < MAX_LINES; i++)
 			modDepth[i] = modDepthTarget[i];
 		depthMoving = false;
-		if (visSm != vis) {
+		if (visSm != vis || dampSm != damp) {
 			visSm = vis;
+			dampSm = damp;
 			setTargets();
 			updateGains();
 		}
@@ -444,8 +449,8 @@ struct Network {
 			updateLengths();
 			gainsPending = true;
 		}
-		if (gainCount > 0 && --gainCount == 0 && (gainsPending || visSm != vis)) {
-			stepVisibility();
+		if (gainCount > 0 && --gainCount == 0 && (gainsPending || visSm != vis || dampSm != damp)) {
+			stepDecay();
 			requestGains();
 		}
 
@@ -633,7 +638,7 @@ struct Network {
 
 	void setTargets() {
 		t60 = fogT60(visSm);
-		const float d = dampBias + (1.f - dampBias) * (1.f - brightness) * damp;
+		const float d = dampBias + (1.f - dampBias) * (1.f - brightness) * dampSm;
 		ratio = fastExp2(-(d + 2.f * d * d));
 		scaleTarget = fastExp2((2.f * size - 1.f) * 1.58496250072f); // log2(3)
 	}
@@ -657,13 +662,15 @@ struct Network {
 		}
 	}
 
-	// One step of the Visibility the gains use towards vis (the one-pole);
-	// on it once within 1e-4.
-	void stepVisibility() {
-		if (visSm == vis)
+	// One step of the Visibility and Damp the gains use towards vis and damp
+	// (the one-pole); on each once within 1e-4.
+	void stepDecay() {
+		if (visSm == vis && dampSm == damp)
 			return;
 		const float d = vis - visSm;
 		visSm = (d > 1e-4f || d < -1e-4f) ? visSm + d * visCoef : vis;
+		const float e = damp - dampSm;
+		dampSm = (e > 1e-4f || e < -1e-4f) ? dampSm + e * visCoef : damp;
 		setTargets();
 	}
 

@@ -29,7 +29,7 @@
 //   leveller holds loud material down.
 // - Leveller: a slow automatic gain on the wet, after the make-up and before
 //   the limiter, one gain for L and R. A peak follower of the louder side
-//   (5 ms attack, 300 ms release) feeds a slower follower (50 ms attack, 3 s
+//   (5 ms attack, 300 ms release) feeds a slower follower (10 ms attack, 3 s
 //   release); while that is over 6.5 V the gain is 6.5 V / it, else exactly 1.
 //   Held tones build up in the network to 4-8 dB over noise, with peaks to
 //   20-50 V; the leveller turns them down instead of the limiter clipping
@@ -61,13 +61,17 @@
 //   QUIET. Buffers are not cleared: their contents are already below QUIET.
 //   reset(), a new rate and a mode change wake it. The sleep test reads the
 //   wet before the leveller.
-// - The wet make-up follows its target (refreshed every 32 samples) through a
-//   30 ms one-pole, so a Visibility or Size change does not step the level.
-//   The target takes the network's smoothed Visibility (Network::visSm, the
-//   same 30 ms one-pole the gains use), so the make-up and the network's own
-//   wet level, sqrt(1 - g^2), move together: from the raw knob, the make-up
-//   (0.30 at Visibility 0, 8.0 at 1) ramped linearly while the network's level
-//   followed the smoothed Visibility, +10 dB in 5 ms on a 0 -> 1 jump.
+// - The wet make-up takes Visibility from the network (Network::visSm, the
+//   30 ms one-pole the gains use, a step per gain refresh) the sample it
+//   changes, with no smoothing of its own, so the make-up and the network's
+//   own wet level, sqrt(1 - g^2), move as one. Size goes through a 30 ms
+//   one-pole here, refreshed at most once per 32 samples. Two earlier forms
+//   failed: from the raw knob through a 30 ms one-pole, the make-up (0.30 at
+//   Visibility 0, 8.0 at 1) ramped linearly while the network's level followed
+//   the smoothed Visibility, +10 dB in 5 ms on a 0 -> 1 jump; from visSm
+//   through that one-pole, the make-up lagged the network by a second pole
+//   and a 1 -> 0 jump swelled the wet 5-8 dB over its start for 50-70 ms
+//   (test_engine's visibility_no_swell).
 // - Only setSampleRate() allocates. process() allocates nothing and calls
 //   no libm.
 #include "Bloom.hpp"
@@ -152,7 +156,7 @@ struct FogEngine {
 	static float levelTarget() { return 6.5f; }
 	static float levelAttack() { return 0.005f; }
 	static float levelRelease() { return 0.3f; }
-	static float levelSlowAttack() { return 0.05f; }
+	static float levelSlowAttack() { return 0.01f; } // 50 ms until the T60 law made the onsets hotter
 	static float levelSlowRelease() { return 3.f; }
 	// Under this (V) on the feed's follower the input counts as absent and
 	// the leveller's gain is held: -54 dB re 5 V. The follower has the 5 ms
@@ -337,19 +341,27 @@ struct FogEngine {
 				net.setControls(vis, size, damp, drift, rateSel);
 				net.process(l, r, ol, orr);
 			});
-			// The make-up target is refreshed at most once per 32 samples (as
-			// the network's gains are), and the applied make-up follows it
-			// through a one-pole with Size's 30 ms slew, so a Visibility or
-			// Size step (or audio-rate CV) does not step the level.
-			if (makeupSnap || ++makeupCount >= 32) {
-				makeupCount = 0;
-				makeupTarget = wetMakeup(net.visSm, size, vo.wetMakeup);
-				if (makeupSnap) {
-					makeup = makeupTarget;
-					makeupSnap = false;
-				}
+			// The make-up (see the top): Visibility from the network's smoothed
+			// value, taken the sample it changes (in step with the gains'
+			// refresh, with no pole of its own), so the total wet gain (the
+			// network's sqrt(1 - g^2) times the make-up) follows one smooth
+			// Visibility; Size through a 30 ms one-pole here (the network's
+			// lengths slew over 30 ms too), refreshed at most once per 32
+			// samples while it moves.
+			if (makeupSnap)
+				makeupSize = size;
+			else if (makeupSize != size) {
+				const float d = size - makeupSize;
+				makeupSize = (d > 1e-5f || d < -1e-5f) ? makeupSize + d * makeupCoef : size;
 			}
-			makeup += (makeupTarget - makeup) * makeupCoef;
+			const bool sizeDue = makeupSize != makeupSizeUsed && ++makeupCount >= 32;
+			if (makeupSnap || net.visSm != makeupVis || sizeDue) {
+				makeupCount = 0;
+				makeupVis = net.visSm;
+				makeupSizeUsed = makeupSize;
+				makeup = wetMakeup(makeupVis, makeupSize, vo.wetMakeup);
+				makeupSnap = false;
+			}
 			wetL = fogFinite(wetL) * makeup;
 			wetR = fogFinite(wetR) * makeup;
 			if (feedQuiet && wetL < Q && wetL > -Q && wetR < Q && wetR > -Q) {
@@ -517,7 +529,9 @@ struct FogEngine {
 	bool mixSnap = true; // the next process() starts the ramp at its target
 	float fade = 1.f, fadeStep = 0.f;
 	int fadeState = 0; // 0 steady, 1 fading out, 2 fading in
-	float makeup = 1.f, makeupTarget = 1.f, makeupCoef = 1.f; // the applied make-up and its target
+	float makeup = 1.f, makeupCoef = 1.f; // the applied make-up; Size's one-pole
+	float makeupSize = 0.5f;              // Size through that one-pole
+	float makeupVis = -1.f, makeupSizeUsed = -1.f; // what the make-up was worked out from
 	int makeupCount = 0;
 	float levelCoef[5] = {1.f, 1.f, 1.f, 1.f, 1.f}; // attack, release, slow attack, slow release, feed release
 	float levelEnv = 0.f, levelSlow = 0.f;      // the two followers (V)
