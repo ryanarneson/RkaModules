@@ -19,21 +19,34 @@
 //   The shift is still orthogonal, and removes the reflection's strong
 //   diagonal (1 - 2/N), which would otherwise let each line feed mostly
 //   itself as a comb; with it, energy walks round all the lines.
-// - Damp: a one-pole low-pass in each line, unity at DC, whose gain at
-//   4 kHz is set so the 4 kHz T60 is the T60 times ratio(Damp), with
-//   log2 ratio = -(d + 2 d^2): 1 at 0, 1/2 at noon, 1/8 fully right.
+// - Damp: a first-order high shelf in each line (bilinear, corner 2 kHz,
+//   unity at DC, levelling off at a gain G above), with G solved so the
+//   gain at 4 kHz makes the 4 kHz T60 the T60 times ratio(Damp), with
+//   log2 ratio = -(d + 2 d^2): 1 at 0, 1/2 at noon, 1/8 fully right. The
+//   shelf's small dip at 250 Hz is made up in the line's gain, so the
+//   250 Hz T60 is Visibility's at any Damp and Size. (A one-pole low-pass
+//   could not: a deep 4 kHz cut dragged its corner down onto 250 Hz.) A
+//   cut deeper than the shelf's floor (G = 0: about -7 dB a pass at
+//   4 kHz) is not reached; that happens only for short T60s with long
+//   lines, where the highs already die within a few passes.
 // - Drift: each line's read swings by a sine of its own rate (0.1-0.5 Hz,
-//   spread log-evenly; 5x slower on Very slow) and phase, depth Drift^2 x
-//   8 ms; zero depth is exactly static.
+//   spread log-evenly over the lines, short to long; 5x slower on Very
+//   slow) and phase. Depth Drift^2 x 8 ms (Slow) or 24 ms (Very slow, so
+//   the pitch still swings tens of cents), capped per line at 0.45 of its
+//   shortest length (Size 0) so a read never leaves it. Zero depth is
+//   exactly static.
 // - Size: scale = 3^(2 Size - 1) (1/3x-3x of the base lengths), slewed by
 //   a one-pole of 30 ms time constant (about 100 ms to settle).
 // - Wet level: steady-state power through the loop grows as 1 / (1 - g^2)
 //   for the mean loop gain g, so the wet is scaled by sqrt(1 - g^2) and a
 //   constant calibrated by measurement (test_network's even_wet_level).
 //
-// Only allocate() allocates. process() calls no libm (fastSin2pi, fastExp2)
-// and touches no global. Gains are recomputed only when a control changes
-// and, while Size slews, every 32 samples.
+// Only allocate() allocates. process() calls no libm (fastSin2pi, the
+// Hermite reads) and touches no global. A Drift change updates only the
+// modulation. The gains and damping are recomputed when Visibility, Damp or
+// the (slewing) length changes, at most once per 32 samples: a change
+// inside that window is applied when it ends, so a control moved every
+// sample (CV) costs one recompute per 32 samples.
 #include "DelayLine.hpp"
 #include "Diffuser.hpp"
 #include "FastMath.hpp"
@@ -48,8 +61,12 @@ struct Network {
 	static const int GAIN_EVERY = 32;
 
 	static float maxScale() { return 3.f; }
-	static float maxModMs() { return 8.f; }
+	static float slowModMs() { return 8.f; }
+	static float verySlowModMs() { return 24.f; }
+	static float maxModMs() { return 24.f; } // the larger of the two
 	static float dampHz() { return 4000.f; }
+	static float shelfHz() { return 2000.f; }
+	static float lowHz() { return 250.f; } // where Visibility's T60 holds
 	// The wet level's constant, set by measurement (test_network's
 	// even_wet_level, pink noise at noon): at 1 the wet RMS is within
 	// 0.1-1.3 dB below the input RMS across the six words, so it stays 1.
@@ -64,13 +81,16 @@ struct Network {
 	float meanBase = 1.f;
 	float len[MAX_LINES] = {};   // current nominal read length, samples
 	float gain[MAX_LINES] = {};  // per-line T60 gain
-	float dampA[MAX_LINES] = {}; // one-pole coefficient
-	float dampZ[MAX_LINES] = {}; // one-pole state
+	float shelfB0[MAX_LINES] = {}, shelfB1[MAX_LINES] = {}; // shelf numerator
+	float shelfZ[MAX_LINES] = {};                           // shelf state
+	float shelfA1 = 0.f;                                    // shelf pole, fixed
 	float phase[MAX_LINES] = {};
 	float phaseInc[MAX_LINES] = {};
+	float modDepth[MAX_LINES] = {}; // Drift swing, samples
 	float tapL[MAX_LINES] = {}, tapR[MAX_LINES] = {}, inSign[MAX_LINES] = {};
 	float wetGain = 0.f;
-	float cosW = 1.f;      // cos of the damping frequency
+	// Prewarped (bilinear) frequencies: tan(pi f / rate).
+	float wDamp = 1.f, wShelf = 1.f, wLow = 0.f;
 	float slewCoeff = 1.f; // Size one-pole
 	float inGain = 1.f;
 
@@ -79,7 +99,8 @@ struct Network {
 	int driftRate = 0;
 	float t60 = 1.f, ratio = 1.f, depth = 0.f;
 	float scaleTarget = 1.f, scaleOffset = 0.f;
-	int gainCount = 0;
+	int gainCount = 0;         // samples until the gains may be recomputed
+	bool gainsPending = false; // a change waits for gainCount
 	bool fresh = true; // cleared and not yet given controls: Size snaps
 
 	// Buffers for every mode's longest line at the largest Size, plus the
@@ -108,11 +129,11 @@ struct Network {
 		}
 		meanBase = sum / (float) n;
 		diffuser.configure(rate, v.diffuseMs, v.diffuseStages, 1.f, 0x5eedu);
-		// The damping frequency, kept below Nyquist at low rates.
-		float f = dampHz();
-		if (f > 0.4f * rate)
-			f = 0.4f * rate;
-		cosW = std::cos(6.28318530717959f * f / rate);
+		// The filter frequencies, kept below Nyquist at low rates.
+		wDamp = prewarp(dampHz());
+		wShelf = prewarp(shelfHz());
+		wLow = prewarp(lowHz());
+		shelfA1 = (wShelf - 1.f) / (wShelf + 1.f);
 		slewCoeff = 1.f / (0.03f * rate + 1.f);
 		// Taps: rows 5 and 10 of the Sylvester Hadamard matrix (orthogonal
 		// +/-1 patterns), and the input signs row 3, over n lines.
@@ -123,7 +144,8 @@ struct Network {
 		}
 		// The diffuser's 8 channels carry 4 (L^2 + R^2); spread over n lines.
 		inGain = n == 16 ? 0.25f : 0.35355339f;
-		setControlsNow();
+		setTargets();
+		updateModulation();
 		clear();
 	}
 
@@ -132,7 +154,7 @@ struct Network {
 	void clear() {
 		for (int i = 0; i < MAX_LINES; i++) {
 			line[i].clear();
-			dampZ[i] = 0.f;
+			shelfZ[i] = 0.f;
 			// Decorrelated starting phases (golden-ratio steps).
 			const float p = 0.61803398875f * (float) i;
 			phase[i] = p - std::floor(p);
@@ -140,6 +162,8 @@ struct Network {
 		diffuser.clear();
 		scaleOffset = 0.f;
 		fresh = true;
+		gainCount = 0;
+		gainsPending = false;
 		updateLengths();
 		updateGains();
 	}
@@ -156,20 +180,26 @@ struct Network {
 		if (visibility == vis && sz == size && dmp == damp && drf == drift && rateSel == driftRate)
 			return;
 		const bool sizeMoved = sz != size;
+		const bool decayMoved = visibility != vis || dmp != damp;
+		const bool driftMoved = drf != drift || rateSel != driftRate;
 		vis = visibility;
 		size = sz;
 		damp = dmp;
 		drift = drf;
 		driftRate = rateSel;
 		const float oldTarget = scaleTarget;
-		setControlsNow();
-		if (sizeMoved && !snap) {
-			// Slew from where the scale is now: target + offset stays put.
-			scaleOffset += oldTarget - scaleTarget;
-			gainCount = 0;
+		setTargets();
+		if (driftMoved)
+			updateModulation();
+		if (sizeMoved) {
+			// Slew from where the scale is now (target + offset stays put),
+			// unless just cleared.
+			if (!snap)
+				scaleOffset += oldTarget - scaleTarget;
+			updateLengths();
 		}
-		updateLengths();
-		updateGains();
+		if (sizeMoved || decayMoved)
+			requestGains();
 	}
 
 	void process(float inL, float inR, float& wetL, float& wetR) {
@@ -181,16 +211,15 @@ struct Network {
 			if (scaleOffset < 1e-6f && scaleOffset > -1e-6f)
 				scaleOffset = 0.f;
 			updateLengths();
-			if (scaleOffset == 0.f || --gainCount <= 0) {
-				updateGains();
-				gainCount = GAIN_EVERY;
-			}
+			gainsPending = true;
 		}
+		if (gainCount > 0 && --gainCount == 0 && gainsPending)
+			requestGains();
 
 		float r[MAX_LINES];
 		if (depth > 0.f) {
 			for (int i = 0; i < n; i++) {
-				r[i] = line[i].read(len[i] + depth * fastSin2pi(phase[i]));
+				r[i] = line[i].read(len[i] + modDepth[i] * fastSin2pi(phase[i]));
 				phase[i] += phaseInc[i];
 				phase[i] = phase[i] >= 1.f ? phase[i] - 1.f : phase[i];
 			}
@@ -216,12 +245,14 @@ struct Network {
 		float v[MAX_LINES];
 		float sum = 0.f;
 		for (int i = 0; i < n; i++) {
-			const float a = dampA[i];
-			float z = (1.f - a) * (gain[i] * r[i]) + a * dampZ[i];
+			// The shelf, transposed direct form II: one state.
+			const float u = gain[i] * r[i];
+			const float y = shelfB0[i] * u + shelfZ[i];
+			float z = shelfB1[i] * u - shelfA1 * y;
 			z = (z > 1e-20f || z < -1e-20f) ? z : 0.f; // denormals and NaN to 0
-			dampZ[i] = z;
-			v[i] = z;
-			sum += z;
+			shelfZ[i] = z;
+			v[i] = y;
+			sum += y;
 		}
 		const float h = sum * (2.f / (float) n);
 		for (int j = 0; j < n; j++) {
@@ -231,6 +262,9 @@ struct Network {
 			line[j].write(w);
 		}
 	}
+
+	// Line i's Drift swing, in samples either side of its length.
+	float lineDepth(int i) const { return modDepth[i]; }
 
 	// ---- control maths (not per sample) ----
 
@@ -245,19 +279,44 @@ struct Network {
 		return x >= 0.f ? (x <= 1.f ? x : 1.f) : 0.f;
 	}
 
-	void setControlsNow() {
+	float prewarp(float hz) const {
+		const float f = hz < 0.4f * rate ? hz : 0.4f * rate;
+		return std::tan(3.14159265358979f * f / rate);
+	}
+
+	void setTargets() {
 		t60 = fogT60(vis);
 		ratio = fastExp2(-(damp + 2.f * damp * damp));
 		scaleTarget = fastExp2((2.f * size - 1.f) * 1.58496250072f); // log2(3)
-		depth = drift * drift * maxModMs() * 0.001f * rate;
-		const float slow = driftRate ? 0.2f : 1.f;
+	}
+
+	// Drift only: the swing and the rates.
+	void updateModulation() {
+		const bool verySlow = driftRate != 0;
+		const float ms = verySlow ? verySlowModMs() : slowModMs();
+		depth = drift * drift * ms * 0.001f * rate;
+		const float slow = verySlow ? 0.2f : 1.f;
+		const float minScale = 1.f / maxScale();
 		for (int i = 0; i < MAX_LINES; i++) {
-			// 0.1 ... 0.5 Hz, log-evenly over the lines, shuffled so neighbours
-			// differ.
-			const int k = (i * 7) & 15;
-			const float hz = 0.1f * fastExp2(2.32192809489f * (float) k / 15.f); // log2(5)
+			// 0.1 ... 0.5 Hz, log-evenly from the shortest line to the
+			// longest, which has the most room to swing.
+			const float k = n > 1 ? (float) (i < n ? i : n - 1) / (float) (n - 1) : 0.f;
+			const float hz = 0.1f * fastExp2(2.32192809489f * k); // log2(5)
 			phaseInc[i] = hz * slow / rate;
+			const float room = 0.45f * baseSamples[i] * minScale;
+			modDepth[i] = depth < room ? depth : room;
 		}
+	}
+
+	// Recompute the gains now, or when the 32-sample window ends.
+	void requestGains() {
+		if (gainCount > 0) {
+			gainsPending = true;
+			return;
+		}
+		updateGains();
+		gainsPending = false;
+		gainCount = GAIN_EVERY;
 	}
 
 	void updateLengths() {
@@ -272,30 +331,29 @@ struct Network {
 		// log2 of 10^(-3 L / (T60 rate)) per sample of L.
 		const float perSample = -3.f * 3.32192809489f / (t60 * rate);
 		const float hfExtra = 1.f / ratio - 1.f;
+		const float wd2 = wDamp * wDamp, ws2 = wShelf * wShelf, wl2 = wLow * wLow;
 		for (int i = 0; i < n; i++) {
 			const float e = perSample * len[i];
-			gain[i] = fastExp2(e);
-			dampA[i] = onePoleFor(fastExp2(e * hfExtra));
+			const float g = fastExp2(e);
+			// The shelf H(s) = (G s + ws) / (s + ws), |H|^2 = (G^2 w^2 +
+			// ws^2) / (w^2 + ws^2): G from the wanted 4 kHz gain m.
+			const float m = fastExp2(e * hfExtra);
+			float G2 = (m * m * (wd2 + ws2) - ws2) / wd2;
+			G2 = G2 > 0.f ? (G2 < 1.f ? G2 : 1.f) : 0.f;
+			const float G = std::sqrt(G2);
+			shelfB0[i] = (G + wShelf) / (1.f + wShelf);
+			shelfB1[i] = (wShelf - G) / (1.f + wShelf);
+			// Make up the shelf's dip at 250 Hz, so the 250 Hz loop gain is g.
+			// It stays below 1: the dip is a small fraction of g's own loss,
+			// and the cap halves the distance to 1 whatever happens.
+			const float h250 = std::sqrt((G2 * wl2 + ws2) / (wl2 + ws2));
+			const float gc = g / h250;
+			const float cap = 0.5f * (1.f + g);
+			gain[i] = gc < cap ? gc : cap;
 		}
 		const float gm = fastExp2(perSample * meanBase * (scaleTarget + scaleOffset));
 		const float p = 1.f - gm * gm;
 		wetGain = wetCal() * std::sqrt(p > 0.f ? p : 0.f);
-	}
-
-	// The coefficient a of (1 - a) / (1 - a z^-1) whose magnitude at the
-	// damping frequency is m (unity at DC). From
-	// (1 - a)^2 = m^2 (1 - 2 a c + a^2); capped so the pole stays clear of 1.
-	float onePoleFor(float m) const {
-		const float m2 = m * m;
-		if (!(m2 < 0.9999999f))
-			return 0.f;
-		const float c = cosW;
-		const float A = 1.f - m2 * c;
-		float disc = m2 * (1.f - c) * (2.f - m2 - m2 * c);
-		disc = disc > 0.f ? disc : 0.f;
-		float a = (A - std::sqrt(disc)) / (1.f - m2);
-		a = a > 0.f ? a : 0.f;
-		return a < 0.995f ? a : 0.995f;
 	}
 };
 

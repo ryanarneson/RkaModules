@@ -174,6 +174,28 @@ void t60HoldsAcrossSize() {
 	}
 }
 
+// Damp must not shorten the low decay: Visibility means the 250 Hz T60 at
+// any Damp and Size, short decays and long lines included.
+void t60LowHoldsWithDamp() {
+	struct Case {
+		const char* name;
+		float v, size;
+	};
+	const Case cases[] = {{"HAZE", 0.304f, 0.5f}, {"MIST", 0.477f, 1.f}};
+	for (const Case& k : cases) {
+		Controls c;
+		c.vis = k.v;
+		c.size = k.size;
+		c.damp = 1.f;
+		const double want = specT60(k.v);
+		const double got = t60At(c, 250.f, irSeconds(want));
+		CHECK(std::fabs(got / want - 1.0) <= 0.15, "%s Damp 1 Size %g: 250 Hz T60 %g s, want %g s +/-15%%", k.name, k.size, got,
+		      want);
+		std::printf("  t60_low_holds_with_damp %-4s Damp 1 Size %.1f: want %.2f s, got %.2f s (%+.1f%%)\n", k.name, k.size, want,
+		            got, 100.0 * (got / want - 1.0));
+	}
+}
+
 void dampRatio() {
 	const double want = specT60(FOG_V);
 	struct Case {
@@ -338,6 +360,38 @@ void driftMoves() {
 	std::printf("  drift_moves: RMS spread about 1 kHz, Drift 0 %.2f Hz, Drift 1 %.2f Hz\n", s0, s1);
 }
 
+// Drift fully right gives pitch deviations in the tens of cents at either
+// rate (spec, "Drift"). A read swinging by d samples at f cycles per sample
+// moves the pitch by up to 2 pi f d (relative), so the peak deviation is
+// computed from the network's modulation parameters. Every swing must also
+// stay inside its line at both ends of Size.
+void driftDepthPerRate() {
+	for (int rate = 0; rate < 2; rate++) {
+		double peak = 0;
+		bool inBounds = true;
+		for (float size : {0.f, 1.f}) {
+			Controls c;
+			c.drift = 1.f;
+			c.size = size;
+			c.driftRate = rate;
+			Rig rig(c);
+			const Network& n = rig.net;
+			for (int i = 0; i < n.n; i++) {
+				const double rel = 2.0 * fogtest::PI * n.phaseInc[i] * n.lineDepth(i);
+				const double cents = 1200.0 * std::log2(1.0 + rel);
+				peak = cents > peak ? cents : peak;
+				const double lo = n.len[i] - n.lineDepth(i), hi = n.len[i] + n.lineDepth(i);
+				inBounds = inBounds && lo >= 1.0 && hi <= n.line[i].maxDelay() - 2;
+			}
+		}
+		CHECK(peak >= 20.0 && peak < 100.0, "Drift 1, %s: peak deviation %g cents, want tens of cents",
+		      rate ? "Very slow" : "Slow", peak);
+		CHECK(inBounds, "Drift 1, %s: a swing leaves its line at Size 0 or 1", rate ? "Very slow" : "Slow");
+		std::printf("  drift_depth_per_rate %-9s: peak %.1f cents, reads in bounds: %s\n", rate ? "Very slow" : "Slow", peak,
+		            inBounds ? "yes" : "no");
+	}
+}
+
 } // namespace
 
 int main() {
@@ -345,12 +399,14 @@ int main() {
 	measureSelfCheck();
 	t60MatchesVisibility();
 	t60HoldsAcrossSize();
+	t60LowHoldsWithDamp();
 	dampRatio();
 	evenWetLevel();
 	stereoDecorrelated();
 	alwaysDecays();
 	driftZeroIsStatic();
 	driftMoves();
+	driftDepthPerRate();
 	const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 	std::printf("  test_network ran in %.1f s\n", secs);
 	return rkatest::finish("test_network");
