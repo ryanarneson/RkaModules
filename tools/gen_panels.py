@@ -322,7 +322,8 @@ PANELS = {
     # Sluice, four VCAs. Rings struck from the origin above the first input;
     # a brass rope drops from it through the four signal inputs, which are
     # the only thing the channels share. Each row runs input, Level, CV
-    # input, output on a tile; the lamp reads the channel's gain.
+    # input, output on a tile; the lamp shows the channel's
+    # position p (Level plus CV), before the gain curve.
     "Sluice": dict(
         dir="sluice",
         hp=10,

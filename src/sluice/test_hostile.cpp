@@ -7,6 +7,9 @@
 #include "testing.hpp"
 
 #include <cmath>
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <new>
 
@@ -88,8 +91,11 @@ void testNanDoesNotTravel() {
 				p.cv[0][0] = bad[k];
 				p.cvCh[0] = 1;
 				p.in[0][0] = 1.f;
-			} else
+			} else {
+				// A's 1 V shows what the Level became: it must read as 0.
+				p.in[0][0] = 1.f;
 				p.level[0] = bad[k];
+			}
 			rka::SluiceEngine e;
 			rka::SluiceResult r;
 			const F f = p.frame();
@@ -132,6 +138,171 @@ void testSmoothingFollowsSampleRate() {
 				eng.process(f, r1, r);
 			CHECK(std::fabs(r.out[0][0] - 1.f) <= 0.01f, "%g -> %g Hz, 50 ms %+d ms: %g, not within 1%% of 1", r0, r1, e ? 1 : -1, r.out[0][0]);
 		}
+}
+
+// An independent scalar model of the spec, in double through libm: the rope,
+// the p clamp, the curve, the mix downward with mono spread, the carry stop.
+// Every row is held as 16 dense voltages (a mono value copied into all 16),
+// which is a different shape from the engine's channel-count bookkeeping.
+struct Ref {
+	double out[ROWS][16];
+	int channels[ROWS];
+	double light[ROWS];
+};
+
+double refCurve(double p, bool exp) {
+	if (!exp)
+		return p;
+	return std::pow(10.0, 3.0 * (p - 1.0)) * std::fmin(1.0, p / 0.05);
+}
+
+// Voltage of channel c of a cable as Rack reads it.
+double refPoly(const float* v, int ch, int c) {
+	return ch == 1 ? v[0] : c < ch ? v[c] : 0.0;
+}
+
+Ref reference(const Patch& p) {
+	Ref ref;
+	double carry[16] = {};  // dense
+	int carryCh = 0;
+	const float* ropeV = nullptr;
+	int ropeCh = 0;
+	for (int r = 0; r < ROWS; r++) {
+		if (p.inCh[r] > 0) {
+			ropeV = p.in[r];
+			ropeCh = p.inCh[r];
+		}
+		const int n = ropeCh > 0 ? ropeCh : 1;
+		double own[16] = {};
+		double lightP = 0.0;
+		for (int c = 0; c < n; c++) {
+			double pos = double(p.level[r]) + refPoly(p.cv[r], p.cvCh[r], c) / 10.0;
+			pos = pos < 0.0 ? 0.0 : pos > 1.0 ? 1.0 : pos;
+			lightP = std::fmax(lightP, pos);
+			own[c] = ropeCh > 0 ? refPoly(ropeV, ropeCh, c) * refCurve(pos, p.exp) : 0.0;
+		}
+		if (n == 1)  // a mono row is copied into every voice of a wider one
+			for (int c = 1; c < 16; c++)
+				own[c] = own[0];
+		ref.channels[r] = std::max(n, carryCh);
+		for (int c = 0; c < 16; c++)
+			ref.out[r][c] = own[c] + carry[c];
+		// Only a mono signal fills every voice; a wider one is 0 beyond its width.
+		if (ref.channels[r] > 1)
+			for (int c = ref.channels[r]; c < 16; c++)
+				ref.out[r][c] = 0.0;
+		ref.light[r] = lightP;
+		if (p.outConn[r]) {
+			carryCh = 0;
+			for (double& x : carry)
+				x = 0.0;
+		} else {
+			carryCh = ref.channels[r];
+			for (int c = 0; c < 16; c++)
+				carry[c] = ref.out[r][c];
+		}
+	}
+	return ref;
+}
+
+// A fixed-seed LCG, as in src/fathom/test_engine.cpp.
+struct Lcg {
+	uint32_t s;
+	explicit Lcg(uint32_t seed) : s(seed) {}
+	float uniform() {  // [0, 1)
+		s = s * 1664525u + 1013904223u;
+		return float(s >> 8) / 16777216.f;
+	}
+	int below(int n) {
+		return int(uniform() * float(n));
+	}
+};
+
+// Random patches against the model: Levels (some outside [0, 1]), the curve,
+// CVs, input and CV channel counts 0..16 with their jacks unplugged or not,
+// output jacks. The Level is held, so a fresh engine's smoother has settled.
+void testFuzzAgainstReference() {
+	Lcg rng(20261115u);
+	int bad = 0;
+	for (int trial = 0; trial < 600; trial++) {
+		Patch p;
+		p.exp = rng.below(2);
+		for (int r = 0; r < ROWS; r++) {
+			const float l = rng.uniform();
+			p.level[r] = l < 0.1f ? -0.3f : l > 0.9f ? 1.4f : rng.uniform();
+			p.inCh[r] = rng.below(3) == 0 ? 0 : rng.below(17);
+			p.cvCh[r] = rng.below(3) == 0 ? 0 : rng.below(17);
+			p.outConn[r] = rng.below(2);
+			for (int c = 0; c < 16; c++) {
+				p.in[r][c] = (rng.uniform() * 2.f - 1.f) * 10.f;
+				p.cv[r][c] = (rng.uniform() * 2.f - 1.f) * 8.f;
+			}
+		}
+		rka::SluiceEngine e;
+		rka::SluiceResult r;
+		const F f = p.frame();
+		for (int i = 0; i < 4; i++)
+			e.process(f, FS, r);
+		const Ref ref = reference(p);
+		for (int row = 0; row < ROWS; row++) {
+			bool ok = r.channels[row] == ref.channels[row] && std::fabs(r.light[row] - ref.light[row]) < 1e-6;
+			for (int c = 0; ok && c < r.channels[row]; c++) {
+				const double want = ref.out[row][c];
+				ok = std::fabs(r.out[row][c] - want) <= 1e-5 + 1e-5 * std::fabs(want);
+			}
+			if (!ok) {
+				for (int c = 0; c < r.channels[row]; c++)
+					if (std::fabs(r.out[row][c] - ref.out[row][c]) > 1e-5 + 1e-5 * std::fabs(ref.out[row][c]))
+						std::printf("   voice %d: %.9g want %.9g; light %.9g want %.9g\n", c, r.out[row][c], ref.out[row][c], r.light[row], ref.light[row]);
+				if (bad++ < 5)
+					std::printf("  trial %d row %d: channels %d (want %d), out[0] %.9g (want %.9g)\n", trial, row, r.channels[row],
+					            ref.channels[row], r.out[row][0], ref.out[row][0]);
+			}
+		}
+	}
+	CHECK(bad == 0, "fuzz: %d rows differ from the reference", bad);
+}
+
+// Sample rates no host uses: the outputs stay finite, and the engine is back
+// at the exact gain on returning to 48 kHz.
+void testEdgeSampleRates() {
+	const float rates[5] = {1.f, 768000.f, 0.f, -48000.f, -1.f};
+	for (int k = 0; k < 5; k++) {
+		for (int exp = 0; exp < 2; exp++) {
+			Patch p;
+			p.exp = exp;
+			p.in[0][0] = 1.f;
+			p.inCh[0] = 1;
+			p.cv[0][0] = 1.f;
+			p.cvCh[0] = 1;
+			p.outConn[0] = true;
+			p.level[0] = 0.25f;
+			rka::SluiceEngine e;
+			rka::SluiceResult r;
+			F f = p.frame();
+			e.process(f, FS, r);
+			// Step the Level at the odd rate, so the smoother has work to do.
+			f.params[F::LEVEL_A] = 0.9f;
+			bool finite = true;
+			for (int i = 0; i < 5000; i++) {
+				e.process(f, rates[k], r);
+				finite = finite && allFinite(r);
+			}
+			CHECK(finite, "%g Hz, exp=%d: an output was not finite", rates[k], exp);
+			// Back at 48 kHz: 1 s settles any sane state to the target exactly.
+			for (int i = 0; i < 48000; i++)
+				e.process(f, FS, r);
+			const double want = (exp ? std::pow(10.0, 3.0 * (1.0 - 1.0)) : 1.0) * 1.0;  // p = 0.9 + 0.1 = 1
+			CHECK(r.out[0][0] == float(want), "after %g Hz, exp=%d: %.9g, want exactly %g", rates[k], exp, r.out[0][0], want);
+			// And a step at 48 kHz still behaves.
+			f.params[F::LEVEL_A] = 0.4f;
+			for (int i = 0; i < 48000; i++)
+				e.process(f, FS, r);
+			const double want2 = refCurve(0.4 + 0.1, exp);
+			CHECK(std::fabs(r.out[0][0] - want2) <= 1e-5 * want2, "after %g Hz, exp=%d, Level 0.4: %.9g, want %.9g", rates[k], exp,
+			      r.out[0][0], want2);
+		}
+	}
 }
 
 void testNoAllocationInProcess() {
@@ -220,6 +391,8 @@ void testExtremeValues() {
 int main() {
 	testNanDoesNotTravel();
 	testSmoothingFollowsSampleRate();
+	testFuzzAgainstReference();
+	testEdgeSampleRates();
 	testNoAllocationInProcess();
 	testExtremeValues();
 	return rkatest::finish("sluice test_hostile");

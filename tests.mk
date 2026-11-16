@@ -37,7 +37,7 @@ DSP_TEST_FLAGS = -std=c++17 -O2 -Wall -Wextra $(TEST_WERROR)
 # Sluice's hostile-input test: the sanitizers, and the counting operator new.
 build/test/sluice/test_hostile: src/sluice/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/sluice/*.hpp)
 	@mkdir -p $(@D)
-	$(CXX) -std=c++17 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/sluice $< -o $@
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/sluice $< -o $@
 
 build/test/shoal/Firmware.o: src/shoal/Firmware.cpp $(SHOAL_DEPS)
 	@mkdir -p $(@D)

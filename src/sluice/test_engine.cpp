@@ -189,7 +189,9 @@ void testUnpatchedCvIsStill() {
 	CHECK(moved == 0, "B, with no CV, moved on %d samples", moved);
 	CHECK(first == 0.5f, "B = %.9g, want 0.5", first);
 	// The CV on A really moves A, so B's stillness means something.
-	CHECK(aMax - aMin > 0.9f,"A's CV moved A only %g", aMax - aMin);
+	// A's input is 1 V, so its output is its gain: it reaches both 0 and full.
+	CHECK(aMin == 0.f, "A's lowest gain %.9g, want exactly 0", aMin);
+	CHECK(aMax == 1.f, "A's highest gain %.9g, want exactly 1", aMax);
 }
 
 void testRopeCarriesSignalAndChannels() {
@@ -236,29 +238,54 @@ void testRowAUnpatchedIsSilence() {
 }
 
 void testMixAllPatterns() {
-	const float inputs[ROWS] = {0.001f, 0.002f, 0.004f, 0.008f};
+	// Different Levels, so the carry going down (which has already been through
+	// its own row's gain) is told apart from one scaled by the receiving row's.
+	const float inputs[ROWS] = {0.5f, 1.f, 2.f, 4.f};
+	const float levels[ROWS] = {0.3f, 0.5f, 0.7f, 0.9f};
 	for (int pattern = 0; pattern < 16; pattern++) {
 		Patch p;
 		for (int row = 0; row < ROWS; row++) {
 			p.setIn(row, {inputs[row]});
 			p.outConn[row] = (pattern >> row) & 1;
+			p.level[row] = levels[row];
 		}
-		p.allLevels(1.f);
 		rka::SluiceEngine e;
 		rka::SluiceResult r;
 		run(e, p, SETTLE, r);
 		// A connected output carries its own row and every unconnected row
-		// directly above it.
+		// directly above it, each as its own input x its own Level.
 		for (int row = 0; row < ROWS; row++) {
 			if (!p.outConn[row])
 				continue;
-			double want = inputs[row];
+			double want = double(inputs[row]) * levels[row];
 			for (int up = row - 1; up >= 0 && !p.outConn[up]; up--)
-				want += inputs[up];
-			CHECK(near(r.out[row][0], want, 1e-8), "pattern %d row %d: %.9g, want %.9g", pattern, row, r.out[row][0],
+				want += double(inputs[up]) * levels[up];
+			CHECK(near(r.out[row][0], want, 1e-6), "pattern %d row %d: %.9g, want %.9g", pattern, row, r.out[row][0],
 			      want);
 		}
 	}
+}
+
+// The rope hands down the row above's input, before that row's gain.
+void testRopeBelowFullOpen() {
+	Patch p;
+	p.setIn(0, {2.f});
+	const float levels[ROWS] = {0.5f, 0.25f, 0.75f, 0.9f};
+	for (int row = 0; row < ROWS; row++)
+		p.level[row] = levels[row];
+	p.allConnected(true);
+	rka::SluiceEngine e;
+	rka::SluiceResult r;
+	run(e, p, SETTLE, r);
+	for (int row = 0; row < ROWS; row++)
+		CHECK(near(r.out[row][0], 2.0 * levels[row], 1e-6), "row %d: %.9g, want 2 V x %g", row, r.out[row][0], levels[row]);
+	// And mixed down onto D alone: four copies of 2 V, each at its own Level.
+	p.allConnected(false);
+	p.outConn[3] = true;
+	rka::SluiceEngine e2;
+	run(e2, p, SETTLE, r);
+	const double want = 2.0 * (0.5 + 0.25 + 0.75 + 0.9);
+	CHECK(near(r.out[3][0], want, 1e-6), "D = %.9g, want %.9g", r.out[3][0], want);
 }
 
 void testRopeCopiesAddUp() {
@@ -493,6 +520,7 @@ int main() {
 	testRopeRestartsAtPatchedInput();
 	testRowAUnpatchedIsSilence();
 	testMixAllPatterns();
+	testRopeBelowFullOpen();
 	testRopeCopiesAddUp();
 	testMonoRowSpreadsIntoPoly();
 	testMonoRowSpreadsIntoWiderCarry();

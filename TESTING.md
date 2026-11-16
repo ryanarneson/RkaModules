@@ -353,9 +353,9 @@ Three habits behind most of them:
 |---|---|---|---|---|
 | Rack-free core with offline tests | Yes | Yes | Yes | Yes |
 | `-Wall -Wextra`, `-Werror` in CI | Yes | Yes | No (vendored firmware warns) | Yes |
-| Sanitizers | No | No | Yes | Partly (`test_hostile` only) |
-| Hostile-input and sample-rate sweeps | Partly | Partly | Yes | Yes (NaN, infinity, 1e30, a sample-rate change) |
-| Random fuzz with seeds | No | No | Yes | No |
+| Sanitizers | No | No | Yes | Partly (`test_hostile` only: the fuzz, hostile input, sample rates, allocation) |
+| Hostile-input and sample-rate sweeps | Partly | Partly | Yes | Yes (NaN, infinity, 1e30, a sample-rate change, 1 Hz to 768 kHz, 0 and negative rates) |
+| Random fuzz with seeds | No | No | Yes | Yes (`test_hostile`: 600 fixed-seed trials against a scalar model; no seed sweep) |
 | Golden saved-state image | No (params only) | No (params only) | Yes | No (params only) |
 | Allocation check on the audio path | No | No | Yes | Yes |
 | Thread tests | Not needed (no shared state) | Not needed | Yes | Not needed |
