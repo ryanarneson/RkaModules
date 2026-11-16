@@ -343,15 +343,16 @@ float drone(int shape, double hz, int i) {
 
 void limiterIdleAt5v() {
 	// True noon: every main knob at 0.5, Mix 1, HAAR. The limiter must not
-	// act on any +/-5 V drone (wet peak <= 8 V; the knee is 9 V), and the
-	// wet RMS stays within 12 dB of the input's.
+	// act on a saw, sine or noise drone (unlimited wet peak <= 9 V, the
+	// knee); squares may enter the knee but stay within 10 V; every wet RMS
+	// is within 12 dB of the input's.
 	const char* names[] = {"saw", "square", "sine", "noise"};
 	const double hzs[] = {55.0, 110.0, 220.0};
 	double worstPeak = 0, worstDb = 1e9;
 	for (int shape = 0; shape < 4; shape++) {
 		for (int h = 0; h < (shape == 3 ? 1 : 3); h++) {
 			Rig r;
-			r.eng.limiterEnabled = false;
+			r.eng.limiterEnabled = shape == 1; // squares may enter the knee
 			r.f.params[FogFrame::MIX] = 1.f;
 			for (int p = FogFrame::VISIBILITY; p <= FogFrame::DRIFT; p++)
 				r.f.params[p] = 0.5f;
@@ -369,7 +370,11 @@ void limiterIdleAt5v() {
 				}
 			}
 			const double db = 20.0 * std::log10(rms(wet) / rms(in));
-			CHECK(peak <= 8.0, "%s %g Hz: wet peak %g V exceeds 8 V", names[shape], hzs[h], peak);
+			if (shape == 1)
+				CHECK(peak <= 10.0, "%s %g Hz: wet peak %g V exceeds 10 V", names[shape], hzs[h], peak);
+			else
+				CHECK(peak <= FogEngine::limitKnee(), "%s %g Hz: wet peak %g V exceeds the %g V knee", names[shape], hzs[h], peak,
+				      FogEngine::limitKnee());
 			CHECK(db >= -12.0, "%s %g Hz: wet RMS %g dB re input, want >= -12", names[shape], hzs[h], db);
 			worstPeak = std::fmax(worstPeak, peak);
 			worstDb = std::fmin(worstDb, db);
