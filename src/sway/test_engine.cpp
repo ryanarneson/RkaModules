@@ -6,7 +6,7 @@
 // the plugin's floating-point flags (tests.mk). Run with `make test`.
 //
 // Full scale is 5 V. What may differ: the sines (SIN, MORPH's sine and
-// rounding, RAND's glide) from FastMath.hpp's sine, within 2e-7 of libm's,
+// rounding, RAND's glide) from FastMath.hpp's sine, within 2.5e-7 of libm's,
 // so 1e-6 V; the frequencies from fastExp2D, within 1e-15 of libm's, which
 // moves a phase by under 1e-12 of a cycle in an hour; the fold's floor in
 // place of fmod, a rounding. Measured on macOS arm64: every sample within

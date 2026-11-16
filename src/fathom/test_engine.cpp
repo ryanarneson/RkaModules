@@ -5,7 +5,7 @@
 // flags (tests.mk). Run with `make test`.
 //
 // Full scale is 5 V (audio is +/-5 V). What may differ: the tanh clip and
-// the sub sine (FastMath.hpp, within 2e-7 of libm's), and the drift's gains
+// the sub sine (FastMath.hpp, within 2.5e-7 of libm's), and the drift's gains
 // and pitch ratios (fastExp2, within one float ulp of libm's exp2f and
 // pow). A pitch ratio an ulp apart makes a saw's phase creep by about 1e-8
 // of a cycle per second, a time shift of nanoseconds; and the resonant

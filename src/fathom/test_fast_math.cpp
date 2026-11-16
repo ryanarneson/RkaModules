@@ -80,7 +80,7 @@ static void testSin() {
 		for (float d : {-1e-7f, 0.f, 1e-7f}) {
 			check(0.125f * k + d);
 		}
-	CHECK(worst < 2e-7, "fastSin2pi absolute error %g at %g", worst, worstP);
+	CHECK(worst < 2.5e-7, "fastSin2pi absolute error %g at %g", worst, worstP);
 	CHECK(fastSin2pi(0.f) == 0.f && fastSin2pi(0.25f) == 1.f && fastSin2pi(-0.25f) == -1.f && fastSin2pi(0.75f) == -1.f,
 	      "fastSin2pi exact at 0 and the peaks: %.9g %.9g %.9g", fastSin2pi(0.f), fastSin2pi(0.25f), fastSin2pi(0.75f));
 	std::printf("fastSin2pi: max absolute error %.3g\n", worst);

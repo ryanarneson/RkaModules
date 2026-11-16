@@ -61,8 +61,9 @@ inline float fastDbToGain(float db) {
 	return fastExp2(db * 0.166096404744368f);  // log2(10) / 20
 }
 
-// sin(2 pi p) for any float p, within 2e-7 absolute (an argument within
-// a float rounding of the libm path's 2 pi p gives up to 5e-7), and exactly
+// sin(2 pi p) for any float p, within 2.5e-7 absolute (measured 1.7e-7 on
+// arm64, 2.0e-7 on x86-64 without FMA; an argument within a float rounding
+// of the libm path's 2 pi p alone gives up to 5e-7), and exactly
 // 0 at whole cycles and +/-1 at quarter cycles. The phase is folded to
 // q in [-1/2, 1/2]: within 1/8 of a zero crossing, the degree-9 odd Taylor
 // series of sin(2 pi q) (truncation under 2e-9); otherwise the degree-12

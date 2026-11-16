@@ -6,7 +6,7 @@
 // [-1, 1]. SIN and TRI start at 0 rising, so they stay in phase.
 namespace rka {
 
-// sin(2 pi p) without libm (FastMath.hpp): within 2e-7 of the exact sine.
+// sin(2 pi p) without libm (FastMath.hpp): within 2.5e-7 of the exact sine.
 inline float waveSin(float p) {
 	return fastSin2pi(p);
 }
