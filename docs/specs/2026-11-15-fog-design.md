@@ -262,10 +262,13 @@ each knob moves its quantity the right way, by at least a stated amount.
 The user's ruling ("for now"): the wet level is evened out across
 Visibility, and full wet is level-matched to dry.
 - **Matched to dry:** at full Mix, noise at ±5 V gives an output about as
-  loud as the input on average (within ±1.5 dB), at every Visibility and
-  Size, with the other knobs at noon. Loudness does not dip as Mix goes up
+  loud as the input on average, within ±1.5 dB across Visibility and Size,
+  with the other knobs at noon. Measured on a 30-point grid, the worst
+  corner is +0.5 dB (Visibility 0.25, Size 1); the four extreme corners are
+  within ±0.25 dB. Loudness does not dip as Mix goes up
   (within ±2 dB across Mix). A make-up gain on the wet, a smooth function
-  of Visibility and Size, does this. The earlier −6 dB trim is gone.
+  of Visibility and Size, does this; it follows its target through a 30 ms
+  smoother, so moving Visibility or Size does not step the level. The earlier −6 dB trim is gone.
 - **Loud drones:** a held tonal drone (a saw, a sine) can be louder than
   its input, because the tail's peaks build up. Loud resonant drones reach
   the limiter: the 9 V knee and 10 V ceiling soft-limit them.
@@ -275,9 +278,10 @@ Visibility, and full wet is level-matched to dry.
 
 ### Safety
 
-- **Limiter:** a gentle limiter on the wet signal only, a safety net
-  that should rarely act, since the wet level is evened out. It keeps
-  the wet signal within about ±10 V even when the input is hot
+- **Limiter:** a gentle limiter on the wet signal only. It acts on loud
+  sustained drones at long Visibility and large Size: the wet is
+  soft-limited from the 9 V knee to a 10 V ceiling. It keeps the wet
+  signal within ±10 V even when the input is hot
   (*designer's call*). The dry signal is never touched.
 - **Bad values:** NaN or infinity on an input becomes 0 where it enters,
   and the network can never hold a NaN.

@@ -26,14 +26,16 @@
 //   limiter's knee (9 V) and are soft-limited to 10 V.
 // - Mode: the voicing follows FogFrame::mode. A change fades the wet out
 //   over 50 ms, clears and reconfigures the network, and fades it in.
-// - Sleep: once the feed into the network and the wet out of it (after the make-up, so QUIET is -114 dB at the output) have both
-//   stayed under QUIET (1e-5 V) for the hold (the longer of 0.25 s and twice
-//   the longest ring in the network, so no stale ring contents survive a
-//   sleep and the sparse echoes of CLEAR at Size 1 do not fall asleep between
-//   hits), the engine skips the RateDivider and the network
-//   (wet 0) until a feed sample reaches QUIET. Buffers are not cleared: their
-//   contents are already below QUIET. reset(), a new rate and a mode change
-//   wake it.
+// - Sleep: once the feed into the network and the wet out of it (after the
+//   make-up, so QUIET is -114 dB at the output) have both stayed under QUIET
+//   (1e-5 V) for the hold (the longer of 0.25 s and twice the longest ring in
+//   the network, so no stale ring contents survive a sleep and the sparse
+//   echoes of CLEAR at Size 1 do not fall asleep between hits), the engine
+//   skips the RateDivider and the network (wet 0) until a feed sample reaches
+//   QUIET. Buffers are not cleared: their contents are already below QUIET.
+//   reset(), a new rate and a mode change wake it.
+// - The wet make-up follows its target (refreshed every 32 samples) through a
+//   30 ms one-pole, so a Visibility or Size change does not step the level.
 // - Only setSampleRate() allocates. process() allocates nothing and calls
 //   no libm.
 #include "Bloom.hpp"
@@ -96,10 +98,14 @@ struct FogEngine {
 		// Measured (noise, +/-5 V, noon knobs): the gain that levels the wet at
 		// Mix 1 is 1.125 at Visibility 0 up to 2.13 at 1 (a quadratic), and
 		// falls about 0.27 per unit of Size around noon (1.78 at Size 0, 1.35
-		// at Size 1, at Visibility 0.5).
+		// at Size 1, at Visibility 0.5); at low Visibility the large-Size fall is
+		// weaker (Visibility 0, Size 1 needs 0.99, not 0.87), so a small cubic
+		// in (1 - Visibility) is added above noon Size.
 		const float v = vis >= 0.f ? (vis <= 1.f ? vis : 1.f) : 0.f;
+		const float w = 1.f - v;
 		const float s = size >= 0.f ? (size <= 1.f ? size : 1.f) : 0.f;
-		return voicingMakeup * (1.125f + v * (0.755f + 0.246f * v)) * (1.f + 0.27f * (0.5f - s));
+		const float sizeTerm = 1.f + 0.27f * (0.5f - s) + 0.11f * w * w * w * (s > 0.5f ? 2.f * s - 1.f : 0.f);
+		return voicingMakeup * (1.125f + v * (0.755f + 0.246f * v)) * sizeTerm;
 	}
 
 	// Below this (V) the feed and the wet count as silence: -114 dB re 5 V.
@@ -133,6 +139,7 @@ struct FogEngine {
 		bloomR.setup(hz);
 		fadeStep = 1.f / (0.05f * hz + 1.f);
 		mixStep = 1.f / (0.005f * hz + 1.f);
+		makeupCoef = 1.f / (0.03f * hz + 1.f);
 		setLowCutCoeffs();
 		reset();
 	}
@@ -155,6 +162,7 @@ struct FogEngine {
 	// Awake, with the quiet count at 0 and the hold refreshed.
 	void wake() {
 		asleep_ = false;
+		makeupSnap = true;
 		quietCount = 0;
 		updateHold();
 	}
@@ -249,11 +257,19 @@ struct FogEngine {
 				net.setControls(vis, size, dampK, drift, rateSel);
 				net.process(l, r, ol, orr);
 			});
-			if (vis != makeupVis || size != makeupSize) { // control rate: only when a knob moved
-				makeupVis = vis;
-				makeupSize = size;
-				makeup = wetMakeup(vis, size, vo.wetMakeup);
+			// The make-up target is refreshed at most once per 32 samples (as
+			// the network's gains are), and the applied make-up follows it
+			// through a one-pole with Size's 30 ms slew, so a Visibility or
+			// Size step (or audio-rate CV) does not step the level.
+			if (makeupSnap || ++makeupCount >= 32) {
+				makeupCount = 0;
+				makeupTarget = wetMakeup(vis, size, vo.wetMakeup);
+				if (makeupSnap) {
+					makeup = makeupTarget;
+					makeupSnap = false;
+				}
 			}
+			makeup += (makeupTarget - makeup) * makeupCoef;
 			wetL = fogFinite(wetL) * makeup;
 			wetR = fogFinite(wetR) * makeup;
 			if (feedQuiet && wetL < Q && wetL > -Q && wetR < Q && wetR > -Q) {
@@ -341,7 +357,9 @@ struct FogEngine {
 	bool mixSnap = true; // the next process() starts the ramp at its target
 	float fade = 1.f, fadeStep = 0.f;
 	int fadeState = 0; // 0 steady, 1 fading out, 2 fading in
-	float makeup = 1.f, makeupVis = -1.f, makeupSize = -1.f;
+	float makeup = 1.f, makeupTarget = 1.f, makeupCoef = 1.f; // the applied make-up and its target
+	int makeupCount = 0;
+	bool makeupSnap = true; // the next awake sample starts the make-up at its target
 	bool asleep_ = false;
 	int quietCount = 0;
 	int hold = 12000;

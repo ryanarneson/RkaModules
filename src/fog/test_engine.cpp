@@ -255,14 +255,12 @@ void unplugKeepsTail() {
 	}
 	r.f.inL.channels = 0;
 	std::vector<float> L;
-	double maxStep = 0, prev = 0;
+	double maxStep = 0, prev = preV; // the step from the last plugged sample counts
 	for (int i = 0; i < (int) (4 * RATE); i++) {
 		const FogResult o = r.step(0.f);
 		L.push_back(o.outL);
-		if (i > 0) {
-			const double d = std::fabs(o.outL - prev);
-			maxStep = d > maxStep ? d : maxStep;
-		}
+		const double d = std::fabs(o.outL - prev);
+		maxStep = d > maxStep ? d : maxStep;
 		prev = o.outL;
 	}
 	const double early = rms(L, 0, 4800), late = rms(L, L.size() - 4800, L.size());
@@ -368,13 +366,58 @@ double noiseLevelDb(float vis, float size, float mix, double seconds = 30.0) {
 
 // Full wet is level-matched to dry: for noise at Mix 1 the output RMS is
 // within 1.5 dB of the input's at Visibility 0 to 1 (Size noon) and at Size 0
-// and 1 (Visibility noon), the other knobs at noon.
+// and 1 (Visibility noon), and at the four corners, the other knobs at noon.
 void wetMatchedLevel() {
-	const float pts[][2] = {{0.f, .5f}, {.25f, .5f}, {.5f, .5f}, {.75f, .5f}, {1.f, .5f}, {.5f, 0.f}, {.5f, 1.f}};
+	const float pts[][2] = {{0.f, .5f}, {.25f, .5f}, {.5f, .5f}, {.75f, .5f}, {1.f, .5f}, {.5f, 0.f}, {.5f, 1.f},
+	                        // the corners, where the Size term matters
+	                        {0.f, 0.f}, {0.f, 1.f}, {1.f, 0.f}, {1.f, 1.f}};
+	double dbs[11];
+	int k = 0;
 	for (const auto& p : pts) {
 		const double db = noiseLevelDb(p[0], p[1], 1.f);
+		dbs[k++] = db;
 		CHECK(std::fabs(db) <= 1.5, "Visibility %g Size %g: wet RMS %+.2f dB re input, want within 1.5", p[0], p[1], db);
 		std::printf("  wet_matched_level v %.2f size %.2f: %+.2f dB\n", p[0], p[1], db);
+	}
+	// Size does not tilt the level: Size 1 against Size 0 at Visibility 0.5,
+	// 0 and 1 within 0.75 dB (a make-up with no Size term leaves ~2.4 dB).
+	const int lo[3] = {5, 7, 9}, hi[3] = {6, 8, 10};
+	for (int i = 0; i < 3; i++) {
+		const double tilt = dbs[hi[i]] - dbs[lo[i]];
+		CHECK(std::fabs(tilt) <= 0.75, "Visibility %g: Size 1 is %+.2f dB against Size 0, want within 0.75", pts[lo[i]][0], tilt);
+		std::printf("  wet_matched_level v %.2f: Size 1 vs Size 0 %+.2f dB\n", pts[lo[i]][0], tilt);
+	}
+}
+
+// The make-up is smoothed: a step in Visibility or Size, with a steady tail
+// present, moves the applied make-up by at most 0.5 % of unity per sample
+// (the 30 ms one-pole at 48 kHz moves it by at most ~0.07 % of the step per
+// sample; an unsmoothed step is 100 % in one) and settles on the new target.
+void wetMakeupSmooth() {
+	for (int which = 0; which < 2; which++) {
+		Rig r;
+		r.f.params[FogFrame::MIX] = 1.f;
+		r.f.params[FogFrame::SIZE] = which ? 0.f : 0.5f;
+		r.f.params[FogFrame::VISIBILITY] = which ? 0.5f : 0.f;
+		for (int i = 0; i < (int) (3 * RATE); i++)
+			r.step(5.f * uniform());
+		if (which)
+			r.f.params[FogFrame::SIZE] = 1.f;
+		else
+			r.f.params[FogFrame::VISIBILITY] = 1.f;
+		double worst = 0;
+		float prev = r.eng.makeup;
+		const double jump = std::fabs(rka::FogEngine::wetMakeup(which ? 0.5f : 1.f, which ? 1.f : 0.5f, 1.f) -
+		                              rka::FogEngine::wetMakeup(which ? 0.5f : 0.f, which ? 0.f : 0.5f, 1.f));
+		for (int i = 0; i < (int) (1 * RATE); i++) {
+			r.step(5.f * uniform());
+			worst = std::fmax(worst, std::fabs(r.eng.makeup - prev));
+			prev = r.eng.makeup;
+		}
+		const float want = rka::FogEngine::wetMakeup(which ? 0.5f : 1.f, which ? 1.f : 0.5f, 1.f);
+		CHECK(worst <= 0.005, "%s step: make-up moved %g in one sample (the step is %g), want <= 0.005", which ? "Size" : "Visibility", worst, jump);
+		CHECK(std::fabs(r.eng.makeup - want) < 1e-3, "%s step: make-up %g did not settle on %g", which ? "Size" : "Visibility", r.eng.makeup, want);
+		std::printf("  wet_makeup_smooth %s 0->1 step (%.3f): largest per-sample move %.5f\n", which ? "Size" : "Visibility", jump, worst);
 	}
 }
 
@@ -628,6 +671,7 @@ int main() {
 	mixRampNoClick();
 	lowCut();
 	wetMatchedLevel();
+	wetMakeupSmooth();
 	levelAcrossMix();
 	outputCeiling();
 	sleepAfterHold();
