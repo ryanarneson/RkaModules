@@ -41,8 +41,9 @@ inline float fastExp2(float x) {
 	return p * pow2i(int(n));
 }
 
-// 2^x for double x, within 1e-15 relative over [-1000, 1000]: the same
-// split, with the degree-13 series (truncation under 1e-17).
+// 2^x for double x (clamped to [-1000, 1000]), within 1e-15 relative
+// (tested over Sway's -24 ... 14): the same split, with the degree-13
+// series (truncation under 2e-16).
 inline double fastExp2D(double x) {
 	x = std::max(-1000.0, std::min(x, 1000.0));
 	const double n = std::floor(x + 0.5);

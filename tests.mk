@@ -9,7 +9,7 @@ MODULES ?= $(patsubst src/%/,%,$(sort $(dir $(wildcard src/*/test_*.cpp))))
 
 TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_*.cpp)))
 .PHONY: test
-test: shoal-globals panels-test $(TEST_BINS)
+test: shoal-globals engine-globals panels-test $(TEST_BINS)
 	@for t in $(TEST_BINS); do ./$$t || exit 1; done
 
 # The panel generator's geometry and layout checks, and that the committed
@@ -94,3 +94,12 @@ $(filter $(TEST_BINS),$(PLUGIN_MATH_TESTS)): build/test/%: src/%.cpp $(wildcard 
 	@mkdir -p $(@D)
 	$(CXX) $(PLUGIN_MATH_TEST_FLAGS) -Isrc -I$(<D) $< -o $@
 
+# Sway's and Fathom's engines hold no writable global state (each instance
+# owns all of its state): the same object check as shoal-globals, on an
+# object that reaches every engine entry point.
+build/test/engine_globals.o: src/bench/engine_globals.cpp $(wildcard src/*.hpp src/sway/*.hpp src/fathom/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++11 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Isrc -c $< -o $@
+.PHONY: engine-globals
+engine-globals: build/test/engine_globals.o
+	tools/check_shoal_globals.sh $<

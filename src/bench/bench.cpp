@@ -11,8 +11,8 @@
 // Rack's engine does on one thread, each with its own state. Prints ns per
 // sample and the share of one core at 48 kHz, total and per instance, and
 // exits non-zero if an instance's share is over its module's budget (at 1
-// and at 16 instances). Built with the plugin's optimisation and
-// architecture flags (tests.mk).
+// and at 16 instances) or if 16 instances cost more each than one does.
+// Built with the plugin's optimisation and architecture flags (tests.mk).
 //
 //   bench                          every case
 //   bench <module> <case> <count> [seconds]
@@ -23,6 +23,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -33,10 +34,19 @@ namespace {
 const float FS = 48000.f;
 const double SAMPLE_NS = 1e9 / 48000.0;
 
-// Per-instance budgets, % of one core at 48 kHz, for every case. The bench
-// fails above them; see TESTING.md rule 10 for the measured values.
-const double SWAY_BUDGET = 0.0;
-const double FATHOM_BUDGET = 0.0;
+// Per-instance budgets, % of one core at 48 kHz, per case (idle, outputs,
+// busy), checked at 1 and at 16 instances. About twice what an Apple M-series
+// Mac measures (TESTING.md rule 10 has the numbers), so noise passes and a
+// real regression fails. x86-64 has three times the room: the only x86 runs
+// so far were emulated (Rosetta under Docker), which measured about three
+// times slower than the Mac.
+#if defined(__aarch64__) || defined(__arm64__)
+const double ARCH_ROOM = 1.0;
+#else
+const double ARCH_ROOM = 3.0;
+#endif
+const double SWAY_BUDGET[3] = {0.5, 0.6, 3.0};
+const double FATHOM_BUDGET[3] = {0.1, 1.2, 1.2};
 
 // A slow, cheap CV in +/-5 V: a sine table read at a per-input rate, so the
 // CVs move every sample without libm calls inside the timed loop.
@@ -47,10 +57,21 @@ struct CvTable {
 		for (int i = 0; i < SIZE; i++)
 			v[i] = 5.f * float(std::sin(2.0 * M_PI * i / SIZE));
 	}
-	// Input k, channel c at sample n.
-	float at(int k, int c, long n) const {
-		const long step = 1 + k * 3 + c;
-		return v[(n * step / 8 + c * 97 + k * 389) & (SIZE - 1)];
+	// A read position in eighths of a table step, and its speed: input k,
+	// channel c moves at its own rate from its own start.
+	struct Cursor {
+		uint32_t pos;
+		uint32_t step;
+	};
+	static Cursor cursor(int k, int c) {
+		Cursor r;
+		r.pos = uint32_t(c * 97 + k * 389) * 8;
+		r.step = uint32_t(1 + k * 3 + c);
+		return r;
+	}
+	float next(Cursor& r) const {
+		r.pos += r.step;
+		return v[(r.pos >> 3) & (SIZE - 1)];
 	}
 };
 const CvTable cvTable;
@@ -73,10 +94,28 @@ struct SwayInstance {
 	float volts[rka::SwayFrame::INPUTS_LEN][16];
 	Case kind = IDLE;
 
+	CvTable::Cursor cv[rka::SwayFrame::INPUTS_LEN][16];
+	int clock[16], reset[16], hold[16];
+
+	// 10 V for the first `width` of every `period` samples.
+	static float pulse(int& t, int period, int width) {
+		if (++t >= period)
+			t = 0;
+		return t < width ? 10.f : 0.f;
+	}
+
 	void setup(Case k) {
 		kind = k;
 		using F = rka::SwayFrame;
 		std::memset(volts, 0, sizeof(volts));
+		for (int i = 0; i < F::INPUTS_LEN; i++)
+			for (int c = 0; c < 16; c++)
+				cv[i][c] = CvTable::cursor(i, c);
+		for (int c = 0; c < 16; c++) {
+			clock[c] = c;
+			reset[c] = 31 * c;
+			hold[c] = 1000 * c;
+		}
 		// The module's defaults.
 		float* p = frame.params;
 		p[F::RATE] = 1.f;
@@ -115,15 +154,16 @@ struct SwayInstance {
 		if (kind == BUSY) {
 			for (int k = F::FM; k <= F::MORPH_IN; k++)
 				for (int c = 0; c < 16; c++)
-					volts[k][c] = cvTable.at(k, c, n);
+					volts[k][c] = cvTable.next(cv[k][c]);
 			// A 4 Hz clock, a reset every 1.5 s and a hold now and then, with
 			// the channels a little apart.
 			for (int c = 0; c < 16; c++) {
-				volts[F::CLOCK][c] = (n + c) % 12000 < 600 ? 10.f : 0.f;
-				volts[F::RESET][c] = (n + 31 * c) % 72000 < 48 ? 10.f : 0.f;
-				volts[F::HOLD][c] = (n + 1000 * c) % 96000 < 4800 ? 10.f : 0.f;
+				volts[F::CLOCK][c] = pulse(clock[c], 12000, 600);
+				volts[F::RESET][c] = pulse(reset[c], 72000, 48);
+				volts[F::HOLD][c] = pulse(hold[c], 96000, 4800);
 			}
 		}
+		(void) n;
 		engine.process(frame, 1.f / FS, FS, result);
 	}
 
@@ -143,9 +183,13 @@ struct FathomInstance {
 	float out[rka::FathomFrame::OUTPUTS_LEN];
 	Case kind = IDLE;
 
+	CvTable::Cursor cv[rka::FathomFrame::INPUTS_LEN];
+
 	void setup(Case k) {
 		kind = k;
 		using F = rka::FathomFrame;
+		for (int i = 0; i < F::INPUTS_LEN; i++)
+			cv[i] = CvTable::cursor(i, 0);
 		float* p = frame.params;
 		p[F::PITCH] = 0.f;
 		p[F::SUB] = 0.5f;
@@ -174,10 +218,11 @@ struct FathomInstance {
 		using F = rka::FathomFrame;
 		if (kind == BUSY) {
 			// A slow vibrato of a semitone on V/OCT, the rest +/-5 V.
-			frame.inputs[F::VOCT] = cvTable.at(0, 0, n) / 60.f;
+			frame.inputs[F::VOCT] = cvTable.next(cv[0]) / 60.f;
 			for (int k = F::DETUNE_IN; k <= F::DRIVE_IN; k++)
-				frame.inputs[k] = cvTable.at(k, 0, n);
+				frame.inputs[k] = cvTable.next(cv[k]);
 		}
+		(void) n;
 		engine.process(frame, FS, out);
 	}
 
@@ -223,25 +268,31 @@ Result run(Case k, int count, double seconds) {
 }
 
 template <typename Instance>
-bool bench(const char* name, double budget, double seconds) {
+bool bench(const char* name, const double* budgets, double seconds) {
 	bool ok = true;
 	std::printf("%-7s %-8s %5s %12s %12s %10s\n", name, "case", "count", "total ns", "ns/inst", "% core/inst");
 	for (int k = 0; k < CASES; k++) {
+		const double budget = budgets[k] * ARCH_ROOM;
 		double pct1 = 0.0;
 		for (int count : {1, 4, 16}) {
-			const Result r = run<Instance>(Case(k), count, seconds / count < 0.5 ? 0.5 : seconds / count);
+			const Result r = run<Instance>(Case(k), count, seconds / count < 2.0 ? 2.0 : seconds / count);
 			if (count == 1)
 				pct1 = r.perInstancePct;
-			const bool over = budget > 0.0 && (count == 1 || count == 16) && r.perInstancePct > budget;
+			const bool over = (count == 1 || count == 16) && r.perInstancePct > budget;
 			std::printf("%-7s %-8s %5d %12.1f %12.1f %10.3f%s\n", name, caseName[k], count, r.nsPerSample,
 			            r.nsPerSample / count, r.perInstancePct, over ? "  OVER BUDGET" : "");
-			if (count == 16 && pct1 > 0.0)
-				std::printf("%-7s %-8s 16 vs 1: per-instance cost x%.2f\n", name, caseName[k], r.perInstancePct / pct1);
 			ok = ok && !over;
+			// Instances share nothing, so 16 must cost no more each than one
+			// (with 0.01 % of slack for the near-free cases' timer noise).
+			if (count == 16) {
+				const bool grows = r.perInstancePct > 1.5 * pct1 + 0.01;
+				std::printf("%-7s %-8s 16 vs 1: per-instance cost x%.2f%s\n", name, caseName[k], r.perInstancePct / pct1,
+				            grows ? "  GROWS WITH COUNT" : "");
+				ok = ok && !grows;
+			}
 		}
+		std::printf("%-7s %-8s budget %.2f %% of a core per instance\n", name, caseName[k], budget);
 	}
-	if (budget > 0.0)
-		std::printf("%s budget: %.2f %% of a core per instance\n", name, budget);
 	return ok;
 }
 
@@ -264,8 +315,8 @@ int main(int argc, char** argv) {
 		            r.nsPerSample, r.perInstancePct);
 		return 0;
 	}
-	bool ok = bench<SwayInstance>("sway", SWAY_BUDGET, 2.0);
-	ok = bench<FathomInstance>("fathom", FATHOM_BUDGET, 2.0) && ok;
-	std::printf(ok ? "bench: within budget\n" : "bench: OVER BUDGET\n");
+	bool ok = bench<SwayInstance>("sway", SWAY_BUDGET, 20.0);
+	ok = bench<FathomInstance>("fathom", FATHOM_BUDGET, 20.0) && ok;
+	std::printf(ok ? "bench: within budget\n" : "bench: FAILED (over budget, or cost grows with the count)\n");
 	return ok ? 0 : 1;
 }

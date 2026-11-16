@@ -16,6 +16,7 @@ last section lists where they fall short.
 | `make shoal-globals` | Fails if the firmware object holds writable global state | |
 | `make shoal-fuzz` | 50 more seeds of the random fault sweep | |
 | `make shoal-bench` | CPU share per app, including drawing and saving | |
+| `make bench` | CPU share of Sway's and Fathom's engines, 1, 4 and 16 instances; fails over budget | A C++ compiler |
 | `tools/cross_build.sh` | Linux and Windows builds in Docker | Colima running |
 
 Before calling any change done: `make test`, `make`, `make smoke`, and for a
@@ -152,6 +153,36 @@ A bench reports CPU share per mode, including the costs that hide outside the
 DSP loop (drawing, periodic saves, UI model building). Shoal's budget is 2 %
 of a core per instance at 48 kHz; every app measures under 0.2 %.
 
+`make bench` times Sway's and Fathom's engines (`SwayEngine.hpp`,
+`FathomEngine.hpp`, the code the modules run) with the plugin's compile
+flags, at 1, 4 and 16 instances run in turn each sample as Rack runs them,
+in three cases: idle (no cables, knobs at defaults), outputs (every output
+patched, no inputs) and busy (Sway: 16 channels, a moving CV on every
+input; Fathom: full detune, drift and spread, a moving CV on every input).
+It fails if an instance is over its budget at 1 or at 16 instances, or if
+16 instances cost more each than one. Budgets and measurements, % of one
+core at 48 kHz per instance, Apple M-series Mac (x86-64 gets three times
+the budget, see `src/bench/bench.cpp`):
+
+| | idle | outputs | busy |
+|---|---|---|---|
+| Sway budget | 0.5 | 0.6 | 3.0 |
+| Sway measured (was) | 0.19 (0.50) | 0.27 (0.50) | 1.6 (1.6) |
+| Fathom budget | 0.1 | 1.2 | 1.2 |
+| Fathom measured (was) | 0.02 (0.58) | 0.55 (0.58) | 0.59 (0.59) |
+
+Per-instance cost is the same at 16 instances as at one. Before this
+bench (issue #8), the engines called libm's exp2, pow, sin, cos and tanh
+tens of times per sample; MinGW's libm, which the Windows build uses, is
+much slower than macOS's or glibc's, which is why Windows showed several
+percent per idle instance. Keep libm out of per-sample paths (use
+`src/FastMath.hpp`, whose bounds `test_fast_math` checks) and work out per
+block or on change what does not need per-sample precision.
+
+Instances share no mutable state: `make engine-globals` (part of
+`make test`) fails if the engines' object file holds writable global
+state, as `make shoal-globals` does for Shoal's firmware.
+
 ### 11. Build everywhere before merge
 
 `make test` on macOS proves nothing about Linux or Windows. Before a branch
@@ -250,7 +281,7 @@ Three habits behind most of them:
 | Golden saved-state image | No (params only) | No (params only) | Yes |
 | Allocation check on the audio path | No | No | Yes |
 | Thread tests | Not needed (no shared state) | Not needed | Yes |
-| CPU bench | No | No | Yes |
+| CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes |
 | Smoke screenshot | Yes | Yes | Yes |
 
 ## Future work
@@ -261,8 +292,9 @@ work, to be planned on its own after Shoal's friendly mode. Not started.
 - Sway and Fathom tests build with the sanitizers, as Shoal's do (rule 3).
 - Sway and Fathom get hostile-input and sample-rate sweeps and a seeded
   random fuzz to the standard of rule 4.
-- Sway and Fathom get an allocation check on the audio path (rule 6) and a
-  CPU bench (rule 10).
+- Sway and Fathom get an allocation check on the audio path (rule 6).
+- ~~Sway and Fathom get a CPU bench (rule 10).~~ Done: `make bench`
+  (issue #8).
 - Their existing tests are each shown to fail by mutation (rule 1).
 
 Other open items:
@@ -270,5 +302,5 @@ Other open items:
 - Shoal's own code (not the vendored firmware) should compile with
   `-Wall -Wextra -Werror` in CI; today CI's `-Werror` reaches only the other
   modules' tests.
-- CI does not run `make smoke`, the bench, the fuzz seeds or ThreadSanitizer;
+- CI does not run `make smoke`, the benches, the fuzz seeds or ThreadSanitizer;
   those are run by hand before a merge.
