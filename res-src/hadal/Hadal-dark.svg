@@ -47,9 +47,9 @@
 <text x="15.78" y="54.87" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">HISS</text>
 <text x="35.27" y="54.87" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">CRACKLE</text>
 <text x="45.02" y="49.30" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">DRIFT</text>
-<text x="25.52" y="94.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">RUMBLE</text>
-<text x="35.27" y="94.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">HISS</text>
-<text x="45.02" y="94.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">CRACKLE</text>
+<text x="25.52" y="94.30" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">RUMBLE</text>
+<text x="35.27" y="94.30" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">HISS</text>
+<text x="45.02" y="94.30" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">CRACKLE</text>
 <text x="35.27" y="110.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">L</text>
 <text x="45.02" y="110.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">R</text>
 <text x="1.30" y="89.00" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#757062">CV</text>

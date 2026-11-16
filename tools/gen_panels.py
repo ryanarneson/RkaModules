@@ -442,7 +442,9 @@ PANELS = {
         # at their turns because 11 does not fall on the 2 km grid.
         faces={"PARAM_DEPTH": dict(r=16.0, ticks=22, major=4,
                                    words=[(round(-135 + 270 * km / 11, 1), str(km)) for km in (0, 2, 4, 6, 8, 11)])},
-        tiles=[dict(port=f"OUTPUT_{n}") for n in ("RUMBLE", "HISS", "CRACKLE", "L", "R")],
+        # The layer names at 1.7 mm keep ivory either side on the narrow tiles.
+        tiles=[dict(port=f"OUTPUT_{n}", name_size=1.7) for n in ("RUMBLE", "HISS", "CRACKLE")]
+        + [dict(port="OUTPUT_L"), dict(port="OUTPUT_R")],
         traces=[[f"INPUT_{n}_CV", f"PARAM_{n}_ATT", f"PARAM_{n}"] for n in _HD_COLS],
         label_at={"PARAM_DEPTH": "face"},
         notes=[(1.3, _HD_CV_Y + 6.0, "CV", 2.0, "dim", "start"),
@@ -624,6 +626,8 @@ BEND_TOLERANCE = 0.05    # mm off the straight line before a trace counts as ben
 ORIGIN_ARM = 1.6         # mm: half the width of an origin's crosshair
 LABEL_CLEARANCE = 0.2    # mm between lettering and any component
 TILE = dict(left=4.4, right=4.4, top=7.2, bottom=4.6)   # mm from the port's centre
+# Lettering on a tile keeps this much ivory to either side of it (mm).
+TILE_NAME_MARGIN = 0.9
 
 
 def cid(kind, cname):
@@ -1268,6 +1272,9 @@ def check_lettering(name, spec):
         for port, rect in tiles:
             if rect[0] <= box[0] and box[2] <= rect[2] and rect[1] <= box[1] and box[3] <= rect[3]:
                 on_ivory = True
+                if box[0] - rect[0] < TILE_NAME_MARGIN or rect[2] - box[2] < TILE_NAME_MARGIN:
+                    sys.exit(f"{name}: {t.what} crowds the edge of the tile of {port}; "
+                             f"make it smaller with the tile's name_size")
             elif rect_distance(box, rect) < clear:
                 sys.exit(f"{name}: {t.what} overlaps the tile of {port}")
         if on_ivory and t.colour != "ink":

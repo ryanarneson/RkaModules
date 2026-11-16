@@ -390,6 +390,20 @@ class FootMarkAndLabels(unittest.TestCase):
         self.assertIn('note "NEAR"', msg)
         self.assertIn("tile of OUTPUT_X", msg)
 
+    def test_tile_name_crowding_its_edges_fails(self):
+        # A tile's name keeps a margin inside the tile: CRACKLE at the
+        # default 2.0 mm fills an 8.8 mm tile almost edge to edge (Hadal's
+        # first panel), and must fail; smaller, it passes.
+        def tiled(**t):
+            return spec(components=[("output", "CRACKLE", 30.0, 60.0, "CRACKLE")],
+                        tiles=[dict(port="OUTPUT_CRACKLE", **t)])
+        msg = failure(self, "T", tiled())
+        self.assertIn('label "CRACKLE"', msg)
+        self.assertIn("edge of the tile of OUTPUT_CRACKLE", msg)
+        g.check_panel("T", tiled(name_size=1.7))
+        # A short name at the default size is untouched.
+        g.check_panel("T", spec(components=[("output", "L", 30.0, 60.0, "L")], tiles=[dict(port="OUTPUT_L")]))
+
     def test_lettering_over_the_limb_or_an_origin_fails(self):
         limb = [dict(c=(30.0, 20.0), r=40.0, a0=-30, a1=30, step=2, major=5)]
         g.check_panel("T", spec(limbs=limb, notes=[(30.0, 57.0, "ABOVE", 2.0, "ivory")]))
