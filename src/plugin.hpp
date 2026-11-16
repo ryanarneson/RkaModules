@@ -11,3 +11,4 @@ extern Plugin* pluginInstance;
 extern Model* modelSway;
 extern Model* modelFathom;
 extern Model* modelShoal;
+extern Model* modelSluice;
