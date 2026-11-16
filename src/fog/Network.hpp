@@ -9,7 +9,27 @@
 //   +--- write line i+1 <-- Householder mix (I - 2/N 11^T), then a shift <-+
 //
 //   wet L, R = two orthogonal +/-1 tap patterns over the line reads,
-//              times a level from the T60.
+//              times a level from the T60, above 200 Hz; below it, one
+//              more tap through a phase pair (the low band, below).
+//
+// - The low band. At one frequency the network is a fixed linear map, so a
+//   held tone comes out of the two tap patterns with whatever phase they
+//   happen to have there: it changes sign every few Hz (20-200 Hz: RMS
+//   correlation 0.3-0.4 at noon Drift, 0.7 at Drift 0), and Drift's swing,
+//   a phase of 2 pi f x depth, is too small at low f to average it out. So
+//   a 33 Hz drone came out at a correlation of -0.9 in one mode and +0.5 in
+//   another, with the sides up to 10 dB apart; the shorter the tail, the
+//   more of the held sound is the first, unblurred pass, and the worse.
+//   Below 200 Hz each side's taps are cut (a 4th-order Butterworth
+//   high-pass) and replaced by one third tap pattern (Hadamard row 15),
+//   low-passed by the matching Butterworth (the two bands' powers sum to 1,
+//   which suits uncorrelated bands) and fed through a phase pair: two
+//   chains of two first-order allpasses whose phases differ by 80 +/- 7.5
+//   degrees from 8 to 600 Hz (poles 6.965 and 159.461 Hz, 30.966 and 711.28
+//   Hz, fitted minimax). The bass is then as loud on both sides, at a
+//   correlation of cos 80 = +0.17 (+0.05 to +0.30), and its mono sum loses
+//   about 2 dB, whatever the tone, mode, Drift or tail (test_stereo). The
+//   T60s are untouched: every tap pattern decays at the network's rate.
 //
 // The modes are voicings (Voicing.hpp): line count and lengths, diffusion,
 // how Damp maps, and two in-loop extras:
@@ -118,9 +138,16 @@ struct Network {
 	static float lowHz() { return 250.f; } // where Visibility's T60 holds
 	static const int LOOP_AP = 8; // in-loop allpasses (SMOKE's 8 lines)
 	static float shimmerMaxA() { return 0.5f; }
+	// The low band: the crossover, and the phase pair's poles (Hz), two
+	// first-order allpasses a branch (see the top).
+	static float lowSplitHz() { return 200.f; }
+	static float pairHz(int branch, int k) {
+		return branch == 0 ? (k == 0 ? 6.965f : 159.461f) : (k == 0 ? 30.966f : 711.28f);
+	}
 	// The wet level's constant, set by measurement (test_network's
 	// even_wet_level, pink noise at noon): at 1 the wet RMS is within
-	// 0.1-1.3 dB below the input RMS across the six words, so it stays 1.
+	// 0.7-1.4 dB below the input RMS across the six words (0.0-1.2 before
+	// the low band), so it stays 1; the engine's wetMakeup levels it.
 	static float wetCal() { return 1.f; }
 
 	DelayLine line[MAX_LINES];
@@ -142,6 +169,16 @@ struct Network {
 	float phaseInc[MAX_LINES] = {};
 	float modDepth[MAX_LINES] = {}; // Drift swing, samples
 	float tapL[MAX_LINES] = {}, tapR[MAX_LINES] = {}, inSign[MAX_LINES] = {};
+	float tapLow[MAX_LINES] = {}; // the low band's one tap
+	// The low band (see the top): the crossover's two Butterworth sections
+	// (b0, b1, b2, a1, a2) for the high-pass on each side and the low-pass on
+	// tapLow, their states, and the phase pair's first-order allpasses.
+	// Double: in float, a 200 Hz section (and a 7 Hz allpass) at 48-96 kHz
+	// amplifies its own rounding to about -76 dB under the signal.
+	double hpC[2][5] = {}, lpC[2][5] = {};
+	double hpZ[2][2][2] = {}, lpZ[2][2] = {}; // [side][section][state], [section][state]
+	double pairC[2][2] = {};                  // [branch][section] coefficient
+	double pairX[2][2] = {}, pairY[2][2] = {}; // last input and output
 	float wetGain = 0.f;
 	// Prewarped (bilinear) frequencies: tan(pi f / rate).
 	float wDamp = 1.f, wShelf = 1.f, wLow = 0.f;
@@ -227,7 +264,11 @@ struct Network {
 			tapL[i] = (popcount(i & 5) & 1) ? -1.f : 1.f;
 			tapR[i] = (popcount(i & 10) & 1) ? -1.f : 1.f;
 			inSign[i] = (popcount(i & 3) & 1) ? -1.f : 1.f;
+			// The low band's tap: row 15 (row 7 over 8 lines), orthogonal to
+			// the other three.
+			tapLow[i] = (popcount(i & 15) & 1) ? -1.f : 1.f;
 		}
+		setLowBand();
 		// The diffuser's 8 channels carry 4 (L^2 + R^2); spread over n lines.
 		inGain = n == 16 ? 0.25f : 0.35355339f;
 		// The voicing's extras.
@@ -277,9 +318,12 @@ struct Network {
 	}
 
 	// Restart ICE's shifters (in the loop and on the wet) as a fresh network
-	// starts them: grain phase 0, their filters empty. For the engine's wake, when everything it holds is below
-	// QUIET anyway, so that waking is the same as starting fresh.
+	// starts them: grain phase 0, their filters empty; and empty the low
+	// band's filters (their states can sit above the wet they feed: the
+	// high-pass holds what it cuts). For the engine's wake, when everything it
+	// holds is below QUIET anyway, so that waking is the same as starting fresh.
 	void restartShifter() {
+		clearLowBand();
 		shifter.restart();
 		octL.restart();
 		octR.restart();
@@ -301,6 +345,7 @@ struct Network {
 		shifter.clear();
 		octL.clear();
 		octR.clear();
+		clearLowBand();
 		scaleOffset = 0.f;
 		fresh = true;
 		gainCount = 0;
@@ -378,13 +423,24 @@ struct Network {
 			r[i] = d - apK * w;
 		}
 
-		float l = 0.f, rr = 0.f;
+		float l = 0.f, rr = 0.f, lo = 0.f;
 		for (int i = 0; i < n; i++) {
 			l += tapL[i] * r[i];
 			rr += tapR[i] * r[i];
+			lo += tapLow[i] * r[i];
 		}
-		wetL = l * wetGain;
-		wetR = rr * wetGain;
+		// The low band: each side's taps high-passed, plus one low-passed tap
+		// through the phase pair, a branch a side.
+		const double hl = biquad(hpC[1], hpZ[0][1], biquad(hpC[0], hpZ[0][0], l));
+		const double hr = biquad(hpC[1], hpZ[1][1], biquad(hpC[0], hpZ[1][0], rr));
+		const double low = biquad(lpC[1], lpZ[1], biquad(lpC[0], lpZ[0], lo));
+		double la = low, lb = low;
+		for (int k = 0; k < 2; k++) {
+			la = allpass(0, k, la);
+			lb = allpass(1, k, lb);
+		}
+		wetL = (float) (hl + la) * wetGain;
+		wetR = (float) (hr + lb) * wetGain;
 		if (shimOut > 0.f) {
 			// ICE: the feed-forward octave, shifted once, never fed back.
 			wetL += shimOut * octL.process(wetL);
@@ -433,7 +489,63 @@ struct Network {
 	// Line i's Drift swing, in samples either side of its length.
 	float lineDepth(int i) const { return modDepth[i]; }
 
+	// ---- the low band, per sample ----
+
+	// Transposed direct form II; state flushed below 1e-20 (denormals, NaN).
+	static double biquad(const double* c, double* z, double x) {
+		const double y = c[0] * x + z[0];
+		const double z0 = c[1] * x - c[3] * y + z[1];
+		const double z1 = c[2] * x - c[4] * y;
+		z[0] = (z0 > 1e-20 || z0 < -1e-20) ? z0 : 0.0;
+		z[1] = (z1 > 1e-20 || z1 < -1e-20) ? z1 : 0.0;
+		return y;
+	}
+
+	// First-order allpass y = c x + x[-1] - c y[-1].
+	double allpass(int b, int k, double x) {
+		double y = pairC[b][k] * (x - pairY[b][k]) + pairX[b][k];
+		y = (y > 1e-20 || y < -1e-20) ? y : 0.0;
+		pairX[b][k] = x;
+		pairY[b][k] = y;
+		return y;
+	}
+
+	void clearLowBand() {
+		for (int s = 0; s < 2; s++)
+			for (int k = 0; k < 2; k++) {
+				hpZ[s][k][0] = hpZ[s][k][1] = 0.0;
+				lpZ[k][0] = lpZ[k][1] = 0.0;
+				pairX[s][k] = pairY[s][k] = 0.0;
+			}
+	}
+
 	// ---- control maths (not per sample) ----
+
+	// The crossover (4th-order Butterworth, two sections of Q 0.541 and
+	// 1.307, so the two bands' powers add to 1) and the phase pair, at the
+	// current rate; their states cleared.
+	void setLowBand() {
+		const double K = prewarpD(lowSplitHz());
+		const double Q[2] = {0.54119610014619698, 1.3065629648763766};
+		for (int k = 0; k < 2; k++) {
+			const double nrm = 1.0 / (1.0 + K / Q[k] + K * K);
+			const double a1 = 2.0 * (K * K - 1.0) * nrm, a2 = (1.0 - K / Q[k] + K * K) * nrm;
+			hpC[k][0] = nrm;
+			hpC[k][1] = -2.0 * nrm;
+			hpC[k][2] = nrm;
+			lpC[k][0] = K * K * nrm;
+			lpC[k][1] = 2.0 * K * K * nrm;
+			lpC[k][2] = K * K * nrm;
+			hpC[k][3] = lpC[k][3] = a1;
+			hpC[k][4] = lpC[k][4] = a2;
+		}
+		for (int b = 0; b < 2; b++)
+			for (int k = 0; k < 2; k++) {
+				const double t = prewarpD(pairHz(b, k));
+				pairC[b][k] = (t - 1.0) / (t + 1.0);
+			}
+		clearLowBand();
+	}
 
 	static int popcount(int x) {
 		int c = 0;
@@ -444,6 +556,11 @@ struct Network {
 
 	static float unit(float x) {
 		return x >= 0.f ? (x <= 1.f ? x : 1.f) : 0.f;
+	}
+
+	double prewarpD(double hz) const {
+		const double f = hz < 0.4 * rate ? hz : 0.4 * rate;
+		return std::tan(3.14159265358979323846 * f / rate);
 	}
 
 	float prewarp(float hz) const {

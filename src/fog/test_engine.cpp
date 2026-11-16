@@ -637,15 +637,18 @@ void levellerNoPumping() {
 	// The steady drones (Drift 0) the leveller turns down by over 3 dB, from
 	// the full set (saw, square, sine at 55, 110, 220 Hz, Visibility 0.75 and
 	// 1, every mode; the rest build up less without Drift): each is checked
-	// to be engaged, so a change that idles one fails here.
+	// to be engaged, so a change that idles one fails here. Since the low
+	// band (Network.hpp) none is ICE: its 55 Hz drones had built up on one
+	// side, and now stay under the leveller's threshold on both.
 	struct Case {
 		int m, shape;
 		double hz;
 		float vis;
 	};
-	const Case cases[] = {{0, 0, 110, 1.f},  {0, 1, 55, 0.75f}, {0, 1, 55, 1.f},  {0, 1, 110, 0.75f}, {0, 1, 110, 1.f},
-	                      {0, 2, 110, 1.f},  {1, 0, 220, 1.f},  {1, 1, 55, 0.75f}, {1, 1, 110, 0.75f}, {2, 1, 110, 0.75f},
-	                      {2, 1, 220, 0.75f}, {3, 1, 55, 0.75f}, {3, 1, 55, 1.f},  {3, 2, 55, 0.75f},  {3, 2, 55, 1.f}};
+	const Case cases[] = {{0, 0, 55, 0.75f},  {0, 0, 55, 1.f},    {0, 0, 110, 0.75f}, {0, 0, 110, 1.f},   {0, 1, 55, 0.75f},
+	                      {0, 1, 55, 1.f},    {0, 1, 110, 0.75f}, {0, 1, 110, 1.f},   {0, 2, 110, 0.75f}, {0, 2, 110, 1.f},
+	                      {1, 0, 220, 0.75f}, {1, 0, 220, 1.f},   {1, 1, 55, 0.75f},  {1, 1, 55, 1.f},    {1, 1, 110, 0.75f},
+	                      {1, 1, 220, 0.75f}, {2, 1, 110, 0.75f}};
 	double worst = 0, worstEarly = 0, worstNoon = 0, worstNoonEarly = 0;
 	char where[96] = "", whereNoon[96] = "";
 	for (const Case& c : cases) {
@@ -715,17 +718,24 @@ void levellerIdleWhenQuiet() {
 // The tail decays as it would without the leveller: a +/-5 V saw at 110 Hz
 // held 15 s at Visibility 1, Size 0.5, the other knobs at noon, Mix 1, then
 // stopped. In every mode, the output in 1 s windows from 1 to 13 s after the
-// stop, against the same run with the leveller off, stays within 1.5 dB of
+// stop, against the same run with the leveller off, is at most 1.5 dB above
 // that ratio in the first second after the stop (where the gain has stopped
-// moving: the leveller holds it while the input is absent). 1.5 dB is the
-// spread the two runs' own beating gives (the held gain lands on a slightly
-// different point of the wander each time, up to 1.3 dB measured); a gain
-// that releases at its 3 s while the tail falls lifts the tail back up as
-// fast as it decays, +4 to +7 dB by 12 s. And FRET: from 1 to 2 s after
-// the stop the gain does not move at all; a new note (a 1 V sine, 220 Hz)
-// then releases it again, at its own 3 s: at least 2 dB within 6 s
-// (measured 3.0; it cannot rise faster than the old tail under it falls,
-// which keeps the 5 ms follower up).
+// moving: the leveller holds it while the input is absent), and at most
+// 2.5 dB below it. 1.5 dB is the spread the two runs' own beating gives (the
+// held gain lands on a slightly different point of the wander each time, up
+// to 1.3 dB measured); a gain that releases at its 3 s while the tail falls
+// lifts the tail back up as fast as it decays, +4 to +7 dB by 12 s. Below,
+// the attack is never held: a tail that peaks above the held drone is
+// turned down like any other peak. Since the low band (Network.hpp) SMOKE's
+// does: its sustained 110 Hz no longer piles up on one side (the louder
+// side's peak, which the leveller follows, fell from 18.7 to 13.9 V), and
+// its first repeats after the stop reach 16.2 V, so its tail sits 1.5 dB
+// under the unlevelled one's from 5 s on. And FRET: from 1 to 2 s after
+// the stop the gain never rises (it is not released; it may still fall by
+// the attack, under 0.01 dB here); a new note (a 1 V sine, 220 Hz) then
+// releases it again, at its own 3 s: at least 2 dB within 6 s (measured
+// 3.5; it cannot rise faster than the old tail under it falls, which keeps
+// the 5 ms follower up).
 double windowDb(const std::vector<float>& x, size_t a, size_t b) {
 	return 20.0 * std::log10(rms(x, a, b) + 1e-12);
 }
@@ -756,8 +766,8 @@ void levellerHoldsInTail() {
 		const double ref = windowDb(out[0], 0, sec) - windowDb(out[1], 0, sec);
 		for (int k = 1; k < 13; k++) {
 			const double d = windowDb(out[0], k * sec, (k + 1) * sec) - windowDb(out[1], k * sec, (k + 1) * sec) - ref;
-			CHECK(std::fabs(d) <= 1.5, "%s: %d-%d s after the stop, the levelled tail is %+.2f dB against the unlevelled one, want within 1.5", MODE_NAMES[m], k,
-			      k + 1, d);
+			CHECK(d <= 1.5 && d >= -2.5, "%s: %d-%d s after the stop, the levelled tail is %+.2f dB against the unlevelled one, want -2.5 to +1.5",
+			      MODE_NAMES[m], k, k + 1, d);
 			if (std::fabs(d) > std::fabs(worst)) {
 				worst = d;
 				std::snprintf(where, sizeof where, "%s, %d-%d s", MODE_NAMES[m], k, k + 1);
@@ -772,11 +782,13 @@ void levellerHoldsInTail() {
 	r->f.params[FogFrame::BLOOM] = 0.5f;
 	r->f.params[FogFrame::DRIFT] = 0.5f;
 	r->f.params[FogFrame::MIX] = 1.f;
-	float first = 0.f;
+	float first = 0.f, top = 0.f;
 	for (int i = 0; i < hold + 2 * sec; i++) {
 		r->step(i < hold ? drone(0, 110.0, i) : 0.f);
 		if (i == hold + sec)
 			first = r->eng.levelGain;
+		if (i >= hold + sec)
+			top = r->eng.levelGain > top ? r->eng.levelGain : top;
 	}
 	const float held = r->eng.levelGain;
 	for (int i = 0; i < 6 * sec; i++)
@@ -784,7 +796,7 @@ void levellerHoldsInTail() {
 	const float later = r->eng.levelGain;
 	delete r;
 	const double rise = 20.0 * std::log10(later / held);
-	CHECK(held < 0.6f && held == first, "in the tail: gain %.3f at 1 s after the stop, %.3f at 2 s, want held (and under 0.6)", first, held);
+	CHECK(held < 0.6f && top == first, "in the tail: gain %.4f at 1 s after the stop, up to %.4f by 2 s, want held: never above (and under 0.6)", first, top);
 	CHECK(rise >= 2.0, "a new note in the tail: gain %.2f dB held, %+.2f dB 6 s later, want it to rise >= 2 dB", 20.0 * std::log10(held), rise);
 	std::printf("  leveller_holds_in_tail: worst %+.2f dB against the unlevelled tail (%s); a new note releases it %+.1f dB in 6 s (from %.1f dB)\n", worst,
 	            where, rise, 20.0 * std::log10(held));
