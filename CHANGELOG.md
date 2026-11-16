@@ -2,7 +2,7 @@
 
 ## 2.0.0 (unreleased)
 
-- New module: **Sway**, an 18 HP polyphonic LFO:
+- New module: **Sway**, a 12 HP polyphonic LFO:
   - SIN, TRI, SAW, SQR (pulse width) plus a MORPH output with SKEW, SMOOTH
     (round or wavefold) and MORPH (sin → tri → saw → square).
   - RAND output, a new random value every cycle, from stepped to gliding
@@ -15,6 +15,9 @@
   - CHANNELS (1–16) and SPREAD for phase-offset polyphony.
   - CV with attenuverters for PW, PHASE, SKEW, SMOOTH, MORPH.
   - The phase is kept in double precision, so slow rates stay accurate.
+  - A rate light on the RATE dial, following channel 1: it blinks once
+    per cycle up to 10 Hz and glows steadily at half brightness above.
+  - Drawn as a pendulum.
 - New module: **Fathom**, a 10 HP bass drone voice:
   - A sine sub one or two octaves under the pitch, and a seven-saw
     supersaw body with the JP-8000's detune and mix curves (after
@@ -30,8 +33,13 @@
   - CV with attenuverters for DETUNE, DRIFT, RES, DRIVE and CUTOFF
     (1 V/oct).
   - Stereo out through a soft clipper, plus a separate SUB out.
-- "Nightglow" look shared by all modules: navy panels, glowing cards,
-  colour-coded outputs, white knobs, and the plugin's own small
-  attenuverter trim; panels can carry glowing rings.
+  - Drawn as an echo sounder.
 - New module: **Shoal**, 28 HP: the Ornament & Crime v1.3.6 firmware and
   all 13 apps in hardware mode; its settings save with the patch.
+  - Drawn as ripples from two sources.
+- One look for every module, "Instrument": brass and ivory on near-black,
+  main controls on enamel dial faces, knurled knobs, a traced line from
+  each CV jack through its attenuverter to the control it moves, outputs
+  on ivory tiles, cyan only for lights and screens, lettered in D-DIN
+  Condensed. The plugin's own knobs, jacks, buttons, lights and screws;
+  Rack's dark-panels preference gets the same drawing turned down.

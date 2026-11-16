@@ -1,10 +1,28 @@
 # Sway
 
-Polyphonic LFO, 18 HP: four classic waves, a shapeable MORPH wave, a random
+Polyphonic LFO, 12 HP: four classic waves, a shapeable MORPH wave, a random
 output from stepped to gliding, an end-of-cycle trigger, clock sync, phase spread across channels, and a one-shot
 mode that turns it into an envelope.
 
 ![Sway panel](Sway.png)
+
+## The panel
+
+Sway is drawn as a pendulum swinging from a pivot at the top right.
+
+- **RATE** is the large numbered dial at the top left, with the **rate
+  light** above its name. **SPREAD** and **CHANNELS** are the two small
+  dials to its right.
+- The five shape knobs (**PW**, **PHASE**, **SKEW**, **SMOOTH**, **MORPH**)
+  sit on the graduated brass arc. Under each is its attenuverter, then its
+  CV jack in the row below; a line joins jack, attenuverter and knob.
+- **FM** is the first column: its jack and attenuverter have no knob of
+  their own, and their line runs up and across to the RATE dial, which FM
+  moves.
+- Row of jacks under that: **CLOCK**, **RESET**, **HOLD** in, then the
+  **SIN**, **TRI**, **SAW** outputs. Bottom row: the **BI / UNI** switch
+  and the **1-SHOT** button, then **SQR**, **MORPH**, **RAND** and **EOC**.
+  Outputs sit on light tiles; inputs are bare.
 
 ## Rate and timing
 
@@ -15,6 +33,12 @@ mode that turns it into an envelope.
     square are band-limited in this range.
 
   The tooltip shows Hz, or the cycle time in Slow.
+- **Rate light**: follows channel 1. Up to 10 Hz it is lit for the first
+  half of each cycle and dark for the second, so it blinks at the LFO's
+  rate (clocked or free); above 10 Hz it glows steadily at half
+  brightness. It stays still while HOLD is high and goes dark when a
+  one-shot cycle has finished. It follows the cycle as EOC counts it, so
+  PHASE does not move it.
 - **FM** jack and attenuverter: exponential FM added to RATE, 1 V/oct at
   full clockwise, inverted counter-clockwise, off at centre.
 - **CLOCK**: once two clock edges have arrived, RATE becomes a ratio of
@@ -25,7 +49,7 @@ mode that turns it into an envelope.
 - **RESET**: a rising edge (above 1 V) restarts the cycle at phase 0 and
   restarts the ÷N count.
 - **HOLD**: while high (above 1 V), the LFO freezes where it is.
-- **1-SHOT** (amber when on): RESET runs a single cycle, then the outputs
+- **1-SHOT** (its cap lights when on): RESET runs a single cycle, then the outputs
   rest at the cycle's end until the next RESET, so Sway works as an
   envelope. Clock edges set its speed but never restart it.
 

@@ -15,10 +15,14 @@ layout.
   Tide (clocked modulator), Eddy (random sampler), Loom (a darker voice).
   Pick from this family before inventing a new name; never rename a
   released module.
-- One shared look ("Nightglow", see README): palette in
-  `tools/gen_panels.py`, shared knobs/lights in `src/widgets.hpp`. Don't use
-  stock knobs or ad-hoc colours in a module. `src/RkaTheme.hpp` and
-  `res/components/` (the trim's SVGs) are generated.
+- One shared look, "Instrument" (brass and ivory on near-black; rules in
+  `docs/DESIGN-THEME.md`, detail in
+  `docs/specs/2026-11-15-instrument-look-design.md`): palette and panel
+  language in `tools/gen_panels.py`, the plugin's own components and
+  widgets in `src/widgets.hpp`. One typeface, D-DIN Condensed, from
+  `tools/fonts/`. No stock knobs, jacks, lights or screws, and no ad-hoc
+  colours in a module. `src/RkaTheme.hpp` and `res/components/` (the
+  components' SVGs) are generated.
 - `RACK_DIR` is set in `~/.bashrc` (`~/ws/sdk/Rack-SDK`, 2.6.6). Non-login
   shells may not have it; pass `RACK_DIR=$HOME/ws/sdk/Rack-SDK` to make.
   On the Mac (arm64) it's in `~/.zshrc`:

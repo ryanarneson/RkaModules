@@ -1,65 +1,127 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="142.24mm" height="128.5mm" viewBox="0 0 142.24 128.5">
-<defs>
-<linearGradient id="bg" x1="0" y1="0" x2="0" y2="128.5" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#111c30"/><stop offset="1" stop-color="#070b14"/></linearGradient>
-<linearGradient id="rule" x1="3" y1="0" x2="139.24" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22e6ef"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
-</defs>
-<rect width="142.24" height="128.5" fill="url(#bg)"/>
-<text x="71.12" y="11.50" font-family="DejaVu Sans" font-size="4.5" font-weight="bold" text-anchor="middle" fill="#22e6ef" stroke="#22e6ef" stroke-width="0.99" stroke-linejoin="round" opacity="0.35">SHOAL</text>
-<text x="71.12" y="11.50" font-family="DejaVu Sans" font-size="4.5" font-weight="bold" text-anchor="middle" fill="#e6f4ff">SHOAL</text>
-<rect x="3" y="12.9" width="136.24" height="1.0" rx="0.5" fill="url(#rule)" opacity="0.35"/>
-<rect x="3" y="13.2" width="136.24" height="0.4" fill="url(#rule)" opacity="1.0"/>
-<rect x="91.0" y="15.0" width="47.2" height="47.0" rx="1.5" fill="#0f1828" stroke="#2a3a55" stroke-width="0.3" stroke-opacity="1.0"/>
-<rect x="91.0" y="66.0" width="47.2" height="49.2" rx="1.5" fill="#0f1828" stroke="#2a3a55" stroke-width="0.3" stroke-opacity="1.0"/>
-<rect x="119.0" y="67.0" width="18.0" height="47.2" rx="1.5" fill="none" stroke="#22e6ef" stroke-width="1.2" opacity="0.21"/>
-<rect x="119.0" y="67.0" width="18.0" height="47.2" rx="1.5" fill="#0f1828" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="1.0"/>
-<rect x="4.0" y="16.0" width="83.2" height="5.0" rx="1.0" fill="#04070c" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="1.0"/>
-<rect x="4.0" y="21.5" width="83.2" height="41.6" rx="1.0" fill="#04070c" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="1.0"/>
-<rect x="4.0" y="67.0" width="83.2" height="41.6" rx="1.0" fill="#04070c" stroke="#22e6ef" stroke-width="0.3" stroke-opacity="1.0"/>
-<text x="102.80" y="19.40" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#e6f4ff">ENC L</text>
-<text x="126.40" y="19.40" font-family="DejaVu Sans" font-size="2.3" font-weight="bold" text-anchor="middle" fill="#e6f4ff">ENC R</text>
-<text x="100.00" y="49.60" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#9fb3c8">UP</text>
-<text x="114.60" y="49.60" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#9fb3c8">DOWN</text>
-<text x="129.20" y="49.60" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#9fb3c8">UI MODE</text>
-<text x="99.80" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#e6f4ff">TRIG</text>
-<text x="112.00" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#e6f4ff">CV</text>
-<text x="131.60" y="72.20" font-family="DejaVu Sans" font-size="2.0" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="1.0">OUT</text>
-<text x="93.60" y="79.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#9fb3c8">1</text>
-<text x="93.60" y="89.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#9fb3c8">2</text>
-<text x="93.60" y="99.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#9fb3c8">3</text>
-<text x="93.60" y="109.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#9fb3c8">4</text>
-<text x="121.40" y="79.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="1.0">A</text>
-<text x="121.40" y="89.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="1.0">B</text>
-<text x="121.40" y="99.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="1.0">C</text>
-<text x="121.40" y="109.40" font-family="DejaVu Sans" font-size="2.2" font-weight="bold" text-anchor="middle" fill="#22e6ef" fill-opacity="1.0">D</text>
-<text x="71.12" y="125.50" font-family="DejaVu Sans" font-size="3.2" font-weight="bold" text-anchor="middle" fill="#f5a623" fill-opacity="1.0">RKA</text>
+<rect width="142.24" height="128.5" fill="#15171c"/>
+<circle cx="103" cy="33" r="16" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="26" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="36" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="46" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="56" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="66" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="76" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="86" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="96" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="106" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="116" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="126" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="136" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="146" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="156" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="16" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="26" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="36" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="46" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="56" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="66" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="76" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="86" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="96" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="106" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="116" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="126" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="136" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="146" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<circle cx="126.5" cy="43" r="156" fill="none" stroke="#2c3340" stroke-width="0.25"/>
+<path d="M95.375 43.898L96.904 41.713" fill="none" stroke="#8a8474" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M129.942 55.849L129.252 53.272" fill="none" stroke="#8a8474" stroke-width="0.25" stroke-linejoin="round"/>
+<circle cx="93.54" cy="46.52" r="3.5" fill="#15171c"/>
+<circle cx="130.77" cy="58.94" r="3.5" fill="#15171c"/>
+<circle cx="107" cy="56" r="3.5" fill="#15171c"/>
+<circle cx="107" cy="64.6" r="3.5" fill="#15171c"/>
+<circle cx="121.5" cy="65" r="3.5" fill="#15171c"/>
+<circle cx="100" cy="80" r="4.3" fill="#15171c"/>
+<circle cx="100" cy="90.4" r="4.3" fill="#15171c"/>
+<circle cx="100" cy="100.8" r="4.3" fill="#15171c"/>
+<circle cx="100" cy="111.2" r="4.3" fill="#15171c"/>
+<circle cx="105.8" cy="80" r="1.3" fill="#15171c"/>
+<circle cx="105.8" cy="90.4" r="1.3" fill="#15171c"/>
+<circle cx="105.8" cy="100.8" r="1.3" fill="#15171c"/>
+<circle cx="105.8" cy="111.2" r="1.3" fill="#15171c"/>
+<circle cx="111.6" cy="80" r="4.3" fill="#15171c"/>
+<circle cx="111.6" cy="90.4" r="4.3" fill="#15171c"/>
+<circle cx="111.6" cy="100.8" r="4.3" fill="#15171c"/>
+<circle cx="111.6" cy="111.2" r="4.3" fill="#15171c"/>
+<rect x="3.775" y="18.975" width="83.65" height="5.45" rx="0.8" fill="#05080c" stroke="#c9a46a" stroke-width="0.45"/>
+<rect x="3.775" y="25.275" width="83.65" height="42.05" rx="0.8" fill="#05080c" stroke="#c9a46a" stroke-width="0.45"/>
+<path d="M9.2 67.95L9.2 68.55 M14.4 67.95L14.4 68.55 M19.6 67.95L19.6 68.55 M30 67.95L30 68.55 M35.2 67.95L35.2 68.55 M40.4 67.95L40.4 68.55 M50.8 67.95L50.8 68.55 M56 67.95L56 68.55 M61.2 67.95L61.2 68.55 M71.6 67.95L71.6 68.55 M76.8 67.95L76.8 68.55 M82 67.95L82 68.55 M3.15 30.7L2.55 30.7 M3.15 35.9L2.55 35.9 M3.15 41.1L2.55 41.1 M3.15 51.5L2.55 51.5 M3.15 56.7L2.55 56.7 M3.15 61.9L2.55 61.9" fill="none" stroke="#c9a46a" stroke-width="0.15"/>
+<path d="M4 67.95L4 69.25 M24.8 67.95L24.8 69.25 M45.6 67.95L45.6 69.25 M66.4 67.95L66.4 69.25 M87.2 67.95L87.2 69.25 M3.15 25.5L1.85 25.5 M3.15 46.3L1.85 46.3 M3.15 67.1L1.85 67.1" fill="none" stroke="#c9a46a" stroke-width="0.25"/>
+<rect x="3.775" y="70.775" width="83.65" height="42.05" rx="0.8" fill="#05080c" stroke="#c9a46a" stroke-width="0.45"/>
+<path d="M9.2 113.45L9.2 114.05 M14.4 113.45L14.4 114.05 M19.6 113.45L19.6 114.05 M30 113.45L30 114.05 M35.2 113.45L35.2 114.05 M40.4 113.45L40.4 114.05 M50.8 113.45L50.8 114.05 M56 113.45L56 114.05 M61.2 113.45L61.2 114.05 M71.6 113.45L71.6 114.05 M76.8 113.45L76.8 114.05 M82 113.45L82 114.05 M3.15 76.2L2.55 76.2 M3.15 81.4L2.55 81.4 M3.15 86.6L2.55 86.6 M3.15 97L2.55 97 M3.15 102.2L2.55 102.2 M3.15 107.4L2.55 107.4" fill="none" stroke="#c9a46a" stroke-width="0.15"/>
+<path d="M4 113.45L4 114.75 M24.8 113.45L24.8 114.75 M45.6 113.45L45.6 114.75 M66.4 113.45L66.4 114.75 M87.2 113.45L87.2 114.75 M3.15 71L1.85 71 M3.15 91.8L1.85 91.8 M3.15 112.6L1.85 112.6" fill="none" stroke="#c9a46a" stroke-width="0.25"/>
+<circle cx="103" cy="33" r="10.4" fill="#efe6d2" stroke="#c9a46a" stroke-width="0.468"/>
+<path d="M103 40.85L103 42.15 M100.968 40.583L100.632 41.838 M99.075 39.798L98.425 40.924 M97.449 38.551L96.53 39.47 M96.202 36.925L95.076 37.575 M95.417 35.032L94.162 35.368 M95.15 33L93.85 33 M95.417 30.968L94.162 30.632 M96.202 29.075L95.076 28.425 M97.449 27.449L96.53 26.53 M99.075 26.202L98.425 25.076 M100.968 25.417L100.632 24.162 M103 25.15L103 23.85 M105.032 25.417L105.368 24.162 M106.925 26.202L107.575 25.076 M108.551 27.449L109.47 26.53 M109.798 29.075L110.924 28.425 M110.583 30.968L111.838 30.632 M110.85 33L112.15 33 M110.583 35.032L111.838 35.368 M109.798 36.925L110.924 37.575 M108.551 38.551L109.47 39.47 M106.925 39.798L107.575 40.924 M105.032 40.583L105.368 41.838" fill="none" stroke="#1c1a16" stroke-width="0.16"/>
+<circle cx="126.5" cy="43" r="10.4" fill="#efe6d2" stroke="#c9a46a" stroke-width="0.468"/>
+<path d="M126.5 50.85L126.5 52.15 M124.468 50.583L124.132 51.838 M122.575 49.798L121.925 50.924 M120.949 48.551L120.03 49.47 M119.702 46.925L118.576 47.575 M118.917 45.032L117.662 45.368 M118.65 43L117.35 43 M118.917 40.968L117.662 40.632 M119.702 39.075L118.576 38.425 M120.949 37.449L120.03 36.53 M122.575 36.202L121.925 35.076 M124.468 35.417L124.132 34.162 M126.5 35.15L126.5 33.85 M128.532 35.417L128.868 34.162 M130.425 36.202L131.075 35.076 M132.051 37.449L132.97 36.53 M133.298 39.075L134.424 38.425 M134.083 40.968L135.338 40.632 M134.35 43L135.65 43 M134.083 45.032L135.338 45.368 M133.298 46.925L134.424 47.575 M132.051 48.551L132.97 49.47 M130.425 49.798L131.075 50.924 M128.532 50.583L128.868 51.838" fill="none" stroke="#1c1a16" stroke-width="0.16"/>
+<rect x="120.4" y="75.4" width="16" height="9.2" rx="0.7" fill="#efe6d2"/>
+<rect x="120.4" y="85.8" width="16" height="9.2" rx="0.7" fill="#efe6d2"/>
+<rect x="120.4" y="96.2" width="16" height="9.2" rx="0.7" fill="#efe6d2"/>
+<rect x="120.4" y="106.6" width="16" height="9.2" rx="0.7" fill="#efe6d2"/>
+<text x="4.00" y="11.00" font-family="D-DIN Condensed" font-size="5.2" font-weight="normal" letter-spacing="1.4" text-anchor="start" fill="#efe6d2">SHOAL</text>
+<text x="4.00" y="14.80" font-family="D-DIN Condensed" font-size="1.7" font-weight="normal" letter-spacing="0.45" text-anchor="start" fill="#8a8474">ORNAMENT &amp; CRIME 1.3.6</text>
+<text x="103.12" y="21.17" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">ENCODER L</text>
+<text x="126.62" y="31.17" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">ENCODER R</text>
+<text x="93.67" y="52.30" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">PUSH</text>
+<text x="130.90" y="64.72" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">PUSH</text>
+<text x="111.40" y="56.69" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#8a8474">UP</text>
+<text x="111.40" y="65.29" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#8a8474">DOWN</text>
+<text x="121.62" y="60.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">UI MODE</text>
+<text x="122.93" y="80.75" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">A</text>
+<text x="122.93" y="91.15" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">B</text>
+<text x="122.93" y="101.55" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">C</text>
+<text x="122.93" y="111.95" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">D</text>
+<text x="14.53" y="17.90" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">A</text>
+<text x="35.33" y="17.90" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">B</text>
+<text x="56.12" y="17.90" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">C</text>
+<text x="76.92" y="17.90" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">D</text>
+<text x="100.12" y="72.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">TRIG</text>
+<text x="111.72" y="72.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">CV</text>
+<text x="131.53" y="72.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">OUT</text>
+<text x="93.33" y="80.70" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">1</text>
+<text x="93.33" y="91.10" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">2</text>
+<text x="93.33" y="101.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">3</text>
+<text x="93.33" y="111.90" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">4</text>
+<text x="4.00" y="116.83" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0" text-anchor="middle" fill="#8a8474">0</text>
+<text x="24.80" y="116.83" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0" text-anchor="middle" fill="#8a8474">32</text>
+<text x="45.60" y="116.83" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0" text-anchor="middle" fill="#8a8474">64</text>
+<text x="66.40" y="116.83" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0" text-anchor="middle" fill="#8a8474">96</text>
+<text x="87.20" y="116.83" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0" text-anchor="middle" fill="#8a8474">128</text>
+<text x="71.37" y="125.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.5" text-anchor="middle" fill="#8a8474">R K A · INSTRUMENTS</text>
 <g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
-<circle id="widget-ENC_L" cx="102.8" cy="29.0" r="1" fill="#ffff00"/>
-<circle id="widget-ENC_R" cx="126.4" cy="29.0" r="1" fill="#ffff00"/>
-<circle id="param-ENC_L_PUSH" cx="102.8" cy="43.5" r="1" fill="#ff0000"/>
-<circle id="param-ENC_R_PUSH" cx="126.4" cy="43.5" r="1" fill="#ff0000"/>
-<circle id="param-UP" cx="100.0" cy="55.0" r="1" fill="#ff0000"/>
-<circle id="param-DOWN" cx="114.6" cy="55.0" r="1" fill="#ff0000"/>
-<circle id="param-UI_MODE" cx="129.2" cy="55.0" r="1" fill="#ff0000"/>
-<circle id="input-TR1" cx="99.8" cy="78.6" r="1" fill="#00ff00"/>
-<circle id="input-TR2" cx="99.8" cy="88.6" r="1" fill="#00ff00"/>
-<circle id="input-TR3" cx="99.8" cy="98.6" r="1" fill="#00ff00"/>
-<circle id="input-TR4" cx="99.8" cy="108.6" r="1" fill="#00ff00"/>
-<circle id="light-TR1" cx="106.0" cy="78.6" r="1" fill="#ff00ff"/>
-<circle id="light-TR2" cx="106.0" cy="88.6" r="1" fill="#ff00ff"/>
-<circle id="light-TR3" cx="106.0" cy="98.6" r="1" fill="#ff00ff"/>
-<circle id="light-TR4" cx="106.0" cy="108.6" r="1" fill="#ff00ff"/>
-<circle id="input-CV1" cx="112.0" cy="78.6" r="1" fill="#00ff00"/>
-<circle id="input-CV2" cx="112.0" cy="88.6" r="1" fill="#00ff00"/>
-<circle id="input-CV3" cx="112.0" cy="98.6" r="1" fill="#00ff00"/>
-<circle id="input-CV4" cx="112.0" cy="108.6" r="1" fill="#00ff00"/>
-<circle id="light-A" cx="124.9" cy="78.6" r="1" fill="#ff00ff"/>
-<circle id="light-B" cx="124.9" cy="88.6" r="1" fill="#ff00ff"/>
-<circle id="light-C" cx="124.9" cy="98.6" r="1" fill="#ff00ff"/>
-<circle id="light-D" cx="124.9" cy="108.6" r="1" fill="#ff00ff"/>
-<circle id="output-A" cx="131.6" cy="78.6" r="1" fill="#0000ff"/>
-<circle id="output-B" cx="131.6" cy="88.6" r="1" fill="#0000ff"/>
-<circle id="output-C" cx="131.6" cy="98.6" r="1" fill="#0000ff"/>
-<circle id="output-D" cx="131.6" cy="108.6" r="1" fill="#0000ff"/>
+<circle id="widget-ENC_L" cx="103.0" cy="33.0" r="1" fill="#ffff00"/>
+<circle id="widget-ENC_R" cx="126.5" cy="43.0" r="1" fill="#ffff00"/>
+<circle id="param-ENC_L_PUSH" cx="93.54" cy="46.52" r="1" fill="#ff0000"/>
+<circle id="param-ENC_R_PUSH" cx="130.77" cy="58.94" r="1" fill="#ff0000"/>
+<circle id="param-UP" cx="107.0" cy="56.0" r="1" fill="#ff0000"/>
+<circle id="param-DOWN" cx="107.0" cy="64.6" r="1" fill="#ff0000"/>
+<circle id="param-UI_MODE" cx="121.5" cy="65.0" r="1" fill="#ff0000"/>
+<circle id="input-TR1" cx="100.0" cy="80.0" r="1" fill="#00ff00"/>
+<circle id="input-TR2" cx="100.0" cy="90.4" r="1" fill="#00ff00"/>
+<circle id="input-TR3" cx="100.0" cy="100.8" r="1" fill="#00ff00"/>
+<circle id="input-TR4" cx="100.0" cy="111.2" r="1" fill="#00ff00"/>
+<circle id="light-TR1" cx="105.8" cy="80.0" r="1" fill="#ff00ff"/>
+<circle id="light-TR2" cx="105.8" cy="90.4" r="1" fill="#ff00ff"/>
+<circle id="light-TR3" cx="105.8" cy="100.8" r="1" fill="#ff00ff"/>
+<circle id="light-TR4" cx="105.8" cy="111.2" r="1" fill="#ff00ff"/>
+<circle id="input-CV1" cx="111.6" cy="80.0" r="1" fill="#00ff00"/>
+<circle id="input-CV2" cx="111.6" cy="90.4" r="1" fill="#00ff00"/>
+<circle id="input-CV3" cx="111.6" cy="100.8" r="1" fill="#00ff00"/>
+<circle id="input-CV4" cx="111.6" cy="111.2" r="1" fill="#00ff00"/>
+<circle id="light-A" cx="125.6" cy="80.0" r="1" fill="#ff00ff"/>
+<circle id="light-B" cx="125.6" cy="90.4" r="1" fill="#ff00ff"/>
+<circle id="light-C" cx="125.6" cy="100.8" r="1" fill="#ff00ff"/>
+<circle id="light-D" cx="125.6" cy="111.2" r="1" fill="#ff00ff"/>
+<circle id="output-A" cx="131.4" cy="80.0" r="1" fill="#0000ff"/>
+<circle id="output-B" cx="131.4" cy="90.4" r="1" fill="#0000ff"/>
+<circle id="output-C" cx="131.4" cy="100.8" r="1" fill="#0000ff"/>
+<circle id="output-D" cx="131.4" cy="111.2" r="1" fill="#0000ff"/>
 </g>
 </svg>

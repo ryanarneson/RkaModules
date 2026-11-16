@@ -16,6 +16,10 @@
 
 namespace shoal {
 
+// How brightly the list draws, as a share of RkaTheme::SIGNAL: secondary
+// text, the faintest text, a control's edge and its fill.
+constexpr float kSecond = 0.65f, kHint = 0.45f, kEdge = 0.35f, kFill = 0.07f;
+
 struct FriendlyList : rack::widget::OpaqueWidget {
 	// Rows scrolled per wheel notch.
 	static constexpr float kRowsPerNotch = 2.f;
@@ -387,8 +391,11 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 		}
 	}
 
-	// --- Drawing: nanovg in RkaTheme's colours, in the light layer like the
-	// other screens. ---
+	// --- Drawing: nanovg, in the light layer like the other screens. The list
+	// is light on glass: everything is RkaTheme::SIGNAL, full or dimmed (lit()).
+	// What belongs to the hardware (the busy banner, a row only it can edit,
+	// the cursor while it is editing, a truncated list) is brass, turning
+	// ivory under the pointer. ---
 
 	void drawLayer(const DrawArgs& args, int layer) override {
 		if (layer == 1)
@@ -455,6 +462,9 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 	static NVGcolor dim(NVGcolor c, float a) {
 		return nvgTransRGBAf(c, a);
 	}
+	static NVGcolor lit(float a = 1.f) {
+		return nvgTransRGBAf(RkaTheme::SIGNAL, a);
+	}
 
 	void drawList(NVGcontext* vg) {
 		std::shared_ptr<rack::window::Font> font = APP->window->loadFont(rack::asset::system("res/fonts/ShareTechMono-Regular.ttf"));
@@ -490,55 +500,56 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 		// The band stays inside the panel's rounded screen edge.
 		nvgBeginPath(pen.vg);
 		nvgRoundedRectVarying(pen.vg, b.x + pen.u, b.y + pen.u, b.w - 2.f * pen.u, b.h - pen.u, 2.f * pen.u, 2.f * pen.u, 0.f, 0.f);
-		nvgFillColor(pen.vg, RkaTheme::CARD);
+		nvgFillColor(pen.vg, lit(hot ? 2.f * kFill : kFill));
 		nvgFill(pen.vg);
-		pen.fill(list::Box{ b.x + pen.u, b.bottom() - pen.u, b.w - 2.f * pen.u, pen.u }, dim(RkaTheme::CYAN, 0.55f));
+		pen.fill(list::Box{ b.x + pen.u, b.bottom() - pen.u, b.w - 2.f * pen.u, pen.u }, lit(0.55f));
 		const float r = b.h * 0.2f;
-		pen.chevron(pen.pad + r, b.y + b.h / 2, r, true, hot ? RkaTheme::CYAN : dim(RkaTheme::INK, 0.7f));
+		pen.chevron(pen.pad + r, b.y + b.h / 2, r, true, lit(hot ? 1.f : kSecond));
 		const list::Box nameBox = { pen.pad + 2.f * r, b.y, b.w - pen.pad - 2.f * r, b.h - pen.u };
-		const float nameEnd = pen.write(nameBox, NVG_ALIGN_LEFT, Core::appName(model.app), hot ? RkaTheme::CYAN : RkaTheme::INK, b.h * 0.72f);
+		const float nameEnd = pen.write(nameBox, NVG_ALIGN_LEFT, Core::appName(model.app), lit(), b.h * 0.72f);
 		// On the right: the app's own status line, or the hint.
 		const list::Box statusBox = { nameEnd + pen.pad, b.y, b.right() - nameEnd - pen.pad, b.h - pen.u };
 		char status[kStatusText + 1];
 		std::snprintf(status, sizeof(status), "%.*s", kStatusText, model.status);
 		if (model.flags & kModelTruncated)
-			pen.write(statusBox, NVG_ALIGN_RIGHT, "LIST TRUNCATED", RkaTheme::MAGENTA, pen.text);
+			pen.write(statusBox, NVG_ALIGN_RIGHT, "LIST TRUNCATED", RkaTheme::BRASS, pen.text);
 		else if (status[0])
-			pen.write(statusBox, NVG_ALIGN_RIGHT, status, dim(RkaTheme::CYAN, 0.9f), pen.text);
+			pen.write(statusBox, NVG_ALIGN_RIGHT, status, lit(kSecond), pen.text);
 		else
-			pen.write(statusBox, NVG_ALIGN_RIGHT, "CLICK APP TO SWITCH", RkaTheme::HINT, pen.text * 0.9f);
+			pen.write(statusBox, NVG_ALIGN_RIGHT, "CLICK APP TO SWITCH", lit(kHint), pen.text * 0.9f);
 	}
 
 	// The busy line: the firmware's app menu or one of the app's own editors
-	// is open, and only hardware mode shows it.
+	// is open, and only hardware mode shows it. A brass band: what it says in
+	// ivory, where a click goes in brass (ivory under the pointer).
 	void drawBanner(const Pen& pen, const list::Layout& l, const list::Hit& hover) {
 		const list::Box b = l.banner();
 		const bool hot = hover.part == list::Part::Banner;
-		pen.fill(list::Box{ b.x + pen.u, b.y, b.w - 2.f * pen.u, b.h }, dim(RkaTheme::AMBER, hot ? 0.3f : 0.18f));
+		pen.fill(list::Box{ b.x + pen.u, b.y, b.w - 2.f * pen.u, b.h }, dim(RkaTheme::BRASS, hot ? 0.3f : 0.18f));
 		const float r = b.h * 0.22f;
 		const list::Box textBox = { b.x, b.y, b.w - pen.pad - 2.f * r, b.h };
-		pen.write(textBox, NVG_ALIGN_LEFT, "HARDWARE EDITOR OPEN", RkaTheme::AMBER, pen.text);
-		pen.write(textBox, NVG_ALIGN_RIGHT, "CLICK TO SWITCH", hot ? RkaTheme::INK : RkaTheme::AMBER, pen.text);
-		pen.chevron(b.right() - pen.pad - r, b.y + b.h / 2, r, false, hot ? RkaTheme::INK : RkaTheme::AMBER);
+		pen.write(textBox, NVG_ALIGN_LEFT, "HARDWARE EDITOR OPEN", RkaTheme::IVORY, pen.text);
+		pen.write(textBox, NVG_ALIGN_RIGHT, "CLICK TO SWITCH", hot ? RkaTheme::IVORY : RkaTheme::BRASS, pen.text);
+		pen.chevron(b.right() - pen.pad - r, b.y + b.h / 2, r, false, hot ? RkaTheme::IVORY : RkaTheme::BRASS);
 	}
 
 	void drawTabs(const Pen& pen, const list::Layout& l, const list::Hit& hover) {
 		if (!l.tabs)
 			return;
 		const list::Box bar = l.tabBar();
-		pen.fill(list::Box{ bar.x, bar.bottom() - pen.u, bar.w, pen.u }, dim(RkaTheme::HINT, 0.6f));
+		pen.fill(list::Box{ bar.x, bar.bottom() - pen.u, bar.w, pen.u }, lit(kEdge));
 		for (int t = 0; t < l.tabs; t++) {
 			const list::Box b = l.tab(t);
 			const bool selected = t == model.tab;
 			const bool hot = hover.part == list::Part::Tab && hover.index == t && !l.busy;
 			if (selected) {
-				pen.fill(b, dim(RkaTheme::CYAN, 0.16f));
-				pen.fill(list::Box{ b.x, b.bottom() - 2.f * pen.u, b.w, 2.f * pen.u }, RkaTheme::CYAN);
+				pen.fill(b, lit(0.16f));
+				pen.fill(list::Box{ b.x, b.bottom() - 2.f * pen.u, b.w, 2.f * pen.u }, lit());
 			}
 			else if (hot)
-				pen.fill(b, dim(RkaTheme::INK, 0.07f));
+				pen.fill(b, lit(kFill));
 			const char* label = model.tabLabel[t] ? model.tabLabel[t] : "";
-			pen.write(b, NVG_ALIGN_CENTER, label, selected ? RkaTheme::INK : dim(RkaTheme::INK, hot ? 0.9f : 0.55f), pen.text);
+			pen.write(b, NVG_ALIGN_CENTER, label, lit(selected ? 1.f : hot ? 0.85f : 0.55f), pen.text);
 		}
 	}
 
@@ -554,39 +565,39 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 
 		if (r.kind == RowKind::Heading) {
 			// A section title with a rule to the end of the row.
-			const float end = pen.write(l.labelText(r, i), NVG_ALIGN_LEFT, label, RkaTheme::VIOLET, pen.text * 0.92f);
+			const float end = pen.write(l.labelText(r, i), NVG_ALIGN_LEFT, label, lit(kSecond), pen.text * 0.92f);
 			const float x = end + pen.pad;
 			if (x < b.right() - pen.pad)
-				pen.fill(list::Box{ x, b.y + b.h / 2, b.right() - pen.pad - x, pen.u }, dim(RkaTheme::VIOLET, 0.4f));
+				pen.fill(list::Box{ x, b.y + b.h / 2, b.right() - pen.pad - x, pen.u }, lit(kEdge));
 			return;
 		}
 
-		// The pointer's row is lightened. The firmware's cursor row is tinted
-		// cyan, with a bar on its left edge (amber while the hardware is
-		// editing its value) and a brighter label.
+		// The pointer's row is lightened. The firmware's cursor row is tinted,
+		// with a bar on its left edge (brass while the hardware is editing
+		// its value) and a label at full brightness.
 		const bool cursor = (r.flags & kRowCursor) != 0;
 		if (cursor)
-			pen.fill(b, dim(RkaTheme::CYAN, 0.09f));
+			pen.fill(b, lit(0.12f));
 		if (rowHot || dragged)
-			pen.fill(b, dim(RkaTheme::INK, 0.07f));
+			pen.fill(b, lit(kFill));
 		if (cursor)
-			pen.fill(l.cursorBar(i), (r.flags & kRowEditing) ? RkaTheme::AMBER : RkaTheme::CYAN);
+			pen.fill(l.cursorBar(i), (r.flags & kRowEditing) ? RkaTheme::BRASS : lit());
 
 		const list::Box c = l.inset(l.control(r, i));
 		const float radius = 1.5f * pen.u;
-		const NVGcolor edge = controlHot || dragged ? RkaTheme::CYAN : dim(RkaTheme::HINT, 0.7f);
+		const NVGcolor edge = lit(controlHot || dragged ? 1.f : kEdge);
 		char value[24];
 
 		if (r.kind == RowKind::Action) {
 			// A button across the row, carrying the label.
 			const list::Box button = { b.x + pen.pad, c.y, b.w - 2.f * pen.pad, c.h };
-			pen.fill(button, dragged ? dim(RkaTheme::CYAN, 0.3f) : RkaTheme::CARD, radius);
+			pen.fill(button, lit(dragged ? 0.3f : kFill), radius);
 			pen.stroke(button, edge, radius);
-			pen.write(button, NVG_ALIGN_CENTER, label, RkaTheme::INK, pen.text);
+			pen.write(button, NVG_ALIGN_CENTER, label, lit(), pen.text);
 			return;
 		}
 
-		pen.write(l.labelText(r, i), NVG_ALIGN_LEFT, label, cursor ? RkaTheme::INK : dim(RkaTheme::INK, 0.72f), pen.text);
+		pen.write(l.labelText(r, i), NVG_ALIGN_LEFT, label, lit(cursor ? 1.f : kSecond), pen.text);
 
 		switch (r.kind) {
 			case RowKind::Number: {
@@ -595,42 +606,42 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 				// it. During a drag it shows the pointer's target, and for a
 				// moment after (SliderHold); the model's value otherwise.
 				const int32_t v = dragged && drag == Drag::Slider ? sliderTarget : sliderHold.shown(model, i);
-				pen.fill(c, RkaTheme::CARD, radius);
-				pen.fill(c, dim(RkaTheme::CYAN, 0.12f), radius);
+				pen.fill(c, lit(0.1f), radius);
 				const float vx = list::sliderX(v, c.w, r.min, r.max);
 				const float zx = r.min < 0 && r.max > 0 ? list::sliderX(0, c.w, r.min, r.max) : 0.f;
 				const float x0 = vx < zx ? vx : zx, x1 = vx < zx ? zx : vx;
 				nvgSave(vg);
 				nvgIntersectScissor(vg, c.x + x0, c.y, x1 - x0, c.h);
-				pen.fill(c, dim(RkaTheme::CYAN, 0.38f), radius);
+				pen.fill(c, lit(0.22f), radius);
 				nvgRestore(vg);
 				const float mark = 1.5f * pen.u;
 				float mx = c.x + vx - mark / 2;
 				mx = mx < c.x ? c.x : mx > c.right() - mark ? c.right() - mark : mx;
-				pen.fill(list::Box{ mx, c.y + pen.u, mark, c.h - 2.f * pen.u }, RkaTheme::CYAN);
+				pen.fill(list::Box{ mx, c.y + pen.u, mark, c.h - 2.f * pen.u }, lit());
 				pen.stroke(c, edge, radius);
 				list::valueText(r, v, value, sizeof(value));
-				pen.write(c, NVG_ALIGN_RIGHT, value, RkaTheme::INK, pen.text);
+				pen.write(c, NVG_ALIGN_RIGHT, value, lit(), pen.text);
 				break;
 			}
 			case RowKind::Choice: {
-				pen.fill(c, RkaTheme::CARD, radius);
+				pen.fill(c, lit(kFill), radius);
 				pen.stroke(c, edge, radius);
 				const float cr = c.h * 0.22f;
-				pen.chevron(c.right() - pen.pad - cr, c.y + c.h / 2, cr, true, controlHot ? RkaTheme::CYAN : dim(RkaTheme::INK, 0.6f));
+				pen.chevron(c.right() - pen.pad - cr, c.y + c.h / 2, cr, true, lit(controlHot ? 1.f : kSecond));
 				list::valueText(r, r.value, value, sizeof(value));
-				pen.write(list::Box{ c.x, c.y, c.w - pen.pad - 2.f * cr, c.h }, NVG_ALIGN_RIGHT, value, RkaTheme::INK, pen.text);
+				pen.write(list::Box{ c.x, c.y, c.w - pen.pad - 2.f * cr, c.h }, NVG_ALIGN_RIGHT, value, lit(), pen.text);
 				break;
 			}
 			case RowKind::Toggle: {
 				list::valueText(r, r.value, value, sizeof(value));
 				if (r.value) {
-					pen.fill(c, dim(RkaTheme::CYAN, 0.9f), radius);
-					pen.write(c, NVG_ALIGN_CENTER, value, RkaTheme::CARD, pen.text);
+					// Lit: the text is the glass showing through.
+					pen.fill(c, lit(0.9f), radius);
+					pen.write(c, NVG_ALIGN_CENTER, value, RkaTheme::GLASS, pen.text);
 				}
 				else {
-					pen.fill(c, RkaTheme::CARD, radius);
-					pen.write(c, NVG_ALIGN_CENTER, value, dim(RkaTheme::INK, 0.6f), pen.text);
+					pen.fill(c, lit(kFill), radius);
+					pen.write(c, NVG_ALIGN_CENTER, value, lit(kSecond), pen.text);
 				}
 				pen.stroke(c, edge, radius);
 				break;
@@ -649,22 +660,23 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 					const bool on = (((uint32_t) r.value >> n) & 1u) != 0;
 					const bool hot = rowHot && hover.part == list::Part::Cell && hover.cell == n;
 					if (on)
-						pen.fill(cell, hot ? RkaTheme::INK : RkaTheme::CYAN, radius);
+						pen.fill(cell, lit(hot ? 1.f : 0.8f), radius);
 					else {
-						pen.fill(cell, RkaTheme::CARD, radius);
-						pen.stroke(cell, hot ? RkaTheme::CYAN : dim(RkaTheme::HINT, 0.7f), radius);
+						pen.fill(cell, lit(kFill), radius);
+						pen.stroke(cell, lit(hot ? 1.f : kEdge), radius);
 					}
 				}
 				if (cells == 0)
-					pen.write(c, NVG_ALIGN_RIGHT, "-", RkaTheme::HINT, pen.text);
+					pen.write(c, NVG_ALIGN_RIGHT, "-", lit(kHint), pen.text);
 				break;
 			}
 			case RowKind::SubEditor: {
 				// Not editable here: a click goes to hardware mode.
-				pen.stroke(c, controlHot ? RkaTheme::AMBER : dim(RkaTheme::AMBER, 0.45f), radius);
+				const NVGcolor ink = controlHot ? RkaTheme::IVORY : RkaTheme::BRASS;
+				pen.stroke(c, controlHot ? RkaTheme::BRASS : dim(RkaTheme::BRASS, 0.45f), radius);
 				const float cr = c.h * 0.22f;
-				pen.chevron(c.right() - pen.pad - cr, c.y + c.h / 2, cr, false, RkaTheme::AMBER);
-				pen.write(list::Box{ c.x, c.y, c.w - pen.pad - 2.f * cr, c.h }, NVG_ALIGN_RIGHT, "edit in hardware mode", RkaTheme::AMBER, pen.text * 0.92f);
+				pen.chevron(c.right() - pen.pad - cr, c.y + c.h / 2, cr, false, ink);
+				pen.write(list::Box{ c.x, c.y, c.w - pen.pad - 2.f * cr, c.h }, NVG_ALIGN_RIGHT, "edit in hardware mode", ink, pen.text * 0.92f);
 				break;
 			}
 			default:
@@ -677,9 +689,9 @@ struct FriendlyList : rack::widget::OpaqueWidget {
 			return;
 		const list::Box bar = l.scrollbar(), thumb = l.thumb();
 		const bool hot = hover.part == list::Part::Scrollbar || drag == Drag::Scrollbar;
-		pen.fill(bar, dim(RkaTheme::INK, 0.05f));
+		pen.fill(bar, lit(0.05f));
 		const list::Box t = { thumb.x + 1.5f * pen.u, thumb.y + pen.u, thumb.w - 3.f * pen.u, thumb.h - 2.f * pen.u };
-		pen.fill(t, hot ? dim(RkaTheme::INK, 0.75f) : RkaTheme::HINT, t.w / 2);
+		pen.fill(t, lit(hot ? 0.8f : 0.4f), t.w / 2);
 	}
 };
 

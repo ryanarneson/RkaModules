@@ -175,9 +175,12 @@ the picture.
 
 ### 13. Generated files
 
-`res/`, `res-src/`, `src/<module>/*Layout.hpp` and `src/RkaTheme.hpp` come
-from `tools/gen_panels.py`. After `make panels`, `git status` must show no
-change to any other module's generated files.
+`res/`, `res-src/`, `src/<module>/*Layout.hpp`, `src/RkaTheme.hpp` and
+`res/components/` come from `tools/gen_panels.py`. After `make panels`,
+`git status` must show no change to any other module's generated files.
+`make test` fails if any committed one is not what the generator writes
+now; without Inkscape it checks everything but the lettering's outlines in
+`res/<module>/`, which only `make panels` and `git status` can.
 
 ### 14. Never fail silently
 

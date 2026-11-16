@@ -61,6 +61,22 @@ throughout, and changes that unfold over minutes.
 Colours, in brief: ground `#15171c`, brass `#c9a46a`, ivory `#efe6d2`,
 cyan `#6fd6e0`. The full palette is in the design doc.
 
+## Where it lives
+
+All three modules (Sway, Fathom, Shoal) are drawn in this look, and it is
+the plugin's only one.
+
+- **Palette and panel language**: `INSTRUMENT` and "The Instrument look"
+  in `tools/gen_panels.py`; its `SPECIMEN` panel uses every part
+  (`make specimen`). The generator fails a layout that breaks the rules it
+  can check (clearances, traces, lettering, screens, screws).
+- **Components**: the plugin's own knobs, jacks, buttons, lights, screw,
+  encoder and pixel screen, in `src/widgets.hpp`, with artwork generated
+  into `res/components/`. No stock components, no ad-hoc colours; colours
+  drawn in code come from the generated `src/RkaTheme.hpp`.
+- **Typeface**: D-DIN Condensed, Regular and Bold, from `tools/fonts/`.
+  One face only, never a system fallback.
+
 ## Naming
 
 - **One word, nautical, short.** Sway, Fathom, Shoal, Wake, Fog, Knot.
@@ -81,7 +97,8 @@ cyan `#6fd6e0`. The full palette is in the design doc.
 
 Lettering on panels:
 
-- Engraved, letterspaced capitals. No monospace.
+- Engraved, letterspaced capitals, in D-DIN Condensed. No monospace
+  (screen contents may be).
 - Control names are plain words a musician would use (Rate, Feedback,
   Mix); the theme belongs to the module's name and its hero dial, not to
   every label.
