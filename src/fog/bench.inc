@@ -73,7 +73,8 @@ struct fog {
 	// Fog has no output jacks the engine reads: as idle.
 	static void outputs(Instance&, long, const Cv&) {}
 
-	// Low noise (+/-1 mV, far over the engine's sleep threshold) into both
+	// Low noise (+/-3 mV: over the engine's sleep threshold, 1e-5 V, and over
+	// Bloom's 1 mV presence gate, so the feed is not gated off) into both
 	// inputs, knobs at their defaults, no CV: the engine stays awake, so this
 	// is the guard for the cache-aliased delay lines that idle used to be.
 	static void quiet(Instance& i, long t, const Cv&) {
@@ -81,8 +82,8 @@ struct fog {
 			i.frame.inL.channels = 1;
 			i.frame.inR.channels = 1;
 		}
-		i.inV[0][0] = i.next() * 2e-4f;
-		i.inV[1][0] = i.next() * 2e-4f;
+		i.inV[0][0] = i.next() * 6e-4f;
+		i.inV[1][0] = i.next() * 6e-4f;
 	}
 
 	// Stereo noise in, every CV moving at full attenuverter, Drift and Bloom
@@ -119,7 +120,7 @@ struct fog {
 	static BenchCase<Instance> benchCase(int k) {
 		// Budgets: about twice what an Apple M-series Mac measured, rounded
 		// up to the next 0.05 (idle 0.059 and outputs 0.059: the engine sleeps
-		// when nothing is patched; busy 0.72, busyIce 0.72 and quiet 0.55 are
+		// when nothing is patched; busy 0.72, busyIce 0.72 and quiet 0.57 are
 		// as before, after the delay lines' write positions were staggered;
 		// before that, 1.09, 1.09, 1.32, 1.32 and 1.09). Quiet keeps the old
 		// idle budget, 0.95, so the old, cache-aliased lines (1.03-1.11) fail

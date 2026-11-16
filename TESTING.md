@@ -194,8 +194,8 @@ Busy is 16 voices on every row with a moving CV on every row, Levels 0.5,
 Exp. Its other-machine budgets are three times the Mac's, as the others are.
 Fog sleeps when its input and tail are silent (under 1e-5 V for 0.25 s or
 twice the longest line), so idle and outputs cost 0.06 (twice, rounded up to
-the next 0.05: 0.15). Its quiet case (+/-1 mV noise into both inputs, knobs at
-their defaults, no CV) keeps the engine awake and measures 0.57-0.63; its
+the next 0.05: 0.15). Its quiet case (+/-3 mV noise into both inputs, knobs at
+their defaults, no CV) keeps the engine awake and measures 0.57-0.66; its
 budget is 0.95, under twice, so the cache-aliased delay lines (1.03-1.11)
 fail it. Fog's 16 lines run whenever it is awake; its busy is stereo noise, all five CVs moving at full attenuverter, Bloom and
 Drift up, Mix 0.5 (busyIce, 0.69 too, is the same in ICE; it is a copy of HAAR

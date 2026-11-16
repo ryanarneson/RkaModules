@@ -29,8 +29,9 @@
 //   over 50 ms, clears and reconfigures the network, and fades it in.
 // - Sleep: once the feed into the network and the wet out of it have both
 //   stayed under QUIET (1e-5 V) for the hold (the longer of 0.25 s and twice
-//   the longest line, so the sparse echoes of CLEAR at Size 1 do not fall
-//   asleep between hits), the engine skips the RateDivider and the network
+//   the longest ring in the network, so no stale ring contents survive a
+//   sleep and the sparse echoes of CLEAR at Size 1 do not fall asleep between
+//   hits), the engine skips the RateDivider and the network
 //   (wet 0) until a feed sample reaches QUIET. Buffers are not cleared: their
 //   contents are already below QUIET. reset(), a new rate and a mode change
 //   wake it.
@@ -146,18 +147,21 @@ struct FogEngine {
 		asleep_ = false;
 		quietCount = 0;
 		updateHold();
-		holdTick = 64;
 	}
 
 	bool asleep() const {
 		return asleep_;
 	}
 
-	// Host-rate samples of silence before sleeping.
+	// Host-rate samples of silence before sleeping: the longer of 0.25 s and
+	// twice the longest ring in the network and its diffuser, so that a quiet
+	// network has overwritten every ring with sub-QUIET values (nothing stale
+	// survives to be read back after a wake at another Size). Set when the
+	// rate or the network changes, never per sample.
 	void updateHold() {
 		const float floorS = 0.25f * hostRate;
-		const float tail = 2.f * net.longestLen() * (float) divider.factor();
-		const float h = tail > floorS ? tail : floorS;
+		const float ring = 2.f * (float) net.ringSamples() * (float) divider.factor();
+		const float h = ring > floorS ? ring : floorS;
 		hold = (int) (h < 1e9f ? h : 1e9f);
 	}
 
@@ -222,8 +226,13 @@ struct FogEngine {
 		float wetL = 0.f, wetR = 0.f;
 		const float Q = quiet();
 		const bool feedQuiet = feedL < Q && feedL > -Q && feedR < Q && feedR > -Q;
-		if (asleep_ && !feedQuiet)
+		if (asleep_ && !feedQuiet) {
+			// The controls were not applied while asleep: apply them now, with
+			// Size snapped (no slew from the Size of the last awake sample).
 			wake();
+			net.setControls(vis, size, dampK, drift, f.driftRate ? 1 : 0);
+			net.snapSize();
+		}
 		if (!asleep_) {
 			const int rateSel = f.driftRate ? 1 : 0;
 			divider.process(feedL, feedR, wetL, wetR, [&](float l, float r, float& ol, float& orr) {
@@ -238,10 +247,6 @@ struct FogEngine {
 			}
 			else
 				quietCount = 0;
-			if (--holdTick <= 0) {
-				holdTick = 64;
-				updateHold();
-			}
 			wetL *= wetTrim();
 			wetR *= wetTrim();
 			if (limiterEnabled) {
@@ -326,7 +331,6 @@ struct FogEngine {
 	bool asleep_ = false;
 	int quietCount = 0;
 	int hold = 12000;
-	int holdTick = 64;
 };
 
 } // namespace rka

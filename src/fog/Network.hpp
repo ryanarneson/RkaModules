@@ -101,6 +101,7 @@ struct Network {
 	float scaleTarget = 1.f, scaleOffset = 0.f;
 	int gainCount = 0;         // samples until the gains may be recomputed
 	bool gainsPending = false; // a change waits for gainCount
+	int ringMax = 0;
 	bool fresh = true; // cleared and not yet given controls: Size snaps
 
 	// Buffers for every mode's longest line at the largest Size, plus the
@@ -117,6 +118,10 @@ struct Network {
 		for (int i = 0; i < MAX_LINES; i++)
 			line[i].allocate(maxD, (uint32_t) (Diffuser<8>::MAX_STAGES * 8 + i));
 		diffuser.allocate(r, 1.f, 0); // stagger 0..31; the network's lines take 32..47
+		int ring = maxD;
+		const int dd = (int) (Diffuser<8>::MAX_STAGE_MS * 0.001f * r) + 4;
+		ring = dd > ring ? dd : ring;
+		ringMax = ring;
 	}
 
 	void configure(const Voicing& v, float innerRate) {
@@ -149,13 +154,21 @@ struct Network {
 		clear();
 	}
 
-	// The longest current line length, in samples at the inner rate (control
-	// rate: the engine asks every few dozen samples for its sleep hold).
-	float longestLen() const {
-		float m = 0.f;
-		for (int i = 0; i < n; i++)
-			m = len[i] > m ? len[i] : m;
-		return m;
+	// The longest ring any line of the network or its diffuser can read back,
+	// in samples at the inner rate (set by allocate()). The engine's sleep
+	// hold is twice this, so that a quiet network has overwritten every ring.
+	int ringSamples() const {
+		return ringMax;
+	}
+
+	// Apply the current Size at once: no slew from an older Size, gains now.
+	// For the engine's wake, after setControls() on a stale network.
+	void snapSize() {
+		scaleOffset = 0.f;
+		gainCount = 0;
+		gainsPending = false;
+		updateLengths();
+		updateGains();
 	}
 
 	// Silences the network. The next setControls() sets Size at once, with

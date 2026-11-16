@@ -440,7 +440,7 @@ SleepRun runToSleep(float vis, bool impulse, int burst, int total) {
 	r.f.params[FogFrame::VISIBILITY] = vis;
 	r.f.params[FogFrame::SIZE] = 1.f;
 	SleepRun s;
-	std::vector<float> out;
+	std::vector<float> out, outR;
 	for (int i = 0; i < total && s.sleepAt < 0; i++) {
 		float x = 0.f;
 		if (impulse)
@@ -449,17 +449,21 @@ SleepRun runToSleep(float vis, bool impulse, int burst, int total) {
 			x = 5.f * uniform();
 		const FogResult o = r.step(x);
 		out.push_back(o.outL);
-		if (i >= 1 && std::fabs(o.outL) >= FogEngine::quiet() * FogEngine::wetTrim() && i >= burst)
+		outR.push_back(o.outR);
+		const float q = FogEngine::quiet() * FogEngine::wetTrim();
+		if (i >= 1 && (std::fabs(o.outL) >= q || std::fabs(o.outR) >= q) && i >= burst)
 			s.lastLoud = i;
 		if (r.eng.asleep())
 			s.sleepAt = i;
 	}
 	s.hold = r.eng.hold;
-	s.longest = r.eng.net.longestLen() * (float) r.eng.divider.factor();
+	s.longest = r.eng.net.ringSamples() * (float) r.eng.divider.factor();
 	// Steps around the sleep transition.
 	if (s.sleepAt > 2)
 		for (int i = s.sleepAt - 2; i <= s.sleepAt; i++) {
-			const double d = std::fabs(out[i] - out[i - 1]);
+			double d = std::fabs(out[i] - out[i - 1]);
+			const double dr = std::fabs(outR[i] - outR[i - 1]);
+			d = dr > d ? dr : d;
 			s.maxStepAtSleep = d > s.maxStepAtSleep ? d : s.maxStepAtSleep;
 		}
 	return s;
@@ -474,8 +478,8 @@ void noSleepInTail() {
 	CHECK(d.sleepAt > d.lastLoud, "DENSE Size 1: slept at %d, but the wet was audible at %d", d.sleepAt, d.lastLoud);
 	CHECK(d.sleepAt >= d.lastLoud + (int) d.hold, "DENSE Size 1: slept %d samples after the last audible one, want >= the hold %g",
 		d.sleepAt - d.lastLoud, d.hold);
-	// The hold is the longer of 0.25 s and twice the longest line (Size 1).
-	CHECK(d.hold >= 2.0 * d.longest - 1.0 && d.hold > 0.25 * RATE + 1, "Size 1: hold %g samples, want >= 2 x the longest line (%g) and over 0.25 s", d.hold,
+	// The hold is the longer of 0.25 s and twice the longest ring.
+	CHECK(d.hold >= 2.0 * d.longest - 1.0 && d.hold > 0.25 * RATE + 1, "Size 1: hold %g samples, want >= 2 x the longest ring (%g) and over 0.25 s", d.hold,
 		d.longest);
 	const SleepRun c = runToSleep(0.f, true, 0, total);
 	CHECK(c.sleepAt > 0, "CLEAR Size 1: never slept in 400 s");
@@ -531,6 +535,51 @@ void wakeTransparent() {
 	std::printf("  wake_transparent: sample-for-sample, worst difference %.3g V (response peak %.2f V)\n", worst, peak);
 }
 
+
+// Sleep at Size 0 after a loud CLEAR burst, turn Size to 1 while asleep, wake
+// with a noise burst: the same output as an engine that was awake at Size 1
+// and settled (48 kHz, sample for sample). Needs the hold to cover the rings
+// (nothing stale to read back at the larger Size) and the Size to snap on
+// wake (no swoop from Size 0).
+void wakeAtNewSize() {
+	Rig a, b;
+	for (Rig* r : {&a, &b}) {
+		r->f.params[FogFrame::MIX] = 1.f;
+		r->f.params[FogFrame::DRIFT] = 0.f;
+		r->f.params[FogFrame::BLOOM] = 0.f;
+		r->f.params[FogFrame::VISIBILITY] = 0.f;
+	}
+	a.f.params[FogFrame::SIZE] = 0.f;
+	b.f.params[FogFrame::SIZE] = 1.f;
+	for (int i = 0; i < (int) (1.0 * RATE); i++)
+		a.step(5.f * uniform());
+	int guard = 0;
+	while (!a.eng.asleep() && guard++ < (int) (400 * RATE))
+		a.step(0.f);
+	CHECK(a.eng.asleep(), "A never slept");
+	a.f.params[FogFrame::SIZE] = 1.f;
+	// Asleep for 5 s more: Bloom (which keeps running) forgets the burst, so
+	// the two engines differ only in what sleep skips.
+	for (int i = 0; i < (int) (5 * RATE); i++)
+		a.step(0.f);
+	CHECK(a.eng.asleep(), "A woke on silence");
+	for (int i = 0; i < (int) (2 * RATE); i++)
+		b.step(0.f); // settled at Size 1
+	double worst = 0, peak = 0;
+	for (int i = 0; i < (int) (3 * RATE); i++) {
+		const float x = i < (int) (0.2 * RATE) ? 3.f * uniform() : 0.f;
+		const FogResult oa = a.step(x), ob = b.step(x);
+		double d = std::fabs(oa.outL - ob.outL);
+		const double dr = std::fabs(oa.outR - ob.outR);
+		d = dr > d ? dr : d;
+		worst = d > worst ? d : worst;
+		peak = std::fabs(ob.outL) > peak ? std::fabs(ob.outL) : peak;
+	}
+	CHECK(peak > 0.1, "the reference response is silent (peak %g)", peak);
+	CHECK(worst < 2e-5, "wake at a new Size differs from a settled engine by %g V, want < 2e-5", worst);
+	std::printf("  wake_at_new_size: worst difference %.3g V (response peak %.2f V)\n", worst, peak);
+}
+
 } // namespace
 
 int main() {
@@ -550,5 +599,6 @@ int main() {
 	noSleepInTail();
 	sleepNoClick();
 	wakeTransparent();
+	wakeAtNewSize();
 	return rkatest::finish("test_engine");
 }
