@@ -24,7 +24,9 @@
 // - Level: the wet is level-matched to the dry on average (full Mix is about as
 //   loud as dry for noise) by wetMakeup(). Loud resonant drones may reach the
 //   limiter's knee (9 V) and are soft-limited to 10 V.
-// - Mode: the voicing follows FogFrame::mode. A change fades the wet out
+// - Mode: the voicing follows FogFrame::mode. The first process() takes its
+//   frame's mode at once (a saved patch loads in its mode, no fade). After
+//   that, a change fades the wet out
 //   over 50 ms, clears and reconfigures the network, the tone stage and
 //   Bloom, and fades it in over 50 ms; the new mode starts clean. A further
 //   change while fading waits for the fade, then the latest mode is taken.
@@ -190,9 +192,17 @@ struct FogEngine {
 	}
 
 	void process(const FogFrame& f, FogResult& res) {
-		// Mode: fade out, switch, fade in.
+		// Mode: fade out, switch, fade in. The first frame's mode (a patch's
+		// saved one) is taken at once: nothing has played, so nothing to fade.
 		int want = f.mode;
 		want = (want >= 0 && want < fog::MODES_LEN) ? want : (int) fog::HAAR;
+		if (!started) {
+			started = true;
+			if (want != (int) mode) {
+				mode = (fog::Mode) want;
+				reset();
+			}
+		}
 		if (want != (int) mode && fadeState == 0)
 			fadeState = 1;
 		if (fadeState == 1) {
@@ -206,7 +216,13 @@ struct FogEngine {
 				bloomR.clear();
 				setTone();
 				fadeState = 2;
+				// A switch made asleep stays asleep (the new network is clear,
+				// so there is nothing to play): the next feed wakes it as it
+				// would any sleeping engine, which restarts ICE's shifter as a
+				// fresh one starts.
+				const bool wasAsleep = asleep_;
 				wake();
+				asleep_ = wasAsleep;
 			}
 		}
 		else if (fadeState == 2) {
@@ -426,6 +442,7 @@ struct FogEngine {
 	int makeupCount = 0;
 	bool makeupSnap = true; // the next awake sample starts the make-up at its target
 	bool asleep_ = false;
+	bool started = false; // process() has run: later mode changes fade
 	int quietCount = 0;
 	int hold = 12000;
 };

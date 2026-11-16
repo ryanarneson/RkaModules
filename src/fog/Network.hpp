@@ -18,34 +18,47 @@
 //   than the one before. It is lossless, and its mean delay (its own length)
 //   is added to the line's length when the gain is worked out, so the T60
 //   holds.
-// - ICE: a +12-semitone granular shifter in the feedback. The loop's
-//   feedback is projected on a unit vector u (a +/-1 Hadamard row over the
-//   lines, orthogonal to the Householder's all-ones), low-passed (5 kHz,
-//   which also keeps the 2x read from aliasing much), written to a 50 ms
-//   buffer and read back at twice speed by two taps half a grain apart with
-//   triangular windows that sum to 1 (integer reads: no interpolation). Its
-//   output s goes back along u as a s - b m (m the projection, b = 0.6 a^2):
-//   removing b m keeps the u component's energy about level ((1 - b)^2 +
-//   a^2 is 0.98 at a = 0.3), so the tail as a whole decays at the T60 (a
-//   touch faster). Each band loses (1 - (1 - b)^2) / N of its energy a pass
-//   to the octave above and gains up to a^2 / N from the octave below.
-//   That is not made up in the line gains: it would count the energy twice,
-//   and an earlier version that did let ICE's tail outlast the law by
-//   nearly 2x at Size 0 (fog-soak). The band-pass (120 Hz-5 kHz) keeps the
-//   bass out of the octave (a voicing choice), and keeps the shifter from
-//   feeding back on itself near DC, where a shifted signal is the signal
-//   and a s - b m is a gain above 1. With a fixed a = 0.25 that ran away
-//   at v = 1, Damp 0; with the amount below it did not even without the
-//   band-pass (5 Hz and 25 Hz decay at the law at v = 1, Size 0), so it is
-//   now a margin, not what keeps ICE stable.
-//   The amount: a^2 = shimmer x N x (1 - g^2), with g the mean loop gain a
-//   pass (capped at a = 0.3, which short tails reach: there it would only
-//   shorten the decay), so the octave fed in a pass is a fixed
-//   fraction (shimmer) of what the loop loses a pass. The octave's level
-//   against the note, and what it costs the T60 (about 5 % at 250 Hz), are
-//   then the same at every Visibility and Size; a fixed a would leak a fixed
-//   share a pass, so short lines and long tails (many passes) would lose
-//   their lows to it (DENSE at Size 0: 38 s, not 70).
+// - ICE: a +12-semitone granular shifter in the feedback.
+//   - The shifter: the loop's feedback is projected on a unit vector u (a
+//     +/-1 Hadamard row over the lines, orthogonal to the Householder's
+//     all-ones) as m, band-passed (two one-pole high-passes at 80 Hz, two
+//     one-pole low-passes at 5 kHz: -16 dB at a quarter of the rate, so
+//     little of the 2x read's aliasing recirculates), written to a buffer,
+//     and read back at twice speed by two taps half a 50 ms grain apart,
+//     with triangular windows that sum to 1 (integer reads: no
+//     interpolation). Each grain starts at a random extra delay of 0-12 ms
+//     (an LCG per network), drawn when its window is 0. With a fixed grain
+//     the two taps sat a fixed 25 ms apart, so the octave's carrier
+//     cancelled at 40n + 20 Hz (220, 260, 300 Hz...) and left a pair of
+//     sidebands beating at 40 Hz; the jitter breaks the fixed phase between
+//     grains, so the octave is a slightly smeared octave at every pitch.
+//   - The crossfade: the u component of the line inputs becomes
+//     (1 - a) m + a s. The bound, whatever the phase between the octave and
+//     the note's own harmonics (a held tone makes them coherent): s is, at
+//     each sample, a convex combination of past band-passed m, and the
+//     band-pass has gain <= 1 at every frequency, so over any stretch the
+//     RMS of s is at most that of m, and by Minkowski the RMS of (1 - a) m +
+//     a s is at most (1 - a) + a = 1 times m's. The u component never
+//     gains, the rest of the vector is untouched, so the loop's energy a
+//     pass is at most the line gains' g^2: no tail outlasts the T60 law. An
+//     earlier a s - b m (b = 0.6 a^2) kept the energy level only for an
+//     octave uncorrelated with the note; on tones it reached 1 - b + a > 1
+//     and an 880 Hz tail held a T60 of 123 s for 80.
+//   - The band-pass is not needed for that bound (it holds with gain 1 at
+//     DC too); the high-pass keeps the bass out of the octave (a voicing
+//     choice, test_modes' ice_bass_kept_out), the low-pass keeps it glassy
+//     and the aliasing down.
+//   - The amount: the crossfade takes 1 - (1 - a)^2 of the u component's
+//     energy from the note a pass (and gives a^2 of it to the octave), so
+//     the lows lose (2 a - a^2) / N of their energy a pass more than the
+//     line gains say. a is set so that this is a fixed fraction (shimmer)
+//     of the loop's own loss a pass, 1 - g^2 (g the mean loop gain): then
+//     ICE's T60 is the same fraction short at every Visibility and Size
+//     (about 13 % for shimmer 0.16, checked by modes_t60), and the line gains
+//     are never raised to make it up (that would void the bound). a is
+//     capped at 0.5. The cost: the octave's level against the note follows
+//     the loss a pass, so it is stronger for short tails and large Size and
+//     fainter for long tails (see Voicing.hpp).
 // - Damp: d acts as bias + (1 - bias)(1 - brightness) d: FRET's bias darkens
 //   from the start, ICE's brightness halves every setting; each still
 //   follows Damp's law from its own baseline.
@@ -109,7 +122,9 @@ struct Network {
 	static const int LOOP_AP = 8; // in-loop allpasses (SMOKE's 8 lines)
 	static float shimmerGrainMs() { return 50.f; }
 	static float shimmerLpHz() { return 5000.f; }
-	static float shimmerHpHz() { return 120.f; }
+	static float shimmerHpHz() { return 80.f; }
+	static float shimmerJitterMs() { return 12.f; }
+	static float shimmerMaxA() { return 0.5f; }
 	// The wet level's constant, set by measurement (test_network's
 	// even_wet_level, pink noise at noon): at 1 the wet RMS is within
 	// 0.1-1.3 dB below the input RMS across the six words, so it stays 1.
@@ -155,13 +170,16 @@ struct Network {
 	float apK = 0.f;
 	int apDelay[LOOP_AP] = {};
 	float meanAp = 0.f; // mean allpass delay over the n lines, samples
-	float shimAmt = 0.f;           // the voicing's shimmer
-	float shimA = 0.f, shimB = 0.f; // from it and the loop gain (updateGains)
+	float shimAmt = 0.f; // the voicing's shimmer
+	float shimA = 0.f;   // the crossfade, from it and the loop gain (updateGains)
 	float shimU[MAX_LINES] = {};
-	float shimLp = 0.f, shimLpCoef = 0.f;
+	float shimLp1 = 0.f, shimLp2 = 0.f, shimLpCoef = 0.f; // the low-pass's two one-pole states
 	float shimHp1 = 0.f, shimHp2 = 0.f, shimHpCoef = 0.f; // the high-pass's two one-pole states
 	int grain = 4, grainK = 0;
 	float invGrain = 0.25f;
+	int jitterMax = 0;          // samples
+	int jitterA = 0, jitterB = 0; // each tap's extra delay this grain
+	uint32_t jitterSeed = 1u;
 
 	// Buffers for every mode's longest line at the largest Size, plus the
 	// Drift swing. Never call from process().
@@ -186,7 +204,7 @@ struct Network {
 		const int apD = (int) (apLongest * 0.001f * r) + 4;
 		for (int i = 0; i < LOOP_AP; i++)
 			loopAp[i].allocate(apD, (uint32_t) (48 + i)); // stagger 48..55
-		const int gD = (int) (shimmerGrainMs() * 0.001f * r) + 4;
+		const int gD = (int) ((shimmerGrainMs() + shimmerJitterMs()) * 0.001f * r) + 4;
 		shiftBuf.allocate(gD, 56u); // stagger 56
 		// The loop's buffers in series (line, allpass, shifter): the longest
 		// path a sample can ring round before it is overwritten.
@@ -243,8 +261,9 @@ struct Network {
 		shimHpCoef = 1.f - std::exp(-2.f * 3.14159265358979f * shimmerHpHz() / rate);
 		shimLpCoef = 1.f - std::exp(-2.f * 3.14159265358979f * (shimmerLpHz() < 0.4f * rate ? shimmerLpHz() : 0.4f * rate) / rate);
 		{
+			jitterMax = (int) (shimmerJitterMs() * 0.001f * rate);
 			int g = (int) (shimmerGrainMs() * 0.001f * rate);
-			const int hi = shiftBuf.maxDelay() - 2;
+			const int hi = shiftBuf.maxDelay() - 2 - jitterMax;
 			g = g > hi ? hi : g;
 			g &= ~1;
 			grain = g < 4 ? 4 : g;
@@ -277,7 +296,9 @@ struct Network {
 	// QUIET anyway, so that waking is the same as starting fresh.
 	void restartShifter() {
 		grainK = 0;
-		shimLp = shimHp1 = shimHp2 = 0.f;
+		shimLp1 = shimLp2 = shimHp1 = shimHp2 = 0.f;
+		jitterSeed = 1u;
+		jitterA = jitterB = 0;
 	}
 
 	// Silences the network. The next setControls() sets Size at once, with
@@ -406,22 +427,34 @@ struct Network {
 			float m = 0.f;
 			for (int j = 0; j < n; j++)
 				m += shimU[j] * fb[j];
-			// Band-limit: two one-pole high-passes (120 Hz), then a one-pole
-			// low-pass (5 kHz).
+			// Band-limit: two one-pole high-passes (80 Hz), then two one-pole
+			// low-passes (5 kHz).
 			shimHp1 += shimHpCoef * (m - shimHp1);
 			shimHp1 = (shimHp1 > 1e-20f || shimHp1 < -1e-20f) ? shimHp1 : 0.f;
 			const float hp1 = m - shimHp1;
 			shimHp2 += shimHpCoef * (hp1 - shimHp2);
 			shimHp2 = (shimHp2 > 1e-20f || shimHp2 < -1e-20f) ? shimHp2 : 0.f;
-			shimLp += shimLpCoef * ((hp1 - shimHp2) - shimLp);
-			shimLp = (shimLp > 1e-20f || shimLp < -1e-20f) ? shimLp : 0.f;
-			shiftBuf.write(shimLp);
+			shimLp1 += shimLpCoef * ((hp1 - shimHp2) - shimLp1);
+			shimLp1 = (shimLp1 > 1e-20f || shimLp1 < -1e-20f) ? shimLp1 : 0.f;
+			shimLp2 += shimLpCoef * (shimLp1 - shimLp2);
+			shimLp2 = (shimLp2 > 1e-20f || shimLp2 < -1e-20f) ? shimLp2 : 0.f;
+			shiftBuf.write(shimLp2);
 			const int k = grainK, half = grain >> 1;
+			// A tap's window is 0 where its grain starts: draw its jitter there.
+			if (k == 0 || k == half) {
+				jitterSeed = jitterSeed * 1664525u + 1013904223u;
+				const int j = (int) ((uint64_t) (jitterSeed >> 8) * (uint32_t) (jitterMax + 1) >> 24);
+				if (k == 0)
+					jitterA = j;
+				else
+					jitterB = j;
+			}
 			const int k2 = k + half < grain ? k + half : k + half - grain;
 			const float w1 = k < half ? 2.f * (float) k * invGrain : 2.f - 2.f * (float) k * invGrain;
-			const float s = w1 * shiftBuf.readInt(grain - k) + (1.f - w1) * shiftBuf.readInt(grain - k2);
+			const float sh = w1 * shiftBuf.readInt(grain - k + jitterA) + (1.f - w1) * shiftBuf.readInt(grain - k2 + jitterB);
 			grainK = k + 1 < grain ? k + 1 : 0;
-			const float c = shimA * s - shimB * m;
+			// The crossfade: u component (1 - a) m + a s.
+			const float c = shimA * (sh - m);
 			for (int j = 0; j < n; j++)
 				fb[j] += c * shimU[j];
 		}
@@ -525,11 +558,12 @@ struct Network {
 		const float gm = fastExp2(perSample * (meanBase * (scaleTarget + scaleOffset) + meanAp));
 		const float p = 1.f - gm * gm;
 		wetGain = wetCal() * std::sqrt(p > 0.f ? p : 0.f);
-		// ICE: the shifter's amount from the loss a pass (see the top).
-		float a2 = shimAmt * (float) n * (p > 0.f ? p : 0.f);
-		a2 = a2 < 0.09f ? a2 : 0.09f; // a <= 0.3
-		shimA = std::sqrt(a2);
-		shimB = 0.6f * a2;
+		// ICE: the crossfade from the loss a pass (see the top): (2 a - a^2) / N
+		// = shimmer (1 - g^2), so a = 1 - sqrt(1 - shimmer N (1 - g^2)).
+		const float q = shimAmt * (float) n * (p > 0.f ? p : 0.f);
+		const float aMax = shimmerMaxA();
+		const float qMax = 2.f * aMax - aMax * aMax;
+		shimA = q > 0.f ? (q < qMax ? 1.f - std::sqrt(1.f - q) : aMax) : 0.f;
 	}
 };
 

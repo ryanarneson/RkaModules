@@ -22,15 +22,16 @@ struct Voicing {
 	float bloomBias;    // slower build-up (0 = HAAR): Bloom's time constant x (1 + bias)
 	float loopDiffuse;  // in-loop allpass coefficient (0 = none; SMOKE)
 	float loopMs[8];    // each in-loop allpass's delay (lines 0-7)
-	float shimmer;      // octave-up in the loop (0 = none; ICE): the octave fed in a
-	                    // pass as a fraction of the loop's loss a pass (Network.hpp)
+	float shimmer;      // octave-up in the loop (0 = none; ICE): what the shifter's
+	                    // crossfade takes from the note a pass, as a fraction of the
+	                    // loop's own loss a pass (Network.hpp)
 	float brightness;   // lighter damping (0 = HAAR): Damp d acts as (1 - brightness) d
 	int toneKind;       // the feed's tone stage
 	float toneHz, toneDb, toneQ;
 	float wetMakeup;    // scale on the engine's wet make-up (1 = HAAR), so full
 	                    // wet matches dry for noise in every mode (test_engine's
 	                    // wet_matched_level): FRET 1.02, SMOKE 0.955 (-0.4 dB),
-	                    // ICE 0.715 (-2.9 dB: its shelf and shimmer add level)
+	                    // ICE 0.715 (-2.9 dB: its shelf adds level)
 };
 
 inline const Voicing& voicing(Mode m) {
@@ -79,16 +80,18 @@ inline const Voicing& voicing(Mode m) {
 		// ICE: sparse and glassy. 16 lines a little shorter than HAAR's
 		// (47-162 ms), only two short input stages (sparser onset), half
 		// HAAR's damping at every Damp, +3 dB above 3 kHz on the feed, and a
-		// +12-semitone shifter in the loop at a fixed low amount: 0.05 (a
-		// coupling of 0.3 at FOG, Size noon) puts the octave about 14 dB under
-		// a held note's fundamental in the tail, at any Visibility and Size
-		// (19 dB at 110 Hz, where the shifter's 120 Hz high-pass bites).
+		// +12-semitone shifter in the loop at a fixed low amount: 0.16 makes
+		// ICE's T60 about 13 % shorter than Visibility's at every setting,
+		// and puts the octave about 15 dB under a held note in the tail at
+		// noon (12-18 dB over 110-880 Hz), fainter for longer tails and
+		// smaller Size (the crossfade's bound ties the octave to the loss a
+		// pass: Network.hpp).
 		{16,
 		 {47.3f, 53.9f, 61.1f, 67.7f, 74.9f, 82.3f, 89.9f, 97.1f, 104.9f, 112.3f, 120.7f, 128.9f, 137.3f, 145.1f, 153.7f, 161.9f},
 		 2, {9.f, 23.f, 0.f, 0.f},
 		 0.f, 0.f,
 		 0.f, {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f},
-		 0.035f, 0.5f,
+		 0.16f, 0.5f,
 		 TONE_HIGH_SHELF, 3000.f, 3.f, 0.7071f,
 		 0.715f},
 	};

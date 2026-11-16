@@ -110,10 +110,10 @@ struct fog {
 	static void busy(Instance& i, long t, const Cv& cv) {
 		setBusy(i, t, cv, rka::fog::HAAR);
 	}
-	// ICE: its shifter runs in the loop (one projection, a band-pass and two
-	// integer reads a sample); with two diffuser stages to HAAR's four, it
-	// costs a little less than HAAR. SMOKE (8 lines) and FRET (HAAR's shape)
-	// cost no more than HAAR.
+	// ICE: its shifter runs in the loop (one projection, a band-pass of four
+	// one-poles and two integer reads a sample); with two diffuser stages to
+	// HAAR's four, it costs a little less than HAAR. SMOKE (8 lines) and
+	// FRET (HAAR's shape) cost no more than HAAR.
 	static void busyIce(Instance& i, long t, const Cv& cv) {
 		setBusy(i, t, cv, rka::fog::ICE);
 	}
@@ -125,9 +125,10 @@ struct fog {
 		// when nothing is patched; quiet 0.57-0.59, after the delay lines'
 		// write positions were staggered; before that, 1.09, 1.09 and 1.09).
 		// Quiet keeps the old idle budget, 0.95, so the old, cache-aliased
-		// lines (1.03-1.11) fail it. Busy 0.75 (0.81 at 16) and busyIce 0.71
-		// (0.74 at 16) with the four voicings tuned (plan Task 7; were 0.72
-		// each, and 1.32 before the stagger): 1.55 and 1.45. Elsewhere: three
+		// lines (1.03-1.11) fail it. Busy 0.77 (0.82 at 16) and busyIce 0.73
+		// (0.75 at 16) with the four voicings tuned and ICE's jittered,
+		// crossfaded shifter (plan Task 7; were 0.72 each, and 1.32 before
+		// the stagger): 1.55 and 1.5. Elsewhere: three
 		// times as much, provisional (not yet measured on x86-64).
 		const BenchCase<Instance> cases[BENCH_CASES] = {
 			// name     inputs   Apple arm64  elsewhere
@@ -135,7 +136,7 @@ struct fog {
 			{"outputs", outputs, 0.15, 0.45},
 			{"quiet", quiet, 0.95, 2.85},
 			{"busy", busy, 1.55, 4.65},
-			{"busyIce", busyIce, 1.45, 4.35},
+			{"busyIce", busyIce, 1.5, 4.5},
 		};
 		return cases[k];
 	}

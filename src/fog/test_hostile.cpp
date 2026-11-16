@@ -349,7 +349,7 @@ long badState(const Rig& r) {
 	for (int i = 0; i < rka::fog::Network::LOOP_AP; i++)
 		scan(n.loopAp[i]);
 	scan(n.shiftBuf);
-	bad += !okValue(n.shimLp) + !okValue(n.shimHp1) + !okValue(n.shimHp2);
+	bad += !okValue(n.shimLp1) + !okValue(n.shimLp2) + !okValue(n.shimHp1) + !okValue(n.shimHp2);
 	for (int c = 0; c < 2; c++)
 		for (int i = 0; i < 2; i++)
 			bad += !okValue(r.eng.toneZ[c][i]);
