@@ -404,10 +404,11 @@ PANELS = {
         + [("param", n, x, _fog_on(x), n) for n, x in zip(_FG_COLS, _FG_X)]
         + [("param", n + "_ATT", x, _FG_ATT_Y, None) for n, x in zip(_FG_COLS, _FG_X)]
         + [("input", n + "_CV", x, _FG_CV_Y, None) for n, x in zip(_FG_COLS, _FG_X)]
-        + [("input", "IN_L", _FG_X[0], 115.0, "IN L"),
-           ("input", "IN_R", _FG_X[1], 115.0, "IN R"),
-           ("output", "L", _FG_X[3], 115.0, "L"),
-           ("output", "R", _FG_X[4], 115.0, "R")],
+        # The bottom row at 116, the house row (Sway, Fathom, Hadal).
+        + [("input", "IN_L", _FG_X[0], 116.0, "IN L"),
+           ("input", "IN_R", _FG_X[1], 116.0, "IN R"),
+           ("output", "L", _FG_X[3], 116.0, "L"),
+           ("output", "R", _FG_X[4], 116.0, "R")],
         sizes={"PARAM_VISIBILITY": "hero"},
         circles=[(*_FG_O, r) for r in (31, 43, 64, 76)],
         limbs=[dict(c=_FG_O, r=_FG_LIMB, a0=153, a1=207, step=2, major=5)],

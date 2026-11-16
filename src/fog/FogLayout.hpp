@@ -19,9 +19,9 @@ static const rack::math::Vec INPUT_DAMP_CV(15.65f, 54.3f);
 static const rack::math::Vec INPUT_BLOOM_CV(25.4f, 54.3f);
 static const rack::math::Vec INPUT_DRIFT_CV(35.15f, 54.3f);
 static const rack::math::Vec INPUT_MIX_CV(44.9f, 54.3f);
-static const rack::math::Vec INPUT_IN_L(5.9f, 115.0f);
-static const rack::math::Vec INPUT_IN_R(15.65f, 115.0f);
-static const rack::math::Vec OUTPUT_L(35.15f, 115.0f);
-static const rack::math::Vec OUTPUT_R(44.9f, 115.0f);
+static const rack::math::Vec INPUT_IN_L(5.9f, 116.0f);
+static const rack::math::Vec INPUT_IN_R(15.65f, 116.0f);
+static const rack::math::Vec OUTPUT_L(35.15f, 116.0f);
+static const rack::math::Vec OUTPUT_R(44.9f, 116.0f);
 static const rack::math::Vec SCREWS[] = {rack::math::Vec(43.18f, 2.54f), rack::math::Vec(7.62f, 125.96f)};
 }
