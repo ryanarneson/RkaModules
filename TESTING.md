@@ -184,12 +184,18 @@ instance, Apple M-series Mac:
 | Fathom measured (was) | 0.02 (0.58) | 0.55 (0.58) | 0.59 (0.59) |
 | Sluice budget | 0.2 | 0.15 | 2.15 |
 | Sluice measured | 0.077 | 0.066 | 1.07 |
+| Fog budget | 2.2 | 2.2 | 2.7 |
+| Fog measured | 1.09 | 1.09 | 1.32 |
 
 Sluice also has a mixDown case (as busy, but only D connected): budget 2.25,
 measured 1.11. Its budgets are about twice the measurement, rounded up to
 the next 0.05, and are written for a new engine, so nothing "was" to record.
 Busy is 16 voices on every row with a moving CV on every row, Levels 0.5,
 Exp. Its other-machine budgets are three times the Mac's, as the others are.
+Fog's 16 lines run whatever the input, so idle costs about what outputs does;
+its busy is stereo noise, all five CVs moving at full attenuverter, Bloom and
+Drift up, Mix 0.5 (busyIce, 1.32 too, is the same in ICE; it is a copy of HAAR
+until the voicings are tuned). The spec's target is busy under 3 %.
 
 The idle and outputs budgets are set so the pre-issue-#8 engines fail
 them on the Mac. Sway busy and Fathom outputs and busy cost the same
@@ -349,20 +355,25 @@ Three habits behind most of them:
 
 ## What each module has today
 
-| | Sway | Fathom | Shoal | Sluice |
-|---|---|---|---|---|
-| Rack-free core with offline tests | Yes | Yes | Yes | Yes |
-| `-Wall -Wextra`, `-Werror` in CI | Yes | Yes | No (vendored firmware warns) | Yes |
-| Sanitizers | No | No | Yes | Partly (`test_hostile` only: the fuzz, hostile input, sample rates, allocation) |
-| Hostile-input and sample-rate sweeps | Partly | Partly | Yes | Yes (NaN, infinity, 1e30, a sample-rate change, 1 Hz to 768 kHz, 0 and negative rates) |
-| Random fuzz with seeds | No | No | Yes | Yes (`test_hostile`: 600 fixed-seed trials against a scalar model; no seed sweep) |
-| Golden saved-state image | No (params only) | No (params only) | Yes | No (params only) |
-| Allocation check on the audio path | No | No | Yes | Yes |
-| Thread tests | Not needed (no shared state) | Not needed | Yes | Not needed |
-| CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes (`make shoal-bench`) | Yes (`make bench`) |
-| No libm call per sample, knobs still | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Not checked | Yes (`make libm-calls`) |
-| No writable global state | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make shoal-globals`) | Yes (`make engine-globals`) |
-| Smoke screenshot | Yes | Yes | Yes | Yes |
+| | Sway | Fathom | Shoal | Sluice | Fog |
+|---|---|---|---|---|---|
+| Rack-free core with offline tests | Yes | Yes | Yes | Yes | Yes |
+| `-Wall -Wextra`, `-Werror` in CI | Yes | Yes | No (vendored firmware warns) | Yes | Yes |
+| Sanitizers | No | No | Yes | Partly (`test_hostile` only: the fuzz, hostile input, sample rates, allocation) | Partly (`test_hostile` only) |
+| Hostile-input and sample-rate sweeps | Partly | Partly | Yes | Yes (NaN, infinity, 1e30, a sample-rate change, 1 Hz to 768 kHz, 0 and negative rates) | Yes (NaN and infinity on every input, CV and parameter, 1 Hz to 768 kHz, 0, negative and NaN rates, a rate change over a tail) |
+| Random fuzz with seeds | No | No | Yes | Yes (`test_hostile`: 600 fixed-seed trials against a scalar model; no seed sweep) | Yes (`test_hostile`: 200 fixed-seed trials; no seed sweep) |
+| Golden saved-state image | No (params only) | No (params only) | Yes | No (params only) | No (params only) |
+| Allocation check on the audio path | No | No | Yes | Yes | Yes |
+| Thread tests | Not needed (no shared state) | Not needed | Yes | Not needed | Not needed |
+| CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes (`make shoal-bench`) | Yes (`make bench`) | Yes (`make bench`) |
+| No libm call per sample, knobs still | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Not checked | Yes (`make libm-calls`) | Yes (`make libm-calls`) |
+| No writable global state | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make shoal-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) |
+| Smoke screenshot | Yes | Yes | Yes | Yes | Not yet |
+
+Fog also has `make fog-soak` (opt-in, minutes, not in `make test`): every
+mode at v = 1 and three corners of Size, Damp and Drift, 10 minutes of noise
+then 3 minutes of silence, with the level under the limiter's bound and the
+tail following the T60 law.
 
 ## Future work
 

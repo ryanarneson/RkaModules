@@ -11,6 +11,7 @@ namespace rka {
 
 template <int N>
 struct Diffuser {
+	static_assert(N > 0 && (N & (N - 1)) == 0, "N must be a power of two");
 	static const int MAX_STAGES = 4;
 	// Longest stage span the buffers are sized for, times maxScale.
 	static constexpr float MAX_STAGE_MS = 100.f;

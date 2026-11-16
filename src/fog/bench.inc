@@ -1,0 +1,133 @@
+// Fog's declaration for the CPU bench, the libm check and the globals check
+// (src/bench/BenchModule.hpp says what each part is for; TESTING.md rule 10
+// has the budgets' history). Not part of the plugin.
+#include "bench/BenchModule.hpp"
+#include "fog/FogEngine.hpp"
+
+#include <cstdint>
+
+namespace rkabench {
+
+struct fog {
+	typedef rka::FogFrame F;
+
+	struct Instance {
+		rka::FogEngine engine;
+		F frame;
+		rka::FogResult result;
+		float inV[2][16];
+		float cvV[5][16];
+		Cv::Cursor cvCur[5];
+		uint32_t noise;
+
+		// The module's defaults: Visibility, Size, Damp, Bloom, Drift and Mix
+		// at noon, attenuverters 0, HAAR, low cut 50 Hz, nothing patched.
+		Instance() : noise(12345u) {
+			for (int c = 0; c < 2; c++)
+				for (int k = 0; k < 16; k++)
+					inV[c][k] = 0.f;
+			for (int i = 0; i < 5; i++) {
+				for (int k = 0; k < 16; k++)
+					cvV[i][k] = 0.f;
+				cvCur[i] = Cv::cursor(i, 0);
+			}
+			for (int p = 0; p < F::PARAMS_LEN; p++)
+				frame.params[p] = 0.5f;
+			for (int p = F::SIZE_ATT; p <= F::MIX_ATT; p++)
+				frame.params[p] = 0.f;
+			frame.inL.v = inV[0];
+			frame.inL.channels = 0;
+			frame.inR.v = inV[1];
+			frame.inR.channels = 0;
+			for (int i = 0; i < 5; i++) {
+				frame.cv[i].v = cvV[i];
+				frame.cv[i].channels = 0;
+			}
+			frame.mode = 0;
+			frame.driftRate = 0;
+			frame.lowCut = 1;
+			frame.dryKill = false;
+			result.outL = result.outR = 0.f;
+		}
+
+		void process(float) {
+			// The engine takes its rate at construction (48 kHz, the bench's).
+			engine.process(frame, result);
+		}
+		void reset() {
+			engine.reset();
+		}
+		float probe() const {
+			return result.outL + result.outR;
+		}
+		// Uniform noise in +/-5 V (an LCG: no libm).
+		float next() {
+			noise = noise * 1664525u + 1013904223u;
+			return (float) (noise >> 8) * (10.f / 16777216.f) - 5.f;
+		}
+	};
+
+	// No cables, knobs at their defaults.
+	static void idle(Instance&, long, const Cv&) {}
+
+	// Fog has no output jacks the engine reads: as idle.
+	static void outputs(Instance&, long, const Cv&) {}
+
+	// Stereo noise in, every CV moving at full attenuverter, Drift and Bloom
+	// up, Mix 0.5, in the mode's voicing. The knobs stay still.
+	static void setBusy(Instance& i, long t, const Cv& cv, int mode) {
+		if (t == 0) {
+			i.frame.mode = mode;
+			i.frame.inL.channels = 1;
+			i.frame.inR.channels = 1;
+			for (int k = 0; k < 5; k++)
+				i.frame.cv[k].channels = 1;
+			i.frame.params[F::VISIBILITY] = 0.8f;
+			i.frame.params[F::DRIFT] = 0.8f;
+			i.frame.params[F::BLOOM] = 0.5f;
+			i.frame.params[F::MIX] = 0.5f;
+			for (int p = F::SIZE_ATT; p <= F::MIX_ATT; p++)
+				i.frame.params[p] = 1.f;
+		}
+		i.inV[0][0] = i.next();
+		i.inV[1][0] = i.next();
+		for (int k = 0; k < 5; k++)
+			i.cvV[k][0] = cv.next(i.cvCur[k]);
+	}
+	static void busy(Instance& i, long t, const Cv& cv) {
+		setBusy(i, t, cv, rka::fog::HAAR);
+	}
+	// ICE is the heaviest voicing once it has its shimmer (plan Task 7); it
+	// is a copy of HAAR until then.
+	static void busyIce(Instance& i, long t, const Cv& cv) {
+		setBusy(i, t, cv, rka::fog::ICE);
+	}
+
+	static const int BENCH_CASES = 4;
+	static BenchCase<Instance> benchCase(int k) {
+		// Budgets: about twice what an Apple M-series Mac measured, rounded
+		// up to the next 0.05 (idle 1.09, outputs 1.09, busy 1.32, busyIce 1.32;
+		// Fog's 16 lines run whatever the input, so idle is not cheap). Elsewhere: three times as
+		// much, provisional (not yet measured on x86-64).
+		const BenchCase<Instance> cases[BENCH_CASES] = {
+			// name     inputs   Apple arm64  elsewhere
+			{"idle", idle, 2.2, 6.6},
+			{"outputs", outputs, 2.2, 6.6},
+			{"busy", busy, 2.7, 8.1},
+			{"busyIce", busyIce, 2.7, 8.1},
+		};
+		return cases[k];
+	}
+
+	static const int LIBM_CASES = 3;
+	static LibmCase<Instance> libmCase(int k) {
+		const LibmCase<Instance> cases[LIBM_CASES] = {
+			{"idle", idle, true},
+			{"outputs", outputs, true},
+			{"busy", busy, true},
+		};
+		return cases[k];
+	}
+};
+
+} // namespace rkabench

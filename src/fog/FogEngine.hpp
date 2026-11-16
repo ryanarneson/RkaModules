@@ -181,6 +181,10 @@ struct FogEngine {
 		bloomR.set(bloom, vo.bloomBias);
 		feedL = bloomL.process(feedL);
 		feedR = bloomR.process(feedR);
+		// The low cut's tail times the falling Bloom gain would otherwise
+		// feed denormals into the network: 1e-20 is -400 dB.
+		feedL = (feedL > 1e-20f || feedL < -1e-20f) ? feedL : 0.f;
+		feedR = (feedR > 1e-20f || feedR < -1e-20f) ? feedR : 0.f;
 
 		// The wet, at the inner rate.
 		float wetL, wetR;

@@ -58,6 +58,7 @@ struct Bloom {
 	float process(float x) {
 		const float a = x >= 0.f ? x : -x;
 		level = a > level * relCoeff ? a : level * relCoeff;
+		level = level > 1e-20f ? level : 0.f; // the follower's tail must not go denormal
 		if (level > presentV())
 			gain += riseCoeff * (1.f - gain);
 		else

@@ -119,36 +119,49 @@ void diffuserDecorrelates() {
 		CHECK(e[i] / tot > 0.05 && e[i] / tot < 0.25, "ch %d share %g", i, e[i] / tot);
 }
 
-void rateFactor() {
-	rka::RateDivider r;
-	const float rates[] = {44100.f, 96000.f, 192000.f, 384000.f, 768000.f};
-	const int want[] = {1, 1, 2, 4, 8};
-	for (int i = 0; i < 5; i++) {
-		r.setHostRate(rates[i]);
-		CHECK(r.factor() == want[i], "rate %g factor %d", rates[i], r.factor());
-		CHECK(r.innerRate() <= 96000.f, "inner %g", r.innerRate());
-	}
-}
+// A tone through the divider with an identity inner process: how many times
+// the inner process ran in `n` host samples, and the passband gain in dB.
+struct DividerRun {
+	long calls;
+	double passDb;
+};
 
-void ratePassband() {
-	const double fs = 192000.0;
+DividerRun runDivider(double fs, double toneHz, int n) {
 	rka::RateDivider r;
 	r.setHostRate((float) fs);
+	long calls = 0;
 	double ein = 0, eout = 0;
-	for (int n = 0; n < 20000; n++) {
-		const float x = (float) std::sin(2 * PI * 5000.0 * n / fs);
+	for (int i = 0; i < n; i++) {
+		const float x = (float) std::sin(2 * PI * toneHz * i / fs);
 		float yl, yr;
-		r.process(x, x, yl, yr, [](float l, float rr, float& ol, float& orr) {
+		r.process(x, x, yl, yr, [&calls](float l, float rr, float& ol, float& orr) {
+			calls++;
 			ol = l;
 			orr = rr;
 		});
-		if (n >= 2000) {
+		if (i >= n / 10) {
 			ein += (double) x * x;
 			eout += (double) yl * yl;
 		}
 	}
-	const double db = 10.0 * std::log10(eout / ein);
-	CHECK(std::fabs(db) < 0.1, "passband %g dB", db);
+	return {calls, 10.0 * std::log10(eout / ein)};
+}
+
+void rateFactor() {
+	const float rates[] = {44100.f, 48000.f, 96000.f, 192000.f, 384000.f, 768000.f};
+	const int want[] = {1, 1, 1, 2, 4, 8};
+	for (int i = 0; i < 6; i++) {
+		rka::RateDivider r;
+		r.setHostRate(rates[i]);
+		CHECK(r.factor() == want[i], "rate %g factor %d", rates[i], r.factor());
+		CHECK(r.innerRate() <= 96000.f, "inner %g", r.innerRate());
+		// The inner process runs once per `factor` host samples.
+		const int n = 48000;
+		const DividerRun d = runDivider(rates[i], 5000.0, n);
+		CHECK(d.calls == n / want[i], "rate %g: %ld inner calls in %d samples, want %d", rates[i], d.calls, n, n / want[i]);
+		// A 5 kHz tone passes flat at every rate.
+		CHECK(std::fabs(d.passDb) < 0.1, "rate %g: passband %g dB", rates[i], d.passDb);
+	}
 }
 
 } // namespace
@@ -161,6 +174,5 @@ int main() {
 	diffuserEnergy();
 	diffuserDecorrelates();
 	rateFactor();
-	ratePassband();
 	return rkatest::finish("fog test_blocks");
 }
