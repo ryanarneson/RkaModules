@@ -5,7 +5,9 @@ can be picked up later. Each is a concept and a rough panel sketch in the
 Instrument look (`docs/specs/2026-11-15-instrument-look-design.md`), not a
 design: names are working titles and have not been checked against the VCV
 Library, and the control sets are first guesses made to draw the panels.
-None has been through a design conversation yet.
+Sluice and Fog have since been designed and built (their pages point to
+their specs and manuals); the rest have not been through a design
+conversation yet.
 
 A suggested order for building them, with the user's music in mind, is
 in [ROADMAP.md](ROADMAP.md).

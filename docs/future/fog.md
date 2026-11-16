@@ -1,6 +1,6 @@
 # Fog: reverb
 
-Status: built (2.0.0). Design: `docs/specs/2026-11-15-fog-design.md`;
+Status: built (merged in 2.0.2, PR #28). Design: `docs/specs/2026-11-15-fog-design.md`;
 manual: `docs/fog/README.md`.
 
 ![mockup](fog-mockup.svg)

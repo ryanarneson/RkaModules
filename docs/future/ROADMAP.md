@@ -15,9 +15,10 @@ Effort is a rough guess, not an estimate: **S** is a simple, well-known
 process and a plain panel; **M** needs real DSP work or tuning by ear;
 **L** needs both, or a window drawn by the module.
 
-Before any of this, the existing three come first: Sway and Fathom move
-to the Instrument look, and Shoal's features are finished
-(`docs/specs/2026-11-15-instrument-look-design.md`).
+The existing three are already in the Instrument look
+(`docs/specs/2026-11-15-instrument-look-design.md`): Sway, Fathom and
+Shoal moved to it in PR #7, after Shoal's friendly mode landed in PR #6
+(both 2026-11-15). Sluice and Fog were built in it from the start.
 
 ## 1. A whole patch from RKA alone
 
