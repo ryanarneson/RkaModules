@@ -1,6 +1,6 @@
 # Sluice: four VCAs
 
-Status: idea, 2026-11-15. Not designed. 10 HP in the sketch. One of nine
+Status: built, 2026-11-15. Design: `../specs/2026-11-15-sluice-design.md`; manual: `../sluice/README.md`. The text below is the original idea. 10 HP. One of nine
 added to fill gaps for dark, space and horror ambient.
 
 ![mockup](sluice-mockup.svg)

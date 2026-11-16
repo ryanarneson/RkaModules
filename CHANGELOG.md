@@ -34,6 +34,16 @@
     (1 V/oct).
   - Stereo out through a soft clipper, plus a separate SUB out.
   - Drawn as an echo sounder.
+- New module: **Sluice**, a 10 HP quad VCA:
+  - Four rows, each with a Level dial (default closed) and a CV input;
+    CV adds to Level, 10 V across the travel.
+  - One Lin/Exp switch for all rows (Exp is a 60 dB decibel taper).
+  - DC-coupled, so it works on audio and on CV.
+  - Unpatched inputs take the row above (the rope); unpatched outputs mix
+    into the row below. Copies add up: 4x with all four rows open.
+  - Polyphonic to 16 voices; a mono row spreads into wider rows.
+  - A light per row showing how open it is.
+  - Drawn as a sluice gate.
 - New module: **Shoal**, 28 HP: the Ornament & Crime v1.3.6 firmware and
   all 13 apps in hardware mode; its settings save with the patch.
   - Drawn as ripples from two sources.
