@@ -108,6 +108,11 @@ public:
 	}
 
 	void process(const SluiceFrame& f, float sampleRate, SluiceResult& res) {
+		// A rate that is NaN, infinite or not positive would overflow the
+		// coefficient and poison the smoother for good: keep the last good
+		// one, or 48 kHz's before any has arrived.
+		if (!(sampleRate > 0.f && sampleRate <= FLT_MAX))
+			sampleRate = knownSampleRate > 0.f ? knownSampleRate : 48000.f;
 		if (sampleRate != knownSampleRate) {
 			knownSampleRate = sampleRate;
 			// One pole of 10 ms: 1 - e^(-1 / (0.010 fs)).
