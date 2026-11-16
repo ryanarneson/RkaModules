@@ -161,6 +161,25 @@ _SL_O = (6.4, 21.0)                              # Sluice's origin; the rope han
 _SL_ROWS = [33.0, 55.5, 78.0, 100.5]
 _SL_OUT_DY = 0.0                                 # an output sits this far below its row
 
+# Fog, a reverb. VISIBILITY is the hero, low on the panel; its centre is the
+# origin the limb (radius 52) and every ring are struck from. Five knobs
+# sit on the limb, 9.75 mm apart, each over a column: attenuverter, then
+# CV jack. The words round the hero's face sit at the turn of their decay
+# time (the spec's Visibility table): -135 + 270 v, with
+# T60 = 0.4 s * 200^v, so CLEAR is at 0.5 s, DENSE at 70 s.
+_FG_O = (25.4, 82.0)
+_FG_X = [round(25.4 + (i - 2) * 9.75, 2) for i in range(5)]
+_FG_COLS = ["SIZE", "DAMP", "BLOOM", "DRIFT", "MIX"]
+_FG_LIMB = 52
+_FG_ATT_Y, _FG_CV_Y = 44.3, 54.3
+_FG_WORDS = [("CLEAR", 0.042), ("HAZE", 0.304), ("MIST", 0.477), ("FOG", 0.642), ("THICK", 0.815),
+             ("DENSE", 0.975)]
+
+
+def _fog_on(x):
+    return round(2 * _FG_O[1] - column_on_arc(*_FG_O, _FG_LIMB, x), 2)   # above the hero
+
+
 PANELS = {
     "Sway": dict(
         dir="sway",
@@ -350,6 +369,39 @@ PANELS = {
         preview={f"PARAM_LEVEL_{r}": dict(turn=-135) for r in "ABCD"} | {"PARAM_CURVE": dict(frame=1)},
         screws=screws_at(10, "tr", "bl"),
     ),
+    # Fog, a reverb: the hero Visibility on a large face lettered with the
+    # words for how far you can see (see _FG_WORDS), under five knobs on a
+    # limb, each over its attenuverter and CV jack. IN L and IN R bottom
+    # left, the outputs on tiles bottom right.
+    "Fog": dict(
+        dir="fog",
+        hp=10,
+        title="FOG",
+        subtitle="REVERB",
+        components=[
+            ("param", "VISIBILITY", *_FG_O, "VISIBILITY"),
+        ]
+        + [("param", n, x, _fog_on(x), n) for n, x in zip(_FG_COLS, _FG_X)]
+        + [("param", n + "_ATT", x, _FG_ATT_Y, None) for n, x in zip(_FG_COLS, _FG_X)]
+        + [("input", n + "_CV", x, _FG_CV_Y, None) for n, x in zip(_FG_COLS, _FG_X)]
+        + [("input", "IN_L", _FG_X[0], 115.0, "IN L"),
+           ("input", "IN_R", _FG_X[1], 115.0, "IN R"),
+           ("output", "L", _FG_X[3], 115.0, "L"),
+           ("output", "R", _FG_X[4], 115.0, "R")],
+        sizes={"PARAM_VISIBILITY": "hero"},
+        circles=[(*_FG_O, r) for r in (31, 43, 64, 76)],
+        limbs=[dict(c=_FG_O, r=_FG_LIMB, a0=153, a1=207, step=2, major=5)],
+        # 50 divisions, long every 10, no numerals; the words take their place.
+        faces={"PARAM_VISIBILITY": dict(r=19.0, ticks=50, major=10,
+                                        words=[(round(-135 + 270 * v, 1), w) for w, v in _FG_WORDS])},
+        tiles=[dict(port="OUTPUT_L"), dict(port="OUTPUT_R")],
+        traces=[[f"INPUT_{n}_CV", f"PARAM_{n}_ATT", f"PARAM_{n}"] for n in _FG_COLS],
+        label_at={"PARAM_VISIBILITY": "face"},
+        notes=[(1.3, 60.5, "CV", 2.0, "dim", "start")],
+        # Every knob at noon, as it opens, but Visibility: at its first word.
+        preview={"PARAM_VISIBILITY": dict(turn=-135)},
+        screws=screws_at(10, "tr", "bl"),
+    ),
 }
 
 def layout_hpp(name, spec):
@@ -452,6 +504,10 @@ def check_screens(name, spec):
 #   faces             id -> dict(r=, ticks=, major=, sweep=270, numerals=None):
 #                     the enamel dial face under a control; without `major`
 #                     every tick is the same (an encoder: sweep=360)
+#                     `words=[(turn, text), ...]` sets words in bold ink on
+#                     the face, each centred on the radius `words_r`
+#                     (default r - 3.0) at `turn` degrees (0 up, clockwise)
+#                     and turned to follow the rim; `words_size` (1.9)
 #   tiles             [dict(port=id, name=, light=id, left=, right=, top=,
 #                     bottom=, name_at=(dx, dy), name_size=)]: an output's
 #                     ivory tile; only `port` is required
@@ -696,23 +752,38 @@ def cap_height(size, weight="normal"):
 # same width and reads better at rack zoom.
 # One piece of lettering: baseline (x, y), anchored "start", "middle" or
 # "end"; `what` describes it in a failed check.
-Text = namedtuple("Text", "x y s size colour weight anchor spacing what")
+# `rot` turns it clockwise, in degrees, about (x, y).
+Text = namedtuple("Text", "x y s size colour weight anchor spacing what rot", defaults=(0.0,))
+
+
+def text_corners(t):
+    """The four corners of a Text's capitals, turned by its `rot`."""
+    w = text_width(t.s, t.size, t.spacing, t.weight)
+    x0 = t.x - {"start": 0.0, "middle": w / 2, "end": w}[t.anchor]
+    box = ((x0, t.y - cap_height(t.size, t.weight)), (x0 + w, t.y - cap_height(t.size, t.weight)),
+           (x0 + w, t.y), (x0, t.y))
+    if not t.rot:
+        return box
+    a = math.radians(t.rot)
+    s, c = math.sin(a), math.cos(a)
+    return tuple((t.x + (x - t.x) * c - (y - t.y) * s, t.y + (x - t.x) * s + (y - t.y) * c) for x, y in box)
 
 
 def text_box(t):
-    """(x0, y0, x1, y1) of a Text's capitals."""
-    w = text_width(t.s, t.size, t.spacing, t.weight)
-    x0 = t.x - {"start": 0.0, "middle": w / 2, "end": w}[t.anchor]
-    return x0, t.y - cap_height(t.size, t.weight), x0 + w, t.y
+    """(x0, y0, x1, y1) of a Text's capitals: for one that is turned, the
+    box round its corners."""
+    pts = text_corners(t)
+    return (min(x for x, _ in pts), min(y for _, y in pts), max(x for x, _ in pts), max(y for _, y in pts))
 
 
 def text_svg(t, pal):
     # SVG letterspacing also follows the last letter; shift so that the
     # letters themselves sit where the anchor says.
     x = t.x + {"start": 0.0, "middle": t.spacing / 2, "end": t.spacing}[t.anchor]
+    turn = f' transform="rotate({num(t.rot)} {t.x:.2f} {t.y:.2f})"' if t.rot else ""
     return (f'<text x="{x:.2f}" y="{t.y:.2f}" font-family="{FONT_INSTRUMENT}" font-size="{num(t.size)}" '
             f'font-weight="{t.weight}" letter-spacing="{num(t.spacing)}" text-anchor="{t.anchor}" '
-            f'fill="{pal[t.colour]}">{escape(t.s)}</text>')
+            f'fill="{pal[t.colour]}"{turn}>{escape(t.s)}</text>')
 
 
 # --- The layout model ---
@@ -862,6 +933,19 @@ def instrument_texts(name, spec):
             out.append(Text(x, y + cap_height(size) / 2, str(s), size, "ink", "normal", "middle", 0.0,
                             f'numeral "{s}" on the face of {fid}'))
 
+    # Words round a face's rim: bold ink, centred on the radius at their
+    # turn and turned to follow the rim.
+    for fid, face in faces.items():
+        c = by[fid]
+        r = face.get("words_r", face["r"] - 3.0)
+        size = face.get("words_size", 1.9)
+        cap = cap_height(size, "bold")
+        for deg, s in face.get("words", []):
+            px, py = dial_point(c.x, c.y, r, deg)
+            a = math.radians(deg)
+            out.append(Text(px - math.sin(a) * cap / 2, py + math.cos(a) * cap / 2, s, size, "ink", "bold",
+                            "middle", 0.25, f'word "{s}" on the face of {fid}', deg))
+
     # Names of components.
     for c in comps:
         tile = tiles.get(c.id)
@@ -926,7 +1010,7 @@ INSTRUMENT_KEYS = {"dir", "hp", "title", "subtitle", "nameplate", "mark", "compo
                    "rulers", "label_at", "label_colour", "label_size", "label_gap", "label_dx", "label_dy", "notes",
                    "preview", "screws"}
 FACE_KEYS = {"r", "ticks", "major", "sweep", "numerals", "tick_r", "minor_len", "major_len", "numeral_r",
-             "numeral_size"}
+             "numeral_size", "words", "words_r", "words_size"}
 TILE_KEYS = {"port", "name", "light", "left", "right", "top", "bottom", "name_at", "name_size"}
 LIMB_KEYS = {"c", "r", "a0", "a1", "step", "major", "minor_len", "major_len"}
 RULER_KEYS = {"px", "sides", "numerals"}
@@ -1124,7 +1208,7 @@ def check_lettering(name, spec):
                 sys.exit(f"{name}: {t.what} overlaps {c.id}")
         on_ivory = False
         for fid, face, f in faces:
-            corners = ((box[0], box[1]), (box[2], box[1]), (box[0], box[3]), (box[2], box[3]))
+            corners = text_corners(t)
             if all(math.hypot(x - f.x, y - f.y) <= face["r"] - face_bezel(face) / 2 for x, y in corners):
                 on_ivory = True
             elif point_rect_distance(f.x, f.y, box) < face_edge(face) + clear:
