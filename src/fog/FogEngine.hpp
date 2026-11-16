@@ -20,11 +20,12 @@
 //   ramps over 5 ms, so a CV step or the dry kill switch does not click.
 // - Safety: every input and parameter is sanitised where it enters (NaN and
 //   infinity read 0). The limiter is on the wet only: the identity up to
-//   +/-8 V, then a tanh knee that ends at +/-10 V.
+//   +/-9 V, then a tanh knee that ends at +/-10 V.
 // - Level: the wet is trimmed by wetTrim() and given a low tilt (tilt()), so
 //   +/-5 V drones (saw, square, sine at 55-220 Hz, white noise) at noon peak
-//   at or under the limiter's knee and keep their RMS within 10 dB of the
-//   input's. Peaks of a tonal drone through a drifting tail build up (crest
+//   peak at 8 V or less (the knee is 9 V) and keep their RMS within 12 dB
+//   of the input's. A plain trim cannot do both (see test_engine's
+//   limiter_idle_at_5v); the tilt is the small extra. Peaks of a tonal drone through a drifting tail build up (crest
 //   about 3.5 against the static response's 2).
 // - Mode: the voicing follows FogFrame::mode. A change fades the wet out
 //   over 50 ms, clears and reconfigures the network, and fades it in.
@@ -79,17 +80,17 @@ struct FogResult {
 };
 
 struct FogEngine {
-	static float limitKnee() { return 8.f; }
+	static float limitKnee() { return 9.f; }
 	static float limitCeil() { return 10.f; }
 	static float maxRate() { return 768000.f; }
 	// Fixed trim on the wet (a fraction): keeps +/-5 V drones under the
 	// limiter's knee at noon.
-	static float wetTrim() { return 0.566f; }
+	static float wetTrim() { return 0.457f; }
 	// And a low tilt on the wet: the lows (undamped, so most coherent in the
 	// tail) are cut by tiltDepth below about tiltHz, 1 above. Tones at
 	// 55-220 Hz, the hottest case, lose a little more than broadband noise.
-	static float tiltHz() { return 2800.f; }
-	static float tiltDepth() { return 0.3f; }
+	static float tiltHz() { return 3750.f; }
+	static float tiltDepth() { return 0.25f; }
 
 	// Test only: bypass the limiter.
 	bool limiterEnabled = true;
