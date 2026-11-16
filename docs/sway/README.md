@@ -91,3 +91,5 @@ Sway is drawn as a pendulum swinging from a pivot at the top right.
 | MORPH | The shaped wave (MORPH, SKEW, SMOOTH, PW) |
 | RAND | A new random value each cycle: stepped, or gliding in as SMOOTH turns left |
 | EOC | A 10 V, 1 ms trigger at the end of each cycle (including a finished one-shot and a clock restart; not RESET) |
+
+An unplugged output reads 0 V (Sway skips working it out).

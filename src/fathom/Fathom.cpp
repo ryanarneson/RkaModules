@@ -139,12 +139,34 @@ struct Fathom : Module {
 	}
 
 	void process(const ProcessArgs& args) override {
-		static_assert(int(PARAMS_LEN) == int(rka::FathomFrame::PARAMS_LEN) && int(DRIVE_ATT_PARAM) == int(rka::FathomFrame::DRIVE_ATT)
-			&& int(SPREAD_PARAM) == int(rka::FathomFrame::SPREAD), "FathomFrame params follow ParamId");
-		static_assert(int(INPUTS_LEN) == int(rka::FathomFrame::INPUTS_LEN) && int(DRIVE_INPUT) == int(rka::FathomFrame::DRIVE_IN),
-			"FathomFrame inputs follow InputId");
-		static_assert(int(OUTPUTS_LEN) == int(rka::FathomFrame::OUTPUTS_LEN) && int(SUB_OUTPUT) == int(rka::FathomFrame::SUB_OUT),
-			"FathomFrame outputs follow OutputId");
+		// Every id as on main (saved patches depend on them) and as the frame
+		// numbers it.
+		static_assert(PITCH_PARAM == 0 && int(PITCH_PARAM) == int(rka::FathomFrame::PITCH)
+			&& SUB_PARAM == 1 && int(SUB_PARAM) == int(rka::FathomFrame::SUB)
+			&& DETUNE_PARAM == 2 && int(DETUNE_PARAM) == int(rka::FathomFrame::DETUNE)
+			&& SPREAD_PARAM == 3 && int(SPREAD_PARAM) == int(rka::FathomFrame::SPREAD)
+			&& DRIFT_PARAM == 4 && int(DRIFT_PARAM) == int(rka::FathomFrame::DRIFT)
+			&& CUTOFF_PARAM == 5 && int(CUTOFF_PARAM) == int(rka::FathomFrame::CUTOFF)
+			&& DETUNE_ATT_PARAM == 6 && int(DETUNE_ATT_PARAM) == int(rka::FathomFrame::DETUNE_ATT)
+			&& DRIFT_ATT_PARAM == 7 && int(DRIFT_ATT_PARAM) == int(rka::FathomFrame::DRIFT_ATT)
+			&& CUTOFF_ATT_PARAM == 8 && int(CUTOFF_ATT_PARAM) == int(rka::FathomFrame::CUTOFF_ATT)
+			&& RES_PARAM == 9 && int(RES_PARAM) == int(rka::FathomFrame::RES)
+			&& DRIVE_PARAM == 10 && int(DRIVE_PARAM) == int(rka::FathomFrame::DRIVE)
+			&& RES_ATT_PARAM == 11 && int(RES_ATT_PARAM) == int(rka::FathomFrame::RES_ATT)
+			&& DRIVE_ATT_PARAM == 12 && int(DRIVE_ATT_PARAM) == int(rka::FathomFrame::DRIVE_ATT)
+			&& PARAMS_LEN == 13 && int(PARAMS_LEN) == int(rka::FathomFrame::PARAMS_LEN), "ParamId ids");
+		static_assert(VOCT_INPUT == 0 && int(VOCT_INPUT) == int(rka::FathomFrame::VOCT)
+			&& DETUNE_INPUT == 1 && int(DETUNE_INPUT) == int(rka::FathomFrame::DETUNE_IN)
+			&& DRIFT_INPUT == 2 && int(DRIFT_INPUT) == int(rka::FathomFrame::DRIFT_IN)
+			&& CUTOFF_INPUT == 3 && int(CUTOFF_INPUT) == int(rka::FathomFrame::CUTOFF_IN)
+			&& RES_INPUT == 4 && int(RES_INPUT) == int(rka::FathomFrame::RES_IN)
+			&& DRIVE_INPUT == 5 && int(DRIVE_INPUT) == int(rka::FathomFrame::DRIVE_IN)
+			&& INPUTS_LEN == 6 && int(INPUTS_LEN) == int(rka::FathomFrame::INPUTS_LEN), "InputId ids");
+		static_assert(LEFT_OUTPUT == 0 && int(LEFT_OUTPUT) == int(rka::FathomFrame::LEFT)
+			&& RIGHT_OUTPUT == 1 && int(RIGHT_OUTPUT) == int(rka::FathomFrame::RIGHT)
+			&& SUB_OUTPUT == 2 && int(SUB_OUTPUT) == int(rka::FathomFrame::SUB_OUT)
+			&& OUTPUTS_LEN == 3 && int(OUTPUTS_LEN) == int(rka::FathomFrame::OUTPUTS_LEN), "OutputId ids");
+		static_assert(LIGHTS_LEN == 0, "LightId ids");
 		for (int i = 0; i < PARAMS_LEN; i++)
 			frame.params[i] = params[i].getValue();
 		for (int i = 0; i < INPUTS_LEN; i++)

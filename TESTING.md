@@ -17,6 +17,7 @@ last section lists where they fall short.
 | `make shoal-fuzz` | 50 more seeds of the random fault sweep | |
 | `make shoal-bench` | CPU share per app, including drawing and saving | |
 | `make bench` | CPU share of Sway's and Fathom's engines, 1, 4 and 16 instances; fails over budget | A C++ compiler |
+| `make libm-calls` | Fails if Sway's or Fathom's engines call libm per sample with the knobs still (in `make test`) | Linux (GNU ld) |
 | `tools/cross_build.sh` | Linux and Windows builds in Docker | Colima running |
 
 Before calling any change done: `make test`, `make`, `make smoke`, and for a
@@ -160,16 +161,35 @@ in three cases: idle (no cables, knobs at defaults), outputs (every output
 patched, no inputs) and busy (Sway: 16 channels, a moving CV on every
 input; Fathom: full detune, drift and spread, a moving CV on every input).
 It fails if an instance is over its budget at 1 or at 16 instances, or if
-16 instances cost more each than one. Budgets and measurements, % of one
-core at 48 kHz per instance, Apple M-series Mac (x86-64 gets three times
-the budget, see `src/bench/bench.cpp`):
+an instance at 16 costs more than 1.5 times what one alone costs plus
+0.01 % of a core (the slack is for timer noise on the near-free cases).
+Budgets and measurements, % of one core at 48 kHz per instance, Apple
+M-series Mac. Every other machine gets three times these budgets, and
+those are provisional: the only x86-64 runs so far were emulated (Rosetta
+under Docker), so they need measuring on native hardware
+(`src/bench/bench.cpp`).
 
 | | idle | outputs | busy |
 |---|---|---|---|
-| Sway budget | 0.5 | 0.6 | 3.0 |
+| Sway budget | 0.3 | 0.4 | 3.0 |
 | Sway measured (was) | 0.19 (0.50) | 0.27 (0.50) | 1.6 (1.6) |
 | Fathom budget | 0.1 | 1.2 | 1.2 |
 | Fathom measured (was) | 0.02 (0.58) | 0.55 (0.58) | 0.59 (0.59) |
+
+The idle and outputs budgets are set so the pre-issue-#8 engines fail
+them on the Mac. Sway busy and Fathom outputs and busy cost the same
+before and after there (macOS's libm is fast), so those budgets catch
+only a gross regression.
+
+Timing on macOS or Linux cannot see what made Windows slow, so
+`make libm-calls` (part of `make test`, Linux only: it needs GNU ld's
+`--wrap`, and is skipped with a message elsewhere) counts the C maths
+library calls the engines make, with every libm entry point they could
+reach wrapped. With the knobs still, after a warm-up, it requires zero
+per sample: Fathom idle and with outputs patched, Sway idle, with outputs
+patched and with a still mono FM cable. With a knob moving, calls are
+reported, not failed. The pre-issue-#8 engines made 25 (Fathom) and 44
+(Sway) per sample.
 
 Per-instance cost is the same at 16 instances as at one. Before this
 bench (issue #8), the engines called libm's exp2, pow, sin, cos and tanh

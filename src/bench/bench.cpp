@@ -35,17 +35,23 @@ const float FS = 48000.f;
 const double SAMPLE_NS = 1e9 / 48000.0;
 
 // Per-instance budgets, % of one core at 48 kHz, per case (idle, outputs,
-// busy), checked at 1 and at 16 instances. About twice what an Apple M-series
-// Mac measures (TESTING.md rule 10 has the numbers), so noise passes and a
-// real regression fails. x86-64 has three times the room: the only x86 runs
-// so far were emulated (Rosetta under Docker), which measured about three
-// times slower than the Mac.
-#if defined(__aarch64__) || defined(__arm64__)
+// busy), checked at 1 and at 16 instances. Set on an Apple M-series Mac
+// (TESTING.md rule 10 has the numbers) so the pre-issue-#8 engines fail
+// every case the work improved there (Sway idle and outputs, Fathom idle:
+// 0.50, 0.50 and 0.58 before) while the current ones pass with about 1.5x
+// room or more. Sway busy and Fathom outputs and busy measured the same
+// before and after on the Mac (its libm is fast), so their budgets only
+// catch a gross regression; test_libm_calls is what catches the libm calls
+// that made Windows slow. Other machines (x86-64, Linux arm64) get three
+// times the room, provisionally: the only x86 runs so far were emulated
+// (Rosetta under Docker, about three times slower than the Mac), so these
+// budgets still need measuring on native hardware.
+#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
 const double ARCH_ROOM = 1.0;
 #else
 const double ARCH_ROOM = 3.0;
 #endif
-const double SWAY_BUDGET[3] = {0.5, 0.6, 3.0};
+const double SWAY_BUDGET[3] = {0.3, 0.4, 3.0};
 const double FATHOM_BUDGET[3] = {0.1, 1.2, 1.2};
 
 // A slow, cheap CV in +/-5 V: a sine table read at a per-input rate, so the

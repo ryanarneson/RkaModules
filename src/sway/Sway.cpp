@@ -145,14 +145,44 @@ struct Sway : Module {
 	}
 
 	void process(const ProcessArgs& args) override {
-		static_assert(int(PARAMS_LEN) == int(rka::SwayFrame::PARAMS_LEN), "SwayFrame params follow ParamId");
-		static_assert(int(INPUTS_LEN) == int(rka::SwayFrame::INPUTS_LEN), "SwayFrame inputs follow InputId");
-		static_assert(int(OUTPUTS_LEN) == int(rka::SwayFrame::OUTPUTS_LEN), "SwayFrame outputs follow OutputId");
-		static_assert(int(ONESHOT_PARAM) == int(rka::SwayFrame::ONESHOT) && int(MORPH_ATT_PARAM) == int(rka::SwayFrame::MORPH_ATT)
-			&& int(CHANNELS_PARAM) == int(rka::SwayFrame::CHANNELS), "SwayFrame::Param ids");
-		static_assert(int(HOLD_INPUT) == int(rka::SwayFrame::HOLD) && int(CLOCK_INPUT) == int(rka::SwayFrame::CLOCK)
-			&& int(MORPH_INPUT) == int(rka::SwayFrame::MORPH_IN), "SwayFrame::Input ids");
-		static_assert(int(EOC_OUTPUT) == int(rka::SwayFrame::EOC) && int(MORPH_OUTPUT) == int(rka::SwayFrame::MORPH_OUT), "SwayFrame::Output ids");
+		// Every id as on main (saved patches depend on them) and as the frame
+		// numbers it.
+		static_assert(RATE_PARAM == 0 && int(RATE_PARAM) == int(rka::SwayFrame::RATE)
+			&& PW_PARAM == 1 && int(PW_PARAM) == int(rka::SwayFrame::PW)
+			&& PHASE_PARAM == 2 && int(PHASE_PARAM) == int(rka::SwayFrame::PHASE)
+			&& SKEW_PARAM == 3 && int(SKEW_PARAM) == int(rka::SwayFrame::SKEW)
+			&& SMOOTH_PARAM == 4 && int(SMOOTH_PARAM) == int(rka::SwayFrame::SMOOTH)
+			&& MORPH_PARAM == 5 && int(MORPH_PARAM) == int(rka::SwayFrame::MORPH)
+			&& SPREAD_PARAM == 6 && int(SPREAD_PARAM) == int(rka::SwayFrame::SPREAD)
+			&& CHANNELS_PARAM == 7 && int(CHANNELS_PARAM) == int(rka::SwayFrame::CHANNELS)
+			&& FM_ATT_PARAM == 8 && int(FM_ATT_PARAM) == int(rka::SwayFrame::FM_ATT)
+			&& PW_ATT_PARAM == 9 && int(PW_ATT_PARAM) == int(rka::SwayFrame::PW_ATT)
+			&& PHASE_ATT_PARAM == 10 && int(PHASE_ATT_PARAM) == int(rka::SwayFrame::PHASE_ATT)
+			&& SKEW_ATT_PARAM == 11 && int(SKEW_ATT_PARAM) == int(rka::SwayFrame::SKEW_ATT)
+			&& SMOOTH_ATT_PARAM == 12 && int(SMOOTH_ATT_PARAM) == int(rka::SwayFrame::SMOOTH_ATT)
+			&& MORPH_ATT_PARAM == 13 && int(MORPH_ATT_PARAM) == int(rka::SwayFrame::MORPH_ATT)
+			&& OFFSET_PARAM == 14 && int(OFFSET_PARAM) == int(rka::SwayFrame::OFFSET)
+			&& ONESHOT_PARAM == 15 && int(ONESHOT_PARAM) == int(rka::SwayFrame::ONESHOT)
+			&& PARAMS_LEN == 16 && int(PARAMS_LEN) == int(rka::SwayFrame::PARAMS_LEN), "ParamId ids");
+		static_assert(FM_INPUT == 0 && int(FM_INPUT) == int(rka::SwayFrame::FM)
+			&& PW_INPUT == 1 && int(PW_INPUT) == int(rka::SwayFrame::PW_IN)
+			&& PHASE_INPUT == 2 && int(PHASE_INPUT) == int(rka::SwayFrame::PHASE_IN)
+			&& SKEW_INPUT == 3 && int(SKEW_INPUT) == int(rka::SwayFrame::SKEW_IN)
+			&& SMOOTH_INPUT == 4 && int(SMOOTH_INPUT) == int(rka::SwayFrame::SMOOTH_IN)
+			&& MORPH_INPUT == 5 && int(MORPH_INPUT) == int(rka::SwayFrame::MORPH_IN)
+			&& CLOCK_INPUT == 6 && int(CLOCK_INPUT) == int(rka::SwayFrame::CLOCK)
+			&& RESET_INPUT == 7 && int(RESET_INPUT) == int(rka::SwayFrame::RESET)
+			&& HOLD_INPUT == 8 && int(HOLD_INPUT) == int(rka::SwayFrame::HOLD)
+			&& INPUTS_LEN == 9 && int(INPUTS_LEN) == int(rka::SwayFrame::INPUTS_LEN), "InputId ids");
+		static_assert(SIN_OUTPUT == 0 && int(SIN_OUTPUT) == int(rka::SwayFrame::SIN)
+			&& TRI_OUTPUT == 1 && int(TRI_OUTPUT) == int(rka::SwayFrame::TRI)
+			&& SAW_OUTPUT == 2 && int(SAW_OUTPUT) == int(rka::SwayFrame::SAW)
+			&& SQR_OUTPUT == 3 && int(SQR_OUTPUT) == int(rka::SwayFrame::SQR)
+			&& MORPH_OUTPUT == 4 && int(MORPH_OUTPUT) == int(rka::SwayFrame::MORPH_OUT)
+			&& RAND_OUTPUT == 5 && int(RAND_OUTPUT) == int(rka::SwayFrame::RAND)
+			&& EOC_OUTPUT == 6 && int(EOC_OUTPUT) == int(rka::SwayFrame::EOC)
+			&& OUTPUTS_LEN == 7 && int(OUTPUTS_LEN) == int(rka::SwayFrame::OUTPUTS_LEN), "OutputId ids");
+		static_assert(ONESHOT_LIGHT == 0 && RATE_LIGHT == 1 && LIGHTS_LEN == 2, "LightId ids");
 		for (int i = 0; i < PARAMS_LEN; i++)
 			frame.params[i] = params[i].getValue();
 		for (int i = 0; i < INPUTS_LEN; i++) {
