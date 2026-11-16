@@ -4,6 +4,7 @@
 #include "FastMath.hpp"
 #include "testing.hpp"
 #include <cmath>
+#include <limits>
 
 using namespace rka;
 
@@ -101,11 +102,24 @@ static void testTanh() {
 	std::printf("fastTanh: max absolute error %.3g\n", worst);
 }
 
+// NaN gives NaN; infinities clamp as FastMath.hpp documents.
+static void testNonFinite() {
+	const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+	CHECK(std::isnan(fastExp2(nan)) && std::isnan(fastExp2D(double(nan))) && std::isnan(fastSin2pi(nan)) &&
+	          std::isnan(fastTanh(nan)) && std::isnan(fastDbToGain(nan)),
+	      "NaN in must give NaN out");
+	CHECK(fastExp2(inf) == pow2i(126) && fastExp2(-inf) == pow2i(-126), "fastExp2(+/-inf) %g %g", fastExp2(inf), fastExp2(-inf));
+	CHECK(fastExp2D(double(inf)) == pow2iD(1000) && fastExp2D(-double(inf)) == pow2iD(-1000), "fastExp2D(+/-inf)");
+	CHECK(fastTanh(inf) == 1.f && fastTanh(-inf) == -1.f, "fastTanh(+/-inf) %g %g", fastTanh(inf), fastTanh(-inf));
+	CHECK(std::isnan(fastSin2pi(inf)) && std::isnan(fastSin2pi(-inf)), "fastSin2pi(+/-inf) %g", fastSin2pi(inf));
+}
+
 int main() {
 	testExp2();
 	testExp2D();
 	testDbToGain();
 	testSin();
 	testTanh();
+	testNonFinite();
 	return rkatest::finish("test_fast_math");
 }

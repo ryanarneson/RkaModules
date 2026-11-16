@@ -11,7 +11,23 @@
 // everywhere. Their error bounds are tested in src/fathom/test_fast_math.cpp.
 // std::floor compiles to one instruction with the plugin's architecture
 // flags (SSE4.1 roundss / ARMv8 frintm), so it stays.
+//
+// NaN and infinity: a NaN argument gives NaN, as libm does. Infinities are
+// clamped: fastExp2(+inf) is 2^126 and fastExp2(-inf) 2^-126 (libm: inf and
+// 0), fastExp2D likewise at 2^+/-1000, fastTanh(+/-inf) is +/-1 (as libm),
+// and fastSin2pi(+/-inf) is NaN (as libm). test_fast_math checks each.
+// The clamps are written as comparisons that NaN fails, so it passes
+// through them rather than landing on an end.
 namespace rka {
+
+// x clamped to [lo, hi]; NaN stays NaN.
+inline float clampKeepNan(float x, float lo, float hi) {
+	return x < lo ? lo : x > hi ? hi : x;
+}
+
+inline double clampKeepNan(double x, double lo, double hi) {
+	return x < lo ? lo : x > hi ? hi : x;
+}
 
 // 2^n for an integer n in [-126, 127], from the bits.
 inline float pow2i(int n) {
@@ -34,7 +50,9 @@ inline double pow2iD(int n) {
 // integer and a fraction in [-0.5, 0.5], and 2^fraction is the degree-7
 // Taylor series of e^(f ln 2) (truncation under 6e-9).
 inline float fastExp2(float x) {
-	x = std::max(-126.f, std::min(x, 126.f));
+	if (x != x)
+		return x;
+	x = clampKeepNan(x, -126.f, 126.f);
 	const float n = std::floor(x + 0.5f);
 	const float f = (x - n) * 0.693147180559945f;
 	const float p = 1.f + f * (1.f + f * (0.5f + f * (1.f / 6 + f * (1.f / 24 + f * (1.f / 120 + f * (1.f / 720 + f * (1.f / 5040)))))));
@@ -45,7 +63,9 @@ inline float fastExp2(float x) {
 // (tested over Sway's -24 ... 14): the same split, with the degree-13
 // series (truncation under 2e-16).
 inline double fastExp2D(double x) {
-	x = std::max(-1000.0, std::min(x, 1000.0));
+	if (x != x)
+		return x;
+	x = clampKeepNan(x, -1000.0, 1000.0);
 	const double n = std::floor(x + 0.5);
 	const double f = (x - n) * 0.69314718055994530942;
 	double p = 1.0 / 6227020800.0;  // 1/13!
@@ -86,7 +106,7 @@ inline float fastSin2pi(float p) {
 // e = e^(2x) from fastExp2, and x clamped to +/-9, where tanh is 1 within
 // 3e-8.
 inline float fastTanh(float x) {
-	x = std::max(-9.f, std::min(x, 9.f));
+	x = clampKeepNan(x, -9.f, 9.f);
 	const float e = fastExp2(x * 2.88539008177793f);  // 2 / ln 2
 	return (e - 1.f) / (e + 1.f);
 }
