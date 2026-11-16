@@ -1,9 +1,5 @@
 #include "plugin.hpp"
-#include "Rate.hpp"
-#include "RateLight.hpp"
-#include "Shaper.hpp"
-#include "Voice.hpp"
-#include "Waves.hpp"
+#include "SwayEngine.hpp"
 #include "SwayLayout.hpp"
 #include "widgets.hpp"
 
@@ -58,19 +54,11 @@ struct Sway : Module {
 
 	// rka::Range, as an int so the context menu can point at it.
 	int range = rka::RANGE_NORMAL;
-	// Channel 1 is following a clock: RATE shows a ratio.
-	bool clocked = false;
 
-	// Timing for all 16 channels, advanced every sample even when inactive.
-	rka::VoiceBank bank;
-	rka::VoiceInput voiceInputs[rka::VoiceBank::SIZE];
-	dsp::SchmittTrigger resetTriggers[PORT_MAX_CHANNELS];
-	dsp::SchmittTrigger clockTriggers[PORT_MAX_CHANNELS];
-	dsp::SchmittTrigger holdTriggers[PORT_MAX_CHANNELS];
-	dsp::PulseGenerator eocPulses[PORT_MAX_CHANNELS];
-	bool wasOneShot = false;
-	bool wasClockConnected = false;
-	rka::RateLight rateLight;
+	// The per-sample logic (rka::SwayEngine), fed from the ports each sample.
+	rka::SwayEngine engine;
+	rka::SwayFrame frame;
+	rka::SwayResult result;
 
 	// RATE's tooltip follows the range and the clock.
 	struct RateQuantity : ParamQuantity {
@@ -78,7 +66,7 @@ struct Sway : Module {
 			Sway* sway = static_cast<Sway*>(module);
 			if (!sway)
 				return ParamQuantity::getDisplayValueString();
-			if (sway->clocked) {
+			if (sway->engine.clocked) {
 				const float ratio = rka::clockRatio(rka::ratioIndex(getValue(), 0.f));
 				return ratio >= 1.f ? string::f("×%d", int(ratio)) : string::f("÷%d", int(std::round(1.f / ratio)));
 			}
@@ -141,11 +129,7 @@ struct Sway : Module {
 
 	void onReset() override {
 		range = rka::RANGE_NORMAL;
-		for (rka::Voice& v : bank.voices) {
-			v.phasor.reset();
-			v.clock.clear();
-		}
-		wasOneShot = false;
+		engine.reset();
 	}
 
 	json_t* dataToJson() override {
@@ -160,85 +144,34 @@ struct Sway : Module {
 			range = clamp(int(json_integer_value(r)), int(rka::RANGE_SLOW), int(rka::RANGE_AUDIO));
 	}
 
-	// Knob plus attenuated CV, where ±5 V at full attenuverter sweeps the
-	// knob's whole range.
-	float modulated(int param, int input, int att, int c) {
-		ParamQuantity* q = paramQuantities[param];
-		const float cv = inputs[input].getPolyVoltage(c) / 10.f * params[att].getValue();
-		return params[param].getValue() + cv * (q->getMaxValue() - q->getMinValue());
-	}
-
 	void process(const ProcessArgs& args) override {
-		int channels = int(params[CHANNELS_PARAM].getValue());
-		for (int i = 0; i < INPUTS_LEN; i++)
-			channels = std::max(channels, inputs[i].getChannels());
-
-		const rka::Range r = rka::Range(range);
-		const float rate = params[RATE_PARAM].getValue();
-		const float spread = params[SPREAD_PARAM].getValue();
-		const bool unipolar = params[OFFSET_PARAM].getValue() > 0.5f;
-		const bool oneShot = params[ONESHOT_PARAM].getValue() > 0.5f;
-		lights[ONESHOT_LIGHT].setBrightness(oneShot);
-
-		// Switching one-shot on parks every channel until the next RESET.
-		if (oneShot && !wasOneShot)
-			for (rka::Voice& v : bank.voices)
-				v.phasor.park();
-		wasOneShot = oneShot;
-
-		// Unplugging the clock returns to free-running at once.
-		const bool clockConnected = inputs[CLOCK_INPUT].isConnected();
-		if (!clockConnected && wasClockConnected)
-			for (rka::Voice& v : bank.voices)
-				v.clock.clear();
-		wasClockConnected = clockConnected;
-
-		// Timing inputs for every channel; getPolyVoltage() lets a mono
-		// cable drive them all.
-		for (int c = 0; c < rka::VoiceBank::SIZE; c++) {
-			rka::VoiceInput& in = voiceInputs[c];
-			in.reset = resetTriggers[c].process(inputs[RESET_INPUT].getPolyVoltage(c), 0.1f, 1.f);
-			holdTriggers[c].process(inputs[HOLD_INPUT].getPolyVoltage(c), 0.1f, 1.f);
-			in.hold = holdTriggers[c].isHigh();
-			in.edge = clockTriggers[c].process(inputs[CLOCK_INPUT].getPolyVoltage(c), 0.1f, 1.f);
-			const float fm = inputs[FM_INPUT].getPolyVoltage(c) * params[FM_ATT_PARAM].getValue();
-			in.ratio = rka::ratioIndex(rate, fm);
-			in.freeHz = rka::expToHz(rka::rateExponent(rate, fm, r), args.sampleRate);
-		}
-		bank.tick(voiceInputs, clockConnected, oneShot, args.sampleTime, args.sampleRate);
-		clocked = clockConnected && bank.voices[0].clock.locked();
-
-		// The rate light follows channel 1 (rka::rateLightHz).
-		const rka::Voice& first = bank.voices[0];
-		lights[RATE_LIGHT].setBrightnessSmooth(
-			rateLight.process(first.phasor.phase, rka::rateLightHz(first, voiceInputs[0].hold)), args.sampleTime);
-
-		for (int c = 0; c < channels; c++) {
-			const rka::Voice& voice = bank.voices[c];
-			const float phaseOffset = modulated(PHASE_PARAM, PHASE_INPUT, PHASE_ATT_PARAM, c);
-			const float p = rka::readPhase(voice.phasor.phase, phaseOffset + spread * c / channels);
-			const float pw = clamp(modulated(PW_PARAM, PW_INPUT, PW_ATT_PARAM, c), 0.01f, 0.99f);
-			const float skew = clamp(modulated(SKEW_PARAM, SKEW_INPUT, SKEW_ATT_PARAM, c), 0.f, 1.f);
-			const float smooth = clamp(modulated(SMOOTH_PARAM, SMOOTH_INPUT, SMOOTH_ATT_PARAM, c), -1.f, 1.f);
-			const float morph = clamp(modulated(MORPH_PARAM, MORPH_INPUT, MORPH_ATT_PARAM, c), 0.f, 1.f);
-			// SMOOTH left of centre also glides RAND: 0 stepped, -1 glides the
-			// whole cycle.
-			const float glide = std::max(0.f, -smooth);
-			if (voice.wrapped)
-				eocPulses[c].trigger(1e-3f);
-			// Band-limit edges only where they can alias.
-			const float dt = r == rka::RANGE_AUDIO ? float(voice.freq * args.sampleTime) : 0.f;
-
-			outputs[SIN_OUTPUT].setVoltage(rka::lfoVolts(rka::waveSin(p), unipolar), c);
-			outputs[TRI_OUTPUT].setVoltage(rka::lfoVolts(rka::waveTri(p), unipolar), c);
-			outputs[SAW_OUTPUT].setVoltage(rka::lfoVolts(rka::sawBlep(p, dt), unipolar), c);
-			outputs[SQR_OUTPUT].setVoltage(rka::lfoVolts(rka::sqrBlep(p, pw, dt), unipolar), c);
-			outputs[MORPH_OUTPUT].setVoltage(rka::lfoVolts(rka::shape(p, skew, morph, smooth, pw, dt), unipolar), c);
-			outputs[RAND_OUTPUT].setVoltage(rka::lfoVolts(voice.random.value(float(voice.phasor.phase), glide), unipolar), c);
-			outputs[EOC_OUTPUT].setVoltage(eocPulses[c].process(args.sampleTime) ? 10.f : 0.f, c);
+		static_assert(int(PARAMS_LEN) == int(rka::SwayFrame::PARAMS_LEN), "SwayFrame params follow ParamId");
+		static_assert(int(INPUTS_LEN) == int(rka::SwayFrame::INPUTS_LEN), "SwayFrame inputs follow InputId");
+		static_assert(int(OUTPUTS_LEN) == int(rka::SwayFrame::OUTPUTS_LEN), "SwayFrame outputs follow OutputId");
+		static_assert(int(ONESHOT_PARAM) == int(rka::SwayFrame::ONESHOT) && int(MORPH_ATT_PARAM) == int(rka::SwayFrame::MORPH_ATT)
+			&& int(CHANNELS_PARAM) == int(rka::SwayFrame::CHANNELS), "SwayFrame::Param ids");
+		static_assert(int(HOLD_INPUT) == int(rka::SwayFrame::HOLD) && int(CLOCK_INPUT) == int(rka::SwayFrame::CLOCK)
+			&& int(MORPH_INPUT) == int(rka::SwayFrame::MORPH_IN), "SwayFrame::Input ids");
+		static_assert(int(EOC_OUTPUT) == int(rka::SwayFrame::EOC) && int(MORPH_OUTPUT) == int(rka::SwayFrame::MORPH_OUT), "SwayFrame::Output ids");
+		for (int i = 0; i < PARAMS_LEN; i++)
+			frame.params[i] = params[i].getValue();
+		for (int i = 0; i < INPUTS_LEN; i++) {
+			frame.inputs[i].v = inputs[i].getVoltages();
+			frame.inputs[i].channels = inputs[i].getChannels();
 		}
 		for (int o = 0; o < OUTPUTS_LEN; o++)
-			outputs[o].setChannels(channels);
+			frame.outputConnected[o] = outputs[o].isConnected();
+		frame.range = range;
+
+		engine.process(frame, args.sampleTime, args.sampleRate, result);
+
+		lights[ONESHOT_LIGHT].setBrightness(result.oneShotLight);
+		lights[RATE_LIGHT].setBrightnessSmooth(result.rateLight, args.sampleTime);
+		for (int o = 0; o < OUTPUTS_LEN; o++) {
+			for (int c = 0; c < result.channels; c++)
+				outputs[o].setVoltage(result.out[o][c], c);
+			outputs[o].setChannels(result.channels);
+		}
 	}
 };
 

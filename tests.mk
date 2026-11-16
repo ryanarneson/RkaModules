@@ -72,3 +72,15 @@ build/test/shoal/test_%: src/shoal/test_%.cpp build/test/shoal/Firmware.o src/te
 build/test/%: src/%.cpp $(wildcard src/*.hpp $(MODULES:%=src/%/*.hpp))
 	@mkdir -p $(@D)
 	$(CXX) $(DSP_TEST_FLAGS) -Isrc -I$(<D) $< -o $@
+
+# CPU bench of Sway's and Fathom's per-sample engines (src/bench/bench.cpp),
+# built as the plugin is: compile.mk's optimisation flags and architecture
+# flag, C++11. Fails if an instance is over its module's budget.
+BENCH_ARCH = $(if $(filter x86_64 amd64,$(shell uname -m)),-march=nehalem,-march=armv8-a+fp+simd)
+BENCH_FLAGS = -std=c++11 -O3 -funsafe-math-optimizations -fno-omit-frame-pointer -g $(BENCH_ARCH)
+build/bench/bench: src/bench/bench.cpp $(wildcard src/sway/*.hpp src/fathom/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) $(BENCH_FLAGS) -Isrc $< -o $@
+.PHONY: bench
+bench: build/bench/bench
+	./build/bench/bench

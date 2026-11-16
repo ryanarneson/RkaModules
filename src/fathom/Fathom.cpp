@@ -1,5 +1,5 @@
 #include "plugin.hpp"
-#include "DroneVoice.hpp"
+#include "FathomEngine.hpp"
 #include "FathomLayout.hpp"
 #include "widgets.hpp"
 
@@ -41,11 +41,9 @@ struct Fathom : Module {
 		LIGHTS_LEN
 	};
 
-	// PITCH 0 and V/OCT 0 V is C2.
-	static constexpr float C2_HZ = 65.4064f;
-
-	rka::DroneVoice voice;
-	rka::OutputStage stage;
+	// The per-sample logic (rka::FathomEngine), fed from the ports each sample.
+	rka::FathomEngine engine;
+	rka::FathomFrame frame;
 	// Menu: 0 = one octave below, 1 = two.
 	int subOctave = 0;
 	// Menu: PITCH snaps to semitones unless free.
@@ -97,7 +95,6 @@ struct Fathom : Module {
 		configOutput(RIGHT_OUTPUT, "Right");
 		configOutput(SUB_OUTPUT, "Sub (sine, before SUB and CUTOFF)");
 		setFreePitch(false);
-		voice.reset(C2_HZ);
 	}
 
 	// Snapping back on also rounds the knob, so the note the tooltip shows
@@ -114,8 +111,7 @@ struct Fathom : Module {
 		filterType = 0;
 		subThroughFilter = false;
 		setFreePitch(false);
-		voice.reset(C2_HZ);
-		stage.reset();
+		engine.reset();
 	}
 
 	json_t* dataToJson() override {
@@ -142,35 +138,27 @@ struct Fathom : Module {
 			subThroughFilter = json_boolean_value(b);
 	}
 
-	// Knob plus attenuated CV, where ±5 V at full attenuverter sweeps the
-	// knob's whole range (as Sway).
-	float modulated(int param, int input, int att) {
-		ParamQuantity* q = paramQuantities[param];
-		const float cv = inputs[input].getVoltage() / 10.f * params[att].getValue();
-		return params[param].getValue() + cv * (q->getMaxValue() - q->getMinValue());
-	}
-
 	void process(const ProcessArgs& args) override {
-		const float semis = params[PITCH_PARAM].getValue() + 12.f * inputs[VOCT_INPUT].getVoltage();
-		const float f0 = C2_HZ * std::exp2(semis / 12.f);
-		const float detune = clamp(modulated(DETUNE_PARAM, DETUNE_INPUT, DETUNE_ATT_PARAM), 0.f, 1.f);
-		const float drift = clamp(modulated(DRIFT_PARAM, DRIFT_INPUT, DRIFT_ATT_PARAM), 0.f, 1.f);
-		const float cutoffOct = clamp(params[CUTOFF_PARAM].getValue() + params[CUTOFF_ATT_PARAM].getValue() * inputs[CUTOFF_INPUT].getVoltage(), 0.f, 10.f);
-		const float cutoffHz = 20.f * std::exp2(cutoffOct);
-		rka::OutputStage::Params p;
-		p.cutoffHz = cutoffHz;
-		p.resonance = clamp(modulated(RES_PARAM, RES_INPUT, RES_ATT_PARAM), 0.f, 1.f);
-		p.drive = clamp(modulated(DRIVE_PARAM, DRIVE_INPUT, DRIVE_ATT_PARAM), 0.f, 1.f);
-		p.type = rka::LadderType(filterType);
-		p.subThroughFilter = subThroughFilter;
+		static_assert(int(PARAMS_LEN) == int(rka::FathomFrame::PARAMS_LEN) && int(DRIVE_ATT_PARAM) == int(rka::FathomFrame::DRIVE_ATT)
+			&& int(SPREAD_PARAM) == int(rka::FathomFrame::SPREAD), "FathomFrame params follow ParamId");
+		static_assert(int(INPUTS_LEN) == int(rka::FathomFrame::INPUTS_LEN) && int(DRIVE_INPUT) == int(rka::FathomFrame::DRIVE_IN),
+			"FathomFrame inputs follow InputId");
+		static_assert(int(OUTPUTS_LEN) == int(rka::FathomFrame::OUTPUTS_LEN) && int(SUB_OUTPUT) == int(rka::FathomFrame::SUB_OUT),
+			"FathomFrame outputs follow OutputId");
+		for (int i = 0; i < PARAMS_LEN; i++)
+			frame.params[i] = params[i].getValue();
+		for (int i = 0; i < INPUTS_LEN; i++)
+			frame.inputs[i] = inputs[i].getVoltage();
+		for (int o = 0; o < OUTPUTS_LEN; o++)
+			frame.outputConnected[o] = outputs[o].isConnected();
+		frame.subOctave = subOctave;
+		frame.filterType = filterType;
+		frame.subThroughFilter = subThroughFilter;
 
-		const rka::DroneVoice::Out o = voice.process(f0, detune, params[SPREAD_PARAM].getValue(), drift,
-		                                             params[SUB_PARAM].getValue(), subOctave + 1, args.sampleRate);
-		float l = o.left, r = o.right;
-		stage.process(p, o.subMix, args.sampleRate, l, r);
-		outputs[LEFT_OUTPUT].setVoltage(5.f * l);
-		outputs[RIGHT_OUTPUT].setVoltage(5.f * r);
-		outputs[SUB_OUTPUT].setVoltage(5.f * o.sub);
+		float out[OUTPUTS_LEN];
+		engine.process(frame, args.sampleRate, out);
+		for (int o = 0; o < OUTPUTS_LEN; o++)
+			outputs[o].setVoltage(out[o]);
 	}
 };
 
