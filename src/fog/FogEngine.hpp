@@ -22,8 +22,11 @@
 //   infinity read 0). The limiter is on the wet only: the identity up to
 //   +/-9 V, then a tanh knee that ends at +/-10 V. With the leveller before
 //   it, it catches only transients (the spikes a bright drone's edges make).
-// - Level: the wet is level-matched to the dry on average (full Mix is about as
-//   loud as dry for noise) by wetMakeup().
+// - Level: the wet's level follows the decay time, as a room's does: full Mix
+//   is about as loud as dry for noise at noon Visibility (MIST, T60 5.66 s),
+//   and 10 log10(T60 / 5.66 s) dB from there (-11.5 dB at Visibility 0, +5.8
+//   at 0.75), whatever the Size and mode, by wetMakeup(). At 0.75 and up the
+//   leveller holds loud material down.
 // - Leveller: a slow automatic gain on the wet, after the make-up and before
 //   the limiter, one gain for L and R. A peak follower of the louder side
 //   (5 ms attack, 300 ms release) feeds a slower follower (50 ms attack, 3 s
@@ -31,9 +34,10 @@
 //   Held tones build up in the network to 4-8 dB over noise, with peaks to
 //   20-50 V; the leveller turns them down instead of the limiter clipping
 //   them. Noise's peaks are lone samples, which barely move the 5 ms
-//   follower: +/-5 V noise at the matched level sits at the threshold (the
-//   points that read up to +0.5 dB come out at about 0 dB, the rest are
-//   untouched), and anything quiet passes at a gain of exactly 1. While the
+//   follower: +/-5 V noise at the matched level (noon Visibility) sits at
+//   the threshold, louder settings are held to about it (+/-5 V noise reads
+//   about 0 dB at Visibility 0.75 and 1, not the law's +5.8 and +11.5), and
+//   anything quiet passes at a gain of exactly 1. While the
 //   feed is absent (its own 5 ms / 50 ms peak follower under 10 mV), the
 //   slow follower does not release: the gain is held, so a tail decays as
 //   it would without the leveller instead of being lifted back up as fast
@@ -59,6 +63,11 @@
 //   wet before the leveller.
 // - The wet make-up follows its target (refreshed every 32 samples) through a
 //   30 ms one-pole, so a Visibility or Size change does not step the level.
+//   The target takes the network's smoothed Visibility (Network::visSm, the
+//   same 30 ms one-pole the gains use), so the make-up and the network's own
+//   wet level, sqrt(1 - g^2), move together: from the raw knob, the make-up
+//   (0.30 at Visibility 0, 8.0 at 1) ramped linearly while the network's level
+//   followed the smoothed Visibility, +10 dB in 5 ms on a 0 -> 1 jump.
 // - Only setSampleRate() allocates. process() allocates nothing and calls
 //   no libm.
 #include "Bloom.hpp"
@@ -113,10 +122,13 @@ struct FogEngine {
 	static float limitKnee() { return 9.f; }
 	static float limitCeil() { return 10.f; }
 	static float maxRate() { return 768000.f; }
-	// The wet's make-up gain (a fraction): level-matches the wet to the dry
-	// for noise at Mix 1 (the network settles a few dB under unity, more at
-	// high Visibility). A smooth function of Visibility and Size, scaled by
-	// the voicing's own factor; polynomial, so no libm.
+	// The wet's make-up gain (a fraction). The matched part levels the wet to
+	// the dry for noise at Mix 1 at every Visibility and Size (the network
+	// settles a few dB under unity, more at high Visibility); then the
+	// energy law scales it by sqrt(T60(v) / T60(0.5)) = 200^((v - 0.5) / 2),
+	// so the steady level goes as 10 log10 of the decay time and matches the
+	// dry at noon. A smooth function of Visibility and Size, scaled by the
+	// voicing's own factor; a polynomial and fastExp2, so no libm.
 	static float wetMakeup(float vis, float size, float voicingMakeup) {
 		// Measured (noise, +/-5 V, noon knobs): the gain that levels the wet at
 		// Mix 1 is 1.125 at Visibility 0 up to 2.13 at 1 (a quadratic), and
@@ -128,7 +140,8 @@ struct FogEngine {
 		const float w = 1.f - v;
 		const float s = size >= 0.f ? (size <= 1.f ? size : 1.f) : 0.f;
 		const float sizeTerm = 1.f + 0.27f * (0.5f - s) + 0.11f * w * w * w * (s > 0.5f ? 2.f * s - 1.f : 0.f);
-		return voicingMakeup * (1.125f + v * (0.755f + 0.246f * v)) * sizeTerm;
+		const float matched = voicingMakeup * (1.125f + v * (0.755f + 0.246f * v)) * sizeTerm;
+		return matched * fastExp2((v - 0.5f) * 3.82192809489f); // log2(200) / 2
 	}
 
 	// Below this (V) the feed and the wet count as silence: -114 dB re 5 V.
@@ -330,7 +343,7 @@ struct FogEngine {
 			// Size step (or audio-rate CV) does not step the level.
 			if (makeupSnap || ++makeupCount >= 32) {
 				makeupCount = 0;
-				makeupTarget = wetMakeup(vis, size, vo.wetMakeup);
+				makeupTarget = wetMakeup(net.visSm, size, vo.wetMakeup);
 				if (makeupSnap) {
 					makeup = makeupTarget;
 					makeupSnap = false;

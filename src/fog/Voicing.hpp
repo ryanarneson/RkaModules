@@ -31,9 +31,10 @@ struct Voicing {
 	int toneKind;       // the feed's tone stage
 	float toneHz, toneDb, toneQ;
 	float wetMakeup;    // scale on the engine's wet make-up (1 = HAAR), so full
-	                    // wet matches dry for noise in every mode (test_engine's
-	                    // wet_matched_level): FRET 1.02, SMOKE 0.955 (-0.4 dB),
-	                    // ICE 0.715 (-2.9 dB: its shelf adds level)
+	                    // wet follows the same level law in every mode, matched to
+	                    // dry at noon (test_engine's wet_level_law): FRET 1.02,
+	                    // SMOKE 0.955 (-0.4 dB), ICE 0.715 (-2.9 dB: its shelf adds
+	                    // level)
 };
 
 inline const Voicing& voicing(Mode m) {

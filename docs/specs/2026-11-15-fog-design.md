@@ -281,16 +281,32 @@ each knob moves its quantity the right way, by at least a stated amount.
 
 ### Wet level
 
-The user's ruling ("for now"): the wet level is evened out across
-Visibility, and full wet is level-matched to dry.
-- **Matched to dry:** at full Mix, noise at ±5 V gives an output about as
-  loud as the input on average, within ±1.5 dB across Visibility and Size,
-  with the other knobs at noon. Measured on a 30-point grid, the worst
-  corner is +0.5 dB (Visibility 0.25, Size 1); the four extreme corners are
-  within ±0.25 dB. Loudness does not dip as Mix goes up
-  (within ±2 dB across Mix). A make-up gain on the wet, a smooth function
-  of Visibility and Size, does this; it follows its target through a 30 ms
-  smoother, so moving Visibility or Size does not step the level. The earlier −6 dB trim is gone.
+The user's ruling (2026-11-16, "go with scaling", like ValhallaRoom): the
+wet level scales with the decay time, as a room's does, and full wet is
+level-matched to dry at noon. (Until 2.0.1 the level was evened out across
+Visibility: full wet matched dry at every Visibility and Size.)
+- **The energy law:** at full Mix, steady noise gives an output whose level
+  against the input is 10 log10(T60 / 5.66 s) dB: 0 dB at noon Visibility
+  (MIST, 5.66 s), −11.5 dB fully left (0.4 s), −5.8 dB at 0.25, +5.8 dB at
+  0.75 and +11.5 dB fully right (80 s), within ±1.5 dB in every mode
+  (measured with ±1 V noise, which the leveller leaves alone: worst 0.53 dB
+  off the law over every mode, Visibility 0, 0.25, 0.5, 0.75 and 1 at Size
+  noon, Size 0 and 1 at noon Visibility, and the four corners).
+- **Against the testbed:** ValhallaRoom LV-426 drops 4.8 dB from a 6.32 s
+  decay to 2.15 s; the law gives 4.7 dB, and Fog drops 4.2–4.6 dB between
+  those Visibility values (0.521 and 0.317), depending on the mode.
+- **Size is level-neutral:** Size 1 against Size 0 within 0.75 dB in HAAR
+  (within 0.9 dB in the other modes) at Visibility 0, noon and 1.
+- **Loud settings are levelled:** from Visibility 0.75 up the leveller
+  (below) holds loud material down: ±5 V noise comes out at about 0 dB
+  against the input at 0.75 and 1, not +5.8 and +11.5. That is expected.
+- Loudness does not dip as Mix goes up (within ±2 dB across Mix, at noon
+  Visibility). A make-up gain on the wet, a smooth function of Visibility
+  and Size (the matched level times the square root of T60 / 5.66 s), does
+  this; it follows its target through a 30 ms smoother, and it takes
+  Visibility through the same 30 ms smoother as the network's gains, so
+  moving Visibility or Size does not step the level. The earlier −6 dB trim
+  is gone.
 - **Loud drones are levelled:** a held tonal drone (a saw, a sine) builds
   up in the network to 4–8 dB over noise, with peaks to 20–50 V at Damp 0.
   The user's ruling: these are turned down, not clipped. A wet leveller, a
@@ -303,10 +319,13 @@ Visibility, and full wet is level-matched to dry.
   - Drones (±5 V saw, square and sine at 55–220 Hz, every mode, Visibility
     0.75 and 1, Size 0.5 and 1, Damp 0, Mix 1) put at most 0.2 % of samples
     over the limiter's 9 V knee, where without it up to 51 % were; at Mix
-    noon, at most 0.8 % of the output is over 9 V (without it, up to 40 %). At the levels
+    noon, at most 0.8 % of the output is over 9 V (without it, up to 40 %);
+    with the energy law the wet arrives hotter at 0.75 and 1, the onset
+    gets through for longer, and at Mix noon up to 1.25 % is over 9 V
+    (second by second the same as before from 2 s on). At the levels
     measured with noon Damp, a drone at full wet now comes out 0.4–2.9 dB
     under its input instead of 2–8 dB over it.
-  - Noise keeps the matched level: its peaks are lone samples, which barely
+  - Noise at noon keeps the matched level: its peaks are lone samples, which barely
     move the 5 ms follower, so ±5 V noise at the matched level sits at the
     threshold. The points that read up to +0.5 dB come out at about 0 dB;
     the rest are untouched (worst −0.7 dB, as before). Anything quiet (±1 V
@@ -408,9 +427,9 @@ each test shown to fail against a deliberate mutation:
   target, not in `make test`, because of its length.
 - **Even wet level.** A held ±5 V drone (pink noise or a saw) at each
   word of Visibility, in HAAR: the wet level stays within ±3 dB of the
-  level at noon. (Superseded by the matched-level test: noise at Mix 1
-  is within ±1.5 dB of the input at the listed Visibility and Size
-  points.) No output sample exceeds 10 V.
+  level at noon. (Superseded by the matched-level test, and that by the
+  energy-law test: noise at Mix 1 is within ±1.5 dB of 10 log10(T60 /
+  5.66 s) against the input at the listed Visibility and Size points.) No output sample exceeds 10 V.
 - **Drones are levelled.** In every mode, drones put at most 1 % of samples
   over the 9 V knee at Mix 1 and at Mix noon; the leveller's gain moves
   under 1 dB in any second on a steady drone once settled; it is exactly 1

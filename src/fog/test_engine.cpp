@@ -238,15 +238,18 @@ void unplugKeepsTail() {
 	Rig r;
 	r.f.params[FogFrame::MIX] = 1.f;
 	r.f.params[FogFrame::VISIBILITY] = 0.642f;
-	// Low-passed noise (one pole near 100 Hz), clipped at +/-1 V (the wet's own slope at
-	// 2.5 V already reaches 0.75 V per sample while plugged, with the level-matched wet): a smooth
-	// signal, so a step in the output could only come from the unplug.
+	// Low-passed noise (one pole near 100 Hz), clipped at +/-0.6 V (the wet's own slope at
+	// 2.5 V already reaches 0.75 V per sample while plugged; 0.6 V, not the 1 V of the
+	// level-matched wet: the wet at this Visibility is 2.6 dB over the dry by the T60 law, and
+	// at 0.75 V the plugged slope read 0.94-0.99 V against the 1 V bound): a smooth signal, so
+	// a step in the output could only come from the unplug.
+	const float clip = 0.6f;
 	float lp = 0.f;
 	double preStep = 0, preV = 0;
 	// Run 2 s, then until the input is clipped at its peak: the cut falls there.
-	for (int i = 0; i < (int) (2 * RATE) || (lp < 1.f && lp > -1.f); i++) {
+	for (int i = 0; i < (int) (2 * RATE) || (lp < clip && lp > -clip); i++) {
 		lp += 0.013f * (uniform() * 30.f - lp);
-		const FogResult o = r.step(lp > 1.f ? 1.f : lp < -1.f ? -1.f : lp);
+		const FogResult o = r.step(lp > clip ? clip : lp < -clip ? -clip : lp);
 		if (i > (int) RATE) {
 			const double d = std::fabs(o.outL - preV);
 			preStep = d > preStep ? d : preStep;
@@ -339,10 +342,11 @@ float drone(int shape, double hz, int i) {
 	}
 }
 
-// Output RMS (both channels) over the last two thirds of `seconds` of +/-5 V
-// noise through the engine at the given knobs (Damp, Bloom and Drift at noon
-// unless set), against the input's RMS, in dB.
-double noiseLevelDb(float vis, float size, float mix, double seconds = 30.0, int mode = 0) {
+// Output RMS (both channels) over the last two thirds of `seconds` of noise
+// (uniform, +/-amp V) through the engine at the given knobs (Damp, Bloom and
+// Drift at noon unless set), against the input's RMS, in dB. *minGain, if
+// given, gets the leveller's lowest gain over the measured part.
+double noiseLevelDb(float vis, float size, float mix, double seconds = 30.0, int mode = 0, float amp = 5.f, float* minGain = nullptr) {
 	Rig r;
 	r.f.mode = mode; // from HAAR, a 0.1 s fade: long before the measurement
 	r.f.params[FogFrame::MIX] = mix;
@@ -353,36 +357,63 @@ double noiseLevelDb(float vis, float size, float mix, double seconds = 30.0, int
 	r.f.params[FogFrame::DRIFT] = 0.5f;
 	std::vector<float> in, out;
 	const int N = (int) (seconds * RATE);
+	float g = 1.f;
 	for (int i = 0; i < N; i++) {
-		const float x = 5.f * uniform();
+		const float x = amp * uniform();
 		const FogResult o = r.step(x);
 		if (i >= N / 3) {
 			in.push_back(x);
 			out.push_back(o.outL);
 			out.push_back(o.outR);
+			g = r.eng.levelGain < g ? r.eng.levelGain : g;
 		}
 	}
+	if (minGain)
+		*minGain = g;
 	return 20.0 * std::log10(rms(out) / rms(in));
 }
 
-// Full wet is level-matched to dry, in every mode: for noise at Mix 1 the
-// output RMS is within 1.5 dB of the input's at Visibility 0 to 1 (Size noon)
-// and at Size 0 and 1 (Visibility noon), and at the four corners, the other
-// knobs at noon. The modes are equally loud: at Visibility 0, 0.5 and 1 (Size
-// noon) each is within 1 dB of HAAR.
-void wetMatchedLevel() {
+// The spec's decay law, T60 = 0.4 s x 200^v, and its inverse.
+double lawT60(double v) {
+	return 0.4 * std::pow(200.0, v);
+}
+double lawVis(double t60) {
+	return std::log(t60 / 0.4) / std::log(200.0);
+}
+
+// Full wet's level follows the decay time (the energy law), in every mode:
+// for noise at Mix 1 the output RMS against the input's is 10 log10(T60(v) /
+// T60(0.5)) dB within 1.5 dB at Visibility 0, 0.25, 0.5, 0.75 and 1 (Size
+// noon), at Size 0 and 1 (Visibility noon) and at the four corners, the other
+// knobs at noon: 0 dB at noon (matched to dry), -11.5 dB at 0, +11.5 at 1.
+// The noise is +/-1 V, so the leveller stays at exactly 1 and the make-up
+// alone is measured (checked: at +/-5 V the leveller holds 0.75 and 1 down,
+// as it may; that is reported). The modes are equally loud: at Visibility 0,
+// 0.5 and 1 (Size noon) each is within 1 dB of HAAR. And against the user's
+// testbed: ValhallaRoom LV-426 drops 4.8 dB from a 6.32 s decay to 2.15 s
+// (the law: 4.7); Fog's drop between those Visibility values is 4.7 +/- 1.5
+// dB in every mode.
+void wetLevelLaw() {
 	const char* names[4] = {"HAAR", "FRET", "SMOKE", "ICE"};
 	const float pts[][2] = {{0.f, .5f}, {.25f, .5f}, {.5f, .5f}, {.75f, .5f}, {1.f, .5f}, {.5f, 0.f}, {.5f, 1.f},
 	                        // the corners, where the Size term matters
 	                        {0.f, 0.f}, {0.f, 1.f}, {1.f, 0.f}, {1.f, 1.f}};
+	const float vHi = (float) lawVis(6.32), vLo = (float) lawVis(2.15);
+	const double lv426 = 10.0 * std::log10(2.15 / 6.32);
 	double dbs[4][11];
+	double worst = 0;
 	for (int m = 0; m < 4; m++) {
 		int k = 0;
 		for (const auto& p : pts) {
-			const double db = noiseLevelDb(p[0], p[1], 1.f, 30.0, m);
+			float g = 1.f;
+			const double db = noiseLevelDb(p[0], p[1], 1.f, 30.0, m, 1.f, &g);
+			const double want = 10.0 * std::log10(lawT60(p[0]) / lawT60(0.5));
 			dbs[m][k++] = db;
-			CHECK(std::fabs(db) <= 1.5, "%s Visibility %g Size %g: wet RMS %+.2f dB re input, want within 1.5", names[m], p[0], p[1], db);
-			std::printf("  wet_matched_level %-5s v %.2f size %.2f: %+.2f dB\n", names[m], p[0], p[1], db);
+			CHECK(g == 1.f, "%s Visibility %g Size %g, +/-1 V noise: the leveller acted (gain %.4f), the level is not the make-up's", names[m], p[0], p[1], g);
+			CHECK(std::fabs(db - want) <= 1.5, "%s Visibility %g Size %g: wet RMS %+.2f dB re input, want %+.2f +/- 1.5 (the T60 law)", names[m], p[0], p[1], db,
+			      want);
+			worst = std::fmax(worst, std::fabs(db - want));
+			std::printf("  wet_level_law %-5s v %.2f size %.2f: %+.2f dB (law %+.2f, %+.2f off)\n", names[m], p[0], p[1], db, want, db - want);
 		}
 		// Size does not tilt the level: Size 1 against Size 0 at Visibility
 		// 0.5, 0 and 1 within 0.75 dB in HAAR (a make-up with no Size term
@@ -393,22 +424,37 @@ void wetMatchedLevel() {
 			const double tilt = dbs[m][hi[i]] - dbs[m][lo[i]];
 			if (m == 0)
 				CHECK(std::fabs(tilt) <= 0.75, "Visibility %g: Size 1 is %+.2f dB against Size 0, want within 0.75", pts[lo[i]][0], tilt);
-			std::printf("  wet_matched_level %-5s v %.2f: Size 1 vs Size 0 %+.2f dB\n", names[m], pts[lo[i]][0], tilt);
+			std::printf("  wet_level_law %-5s v %.2f: Size 1 vs Size 0 %+.2f dB\n", names[m], pts[lo[i]][0], tilt);
 		}
+		// LV-426's drop.
+		const double drop = noiseLevelDb(vHi, .5f, 1.f, 30.0, m, 1.f) - noiseLevelDb(vLo, .5f, 1.f, 30.0, m, 1.f);
+		CHECK(std::fabs(drop + lv426) <= 1.5, "%s: %.2f dB from Visibility %.3f (6.32 s) to %.3f (2.15 s), want %.2f +/- 1.5 (LV-426: 4.8)", names[m], drop,
+		      vHi, vLo, -lv426);
+		std::printf("  wet_level_law %-5s: drops %.2f dB from 6.32 s (v %.3f) to 2.15 s (v %.3f); law %.2f, LV-426 4.8\n", names[m], drop, vHi, vLo, -lv426);
 	}
 	const int noon[3] = {0, 2, 4};
 	for (int m = 1; m < 4; m++)
 		for (int i : noon) {
 			const double d = dbs[m][i] - dbs[0][i];
 			CHECK(std::fabs(d) <= 1.0, "%s Visibility %g: %+.2f dB against HAAR, want within 1", names[m], pts[i][0], d);
-			std::printf("  wet_matched_level %-5s v %.2f: %+.2f dB against HAAR\n", names[m], pts[i][0], d);
+			std::printf("  wet_level_law %-5s v %.2f: %+.2f dB against HAAR\n", names[m], pts[i][0], d);
 		}
+	// At +/-5 V the leveller may hold the long settings down (reported).
+	for (float v : {.5f, .75f, 1.f}) {
+		float g = 1.f;
+		const double db = noiseLevelDb(v, .5f, 1.f, 30.0, 0, 5.f, &g);
+		std::printf("  wet_level_law HAAR  v %.2f, +/-5 V noise: %+.2f dB (law %+.2f), leveller down to %.2f dB\n", v, db,
+		            10.0 * std::log10(lawT60(v) / lawT60(0.5)), 20.0 * std::log10(g));
+	}
+	std::printf("  wet_level_law: worst %.2f dB off the law\n", worst);
 }
 
 // The make-up is smoothed: a step in Visibility or Size, with a steady tail
-// present, moves the applied make-up by at most 0.5 % of unity per sample
-// (the 30 ms one-pole at 48 kHz moves it by at most ~0.07 % of the step per
-// sample; an unsmoothed step is 100 % in one) and settles on the new target.
+// present, moves the applied make-up by at most 0.1 % of the step per sample
+// (the 30 ms one-pole at 48 kHz moves it by at most 0.069 %; an unsmoothed
+// step is 100 % in one) and settles on the new target. (The bound was 0.5 %
+// of unity while the make-up matched the wet at every Visibility; with the
+// T60 law the Visibility step is 0.30 -> 8.0, and 0.069 % of it is 0.0053.)
 void wetMakeupSmooth() {
 	for (int which = 0; which < 2; which++) {
 		Rig r;
@@ -431,7 +477,7 @@ void wetMakeupSmooth() {
 			prev = r.eng.makeup;
 		}
 		const float want = rka::FogEngine::wetMakeup(which ? 0.5f : 1.f, which ? 1.f : 0.5f, 1.f);
-		CHECK(worst <= 0.005, "%s step: make-up moved %g in one sample (the step is %g), want <= 0.005", which ? "Size" : "Visibility", worst, jump);
+		CHECK(worst <= 0.001 * jump, "%s step: make-up moved %g in one sample (the step is %g), want <= 0.1 %% of it", which ? "Size" : "Visibility", worst, jump);
 		CHECK(std::fabs(r.eng.makeup - want) < 1e-3, "%s step: make-up %g did not settle on %g", which ? "Size" : "Visibility", r.eng.makeup, want);
 		std::printf("  wet_makeup_smooth %s 0->1 step (%.3f): largest per-sample move %.5f\n", which ? "Size" : "Visibility", jump, worst);
 	}
@@ -498,66 +544,80 @@ void driftStepNoClick() {
 // A Visibility jump does not step the wet: a 1 V sine at 200 Hz (a period
 // of 240 samples, so a 5 ms RMS window holds whole periods and reads a
 // steady wet as a flat line), Mix 1, Drift 0, every mode; after 6 s at
-// Visibility 0 (the network holding its tail), Visibility 1 in one sample.
-// The wet's 5 ms RMS envelope moves by at most 3 dB from one window to the
-// next over the second after, and the largest sample step is at most twice
-// the steady one plus 0.05 V. Unsmoothed, the wet level (sqrt(1 - g^2) at
-// Visibility 0, 0.985, against 0.132 at 1) steps by -17 dB in one sample and
-// the make-up climbs back over 30 ms: 9-17 dB in one window. Smoothed (the
-// Visibility the network's gains use follows a 30 ms one-pole, and the wet
-// level ramps between its 32-sample updates), a 30 ms one-pole moves at
-// most 1 - e^(-1/6) = 15 % of its gap a window, -1.3 dB for the 0.134 ratio;
-// the bound leaves room for the make-up's own 30 ms climb and the tail
-// building under it.
+// Visibility 0 (the network holding its tail), Visibility 1 in one sample,
+// and back. The wet's 5 ms RMS envelope moves by at most 3 dB from one
+// window to the next over the second after, and no sample step is a click:
+// each step against its window's RMS is at most twice the largest such ratio
+// in the second before, plus 0.05 (against the RMS, since the level is meant
+// to move: the T60 law puts Visibility 1 23 dB over 0 once the tail has
+// built). Unsmoothed, the wet level (sqrt(1 - g^2): 0.985 at Visibility 0,
+// 0.132 at 1) stepped by 17 dB in one sample and the make-up took 30 ms to
+// follow: 9-17 dB in one window, steps of 1.2-1.3x the RMS (with the T60
+// law, 5-11 dB and 0.5-2.6x). Smoothed (the
+// network's gains and the make-up both take Visibility through the same 30 ms
+// one-pole), the first window moves 1 - e^(-1/6) = 15 % of the way in
+// Visibility, about 1.7 dB of the wet gain's 11 dB rise; the bound leaves
+// room for the make-up's own 30 ms smoothing and the tail building under it.
 void visibilityStepNoClick() {
 	double worstDb = 0;
-	for (int m = 0; m < 4; m++) {
-		Rig* r = new Rig;
-		r->f.mode = m;
-		r->eng.mode = (rka::fog::Mode) m;
-		r->eng.reset();
-		r->f.params[FogFrame::MIX] = 1.f;
-		r->f.params[FogFrame::VISIBILITY] = 0.f;
-		const int W = 240;
-		const long at = (long) (6 * RATE), N = at + (long) RATE;
-		std::vector<double> env;
-		double acc = 0, steadyStep = 0, step = 0;
-		float pl = 0.f, pr = 0.f;
-		for (long i = 0; i < N; i++) {
-			if (i == at)
-				r->f.params[FogFrame::VISIBILITY] = 1.f;
-			const FogResult o = r->step((float) std::sin(2.0 * PI * 200.0 * (double) i / RATE));
-			acc += 0.5 * ((double) o.outL * o.outL + (double) o.outR * o.outR);
-			if (i % W == W - 1) {
-				env.push_back(std::sqrt(acc / W));
-				acc = 0;
+	for (int m = 0; m < 4; m++)
+		for (int dir = 0; dir < 2; dir++) {
+			const float from = dir ? 1.f : 0.f, to = dir ? 0.f : 1.f;
+			Rig* r = new Rig;
+			r->f.mode = m;
+			r->eng.mode = (rka::fog::Mode) m;
+			r->eng.reset();
+			r->f.params[FogFrame::MIX] = 1.f;
+			r->f.params[FogFrame::VISIBILITY] = from;
+			const int W = 240;
+			const long at = (long) (6 * RATE), N = at + (long) RATE;
+			std::vector<double> env;
+			std::vector<float> L, R;
+			double acc = 0;
+			for (long i = 0; i < N; i++) {
+				if (i == at)
+					r->f.params[FogFrame::VISIBILITY] = to;
+				const FogResult o = r->step((float) std::sin(2.0 * PI * 200.0 * (double) i / RATE));
+				if (i >= at - (long) RATE) {
+					L.push_back(o.outL);
+					R.push_back(o.outR);
+				}
+				acc += 0.5 * ((double) o.outL * o.outL + (double) o.outR * o.outR);
+				if (i % W == W - 1) {
+					env.push_back(std::sqrt(acc / W));
+					acc = 0;
+				}
 			}
-			const double d = std::fmax(std::fabs(o.outL - pl), std::fabs(o.outR - pr));
-			if (i >= at - (long) RATE && i < at)
-				steadyStep = std::fmax(steadyStep, d);
-			else if (i >= at)
-				step = std::fmax(step, d);
-			pl = o.outL;
-			pr = o.outR;
+			delete r;
+			// Steps against the RMS of their window, before and after.
+			const size_t k0 = (size_t) (at / W), first = k0 - (size_t) (RATE / W);
+			double steady = 0, after = 0;
+			for (size_t j = 1; j < L.size(); j++) {
+				const double d = std::fmax(std::fabs(L[j] - L[j - 1]), std::fabs(R[j] - R[j - 1]));
+				const size_t k = first + j / W;
+				const double q = d / (env[k] + 1e-9);
+				if (k < k0)
+					steady = std::fmax(steady, q);
+				else
+					after = std::fmax(after, q);
+			}
+			double steadyDb = 0, db = 0;
+			for (size_t k = k0 - 200; k < k0 + 200; k++) {
+				const double d = std::fabs(20.0 * std::log10(env[k] / env[k - 1]));
+				if (k < k0)
+					steadyDb = std::fmax(steadyDb, d);
+				else
+					db = std::fmax(db, d);
+			}
+			CHECK(env[k0 - 1] > 0.01, "%s: no wet before the step (%g V RMS)", STEP_MODES[m], env[k0 - 1]);
+			CHECK(db <= 3.0, "%s Visibility %g -> %g: the wet's 5 ms envelope moves %.2f dB in one window (%.2f before), want <= 3", STEP_MODES[m], from, to, db,
+			      steadyDb);
+			CHECK(after <= 2.0 * steady + 0.05, "%s Visibility %g -> %g: largest step %.3f x the RMS after, %.3f before; want <= %.3f", STEP_MODES[m], from, to,
+			      after, steady, 2.0 * steady + 0.05);
+			worstDb = std::fmax(worstDb, db);
+			std::printf("  visibility_step_no_click %-5s %g -> %g: envelope %.2f dB a window at most (%.2f before), largest step %.3f x RMS (%.3f before)\n",
+			            STEP_MODES[m], from, to, db, steadyDb, after, steady);
 		}
-		delete r;
-		const size_t k0 = (size_t) (at / W);
-		double steadyDb = 0, db = 0;
-		for (size_t k = k0 - 200; k < k0 + 200; k++) {
-			const double d = std::fabs(20.0 * std::log10(env[k] / env[k - 1]));
-			if (k < k0)
-				steadyDb = std::fmax(steadyDb, d);
-			else
-				db = std::fmax(db, d);
-		}
-		CHECK(env[k0 - 1] > 0.05, "%s: no wet before the step (%g V RMS)", STEP_MODES[m], env[k0 - 1]);
-		CHECK(db <= 3.0, "%s Visibility 0 -> 1: the wet's 5 ms envelope moves %.2f dB in one window (%.2f before), want <= 3", STEP_MODES[m], db, steadyDb);
-		CHECK(step <= 2.0 * steadyStep + 0.05, "%s Visibility 0 -> 1: largest step %.4f V after, %.4f V before; want <= %.4f", STEP_MODES[m], step, steadyStep,
-		      2.0 * steadyStep + 0.05);
-		worstDb = std::fmax(worstDb, db);
-		std::printf("  visibility_step_no_click %-5s 0 -> 1: envelope %.2f dB a window at most (%.2f before), largest step %.4f V (%.4f before)\n",
-		            STEP_MODES[m], db, steadyDb, step, steadyStep);
-	}
 	std::printf("  visibility_step_no_click: worst %.2f dB a window\n", worstDb);
 }
 
@@ -639,10 +699,14 @@ void droneRig(Rig& r, int m, float vis, float size, float mix) {
 // Mix 1, 10 s. After the first 0.5 s, at most 1 % of samples are over the
 // limiter's 9 V knee (without the leveller: up to 51 %), and the peak is at
 // most 10 V. The same drones at Mix noon (the output worked out from the
-// same wet by the equal-power law): at most 1 % of output samples over 9 V
+// same wet by the equal-power law): at most 1.5 % of output samples over 9 V
 // (without the leveller: up to 40 %). The share is of the whole run, and the
-// onset's overshoot is most of it, so a shorter run reads higher (7 s:
-// 1.09 %). The wet's spikes (the
+// onset's overshoot is most of it, so a shorter run reads higher. The bound
+// was 1 % while the wet was matched to the dry at every Visibility; with the
+// T60 law it arrives 5.8 dB hotter at 0.75 and 11.5 dB at 1, and the
+// leveller's attack lets more of the onset through (worst 1.23 %, HAAR
+// square 220 Hz v 1: 4.4 % of its first second, against 0 % before; from
+// 2 s on, second by second, the same as before). The wet's spikes (the
 // network's answer to a bright drone's edges, sharpest at Damp 0) still reach
 // the limiter now and then, and at Mix noon a spike on top of a +/-5 V
 // square's dry can reach 10.6 V: the largest peaks are reported.
@@ -684,7 +748,7 @@ void levellerTurnsDronesDown() {
 						const double share = 100.0 * over / (N - from), shareMix = 100.0 * overMix / (N - from);
 						CHECK(share <= 1.0 && peak <= FogEngine::limitCeil(), "%s %s %g Hz v %g Size %g: %.2f%% of samples over 9 V, peak %.2f V; want <= 1%%, <= 10 V",
 						      MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis, size, share, peak);
-						CHECK(shareMix <= 1.0, "%s %s %g Hz v %g Size %g, Mix 0.5: %.2f%% of output samples over 9 V (peak %.2f V), want <= 1%%",
+						CHECK(shareMix <= 1.5, "%s %s %g Hz v %g Size %g, Mix 0.5: %.2f%% of output samples over 9 V (peak %.2f V), want <= 1.5%%",
 						      MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis, size, shareMix, peakMix);
 						if (share > worstShare) {
 							worstShare = share;
@@ -841,8 +905,9 @@ void levellerIdleWhenQuiet() {
 
 // The tail decays as it would without the leveller: a +/-5 V saw at 110 Hz
 // held 15 s at Visibility 1, Size 0.5, the other knobs at noon, Mix 1, then
-// stopped. In every mode, the output in 1 s windows from 1 to 13 s after the
-// stop, against the same run with the leveller off, stays within 1.5 dB of
+// stopped, the limiter off in both runs. In every mode, the output in 1 s
+// windows from 1 to 13 s after the stop, against the same run with the
+// leveller off, stays within 1.5 dB of
 // that ratio in the first second after the stop (where the gain has stopped
 // moving: the leveller holds it while the input is absent). 1.5 dB is the spread the two runs' own beating gives (the
 // held gain lands on a slightly different point of the wander each time, up
@@ -880,6 +945,11 @@ void levellerHoldsInTail() {
 			r->f.params[FogFrame::DRIFT] = 0.5f;
 			r->f.params[FogFrame::MIX] = 1.f;
 			r->eng.levellerEnabled = pass == 0;
+			// Both passes without the limiter: at Visibility 1 the wet is 11.5 dB
+			// over the dry (the T60 law), so the unlevelled one sits in the
+			// limiter's knee for the first seconds of the tail and the
+			// comparison would read the limiter letting go, not the leveller.
+			r->eng.limiterEnabled = false;
 			for (int i = 0; i < hold + after; i++) {
 				const FogResult o = r->step(i < hold ? drone(0, 110.0, i) : 0.f);
 				if (i >= hold) {
@@ -1221,7 +1291,7 @@ int main() {
 	rateIgnored();
 	mixRampNoClick();
 	lowCut();
-	wetMatchedLevel();
+	wetLevelLaw();
 	wetMakeupSmooth();
 	driftStepNoClick();
 	visibilityStepNoClick();
