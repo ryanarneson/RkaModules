@@ -159,7 +159,7 @@ def _shoal_push(encoder, deg):
 
 _SL_O = (6.4, 21.0)                              # Sluice's origin; the rope hangs from it
 _SL_ROWS = [33.0, 55.5, 78.0, 100.5]
-_SL_OUT_DY = 1.6                                 # an output sits this far below its row
+_SL_OUT_DY = 0.0                                 # an output sits this far below its row
 
 PANELS = {
     "Sway": dict(
