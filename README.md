@@ -7,6 +7,7 @@ VCV Rack 2 modules.
 | [**Sway**](docs/sway/README.md) | 12 | Polyphonic LFO: classic and morphing waves, random, EOC, clock sync, phase spread, one-shot |
 | [**Fathom**](docs/fathom/README.md) | 10 | Deep bass drone voice: sub sine, 7-saw supersaw, drift, ladder filter |
 | [**Sluice**](docs/sluice/README.md) | 10 | Quad VCA: Level and CV per row, Lin/Exp, DC-coupled, polyphonic, normalled inputs and a mix downward |
+| [**Fog**](docs/fog/README.md) | 10 | Stereo reverb: Visibility sets the decay in seconds (0.4 to 80 s), four modes, Size, Damp, Bloom, Drift, CV on all five |
 | [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware, with a mouse-driven settings list |
 
 Each module's manual is in its own folder.
@@ -39,6 +40,8 @@ src/fathom/              the Fathom drone voice, same shape: Fathom.cpp,
                          FathomLayout.hpp
 src/sluice/              the Sluice quad VCA: Sluice.cpp, SluiceEngine.hpp
                          (Rack-free), test_*.cpp, bench.inc, SluiceLayout.hpp
+src/fog/                 the Fog reverb: Fog.cpp, FogEngine.hpp and the Rack-free
+                         parts (Voicing.hpp, ...), test_*.cpp, bench.inc, FogLayout.hpp
 src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   Shoal.cpp              module and widget, mapped onto shoal::Host
   FriendlyList.hpp       the friendly-mode list widget on the lower screen

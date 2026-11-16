@@ -398,8 +398,8 @@ PANELS = {
         traces=[[f"INPUT_{n}_CV", f"PARAM_{n}_ATT", f"PARAM_{n}"] for n in _FG_COLS],
         label_at={"PARAM_VISIBILITY": "face"},
         notes=[(1.3, 60.5, "CV", 2.0, "dim", "start")],
-        # Every knob at noon, as it opens, but Visibility: at its first word.
-        preview={"PARAM_VISIBILITY": dict(turn=-135)},
+        # Every knob at noon, as it opens: Visibility too.
+        preview={"PARAM_VISIBILITY": dict(turn=0)},
         screws=screws_at(10, "tr", "bl"),
     ),
 }

@@ -27,7 +27,7 @@ sound, space, loudness under control, stereo, and a safe output.
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
 | 1 | [Sluice](sluice.md) (built) | S | Four VCAs. The simplest DSP in the list, so the right first module to build new in the look; and nothing else can make a CV control loudness. |
-| 2 | [Fog](fog.md) | L | Reverb. The largest single gain for this music: Fathom into Fog is already a piece. |
+| 2 | [Fog](fog.md) (built) | L | Reverb. The largest single gain for this music: Fathom into Fog is already a piece. |
 | 3 | [Hadal](hadal.md) | S | Rumble and noise. Cheap, immediately in genre, and the noise source Rigging will want. |
 | 4 | [Ballast](ballast.md) | M | Stereo mixer with pan CV. From here a patch needs no other maker's mixer. |
 | 5 | [Plimsoll](plimsoll.md) | M | Limiter. Drones into long reverb build up; this makes the output safe. |
