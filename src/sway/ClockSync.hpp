@@ -15,9 +15,15 @@ static const float CLOCK_RATIOS[15] = {
 
 // RATE (plus FM volts, one step per volt) rounded to a ratio index.
 // Halves round away from zero, as lround; clamped first, so no libm call
-// and no out-of-range conversion (NaN lands on 7).
+// and no out-of-range conversion. A NaN FM means no FM (as in expToHz's
+// caller); a NaN sum (a NaN RATE) gives 0.
 inline int ratioIndex(float rate, float fm) {
-	const double x = std::fmax(std::fmin(double(rate + fm), 7.0), -7.0);
+	if (fm != fm)
+		fm = 0.f;
+	const double sum = double(rate + fm);
+	if (sum != sum)
+		return 0;
+	const double x = sum < -7.0 ? -7.0 : sum > 7.0 ? 7.0 : sum;
 	const int i = x >= 0.0 ? int(x + 0.5) : -int(-x + 0.5);
 	return std::max(-7, std::min(i, 7));
 }

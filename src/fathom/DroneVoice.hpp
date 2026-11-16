@@ -54,6 +54,7 @@ struct DroneVoice {
 		hpLeft.setCoefficients(f0, BUTTERWORTH_K, lastRate > 0.f ? lastRate : 48000.f);
 		hpRight = hpLeft;
 		block = 0;
+		hpKnown = false;
 	}
 
 	Out process(float f0Hz, float detune, float spread, float driftAmount, float subLevel, int subOctaves, float sampleRate) {
@@ -64,9 +65,13 @@ struct DroneVoice {
 			block = 0;
 		}
 		f0 += (clampF0(f0Hz) - f0) * slew;
-		if (block == 0) {
+		// Once a block, and only when the pitch or rate moved (tan is libm).
+		if (block == 0 && (!hpKnown || f0 != hpF0 || sampleRate != hpRate)) {
 			hpLeft.setCoefficients(f0, BUTTERWORTH_K, sampleRate);
 			hpRight.setCoefficients(f0, BUTTERWORTH_K, sampleRate);
+			hpKnown = true;
+			hpF0 = f0;
+			hpRate = sampleRate;
 		}
 		block = (block + 1) % BLOCK;
 
@@ -114,6 +119,10 @@ private:
 	float slew = 1.f;
 	float lastRate = 0.f;
 	float lastDetune = -1.f;
+	// The f0 and rate the high-passes' coefficients were worked out for.
+	bool hpKnown = false;
+	float hpF0 = 0.f;
+	float hpRate = 0.f;
 
 	float advanceSub(int subOctaves, float dt) {
 		subPhase += f0 / (subOctaves == 2 ? 4.f : 2.f) * dt;
@@ -183,6 +192,8 @@ struct OutputStage {
 		dcRight = DcBlock();
 		block = 0;
 		lastRate = 0.f;
+		octKnown = false;
+		logKnown = false;
 	}
 
 	// Whether the next process() reads p's cutoff, resonance and drive (once
@@ -200,23 +211,31 @@ struct OutputStage {
 			resCoef = 1.f - std::exp(-BLOCK / (sampleRate * RES_SLEW_SEC));
 			lastRate = sampleRate;
 			block = 0;
-			cutoffOct = std::log2(std::max(p.cutoffHz, 1.f));
+			cutoffOct = cutoffLog2(p.cutoffHz);
 			k = targetK(p);
 			driveOct = targetDriveOct(p);
 			ladderLeft.reset();
 			ladderRight.reset();
 		}
 		if (block == 0) {
-			cutoffOct += (std::log2(std::max(p.cutoffHz, 1.f)) - cutoffOct) * cutoffCoef;
+			cutoffOct += (cutoffLog2(p.cutoffHz) - cutoffOct) * cutoffCoef;
 			k += (targetK(p) - k) * resCoef;
 			// The drive is smoothed in octaves, like the cutoff, so a step
 			// ramps geometrically instead of jumping most of the way at once.
 			driveOct += (targetDriveOct(p) - driveOct) * resCoef;
-			const float fc = std::exp2(cutoffOct);
+			// The exp2s (libm) only when the smoothed values moved.
+			if (!octKnown || cutoffOct != fcOct) {
+				fc = std::exp2(cutoffOct);
+				fcOct = cutoffOct;
+			}
 			ladderLeft.setCoefficients(fc, k, p.type, sampleRate);
 			ladderRight.setCoefficients(fc, k, p.type, sampleRate);
-			driveGain = std::exp2(driveOct);
-			makeup = driveOct < 0.f ? std::exp2(-driveOct) : std::exp2(-MAKEUP_EXP * driveOct);
+			if (!octKnown || driveOct != gainOct) {
+				driveGain = std::exp2(driveOct);
+				makeup = driveOct < 0.f ? std::exp2(-driveOct) : std::exp2(-MAKEUP_EXP * driveOct);
+				gainOct = driveOct;
+			}
+			octKnown = true;
 		}
 		block = (block + 1) % BLOCK;
 
@@ -238,6 +257,23 @@ private:
 	float driveGain = 1.f;
 	float makeup = 1.f;
 	float lastRate = 0.f;
+	// Caches of the libm calls above, keyed on their arguments.
+	bool octKnown = false;
+	float fcOct = 0.f;
+	float fc = 1000.f;
+	float gainOct = 0.f;
+	bool logKnown = false;
+	float logHz = 0.f;
+	float logValue = 0.f;
+
+	float cutoffLog2(float hz) {
+		if (!logKnown || hz != logHz) {
+			logValue = std::log2(std::max(hz, 1.f));
+			logHz = hz;
+			logKnown = true;
+		}
+		return logValue;
+	}
 
 	static float targetK(const Params& p) {
 		const float res = std::max(0.f, std::min(p.resonance, 1.f));

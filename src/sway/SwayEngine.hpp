@@ -14,9 +14,10 @@
 // the tests fill one directly, so all three run the same code.
 namespace rka {
 
-// rack::clamp: NaN lands on the low end.
+// rack::clamp, fmax(fmin(x, hi), lo), which sends NaN to hi; written as
+// comparisons, since GCC makes fmin and fmax libm calls.
 inline float clampF(float x, float lo, float hi) {
-	return std::fmax(std::fmin(x, hi), lo);
+	return x < lo ? lo : x <= hi ? x : hi;
 }
 
 // One input port as Rack holds it: 16 voltages and a channel count (0 when
@@ -108,6 +109,11 @@ public:
 		return f.params[param] + cv * span(param);
 	}
 
+	// A NaN FM means no FM, in the ratio and the frequency alike.
+	static float noNan(float fm) {
+		return fm == fm ? fm : 0.f;
+	}
+
 	// Each channel's clock ratio and free-running frequency from RATE, the
 	// range and its FM, worked out again only when one of those changes,
 	// and once for all channels when FM is mono or unplugged.
@@ -122,7 +128,7 @@ public:
 		if (fmIn.channels >= 2) {
 			sharedFm = false;
 			for (int c = 0; c < VoiceBank::SIZE; c++) {
-				const float fm = fmIn.v[c] * att;
+				const float fm = noNan(fmIn.v[c] * att);
 				if (same && fm == knownFm[c])
 					continue;
 				knownFm[c] = fm;
@@ -131,7 +137,7 @@ public:
 			}
 			return;
 		}
-		const float fm = (fmIn.channels == 1 ? fmIn.v[0] : 0.f) * att;
+		const float fm = noNan((fmIn.channels == 1 ? fmIn.v[0] : 0.f) * att);
 		if (same && fm == knownFm[0] && sharedFm)
 			return;
 		const int ratio = ratioIndex(rate, fm);

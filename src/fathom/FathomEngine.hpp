@@ -47,6 +47,7 @@ struct FathomEngine {
 		voice.reset(C2_HZ);
 		stage.reset();
 		pitchKnown = false;
+		cutoffKnown = false;
 	}
 
 	// Knob plus attenuated CV, where +/-5 V at full attenuverter sweeps the
@@ -56,9 +57,14 @@ struct FathomEngine {
 		return f.params[param] + cv * 1.f;
 	}
 
-	// rack::clamp: NaN lands on 0.
+	// rack::clamp, fmax(fmin(x, hi), lo), which sends NaN to hi; written
+	// as comparisons, since GCC makes fmin and fmax libm calls.
+	static float clampF(float x, float lo, float hi) {
+		return x < lo ? lo : x <= hi ? x : hi;
+	}
+
 	static float clamp01(float x) {
-		return std::fmax(std::fmin(x, 1.f), 0.f);
+		return clampF(x, 0.f, 1.f);
 	}
 
 	// out: volts for LEFT, RIGHT and SUB_OUT.
@@ -89,8 +95,12 @@ struct FathomEngine {
 		const float drift = clamp01(modulated(f, FathomFrame::DRIFT, FathomFrame::DRIFT_IN, FathomFrame::DRIFT_ATT));
 		// The stage reads cutoff, resonance and drive once a block.
 		if (stage.readsControls(sampleRate)) {
-			const float cutoffOct = std::fmax(std::fmin(f.params[FathomFrame::CUTOFF] + f.params[FathomFrame::CUTOFF_ATT] * f.inputs[FathomFrame::CUTOFF_IN], 10.f), 0.f);
-			controls.cutoffHz = 20.f * std::exp2(cutoffOct);
+			const float cutoffOct = clampF(f.params[FathomFrame::CUTOFF] + f.params[FathomFrame::CUTOFF_ATT] * f.inputs[FathomFrame::CUTOFF_IN], 0.f, 10.f);
+			if (!cutoffKnown || cutoffOct != lastCutoffOct) {
+				controls.cutoffHz = 20.f * std::exp2(cutoffOct);
+				lastCutoffOct = cutoffOct;
+				cutoffKnown = true;
+			}
 			controls.resonance = clamp01(modulated(f, FathomFrame::RES, FathomFrame::RES_IN, FathomFrame::RES_ATT));
 			controls.drive = clamp01(modulated(f, FathomFrame::DRIVE, FathomFrame::DRIVE_IN, FathomFrame::DRIVE_ATT));
 		}
@@ -109,6 +119,8 @@ struct FathomEngine {
 private:
 	bool pitchKnown = false;
 	float lastSemis = 0.f;
+	bool cutoffKnown = false;
+	float lastCutoffOct = 0.f;
 	float f0 = C2_HZ;
 	OutputStage::Params controls;
 	// The output stage was skipped (no body outputs patched).

@@ -305,6 +305,49 @@ void testRatioIndex() {
 	CHECK(rka::ratioIndex(1e30f, 0.f) == 7 && rka::ratioIndex(-1e30f, 0.f) == -7, "ratioIndex clamps");
 }
 
+// A NaN FM means no FM: the same clock ratio and free-running frequency as
+// an FM of 0 V, mono or poly, clocked or not (controller's ruling, issue #8
+// review).
+void testNanFm() {
+	CHECK(rka::ratioIndex(1.f, NAN) == 1 && rka::ratioIndex(-3.f, NAN) == -3, "ratioIndex with NaN FM %d",
+	      rka::ratioIndex(1.f, NAN));
+	for (int channels : {1, 16}) {
+		Setup nanFm, zeroFm;
+		for (Setup* s : {&nanFm, &zeroFm}) {
+			s->params[F::RATE] = 2.f;
+			s->params[F::FM_ATT] = 1.f;
+			s->params[F::CHANNELS] = 16.f;
+			s->plug(F::FM, channels);
+		}
+		for (int c = 0; c < channels; c++)
+			nanFm.volts[F::FM][c] = c % 2 ? 0.f : NAN;
+		rka::SwayEngine a, b;
+		rka::SwayFrame fa, fb;
+		rka::SwayResult ra, rb;
+		for (Setup* s : {&nanFm, &zeroFm}) {
+			rka::SwayFrame& f = s == &nanFm ? fa : fb;
+			for (int k = 0; k < F::PARAMS_LEN; k++)
+				f.params[k] = s->params[k];
+			for (int k = 0; k < F::INPUTS_LEN; k++) {
+				f.inputs[k].v = s->volts[k];
+				f.inputs[k].channels = s->channels[k];
+			}
+			for (int o = 0; o < F::OUTPUTS_LEN; o++)
+				f.outputConnected[o] = true;
+		}
+		long differ = 0;
+		for (int i = 0; i < 4800; i++) {
+			a.process(fa, 1.f / 48000.f, 48000.f, ra);
+			b.process(fb, 1.f / 48000.f, 48000.f, rb);
+			for (int c = 0; c < 16; c++)
+				differ += a.voiceInputs[c].ratio != b.voiceInputs[c].ratio || a.voiceInputs[c].freeHz != b.voiceInputs[c].freeHz;
+		}
+		CHECK(differ == 0, "NaN FM (%d channels) differs from 0 V FM on %ld channel-samples", channels, differ);
+		CHECK(a.voiceInputs[0].ratio == 2 && a.voiceInputs[0].freeHz == 4.0, "NaN FM: ratio %d, %f Hz",
+		      a.voiceInputs[0].ratio, a.voiceInputs[0].freeHz);
+	}
+}
+
 } // namespace
 
 int main() {
@@ -315,5 +358,6 @@ int main() {
 	testSampleRate();
 	testInstancesIndependent();
 	testRatioIndex();
+	testNanFm();
 	return rkatest::finish("test_engine");
 }

@@ -9,7 +9,7 @@ MODULES ?= $(patsubst src/%/,%,$(sort $(dir $(wildcard src/*/test_*.cpp))))
 
 TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_*.cpp)))
 .PHONY: test
-test: shoal-globals engine-globals panels-test $(TEST_BINS)
+test: shoal-globals engine-globals libm-calls panels-test $(TEST_BINS)
 	@for t in $(TEST_BINS); do ./$$t || exit 1; done
 
 # The panel generator's geometry and layout checks, and that the committed
@@ -78,7 +78,7 @@ build/test/%: src/%.cpp $(wildcard src/*.hpp $(MODULES:%=src/%/*.hpp))
 # flag, C++11. Fails if an instance is over its module's budget.
 BENCH_ARCH = $(if $(filter x86_64 amd64,$(shell uname -m)),-march=nehalem,-march=armv8-a+fp+simd)
 BENCH_FLAGS = -std=c++11 -O3 -funsafe-math-optimizations -fno-omit-frame-pointer -g $(BENCH_ARCH)
-build/bench/bench: src/bench/bench.cpp $(wildcard src/sway/*.hpp src/fathom/*.hpp)
+build/bench/bench: src/bench/bench.cpp $(wildcard src/*.hpp src/sway/*.hpp src/fathom/*.hpp)
 	@mkdir -p $(@D)
 	$(CXX) $(BENCH_FLAGS) -Isrc $< -o $@
 .PHONY: bench
@@ -103,3 +103,22 @@ build/test/engine_globals.o: src/bench/engine_globals.cpp $(wildcard src/*.hpp s
 .PHONY: engine-globals
 engine-globals: build/test/engine_globals.o
 	tools/check_shoal_globals.sh $<
+
+# No C maths-library call per sample on the engines' still-knob paths
+# (src/bench/test_libm_calls.cpp): MinGW's libm is slow, and timing on macOS
+# or Linux cannot see a call creeping back. Needs GNU ld's --wrap, so it
+# runs on Linux (CI) and is skipped elsewhere.
+LIBM_WRAP = exp2f exp2 expf exp log2f log2 logf log powf pow sinf sin cosf cos sincosf sincos \
+	tanf tan tanhf tanh fmodf fmod lroundf lround floorf floor fminf fmin fmaxf fmax
+build/test/libm_calls: src/bench/test_libm_calls.cpp src/testing.hpp $(wildcard src/*.hpp src/sway/*.hpp src/fathom/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR) -Isrc $< -o $@ \
+		$(LIBM_WRAP:%=-Wl,--wrap=%) -lm
+.PHONY: libm-calls
+ifeq ($(shell uname -s),Linux)
+libm-calls: build/test/libm_calls
+	./build/test/libm_calls
+else
+libm-calls:
+	@echo "libm-calls: skipped (needs GNU ld's --wrap; runs on Linux and in CI)"
+endif
