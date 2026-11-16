@@ -41,7 +41,7 @@ const double SAMPLE_NS = 1e9 / 48000.0;
 // 0.50, 0.50 and 0.58 before) while the current ones pass with about 1.5x
 // room or more. Sway busy and Fathom outputs and busy measured the same
 // before and after on the Mac (its libm is fast), so their budgets only
-// catch a gross regression; test_libm_calls is what catches the libm calls
+// catch a gross regression; libm_calls is what catches the libm calls
 // that made Windows slow. Other machines (x86-64, Linux arm64) get three
 // times the room, provisionally: the only x86 runs so far were emulated
 // (Rosetta under Docker, about three times slower than the Mac), so these

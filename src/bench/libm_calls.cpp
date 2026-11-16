@@ -7,7 +7,8 @@
 // are allowed (some coefficients are worked out again on a change) and only
 // reported. MinGW's libm is slow, so a libm call creeping back into a
 // per-sample path is the regression issue #8 was about, and timing on macOS
-// or Linux cannot see it.
+// or Linux cannot see it. (Not named test_*.cpp: tests.mk's generic test
+// rule would build it without the wrap flags.)
 #include "fathom/FathomEngine.hpp"
 #include "sway/SwayEngine.hpp"
 #include "testing.hpp"
@@ -166,5 +167,5 @@ int main() {
 	sway("sway outputs", true, false, false);
 	sway("sway outputs, mono FM", true, true, false);
 	sway("sway outputs, RATE moving", true, false, true);
-	return rkatest::finish("test_libm_calls");
+	return rkatest::finish("libm_calls");
 }

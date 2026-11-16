@@ -105,12 +105,12 @@ engine-globals: build/test/engine_globals.o
 	tools/check_shoal_globals.sh $<
 
 # No C maths-library call per sample on the engines' still-knob paths
-# (src/bench/test_libm_calls.cpp): MinGW's libm is slow, and timing on macOS
+# (src/bench/libm_calls.cpp): MinGW's libm is slow, and timing on macOS
 # or Linux cannot see a call creeping back. Needs GNU ld's --wrap, so it
 # runs on Linux (CI) and is skipped elsewhere.
 LIBM_WRAP = exp2f exp2 expf exp log2f log2 logf log powf pow sinf sin cosf cos sincosf sincos \
 	tanf tan tanhf tanh fmodf fmod lroundf lround floorf floor fminf fmin fmaxf fmax
-build/test/libm_calls: src/bench/test_libm_calls.cpp src/testing.hpp $(wildcard src/*.hpp src/sway/*.hpp src/fathom/*.hpp)
+build/test/libm_calls: src/bench/libm_calls.cpp src/testing.hpp $(wildcard src/*.hpp src/sway/*.hpp src/fathom/*.hpp)
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR) -Isrc $< -o $@ \
 		$(LIBM_WRAP:%=-Wl,--wrap=%) -lm
