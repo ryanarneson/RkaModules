@@ -437,6 +437,130 @@ void wetMakeupSmooth() {
 	}
 }
 
+// ---- Control steps ----
+
+const char* STEP_MODES[4] = {"HAAR", "FRET", "SMOKE", "ICE"};
+
+// The largest sample-to-sample step of either output over `seconds` of a
+// 1 V sine at hz, continuing from sample *i.
+double largestStep(Rig& r, double hz, double seconds, long* i, float* prevL, float* prevR) {
+	double worst = 0;
+	for (long k = 0; k < (long) (seconds * RATE); k++, (*i)++) {
+		const FogResult o = r.step((float) std::sin(2.0 * PI * hz * (double) *i / RATE));
+		worst = std::fmax(worst, std::fmax(std::fabs(o.outL - *prevL), std::fabs(o.outR - *prevR)));
+		*prevL = o.outL;
+		*prevR = o.outR;
+	}
+	return worst;
+}
+
+// Drift steps do not click: a 1 V sine at 220 Hz, Mix 1, Visibility noon,
+// Drift noon, every mode; after 4 s, Drift 0.5 -> 0 in one sample, or the
+// Drift rate switched Slow -> Very slow or back. The largest output step in
+// the second after it is at most twice the largest in the second before,
+// plus 0.05 V. Unsmoothed, the reads jump by up to the whole swing (96
+// samples at noon, Slow; 288 Very slow) and the step is 0.5-4.5 V; with the
+// swing's 40 ms one-pole it is within the steady one's spread. The rate
+// itself needs no smoothing: the phase is continuous, so a new rate bends the
+// read's path but never moves it (the swing's slope, at most 0.6 % of a
+// sample a sample at noon, is all that changes).
+void driftStepNoClick() {
+	const char* what[3] = {"Drift 0.5 -> 0", "Slow -> Very slow", "Very slow -> Slow"};
+	double worstRatio = 0;
+	for (int m = 0; m < 4; m++)
+		for (int kind = 0; kind < 3; kind++) {
+			Rig* r = new Rig;
+			r->f.mode = m;
+			r->eng.mode = (rka::fog::Mode) m;
+			r->eng.reset();
+			r->f.params[FogFrame::MIX] = 1.f;
+			r->f.params[FogFrame::DRIFT] = 0.5f;
+			r->f.driftRate = kind == 2 ? 1 : 0;
+			long i = 0;
+			float pl = 0.f, pr = 0.f;
+			largestStep(*r, 220.0, 3.0, &i, &pl, &pr);
+			const double before = largestStep(*r, 220.0, 1.0, &i, &pl, &pr);
+			if (kind == 0)
+				r->f.params[FogFrame::DRIFT] = 0.f;
+			else
+				r->f.driftRate = kind == 1 ? 1 : 0;
+			const double after = largestStep(*r, 220.0, 1.0, &i, &pl, &pr);
+			delete r;
+			CHECK(before > 0.005, "%s %s: no signal before the step (%g V)", STEP_MODES[m], what[kind], before);
+			CHECK(after <= 2.0 * before + 0.05, "%s %s: largest step %.4f V after, %.4f V before; want <= %.4f", STEP_MODES[m], what[kind], after, before,
+			      2.0 * before + 0.05);
+			worstRatio = std::fmax(worstRatio, after / before);
+			std::printf("  drift_step_no_click %-5s %-17s: largest step %.4f V before, %.4f V after\n", STEP_MODES[m], what[kind], before, after);
+		}
+	std::printf("  drift_step_no_click: worst after/before %.2f\n", worstRatio);
+}
+
+// A Visibility jump does not step the wet: a 1 V sine at 200 Hz (a period
+// of 240 samples, so a 5 ms RMS window holds whole periods and reads a
+// steady wet as a flat line), Mix 1, Drift 0, every mode; after 6 s at
+// Visibility 0 (the network holding its tail), Visibility 1 in one sample.
+// The wet's 5 ms RMS envelope moves by at most 3 dB from one window to the
+// next over the second after, and the largest sample step is at most twice
+// the steady one plus 0.05 V. Unsmoothed, the wet level (sqrt(1 - g^2) at
+// Visibility 0, 0.985, against 0.132 at 1) steps by -17 dB in one sample and
+// the make-up climbs back over 30 ms: 9-17 dB in one window. Smoothed (the
+// Visibility the network's gains use follows a 30 ms one-pole, and the wet
+// level ramps between its 32-sample updates), a 30 ms one-pole moves at
+// most 1 - e^(-1/6) = 15 % of its gap a window, -1.3 dB for the 0.134 ratio;
+// the bound leaves room for the make-up's own 30 ms climb and the tail
+// building under it.
+void visibilityStepNoClick() {
+	double worstDb = 0;
+	for (int m = 0; m < 4; m++) {
+		Rig* r = new Rig;
+		r->f.mode = m;
+		r->eng.mode = (rka::fog::Mode) m;
+		r->eng.reset();
+		r->f.params[FogFrame::MIX] = 1.f;
+		r->f.params[FogFrame::VISIBILITY] = 0.f;
+		const int W = 240;
+		const long at = (long) (6 * RATE), N = at + (long) RATE;
+		std::vector<double> env;
+		double acc = 0, steadyStep = 0, step = 0;
+		float pl = 0.f, pr = 0.f;
+		for (long i = 0; i < N; i++) {
+			if (i == at)
+				r->f.params[FogFrame::VISIBILITY] = 1.f;
+			const FogResult o = r->step((float) std::sin(2.0 * PI * 200.0 * (double) i / RATE));
+			acc += 0.5 * ((double) o.outL * o.outL + (double) o.outR * o.outR);
+			if (i % W == W - 1) {
+				env.push_back(std::sqrt(acc / W));
+				acc = 0;
+			}
+			const double d = std::fmax(std::fabs(o.outL - pl), std::fabs(o.outR - pr));
+			if (i >= at - (long) RATE && i < at)
+				steadyStep = std::fmax(steadyStep, d);
+			else if (i >= at)
+				step = std::fmax(step, d);
+			pl = o.outL;
+			pr = o.outR;
+		}
+		delete r;
+		const size_t k0 = (size_t) (at / W);
+		double steadyDb = 0, db = 0;
+		for (size_t k = k0 - 200; k < k0 + 200; k++) {
+			const double d = std::fabs(20.0 * std::log10(env[k] / env[k - 1]));
+			if (k < k0)
+				steadyDb = std::fmax(steadyDb, d);
+			else
+				db = std::fmax(db, d);
+		}
+		CHECK(env[k0 - 1] > 0.05, "%s: no wet before the step (%g V RMS)", STEP_MODES[m], env[k0 - 1]);
+		CHECK(db <= 3.0, "%s Visibility 0 -> 1: the wet's 5 ms envelope moves %.2f dB in one window (%.2f before), want <= 3", STEP_MODES[m], db, steadyDb);
+		CHECK(step <= 2.0 * steadyStep + 0.05, "%s Visibility 0 -> 1: largest step %.4f V after, %.4f V before; want <= %.4f", STEP_MODES[m], step, steadyStep,
+		      2.0 * steadyStep + 0.05);
+		worstDb = std::fmax(worstDb, db);
+		std::printf("  visibility_step_no_click %-5s 0 -> 1: envelope %.2f dB a window at most (%.2f before), largest step %.4f V (%.4f before)\n",
+		            STEP_MODES[m], db, steadyDb, step, steadyStep);
+	}
+	std::printf("  visibility_step_no_click: worst %.2f dB a window\n", worstDb);
+}
+
 // The loudness does not dip across Mix: noise, noon knobs, Visibility 0.5.
 void levelAcrossMix() {
 	const float mixes[] = {0.f, .25f, .5f, .75f, 1.f};
@@ -1099,6 +1223,8 @@ int main() {
 	lowCut();
 	wetMatchedLevel();
 	wetMakeupSmooth();
+	driftStepNoClick();
+	visibilityStepNoClick();
 	levelAcrossMix();
 	outputCeiling();
 	levellerTurnsDronesDown();

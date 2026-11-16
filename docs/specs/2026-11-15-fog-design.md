@@ -146,6 +146,9 @@ The time for the tail to fall by 60 dB:
   right the tail dies away. The user's ruling for DENSE: very long, not
   infinite.
 - **Tooltip:** Rack shows the time in seconds.
+- **Changes:** the decay follows Visibility through a 30 ms smoother, so a
+  jump (a mapping module, a typed value, a preset load during play) does
+  not step the wet; the new T60 holds within about 100 ms.
 
 ### Size: the space
 
@@ -201,6 +204,13 @@ The depth of slow, decorrelated modulation of the lines' read positions:
   cents.
 
 The rate is a menu setting.
+
+Changes do not click: the depth follows the knob, its CV and the rate
+menu through a 40 ms smoother, so a stepped CV on Drift or a rate switch
+during play moves the reads smoothly (a step from noon to 0 used to jump
+them at once, a 2 V step on a 1 V sine). The rate itself changes at once:
+the modulation's phase is continuous, so only the speed of the swing
+changes, never its position.
 
 ### Mix: dry against wet
 

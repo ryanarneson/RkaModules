@@ -111,19 +111,30 @@
 //   slow) and phase. Depth Drift^2 x 8 ms (Slow) or 24 ms (Very slow, so
 //   the pitch still swings tens of cents), capped per line at 0.45 of its
 //   shortest length (Size 0) so a read never leaves it. Zero depth is
-//   exactly static.
+//   exactly static. The depth follows its target through a 40 ms one-pole
+//   (per sample while it moves, then not at all), so a Drift step or a rate
+//   switch does not jump the reads (unsmoothed, Drift noon to 0 moved them by
+//   up to 96 samples at once: a 2 V step on a 1 V sine). The rate is not
+//   smoothed: the phase is continuous, so a new rate bends the read's path
+//   but never moves it (test_engine's drift_step_no_click).
 // - Size: scale = 3^(2 Size - 1) (1/3x-3x of the base lengths), slewed by
 //   a one-pole of 30 ms time constant (about 100 ms to settle).
 // - Wet level: steady-state power through the loop grows as 1 / (1 - g^2)
 //   for the mean loop gain g, so the wet is scaled by sqrt(1 - g^2) and a
 //   constant calibrated by measurement (test_network's even_wet_level).
+// - Visibility reaches the gains through a 30 ms one-pole, a step each 32
+//   samples (the gains' own refresh): the T60 is there within about 100 ms.
+//   Applied at once, a Visibility jump stepped sqrt(1 - g^2) (0.985 at 0,
+//   0.132 at 1: -17 dB in one sample) while the engine's make-up took 30 ms
+//   to follow, and stepped every line's gain (test_engine's
+//   visibility_step_no_click).
 //
 // Only allocate() allocates. process() calls no libm (fastSin2pi, the
 // Hermite reads) and touches no global. A Drift change updates only the
-// modulation. The gains and damping are recomputed when Visibility, Damp or
-// the (slewing) length changes, at most once per 32 samples: a change
-// inside that window is applied when it ends, so a control moved every
-// sample (CV) costs one recompute per 32 samples.
+// modulation. The gains and damping are recomputed when the (smoothed)
+// Visibility, Damp or the (slewing) length changes, at most once per 32
+// samples: a change inside that window is applied when it ends, so a
+// control moved every sample (CV) costs one recompute per 32 samples.
 #include "DelayLine.hpp"
 #include "Diffuser.hpp"
 #include "Shifter.hpp"
@@ -176,7 +187,10 @@ struct Network {
 	float shelfA1 = 0.f;                                    // shelf pole, fixed
 	float phase[MAX_LINES] = {};
 	float phaseInc[MAX_LINES] = {};
-	float modDepth[MAX_LINES] = {}; // Drift swing, samples
+	float modDepth[MAX_LINES] = {};       // Drift swing applied, samples
+	float modDepthTarget[MAX_LINES] = {}; // and the one it follows (updateModulation)
+	bool depthMoving = false;             // modDepth is still on its way
+	float depthCoef = 1.f;                // the swing's 40 ms one-pole
 	float tapL[MAX_LINES] = {}, tapR[MAX_LINES] = {}, inSign[MAX_LINES] = {};
 	float tapLow[MAX_LINES] = {}; // the low band's one tap
 	// The low band (see the top): the crossover's two Butterworth sections
@@ -196,6 +210,8 @@ struct Network {
 
 	// Controls.
 	float vis = 0.5f, size = 0.5f, damp = 0.f, drift = 0.f;
+	float visSm = 0.5f;   // the Visibility the gains use: follows vis (30 ms)
+	float visCoef = 1.f;  // its one-pole, a step per GAIN_EVERY samples
 	int driftRate = 0;
 	float t60 = 1.f, ratio = 1.f, depth = 0.f;
 	float scaleTarget = 1.f, scaleOffset = 0.f;
@@ -267,6 +283,9 @@ struct Network {
 		wLow = prewarp(lowHz());
 		shelfA1 = (wShelf - 1.f) / (wShelf + 1.f);
 		slewCoeff = 1.f / (0.03f * rate + 1.f);
+		depthCoef = 1.f / (0.04f * rate + 1.f);
+		// Visibility's 30 ms one-pole, taken one step a GAIN_EVERY samples.
+		visCoef = (float) GAIN_EVERY / (0.03f * rate + (float) GAIN_EVERY);
 		// Taps: rows 5 and 10 of the Sylvester Hadamard matrix (orthogonal
 		// +/-1 patterns), and the input signs row 3, over n lines.
 		for (int i = 0; i < MAX_LINES; i++) {
@@ -324,6 +343,20 @@ struct Network {
 		gainsPending = false;
 		updateLengths();
 		updateGains();
+		snapSmoothing();
+	}
+
+	// The smoothed controls (Drift's swing, the wet level) jump to their
+	// targets: after a clear, a fresh network's first controls, or a wake.
+	void snapSmoothing() {
+		for (int i = 0; i < MAX_LINES; i++)
+			modDepth[i] = modDepthTarget[i];
+		depthMoving = false;
+		if (visSm != vis) {
+			visSm = vis;
+			setTargets();
+			updateGains();
+		}
 	}
 
 	// Restart ICE's shifters (in the loop and on the wet) as a fresh network
@@ -361,6 +394,7 @@ struct Network {
 		gainsPending = false;
 		updateLengths();
 		updateGains();
+		snapSmoothing();
 	}
 
 	// All in [0, 1] (NaN reads as 0); driftRate 0 = Slow, 1 = Very slow.
@@ -395,6 +429,8 @@ struct Network {
 		}
 		if (sizeMoved || decayMoved)
 			requestGains();
+		if (snap)
+			snapSmoothing();
 	}
 
 	void process(float inL, float inR, float& wetL, float& wetR) {
@@ -408,11 +444,29 @@ struct Network {
 			updateLengths();
 			gainsPending = true;
 		}
-		if (gainCount > 0 && --gainCount == 0 && gainsPending)
+		if (gainCount > 0 && --gainCount == 0 && (gainsPending || visSm != vis)) {
+			stepVisibility();
 			requestGains();
+		}
+
+		// Drift's swing follows its target through a 40 ms one-pole (see the
+		// top), and stops once there.
+		if (depthMoving) {
+			bool moving = false;
+			for (int i = 0; i < n; i++) {
+				const float d = modDepthTarget[i] - modDepth[i];
+				if (d > 1e-3f || d < -1e-3f) {
+					modDepth[i] += d * depthCoef;
+					moving = true;
+				}
+				else
+					modDepth[i] = modDepthTarget[i];
+			}
+			depthMoving = moving;
+		}
 
 		float r[MAX_LINES];
-		if (depth > 0.f) {
+		if (depth > 0.f || depthMoving) {
 			for (int i = 0; i < n; i++) {
 				r[i] = line[i].read(len[i] + modDepth[i] * fastSin2pi(phase[i]));
 				phase[i] += phaseInc[i];
@@ -578,7 +632,7 @@ struct Network {
 	}
 
 	void setTargets() {
-		t60 = fogT60(vis);
+		t60 = fogT60(visSm);
 		const float d = dampBias + (1.f - dampBias) * (1.f - brightness) * damp;
 		ratio = fastExp2(-(d + 2.f * d * d));
 		scaleTarget = fastExp2((2.f * size - 1.f) * 1.58496250072f); // log2(3)
@@ -598,8 +652,19 @@ struct Network {
 			const float hz = 0.1f * fastExp2(2.32192809489f * k); // log2(5)
 			phaseInc[i] = hz * slow / rate;
 			const float room = 0.45f * baseSamples[i] * minScale;
-			modDepth[i] = depth < room ? depth : room;
+			modDepthTarget[i] = depth < room ? depth : room;
+			depthMoving = depthMoving || modDepthTarget[i] != modDepth[i];
 		}
+	}
+
+	// One step of the Visibility the gains use towards vis (the one-pole);
+	// on it once within 1e-4.
+	void stepVisibility() {
+		if (visSm == vis)
+			return;
+		const float d = vis - visSm;
+		visSm = (d > 1e-4f || d < -1e-4f) ? visSm + d * visCoef : vis;
+		setTargets();
 	}
 
 	// Recompute the gains now, or when the 32-sample window ends.
