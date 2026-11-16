@@ -84,3 +84,13 @@ build/bench/bench: src/bench/bench.cpp $(wildcard src/sway/*.hpp src/fathom/*.hp
 .PHONY: bench
 bench: build/bench/bench
 	./build/bench/bench
+
+# Tests of the fast maths and of the optimised engines against their
+# pre-optimisation references, built with the plugin's floating-point and
+# architecture flags so they check what the plugin computes.
+PLUGIN_MATH_TEST_FLAGS = -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR)
+PLUGIN_MATH_TESTS = build/test/fathom/test_fast_math build/test/fathom/test_engine build/test/sway/test_engine
+$(filter $(TEST_BINS),$(PLUGIN_MATH_TESTS)): build/test/%: src/%.cpp $(wildcard src/*.hpp $(MODULES:%=src/%/*.hpp) $(MODULES:%=src/%/testdata/ref/*.hpp))
+	@mkdir -p $(@D)
+	$(CXX) $(PLUGIN_MATH_TEST_FLAGS) -Isrc -I$(<D) $< -o $@
+
