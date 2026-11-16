@@ -5,6 +5,7 @@
 #include "Random.hpp"
 #include "NoiseLayer.hpp"
 #include "Crackle.hpp"
+#include "Drift.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -338,6 +339,74 @@ void crackle_no_rhythm() {
 	CHECK(a < 0.1, "crackle's tick train autocorrelates at %.3f between 50 ms and 10 s (want < 0.1)", a);
 }
 
+
+// ---- Drift wander (Task 4) ----
+
+// A wander's values every 100 ms for `seconds`, run at 1 kHz (its timing is
+// in seconds, so the rate only sets resolution); and the largest step.
+std::vector<float> wanderTrace(uint32_t seed, float seconds, float& maxStepPerMs) {
+	rka::hadal::Wander w;
+	const float fs = 1000.f;
+	w.setRate(fs);
+	w.seed(seed);
+	std::vector<float> out;
+	float prev = w.next();
+	maxStepPerMs = 0;
+	for (int i = 1; i < (int) (seconds * fs); i++) {
+		const float v = w.next();
+		maxStepPerMs = std::max(maxStepPerMs, std::fabs(v - prev));
+		prev = v;
+		if (i % 100 == 0)
+			out.push_back(v);
+	}
+	return out;
+}
+
+void wander_bounded_and_smooth() {
+	float step;
+	std::vector<float> t = wanderTrace(5, 3000.f, step);
+	float lo = 1e9f, hi = -1e9f;
+	for (float v : t) {
+		lo = std::min(lo, v);
+		hi = std::max(hi, v);
+	}
+	std::printf("  wander: range %.2f to %.2f, largest step %.5f per ms\n", lo, hi, step);
+	CHECK(lo >= -1.f && hi <= 1.f, "wander leaves [-1, 1]: %.3f to %.3f", lo, hi);
+	CHECK(hi - lo > 1.0f, "wander barely moves: %.3f to %.3f over 3000 s", lo, hi);
+	CHECK(step < 0.01f, "wander steps %.5f per ms (want < 0.01)", step);
+}
+
+void wander_slow() {
+	float step;
+	std::vector<float> t = wanderTrace(6, 3000.f, step);
+	double m = 0;
+	for (float v : t)
+		m += v;
+	m /= t.size();
+	int crossings = 0;
+	for (size_t i = 1; i < t.size(); i++)
+		crossings += (t[i - 1] - m) * (t[i] - m) < 0;
+	const double interval = 3000.0 / (crossings > 0 ? crossings : 1);
+	std::printf("  wander: mean-crossing interval %.1f s\n", interval);
+	CHECK(interval >= 5.0 && interval <= 60.0, "wander's mean-crossing interval is %.1f s (want 5-60 s)", interval);
+}
+
+void wander_not_periodic() {
+	float step;
+	std::vector<float> t = wanderTrace(7, 3000.f, step);
+	// Samples are 100 ms apart: lags 60-300 s.
+	const double a = maxAutocorr(t, 600, 3000);
+	std::printf("  wander: autocorrelation up to %.3f at 60-300 s\n", a);
+	CHECK(a < 0.3, "wander repeats: autocorrelation %.3f between 60 and 300 s (want < 0.3)", a);
+}
+
+void wander_seeds_independent() {
+	float step;
+	std::vector<float> a = wanderTrace(11, 3000.f, step), b = wanderTrace(12, 3000.f, step);
+	const double c = corr(a, b);
+	CHECK(std::fabs(c) < 0.2, "two seeds' wanders correlate at %.3f (want < 0.2)", c);
+}
+
 } // namespace
 
 int main() {
@@ -358,5 +427,9 @@ int main() {
 	crackle_sizes_skewed();
 	crackle_spread();
 	crackle_no_rhythm();
+	wander_bounded_and_smooth();
+	wander_slow();
+	wander_not_periodic();
+	wander_seeds_independent();
 	return rkatest::finish("hadal test_layers");
 }
