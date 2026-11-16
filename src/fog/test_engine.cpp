@@ -342,8 +342,9 @@ float drone(int shape, double hz, int i) {
 // Output RMS (both channels) over the last two thirds of `seconds` of +/-5 V
 // noise through the engine at the given knobs (Damp, Bloom and Drift at noon
 // unless set), against the input's RMS, in dB.
-double noiseLevelDb(float vis, float size, float mix, double seconds = 30.0) {
+double noiseLevelDb(float vis, float size, float mix, double seconds = 30.0, int mode = 0) {
 	Rig r;
+	r.f.mode = mode; // from HAAR, a 0.1 s fade: long before the measurement
 	r.f.params[FogFrame::MIX] = mix;
 	r.f.params[FogFrame::VISIBILITY] = vis;
 	r.f.params[FogFrame::SIZE] = size;
@@ -364,29 +365,44 @@ double noiseLevelDb(float vis, float size, float mix, double seconds = 30.0) {
 	return 20.0 * std::log10(rms(out) / rms(in));
 }
 
-// Full wet is level-matched to dry: for noise at Mix 1 the output RMS is
-// within 1.5 dB of the input's at Visibility 0 to 1 (Size noon) and at Size 0
-// and 1 (Visibility noon), and at the four corners, the other knobs at noon.
+// Full wet is level-matched to dry, in every mode: for noise at Mix 1 the
+// output RMS is within 1.5 dB of the input's at Visibility 0 to 1 (Size noon)
+// and at Size 0 and 1 (Visibility noon), and at the four corners, the other
+// knobs at noon. The modes are equally loud: at Visibility 0, 0.5 and 1 (Size
+// noon) each is within 1 dB of HAAR.
 void wetMatchedLevel() {
+	const char* names[4] = {"HAAR", "FRET", "SMOKE", "ICE"};
 	const float pts[][2] = {{0.f, .5f}, {.25f, .5f}, {.5f, .5f}, {.75f, .5f}, {1.f, .5f}, {.5f, 0.f}, {.5f, 1.f},
 	                        // the corners, where the Size term matters
 	                        {0.f, 0.f}, {0.f, 1.f}, {1.f, 0.f}, {1.f, 1.f}};
-	double dbs[11];
-	int k = 0;
-	for (const auto& p : pts) {
-		const double db = noiseLevelDb(p[0], p[1], 1.f);
-		dbs[k++] = db;
-		CHECK(std::fabs(db) <= 1.5, "Visibility %g Size %g: wet RMS %+.2f dB re input, want within 1.5", p[0], p[1], db);
-		std::printf("  wet_matched_level v %.2f size %.2f: %+.2f dB\n", p[0], p[1], db);
+	double dbs[4][11];
+	for (int m = 0; m < 4; m++) {
+		int k = 0;
+		for (const auto& p : pts) {
+			const double db = noiseLevelDb(p[0], p[1], 1.f, 30.0, m);
+			dbs[m][k++] = db;
+			CHECK(std::fabs(db) <= 1.5, "%s Visibility %g Size %g: wet RMS %+.2f dB re input, want within 1.5", names[m], p[0], p[1], db);
+			std::printf("  wet_matched_level %-5s v %.2f size %.2f: %+.2f dB\n", names[m], p[0], p[1], db);
+		}
+		// Size does not tilt the level: Size 1 against Size 0 at Visibility
+		// 0.5, 0 and 1 within 0.75 dB in HAAR (a make-up with no Size term
+		// leaves ~2.4 dB). The other modes share HAAR's Size term and are
+		// held only to the 1.5 dB above; their tilt is reported.
+		const int lo[3] = {5, 7, 9}, hi[3] = {6, 8, 10};
+		for (int i = 0; i < 3; i++) {
+			const double tilt = dbs[m][hi[i]] - dbs[m][lo[i]];
+			if (m == 0)
+				CHECK(std::fabs(tilt) <= 0.75, "Visibility %g: Size 1 is %+.2f dB against Size 0, want within 0.75", pts[lo[i]][0], tilt);
+			std::printf("  wet_matched_level %-5s v %.2f: Size 1 vs Size 0 %+.2f dB\n", names[m], pts[lo[i]][0], tilt);
+		}
 	}
-	// Size does not tilt the level: Size 1 against Size 0 at Visibility 0.5,
-	// 0 and 1 within 0.75 dB (a make-up with no Size term leaves ~2.4 dB).
-	const int lo[3] = {5, 7, 9}, hi[3] = {6, 8, 10};
-	for (int i = 0; i < 3; i++) {
-		const double tilt = dbs[hi[i]] - dbs[lo[i]];
-		CHECK(std::fabs(tilt) <= 0.75, "Visibility %g: Size 1 is %+.2f dB against Size 0, want within 0.75", pts[lo[i]][0], tilt);
-		std::printf("  wet_matched_level v %.2f: Size 1 vs Size 0 %+.2f dB\n", pts[lo[i]][0], tilt);
-	}
+	const int noon[3] = {0, 2, 4};
+	for (int m = 1; m < 4; m++)
+		for (int i : noon) {
+			const double d = dbs[m][i] - dbs[0][i];
+			CHECK(std::fabs(d) <= 1.0, "%s Visibility %g: %+.2f dB against HAAR, want within 1", names[m], pts[i][0], d);
+			std::printf("  wet_matched_level %-5s v %.2f: %+.2f dB against HAAR\n", names[m], pts[i][0], d);
+		}
 }
 
 // The make-up is smoothed: a step in Visibility or Size, with a steady tail
@@ -576,11 +592,22 @@ void sleepNoClick() {
 	std::printf("  sleep_no_click: step at sleep %.3g V (limit %.3g)\n", d.maxStepAtSleep, lim);
 }
 
-// Waking is transparent: with Drift 0, a noise burst after sleeping gives the
-// same output as the same burst on a fresh engine (48 kHz, so the divider
-// has no phase: sample for sample).
-void wakeTransparent() {
+// Both engines start in mode m at once (no fade from HAAR).
+void startIn(Rig& r, int m) {
+	r.f.mode = m;
+	r.eng.mode = (rka::fog::Mode) m;
+	r.eng.reset();
+}
+
+const char* MODE_NAMES[4] = {"HAAR", "FRET", "SMOKE", "ICE"};
+
+// Waking is transparent, in every mode: with Drift 0, a noise burst after
+// sleeping gives the same output as the same burst on a fresh engine (48 kHz,
+// so the divider has no phase: sample for sample).
+void wakeTransparent(int m) {
 	Rig a, b;
+	startIn(a, m);
+	startIn(b, m);
 	for (Rig* r : {&a, &b}) {
 		r->f.params[FogFrame::MIX] = 1.f;
 		r->f.params[FogFrame::DRIFT] = 0.f;
@@ -606,9 +633,9 @@ void wakeTransparent() {
 		worst = d > worst ? d : worst;
 		peak = std::fabs(ob.outL) > peak ? std::fabs(ob.outL) : peak;
 	}
-	CHECK(peak > 0.1, "the reference engine's response is silent (peak %g)", peak);
-	CHECK(worst < 2e-5, "after sleep the output differs from a fresh engine by %g V, want < 2e-5", worst);
-	std::printf("  wake_transparent: sample-for-sample, worst difference %.3g V (response peak %.2f V)\n", worst, peak);
+	CHECK(peak > 0.1, "%s: the reference engine's response is silent (peak %g)", MODE_NAMES[m], peak);
+	CHECK(worst < 2e-5, "%s: after sleep the output differs from a fresh engine by %g V, want < 2e-5", MODE_NAMES[m], worst);
+	std::printf("  wake_transparent %-5s: sample-for-sample, worst difference %.3g V (response peak %.2f V)\n", MODE_NAMES[m], worst, peak);
 }
 
 
@@ -616,9 +643,12 @@ void wakeTransparent() {
 // with a noise burst: the same output as an engine that was awake at Size 1
 // and settled (48 kHz, sample for sample). Needs the hold to cover the rings
 // (nothing stale to read back at the larger Size) and the Size to snap on
-// wake (no swoop from Size 0).
-void wakeAtNewSize() {
+// wake (no swoop from Size 0). In every mode: SMOKE's allpasses and ICE's
+// shifter are ring memory too.
+void wakeAtNewSize(int m) {
 	Rig a, b;
+	startIn(a, m);
+	startIn(b, m);
 	for (Rig* r : {&a, &b}) {
 		r->f.params[FogFrame::MIX] = 1.f;
 		r->f.params[FogFrame::DRIFT] = 0.f;
@@ -651,9 +681,9 @@ void wakeAtNewSize() {
 		worst = d > worst ? d : worst;
 		peak = std::fabs(ob.outL) > peak ? std::fabs(ob.outL) : peak;
 	}
-	CHECK(peak > 0.1, "the reference response is silent (peak %g)", peak);
-	CHECK(worst < 2e-5, "wake at a new Size differs from a settled engine by %g V, want < 2e-5", worst);
-	std::printf("  wake_at_new_size: worst difference %.3g V (response peak %.2f V)\n", worst, peak);
+	CHECK(peak > 0.1, "%s: the reference response is silent (peak %g)", MODE_NAMES[m], peak);
+	CHECK(worst < 2e-5, "%s: wake at a new Size differs from a settled engine by %g V, want < 2e-5", MODE_NAMES[m], worst);
+	std::printf("  wake_at_new_size %-5s: worst difference %.3g V (response peak %.2f V)\n", MODE_NAMES[m], worst, peak);
 }
 
 } // namespace
@@ -677,7 +707,9 @@ int main() {
 	sleepAfterHold();
 	noSleepInTail();
 	sleepNoClick();
-	wakeTransparent();
-	wakeAtNewSize();
+	for (int m = 0; m < 4; m++) {
+		wakeTransparent(m);
+		wakeAtNewSize(m);
+	}
 	return rkatest::finish("test_engine");
 }

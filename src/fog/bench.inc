@@ -110,8 +110,10 @@ struct fog {
 	static void busy(Instance& i, long t, const Cv& cv) {
 		setBusy(i, t, cv, rka::fog::HAAR);
 	}
-	// ICE is the heaviest voicing once it has its shimmer (plan Task 7); it
-	// is a copy of HAAR until then.
+	// ICE: its shifter runs in the loop (one projection, a band-pass and two
+	// integer reads a sample); with two diffuser stages to HAAR's four, it
+	// costs a little less than HAAR. SMOKE (8 lines) and FRET (HAAR's shape)
+	// cost no more than HAAR.
 	static void busyIce(Instance& i, long t, const Cv& cv) {
 		setBusy(i, t, cv, rka::fog::ICE);
 	}
@@ -120,19 +122,20 @@ struct fog {
 	static BenchCase<Instance> benchCase(int k) {
 		// Budgets: about twice what an Apple M-series Mac measured, rounded
 		// up to the next 0.05 (idle 0.059 and outputs 0.059: the engine sleeps
-		// when nothing is patched; busy 0.72, busyIce 0.72 and quiet 0.57 are
-		// as before, after the delay lines' write positions were staggered;
-		// before that, 1.09, 1.09, 1.32, 1.32 and 1.09). Quiet keeps the old
-		// idle budget, 0.95, so the old, cache-aliased lines (1.03-1.11) fail
-		// it. Elsewhere: three times as much, provisional (not yet measured
-		// on x86-64).
+		// when nothing is patched; quiet 0.57-0.59, after the delay lines'
+		// write positions were staggered; before that, 1.09, 1.09 and 1.09).
+		// Quiet keeps the old idle budget, 0.95, so the old, cache-aliased
+		// lines (1.03-1.11) fail it. Busy 0.75 (0.81 at 16) and busyIce 0.71
+		// (0.74 at 16) with the four voicings tuned (plan Task 7; were 0.72
+		// each, and 1.32 before the stagger): 1.55 and 1.45. Elsewhere: three
+		// times as much, provisional (not yet measured on x86-64).
 		const BenchCase<Instance> cases[BENCH_CASES] = {
 			// name     inputs   Apple arm64  elsewhere
 			{"idle", idle, 0.15, 0.45},
 			{"outputs", outputs, 0.15, 0.45},
 			{"quiet", quiet, 0.95, 2.85},
-			{"busy", busy, 1.4, 4.2},
-			{"busyIce", busyIce, 1.4, 4.2},
+			{"busy", busy, 1.55, 4.65},
+			{"busyIce", busyIce, 1.45, 4.35},
 		};
 		return cases[k];
 	}

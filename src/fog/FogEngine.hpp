@@ -7,7 +7,7 @@
 //
 //   IN L, IN R (R normals to L; a poly cable sums to mono)
 //     |-- dry ------------------------------------------------+
-//     +-- low cut -> Bloom -> RateDivider -> Network -> limiter x mode fade
+//     +-- low cut -> tone -> Bloom -> RateDivider -> Network -> limiter x mode fade
 //                                                              |
 //   out = cos(Mix pi/2) dry + sin(Mix pi/2) wet  <-------------+
 //
@@ -25,7 +25,12 @@
 //   loud as dry for noise) by wetMakeup(). Loud resonant drones may reach the
 //   limiter's knee (9 V) and are soft-limited to 10 V.
 // - Mode: the voicing follows FogFrame::mode. A change fades the wet out
-//   over 50 ms, clears and reconfigures the network, and fades it in.
+//   over 50 ms, clears and reconfigures the network, the tone stage and
+//   Bloom, and fades it in over 50 ms; the new mode starts clean. A further
+//   change while fading waits for the fade, then the latest mode is taken.
+// - Tone: the voicing's EQ on the feed (FRET's low-mid peak, ICE's high
+//   shelf; HAAR and SMOKE have none), an RBJ biquad worked out on a mode or
+//   rate change, never per sample.
 // - Sleep: once the feed into the network and the wet out of it (after the
 //   make-up, so QUIET is -114 dB at the output) have both stayed under QUIET
 //   (1e-5 V) for the hold (the longer of 0.25 s and twice the longest ring in
@@ -150,6 +155,7 @@ struct FogEngine {
 		net.configure(fog::voicing(mode), divider.innerRate());
 		bloomL.clear();
 		bloomR.clear();
+		setTone();
 		for (int c = 0; c < 2; c++)
 			for (int i = 0; i < 2; i++)
 				cutZ[c][i] = 0.0;
@@ -198,6 +204,7 @@ struct FogEngine {
 				net.configure(fog::voicing(mode), divider.innerRate());
 				bloomL.clear();
 				bloomR.clear();
+				setTone();
 				fadeState = 2;
 				wake();
 			}
@@ -222,14 +229,17 @@ struct FogEngine {
 		const float drift = knob(f, FogFrame::DRIFT, 3, FogFrame::DRIFT_ATT);
 		const float mix = f.dryKill ? 1.f : knob(f, FogFrame::MIX, 4, FogFrame::MIX_ATT);
 		const fog::Voicing& vo = fog::voicing(mode);
-		const float dampK = damp + vo.dampBias * (1.f - damp);
 
-		// The feed: low cut, then Bloom.
+		// The feed: low cut, tone, then Bloom.
 		const int cut = (f.lowCut == 1 || f.lowCut == 2) ? f.lowCut : 0;
 		float feedL = dryL, feedR = dryR;
 		if (cut) {
 			feedL = highpass(0, cut, feedL);
 			feedR = highpass(1, cut, feedR);
+		}
+		if (toneOn) {
+			feedL = tone(0, feedL);
+			feedR = tone(1, feedR);
 		}
 		bloomL.set(bloom, vo.bloomBias);
 		bloomR.set(bloom, vo.bloomBias);
@@ -246,15 +256,17 @@ struct FogEngine {
 		const bool feedQuiet = feedL < Q && feedL > -Q && feedR < Q && feedR > -Q;
 		if (asleep_ && !feedQuiet) {
 			// The controls were not applied while asleep: apply them now, with
-			// Size snapped (no slew from the Size of the last awake sample).
+			// Size snapped (no slew from the Size of the last awake sample),
+			// and ICE's shifter restarted as a fresh network's.
 			wake();
-			net.setControls(vis, size, dampK, drift, f.driftRate ? 1 : 0);
+			net.setControls(vis, size, damp, drift, f.driftRate ? 1 : 0);
 			net.snapSize();
+			net.restartShifter();
 		}
 		if (!asleep_) {
 			const int rateSel = f.driftRate ? 1 : 0;
 			divider.process(feedL, feedR, wetL, wetR, [&](float l, float r, float& ol, float& orr) {
-				net.setControls(vis, size, dampK, drift, rateSel);
+				net.setControls(vis, size, damp, drift, rateSel);
 				net.process(l, r, ol, orr);
 			});
 			// The make-up target is refreshed at most once per 32 samples (as
@@ -330,6 +342,56 @@ struct FogEngine {
 		return (float) y;
 	}
 
+	// The voicing's tone stage: transposed direct form II, float, with its
+	// state flushed below 1e-20 (as the network's).
+	float tone(int ch, float x) {
+		const float y = toneB[0] * x + toneZ[ch][0];
+		float z0 = toneB[1] * x - toneA[0] * y + toneZ[ch][1];
+		float z1 = toneB[2] * x - toneA[1] * y;
+		toneZ[ch][0] = (z0 > 1e-20f || z0 < -1e-20f) ? z0 : 0.f;
+		toneZ[ch][1] = (z1 > 1e-20f || z1 < -1e-20f) ? z1 : 0.f;
+		return y;
+	}
+
+	// RBJ cookbook peaking or high-shelf coefficients for the current mode
+	// at the host rate, and a clear state. Not per sample (libm).
+	void setTone() {
+		const fog::Voicing& v = fog::voicing(mode);
+		for (int c = 0; c < 2; c++)
+			toneZ[c][0] = toneZ[c][1] = 0.f;
+		toneOn = (v.toneKind == fog::TONE_PEAK || v.toneKind == fog::TONE_HIGH_SHELF) && v.toneDb != 0.f && v.toneHz > 0.f &&
+		         v.toneQ > 0.f;
+		if (!toneOn)
+			return;
+		const double f0 = v.toneHz < 0.4 * hostRate ? v.toneHz : 0.4 * hostRate;
+		const double A = std::pow(10.0, v.toneDb / 40.0);
+		const double w = 2.0 * 3.14159265358979323846 * f0 / hostRate;
+		const double cw = std::cos(w), alpha = std::sin(w) / (2.0 * v.toneQ);
+		double b0, b1, b2, a0, a1, a2;
+		if (v.toneKind == fog::TONE_PEAK) {
+			b0 = 1.0 + alpha * A;
+			b1 = -2.0 * cw;
+			b2 = 1.0 - alpha * A;
+			a0 = 1.0 + alpha / A;
+			a1 = -2.0 * cw;
+			a2 = 1.0 - alpha / A;
+		}
+		else {
+			const double sq = 2.0 * std::sqrt(A) * alpha;
+			b0 = A * ((A + 1.0) + (A - 1.0) * cw + sq);
+			b1 = -2.0 * A * ((A - 1.0) + (A + 1.0) * cw);
+			b2 = A * ((A + 1.0) + (A - 1.0) * cw - sq);
+			a0 = (A + 1.0) - (A - 1.0) * cw + sq;
+			a1 = 2.0 * ((A - 1.0) - (A + 1.0) * cw);
+			a2 = (A + 1.0) - (A - 1.0) * cw - sq;
+		}
+		toneB[0] = (float) (b0 / a0);
+		toneB[1] = (float) (b1 / a0);
+		toneB[2] = (float) (b2 / a0);
+		toneA[0] = (float) (a1 / a0);
+		toneA[1] = (float) (a2 / a0);
+	}
+
 	void setLowCutCoeffs() {
 		const double hz[2] = {50.0, 100.0};
 		for (int k = 0; k < 2; k++) {
@@ -353,6 +415,9 @@ struct FogEngine {
 	bool ready = false;
 	double cutCoef[2][5] = {};
 	double cutZ[2][2] = {};
+	bool toneOn = false;
+	float toneB[3] = {1.f, 0.f, 0.f}, toneA[2] = {};
+	float toneZ[2][2] = {};
 	float mixSm = 0.f, mixStep = 1.f;
 	bool mixSnap = true; // the next process() starts the ramp at its target
 	float fade = 1.f, fadeStep = 0.f;

@@ -11,6 +11,45 @@
 //   wet L, R = two orthogonal +/-1 tap patterns over the line reads,
 //              times a level from the T60.
 //
+// The modes are voicings (Voicing.hpp): line count and lengths, diffusion,
+// how Damp maps, and two in-loop extras:
+// - SMOKE: an allpass after each line's read (Schroeder, coefficient
+//   loopDiffuse, 6-22 ms), inside the loop, so each repeat is blurred more
+//   than the one before. It is lossless, and its mean delay (its own length)
+//   is added to the line's length when the gain is worked out, so the T60
+//   holds.
+// - ICE: a +12-semitone granular shifter in the feedback. The loop's
+//   feedback is projected on a unit vector u (a +/-1 Hadamard row over the
+//   lines, orthogonal to the Householder's all-ones), low-passed (5 kHz,
+//   which also keeps the 2x read from aliasing much), written to a 50 ms
+//   buffer and read back at twice speed by two taps half a grain apart with
+//   triangular windows that sum to 1 (integer reads: no interpolation). Its
+//   output s goes back along u as a s - b m (m the projection, b = 0.6 a^2):
+//   removing b m keeps the u component's energy about level ((1 - b)^2 +
+//   a^2 is 0.98 at a = 0.3), so the tail as a whole decays at the T60 (a
+//   touch faster). Each band loses (1 - (1 - b)^2) / N of its energy a pass
+//   to the octave above and gains up to a^2 / N from the octave below.
+//   That is not made up in the line gains: it would count the energy twice,
+//   and an earlier version that did let ICE's tail outlast the law by
+//   nearly 2x at Size 0 (fog-soak). The band-pass (120 Hz-5 kHz) keeps the
+//   bass out of the octave (a voicing choice), and keeps the shifter from
+//   feeding back on itself near DC, where a shifted signal is the signal
+//   and a s - b m is a gain above 1. With a fixed a = 0.25 that ran away
+//   at v = 1, Damp 0; with the amount below it did not even without the
+//   band-pass (5 Hz and 25 Hz decay at the law at v = 1, Size 0), so it is
+//   now a margin, not what keeps ICE stable.
+//   The amount: a^2 = shimmer x N x (1 - g^2), with g the mean loop gain a
+//   pass (capped at a = 0.3, which short tails reach: there it would only
+//   shorten the decay), so the octave fed in a pass is a fixed
+//   fraction (shimmer) of what the loop loses a pass. The octave's level
+//   against the note, and what it costs the T60 (about 5 % at 250 Hz), are
+//   then the same at every Visibility and Size; a fixed a would leak a fixed
+//   share a pass, so short lines and long tails (many passes) would lose
+//   their lows to it (DENSE at Size 0: 38 s, not 70).
+// - Damp: d acts as bias + (1 - bias)(1 - brightness) d: FRET's bias darkens
+//   from the start, ICE's brightness halves every setting; each still
+//   follows Damp's law from its own baseline.
+//
 // - Decay: line i's gain is g_i = 10^(-3 len_i / (T60 rate)), from its own
 //   current length, so every loop round the network loses 60 dB per T60
 //   whatever Size is. The mix is orthogonal (lossless), so the gains alone
@@ -67,6 +106,10 @@ struct Network {
 	static float dampHz() { return 4000.f; }
 	static float shelfHz() { return 2000.f; }
 	static float lowHz() { return 250.f; } // where Visibility's T60 holds
+	static const int LOOP_AP = 8; // in-loop allpasses (SMOKE's 8 lines)
+	static float shimmerGrainMs() { return 50.f; }
+	static float shimmerLpHz() { return 5000.f; }
+	static float shimmerHpHz() { return 120.f; }
 	// The wet level's constant, set by measurement (test_network's
 	// even_wet_level, pink noise at noon): at 1 the wet RMS is within
 	// 0.1-1.3 dB below the input RMS across the six words, so it stays 1.
@@ -74,6 +117,8 @@ struct Network {
 
 	DelayLine line[MAX_LINES];
 	Diffuser<8> diffuser;
+	DelayLine loopAp[LOOP_AP]; // SMOKE's in-loop allpasses
+	DelayLine shiftBuf;        // ICE's shifter
 
 	int n = MAX_LINES;
 	float rate = 48000.f;
@@ -104,6 +149,20 @@ struct Network {
 	int ringMax = 0;
 	bool fresh = true; // cleared and not yet given controls: Size snaps
 
+	// The voicing's extras.
+	float dampBias = 0.f, brightness = 0.f;
+	int loopN = 0; // lines with an in-loop allpass
+	float apK = 0.f;
+	int apDelay[LOOP_AP] = {};
+	float meanAp = 0.f; // mean allpass delay over the n lines, samples
+	float shimAmt = 0.f;           // the voicing's shimmer
+	float shimA = 0.f, shimB = 0.f; // from it and the loop gain (updateGains)
+	float shimU[MAX_LINES] = {};
+	float shimLp = 0.f, shimLpCoef = 0.f;
+	float shimHp1 = 0.f, shimHp2 = 0.f, shimHpCoef = 0.f; // the high-pass's two one-pole states
+	int grain = 4, grainK = 0;
+	float invGrain = 0.25f;
+
 	// Buffers for every mode's longest line at the largest Size, plus the
 	// Drift swing. Never call from process().
 	void allocate(float innerRate) {
@@ -118,7 +177,20 @@ struct Network {
 		for (int i = 0; i < MAX_LINES; i++)
 			line[i].allocate(maxD, (uint32_t) (Diffuser<8>::MAX_STAGES * 8 + i));
 		diffuser.allocate(r, 1.f, 0); // stagger 0..31; the network's lines take 32..47
-		int ring = maxD;
+		float apLongest = 1.f;
+		for (int m = 0; m < MODES_LEN; m++)
+			for (int i = 0; i < LOOP_AP; i++) {
+				const float ms = voicing((Mode) m).loopMs[i];
+				apLongest = ms > apLongest ? ms : apLongest;
+			}
+		const int apD = (int) (apLongest * 0.001f * r) + 4;
+		for (int i = 0; i < LOOP_AP; i++)
+			loopAp[i].allocate(apD, (uint32_t) (48 + i)); // stagger 48..55
+		const int gD = (int) (shimmerGrainMs() * 0.001f * r) + 4;
+		shiftBuf.allocate(gD, 56u); // stagger 56
+		// The loop's buffers in series (line, allpass, shifter): the longest
+		// path a sample can ring round before it is overwritten.
+		int ring = maxD + apD + gD;
 		const int dd = (int) (Diffuser<8>::MAX_STAGE_MS * 0.001f * r) + 4;
 		ring = dd > ring ? dd : ring;
 		ringMax = ring;
@@ -149,6 +221,35 @@ struct Network {
 		}
 		// The diffuser's 8 channels carry 4 (L^2 + R^2); spread over n lines.
 		inGain = n == 16 ? 0.25f : 0.35355339f;
+		// The voicing's extras.
+		dampBias = unit(v.dampBias);
+		brightness = unit(v.brightness);
+		loopN = v.loopDiffuse > 0.f ? (n < LOOP_AP ? n : LOOP_AP) : 0;
+		apK = v.loopDiffuse > 0.f ? (v.loopDiffuse < 0.9f ? v.loopDiffuse : 0.9f) : 0.f;
+		float apSum = 0.f;
+		for (int i = 0; i < LOOP_AP; i++) {
+			int d = (int) (v.loopMs[i] * 0.001f * rate);
+			const int hi = loopAp[i].maxDelay() - 2;
+			d = d < 1 ? 1 : d > hi ? hi : d;
+			apDelay[i] = d;
+			if (i < loopN)
+				apSum += (float) d;
+		}
+		meanAp = apSum / (float) n;
+		shimAmt = v.shimmer > 0.f ? (v.shimmer < 1.f ? v.shimmer : 1.f) : 0.f;
+		const float invSqrtN = n == 16 ? 0.25f : 0.35355339f;
+		for (int i = 0; i < MAX_LINES; i++)
+			shimU[i] = ((popcount(i & 6) & 1) ? -invSqrtN : invSqrtN);
+		shimHpCoef = 1.f - std::exp(-2.f * 3.14159265358979f * shimmerHpHz() / rate);
+		shimLpCoef = 1.f - std::exp(-2.f * 3.14159265358979f * (shimmerLpHz() < 0.4f * rate ? shimmerLpHz() : 0.4f * rate) / rate);
+		{
+			int g = (int) (shimmerGrainMs() * 0.001f * rate);
+			const int hi = shiftBuf.maxDelay() - 2;
+			g = g > hi ? hi : g;
+			g &= ~1;
+			grain = g < 4 ? 4 : g;
+			invGrain = 1.f / (float) grain;
+		}
 		setTargets();
 		updateModulation();
 		clear();
@@ -171,6 +272,14 @@ struct Network {
 		updateGains();
 	}
 
+	// Restart ICE's shifter as a fresh network starts it: grain phase 0, its
+	// filters empty. For the engine's wake, when everything it holds is below
+	// QUIET anyway, so that waking is the same as starting fresh.
+	void restartShifter() {
+		grainK = 0;
+		shimLp = shimHp1 = shimHp2 = 0.f;
+	}
+
 	// Silences the network. The next setControls() sets Size at once, with
 	// no slew, since there is no tail to swoop.
 	void clear() {
@@ -182,6 +291,10 @@ struct Network {
 			phase[i] = p - std::floor(p);
 		}
 		diffuser.clear();
+		for (int i = 0; i < LOOP_AP; i++)
+			loopAp[i].clear();
+		shiftBuf.clear();
+		restartShifter();
 		scaleOffset = 0.f;
 		fresh = true;
 		gainCount = 0;
@@ -250,6 +363,14 @@ struct Network {
 			for (int i = 0; i < n; i++)
 				r[i] = line[i].read(len[i]);
 		}
+		// SMOKE: the allpass after each read, w = x + k w[-M], y = w[-M] - k w.
+		for (int i = 0; i < loopN; i++) {
+			const float d = loopAp[i].readInt(apDelay[i] - 1);
+			float w = r[i] + apK * d;
+			w = (w > 1e-20f || w < -1e-20f) ? w : 0.f;
+			loopAp[i].write(w);
+			r[i] = d - apK * w;
+		}
 
 		float l = 0.f, rr = 0.f;
 		for (int i = 0; i < n; i++) {
@@ -277,9 +398,35 @@ struct Network {
 			sum += y;
 		}
 		const float h = sum * (2.f / (float) n);
+		float fb[MAX_LINES];
+		for (int j = 0; j < n; j++)
+			fb[j] = v[j == 0 ? n - 1 : j - 1] - h;
+		if (shimA > 0.f) {
+			// ICE: the octave-up shifter on the feedback's u component.
+			float m = 0.f;
+			for (int j = 0; j < n; j++)
+				m += shimU[j] * fb[j];
+			// Band-limit: two one-pole high-passes (120 Hz), then a one-pole
+			// low-pass (5 kHz).
+			shimHp1 += shimHpCoef * (m - shimHp1);
+			shimHp1 = (shimHp1 > 1e-20f || shimHp1 < -1e-20f) ? shimHp1 : 0.f;
+			const float hp1 = m - shimHp1;
+			shimHp2 += shimHpCoef * (hp1 - shimHp2);
+			shimHp2 = (shimHp2 > 1e-20f || shimHp2 < -1e-20f) ? shimHp2 : 0.f;
+			shimLp += shimLpCoef * ((hp1 - shimHp2) - shimLp);
+			shimLp = (shimLp > 1e-20f || shimLp < -1e-20f) ? shimLp : 0.f;
+			shiftBuf.write(shimLp);
+			const int k = grainK, half = grain >> 1;
+			const int k2 = k + half < grain ? k + half : k + half - grain;
+			const float w1 = k < half ? 2.f * (float) k * invGrain : 2.f - 2.f * (float) k * invGrain;
+			const float s = w1 * shiftBuf.readInt(grain - k) + (1.f - w1) * shiftBuf.readInt(grain - k2);
+			grainK = k + 1 < grain ? k + 1 : 0;
+			const float c = shimA * s - shimB * m;
+			for (int j = 0; j < n; j++)
+				fb[j] += c * shimU[j];
+		}
 		for (int j = 0; j < n; j++) {
-			const int i = j == 0 ? n - 1 : j - 1;
-			float w = v[i] - h + inGain * inSign[j] * x[j & 7];
+			float w = fb[j] + inGain * inSign[j] * x[j & 7];
 			w = (w > 1e-20f || w < -1e-20f) ? w : 0.f;
 			line[j].write(w);
 		}
@@ -308,7 +455,8 @@ struct Network {
 
 	void setTargets() {
 		t60 = fogT60(vis);
-		ratio = fastExp2(-(damp + 2.f * damp * damp));
+		const float d = dampBias + (1.f - dampBias) * (1.f - brightness) * damp;
+		ratio = fastExp2(-(d + 2.f * d * d));
 		scaleTarget = fastExp2((2.f * size - 1.f) * 1.58496250072f); // log2(3)
 	}
 
@@ -355,7 +503,8 @@ struct Network {
 		const float hfExtra = 1.f / ratio - 1.f;
 		const float wd2 = wDamp * wDamp, ws2 = wShelf * wShelf, wl2 = wLow * wLow;
 		for (int i = 0; i < n; i++) {
-			const float e = perSample * len[i];
+			// The allpass's mean delay is its length: part of the loop.
+			const float e = perSample * (len[i] + (i < loopN ? (float) apDelay[i] : 0.f));
 			const float g = fastExp2(e);
 			// The shelf H(s) = (G s + ws) / (s + ws), |H|^2 = (G^2 w^2 +
 			// ws^2) / (w^2 + ws^2): G from the wanted 4 kHz gain m.
@@ -373,9 +522,14 @@ struct Network {
 			const float cap = 0.5f * (1.f + g);
 			gain[i] = gc < cap ? gc : cap;
 		}
-		const float gm = fastExp2(perSample * meanBase * (scaleTarget + scaleOffset));
+		const float gm = fastExp2(perSample * (meanBase * (scaleTarget + scaleOffset) + meanAp));
 		const float p = 1.f - gm * gm;
 		wetGain = wetCal() * std::sqrt(p > 0.f ? p : 0.f);
+		// ICE: the shifter's amount from the loss a pass (see the top).
+		float a2 = shimAmt * (float) n * (p > 0.f ? p : 0.f);
+		a2 = a2 < 0.09f ? a2 : 0.09f; // a <= 0.3
+		shimA = std::sqrt(a2);
+		shimB = 0.6f * a2;
 	}
 };
 
