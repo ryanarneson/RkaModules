@@ -46,6 +46,7 @@ struct FathomEngine {
 	void reset() {
 		voice.reset(C2_HZ);
 		stage.reset();
+		pitchKnown = false;
 	}
 
 	// Knob plus attenuated CV, where +/-5 V at full attenuverter sweeps the
@@ -62,26 +63,56 @@ struct FathomEngine {
 
 	// out: volts for LEFT, RIGHT and SUB_OUT.
 	void process(const FathomFrame& f, float sampleRate, float* out) {
+		// The pitch's exp2 runs only when PITCH or V/OCT moves.
 		const float semis = f.params[FathomFrame::PITCH] + 12.f * f.inputs[FathomFrame::VOCT];
-		const float f0 = C2_HZ * std::exp2(semis / 12.f);
+		if (!pitchKnown || semis != lastSemis) {
+			f0 = C2_HZ * std::exp2(semis / 12.f);
+			lastSemis = semis;
+			pitchKnown = true;
+		}
+
+		// Nothing patched to LEFT or RIGHT: only the sub runs, and the body
+		// and output stage start from rest when a cable comes back.
+		if (!f.outputConnected[FathomFrame::LEFT] && !f.outputConnected[FathomFrame::RIGHT]) {
+			const DroneVoice::Out o = voice.processSubOnly(f0, f.subOctave + 1, sampleRate);
+			out[FathomFrame::LEFT] = out[FathomFrame::RIGHT] = 0.f;
+			out[FathomFrame::SUB_OUT] = 5.f * o.sub;
+			stageIdle = true;
+			return;
+		}
+		if (stageIdle) {
+			stage.reset();
+			stageIdle = false;
+		}
+
 		const float detune = clamp01(modulated(f, FathomFrame::DETUNE, FathomFrame::DETUNE_IN, FathomFrame::DETUNE_ATT));
 		const float drift = clamp01(modulated(f, FathomFrame::DRIFT, FathomFrame::DRIFT_IN, FathomFrame::DRIFT_ATT));
-		const float cutoffOct = std::fmax(std::fmin(f.params[FathomFrame::CUTOFF] + f.params[FathomFrame::CUTOFF_ATT] * f.inputs[FathomFrame::CUTOFF_IN], 10.f), 0.f);
-		OutputStage::Params p;
-		p.cutoffHz = 20.f * std::exp2(cutoffOct);
-		p.resonance = clamp01(modulated(f, FathomFrame::RES, FathomFrame::RES_IN, FathomFrame::RES_ATT));
-		p.drive = clamp01(modulated(f, FathomFrame::DRIVE, FathomFrame::DRIVE_IN, FathomFrame::DRIVE_ATT));
-		p.type = LadderType(f.filterType);
-		p.subThroughFilter = f.subThroughFilter;
+		// The stage reads cutoff, resonance and drive once a block.
+		if (stage.readsControls(sampleRate)) {
+			const float cutoffOct = std::fmax(std::fmin(f.params[FathomFrame::CUTOFF] + f.params[FathomFrame::CUTOFF_ATT] * f.inputs[FathomFrame::CUTOFF_IN], 10.f), 0.f);
+			controls.cutoffHz = 20.f * std::exp2(cutoffOct);
+			controls.resonance = clamp01(modulated(f, FathomFrame::RES, FathomFrame::RES_IN, FathomFrame::RES_ATT));
+			controls.drive = clamp01(modulated(f, FathomFrame::DRIVE, FathomFrame::DRIVE_IN, FathomFrame::DRIVE_ATT));
+		}
+		controls.type = LadderType(f.filterType);
+		controls.subThroughFilter = f.subThroughFilter;
 
 		const DroneVoice::Out o = voice.process(f0, detune, f.params[FathomFrame::SPREAD], drift,
 		                                        f.params[FathomFrame::SUB], f.subOctave + 1, sampleRate);
 		float l = o.left, r = o.right;
-		stage.process(p, o.subMix, sampleRate, l, r);
+		stage.process(controls, o.subMix, sampleRate, l, r);
 		out[FathomFrame::LEFT] = 5.f * l;
 		out[FathomFrame::RIGHT] = 5.f * r;
 		out[FathomFrame::SUB_OUT] = 5.f * o.sub;
 	}
+
+private:
+	bool pitchKnown = false;
+	float lastSemis = 0.f;
+	float f0 = C2_HZ;
+	OutputStage::Params controls;
+	// The output stage was skipped (no body outputs patched).
+	bool stageIdle = false;
 };
 
 } // namespace rka

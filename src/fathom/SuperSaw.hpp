@@ -53,8 +53,11 @@ struct SuperSaw {
 	// One sample at fundamental f0Hz. pitchRatio / levelGain are per-saw
 	// multipliers (drift) or null for 1. Saw i sits at spread * (i - 3) / 3
 	// across the stereo field with equal-power panning, so at spread 0 each
-	// side carries sqrt(1/2) of the mono sum.
+	// side carries sqrt(1/2) of the mono sum. The pan gains are worked out
+	// again only when spread changes.
 	void process(float f0Hz, const float* pitchRatio, const float* levelGain, float spread, float dt, float& left, float& right) {
+		if (spread != panSpread)
+			setPan(spread);
 		left = right = 0.f;
 		for (int i = 0; i < N; i++) {
 			const float pr = pitchRatio ? pitchRatio[i] : 1.f;
@@ -63,10 +66,23 @@ struct SuperSaw {
 			phase[i] += dti;
 			phase[i] -= std::floor(phase[i]);
 			const float s = sawBlep(float(phase[i]), dti) * volume[i] * lg * gain;
+			left += s * panLeft[i];
+			right += s * panRight[i];
+		}
+	}
+
+private:
+	float panSpread = -1.f;
+	float panLeft[N];
+	float panRight[N];
+
+	void setPan(float spread) {
+		panSpread = spread;
+		for (int i = 0; i < N; i++) {
 			const float pos = spread * float(i - 3) / 3.f;
 			const float a = (pos + 1.f) * float(M_PI) / 4.f;
-			left += s * std::cos(a);
-			right += s * std::sin(a);
+			panLeft[i] = std::cos(a);
+			panRight[i] = std::sin(a);
 		}
 	}
 };
