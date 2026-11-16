@@ -269,20 +269,50 @@ Visibility, and full wet is level-matched to dry.
   (within ±2 dB across Mix). A make-up gain on the wet, a smooth function
   of Visibility and Size, does this; it follows its target through a 30 ms
   smoother, so moving Visibility or Size does not step the level. The earlier −6 dB trim is gone.
-- **Loud drones:** a held tonal drone (a saw, a sine) can be louder than
-  its input, because the tail's peaks build up. Loud resonant drones reach
-  the limiter: the 9 V knee and 10 V ceiling soft-limit them.
+- **Loud drones are levelled:** a held tonal drone (a saw, a sine) builds
+  up in the network to 4–8 dB over noise, with peaks to 20–50 V at Damp 0.
+  The user's ruling: these are turned down, not clipped. A wet leveller, a
+  slow automatic gain after the make-up and before the limiter, rides the
+  wet down. It is stereo-linked (one gain for L and R, from the louder
+  side): a peak follower (5 ms attack, 300 ms release) feeds a slower
+  follower (50 ms attack, 3 s release), and while that is over 6.5 V the
+  gain is 6.5 V divided by it; otherwise exactly 1. The dry signal is never
+  touched.
+  - Drones (±5 V saw, square and sine at 55–220 Hz, every mode, Visibility
+    0.75 and 1, Size 0.5 and 1, Damp 0, Mix 1) put at most 0.2 % of samples
+    over the limiter's 9 V knee, where without it up to 51 % were; at Mix
+    noon, at most 0.8 % of the output is over 9 V (without it, up to 40 %). At the levels
+    measured with noon Damp, a drone at full wet now comes out 0.4–2.9 dB
+    under its input instead of 2–8 dB over it.
+  - Noise keeps the matched level: its peaks are lone samples, which barely
+    move the 5 ms follower, so ±5 V noise at the matched level sits at the
+    threshold. The points that read up to +0.5 dB come out at about 0 dB;
+    the rest are untouched (worst −0.7 dB, as before). Anything quiet (±1 V
+    at Visibility noon) passes at a gain of exactly 1.
+  - It does not pump: on a steady drone (Drift 0, after the network's
+    build-up) the gain moves under 0.4 dB in any second. With Drift up the
+    drone's wet itself wanders by several dB a second, as the moving lines
+    sweep the network's resonances across its harmonics, and the gain
+    follows that wander (up to about 5 dB in a second at Visibility 1).
+  - Its state starts clean whenever the engine starts clean: on reset, a
+    new sample rate, a mode change and a wake from sleep. The sleep test
+    reads the wet before it.
 - **The cost:** a short sound (a ping, a pluck) is quieter at DENSE than
   at CLEAR, because its energy is spread over a much longer tail.
 - **If revisited:** this could later become a menu choice.
 
 ### Safety
 
-- **Limiter:** a gentle limiter on the wet signal only. It acts on loud
-  sustained drones at long Visibility and large Size: the wet is
-  soft-limited from the 9 V knee to a 10 V ceiling. It keeps the wet
-  signal within ±10 V even when the input is hot
-  (*designer's call*). The dry signal is never touched.
+- **Limiter:** a gentle limiter on the wet signal only, after the
+  leveller (Wet level): the wet is soft-limited from the 9 V knee to a
+  10 V ceiling. Drones are levelled before it, so it only catches
+  transients: the spikes a bright drone's edges make in the tail, which
+  the leveller's 5 ms follower is too slow for (up to about 12.5 V before
+  the limiter, on under 0.2 % of samples), noise's rare peaks, and a hot
+  input's onset. It keeps the wet signal within ±10 V even when the input
+  is hot (*designer's call*). At Mix noon a spike on top of a ±5 V dry can
+  still reach about 10.6 V at the output. The dry signal is never
+  touched.
 - **Bad values:** NaN or infinity on an input becomes 0 where it enters,
   and the network can never hold a NaN.
 - **Denormals:** handled so that a decaying tail never slows the CPU.
@@ -351,6 +381,11 @@ each test shown to fail against a deliberate mutation:
   level at noon. (Superseded by the matched-level test: noise at Mix 1
   is within ±1.5 dB of the input at the listed Visibility and Size
   points.) No output sample exceeds 10 V.
+- **Drones are levelled.** In every mode, drones put at most 1 % of samples
+  over the 9 V knee at Mix 1 and at Mix noon; the leveller's gain moves
+  under 1 dB in any second on a steady drone once settled; it is exactly 1
+  for ±1 V signals; and its state starts clean on reset, a new rate, a
+  mode change and a wake (test_engine).
 - **Stereo.** IN L alone fills both outputs, and the two output channels
   are decorrelated (correlation well below 1).
 - **Mix and dry kill.** Fully left is bit-exact dry. Fully right and dry

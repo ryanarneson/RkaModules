@@ -485,6 +485,286 @@ void outputCeiling() {
 	std::printf("  output_ceiling: 80 V saw limited to %.3f V\n", hp);
 }
 
+// ---- The leveller ----
+
+// An engine starts in mode m at once (no fade from HAAR).
+void startIn(Rig& r, int m) {
+	r.f.mode = m;
+	r.eng.mode = (rka::fog::Mode) m;
+	r.eng.reset();
+}
+
+const char* MODE_NAMES[4] = {"HAAR", "FRET", "SMOKE", "ICE"};
+
+const char* SHAPE_NAMES[3] = {"saw", "square", "sine"};
+
+// A rig at the drone conditions: Damp 0, Bloom and Drift at noon, in mode m
+// from the start.
+void droneRig(Rig& r, int m, float vis, float size, float mix) {
+	startIn(r, m);
+	r.f.params[FogFrame::VISIBILITY] = vis;
+	r.f.params[FogFrame::SIZE] = size;
+	r.f.params[FogFrame::DAMP] = 0.f;
+	r.f.params[FogFrame::BLOOM] = 0.5f;
+	r.f.params[FogFrame::DRIFT] = 0.5f;
+	r.f.params[FogFrame::MIX] = mix;
+}
+
+// Drones are turned down, not clipped: +/-5 V saw, square and sine at 55,
+// 110 and 220 Hz, every mode, Visibility 0.75 and 1, Size 0.5 and 1, Damp 0,
+// Mix 1, 10 s. After the first 0.5 s, at most 1 % of samples are over the
+// limiter's 9 V knee (without the leveller: 10-54 %), and the peak is at
+// most 10 V. The same drones at Mix noon: at most 1 % of output samples
+// over 9 V (without the leveller: up to 47 %). The wet's spikes (the
+// network's answer to a bright drone's edges, sharpest at Damp 0) still reach
+// the limiter now and then, and at Mix noon a spike on top of a +/-5 V
+// square's dry can reach 10.6 V: the largest peaks are reported.
+void levellerTurnsDronesDown() {
+	const int N = (int) (10 * RATE), from = (int) (0.5 * RATE);
+	double worstShare = 0, worstPeak = 0, worstMixShare = 0, worstMixPeak = 0, worstPre = 0;
+	char where[96] = "", whereMix[96] = "";
+	for (int m = 0; m < 4; m++)
+		for (float vis : {0.75f, 1.f})
+			for (float size : {0.5f, 1.f})
+				for (int shape = 0; shape < 3; shape++)
+					for (double hz : {55.0, 110.0, 220.0}) {
+						Rig* a = new Rig, *b = new Rig; // large: on the heap
+						droneRig(*a, m, vis, size, 1.f);
+						droneRig(*b, m, vis, size, 0.5f);
+						long over = 0, overMix = 0;
+						double peak = 0, peakMix = 0, pre = 0;
+						for (int i = 0; i < N; i++) {
+							const float x = drone(shape, hz, i);
+							const FogResult o = a->step(x), q = b->step(x);
+							if (i < from)
+								continue;
+							const double s = std::fmax(std::fabs(o.outL), std::fabs(o.outR));
+							const double t = std::fmax(std::fabs(q.outL), std::fabs(q.outR));
+							over += s > FogEngine::limitKnee();
+							overMix += t > 9.0;
+							peak = std::fmax(peak, s);
+							peakMix = std::fmax(peakMix, t);
+							// The peak before the limiter, from the knee's inverse.
+							if (s > FogEngine::limitKnee()) {
+								const double room = FogEngine::limitCeil() - FogEngine::limitKnee();
+								const double u = (s - FogEngine::limitKnee()) / room;
+								pre = std::fmax(pre, u < 0.999999 ? FogEngine::limitKnee() + room * std::atanh(u) : 99.0);
+							}
+						}
+						const double share = 100.0 * over / (N - from), shareMix = 100.0 * overMix / (N - from);
+						CHECK(share <= 1.0 && peak <= FogEngine::limitCeil(), "%s %s %g Hz v %g Size %g: %.2f%% of samples over 9 V, peak %.2f V; want <= 1%%, <= 10 V",
+						      MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis, size, share, peak);
+						CHECK(shareMix <= 1.0, "%s %s %g Hz v %g Size %g, Mix 0.5: %.2f%% of output samples over 9 V (peak %.2f V), want <= 1%%",
+						      MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis, size, shareMix, peakMix);
+						if (share > worstShare) {
+							worstShare = share;
+							std::snprintf(where, sizeof where, "%s %s %g Hz v %g Size %g", MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis, size);
+						}
+						if (shareMix > worstMixShare) {
+							worstMixShare = shareMix;
+							std::snprintf(whereMix, sizeof whereMix, "%s %s %g Hz v %g Size %g", MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis, size);
+						}
+						worstPeak = std::fmax(worstPeak, peak);
+						worstMixPeak = std::fmax(worstMixPeak, peakMix);
+						worstPre = std::fmax(worstPre, pre);
+						delete a;
+						delete b;
+					}
+	std::printf("  leveller_turns_drones_down: 144 drones, Mix 1: worst %.2f%% over 9 V (%s), peak %.2f V (%s%.1f V before the limiter)\n", worstShare,
+	            where, worstPeak, worstPre >= 99.0 ? "over " : "", worstPre >= 99.0 ? 20.0 : worstPre);
+	std::printf("  leveller_turns_drones_down: Mix 0.5: worst %.3f%% over 9 V (%s), peak %.2f V\n", worstMixShare, whereMix, worstMixPeak);
+}
+
+// No pumping: on a steady drone (Drift 0, so the network is time-invariant
+// and its wet is periodic), once the network's build-up is over, the
+// leveller's gain moves by under 1 dB peak to peak in every 1 s window:
+// saws, squares and sines at 55, 110 and 220 Hz, every mode, Visibility
+// 0.75 and 1, Size 0.5, Damp 0, 30 s, windows from 20 s. Only the drones
+// that the leveller turns down by more than 3 dB count (without Drift, most
+// build up less), and every mode must have at least two. With Drift at noon the wet
+// itself wanders by several dB a second (the moving lines sweep the
+// network's resonances across the drone's harmonics), and the leveller
+// follows that: a saw and a square at 110 Hz, Visibility 1, windows from
+// 10 s, are held only to 6.5 dB (measured 5.2; 8.0 with no slow follower,
+// 7.2 with its release at 30 ms).
+// The worst 1 s spread from fromS; *early gets the worst from 2 s.
+double gainSpreadDb(int m, int shape, double hz, float vis, float drift, double fromS, double seconds, float* minGain, double* early) {
+	Rig* r = new Rig;
+	droneRig(*r, m, vis, 0.5f, 1.f);
+	r->f.params[FogFrame::DRIFT] = drift;
+	const int N = (int) (seconds * RATE), from = (int) (fromS * RATE), win = (int) RATE;
+	double worst = 0, worstEarly = 0;
+	float lo = 1.f, hi = 0.f, gmin = 1.f, elo = 1.f, ehi = 0.f;
+	const int two = (int) (2 * RATE);
+	for (int i = 0; i < N; i++) {
+		r->step(drone(shape, hz, i));
+		if (i >= two) {
+			const float g = r->eng.levelGain;
+			elo = g < elo ? g : elo;
+			ehi = g > ehi ? g : ehi;
+			if ((i - two) % win == win - 1) {
+				worstEarly = std::fmax(worstEarly, 20.0 * std::log10(ehi / elo));
+				elo = 1.f;
+				ehi = 0.f;
+			}
+		}
+		if (i < from)
+			continue;
+		const float g = r->eng.levelGain;
+		lo = g < lo ? g : lo;
+		hi = g > hi ? g : hi;
+		gmin = g < gmin ? g : gmin;
+		if ((i - from) % win == win - 1) {
+			worst = std::fmax(worst, 20.0 * std::log10(hi / lo));
+			lo = 1.f;
+			hi = 0.f;
+		}
+	}
+	delete r;
+	*minGain = gmin;
+	*early = worstEarly;
+	return worst;
+}
+
+void levellerNoPumping() {
+	double worst = 0, worstNoon = 0, worstEarly = 0, worstNoonEarly = 0;
+	char where[96] = "", whereNoon[96] = "";
+	int counted = 0;
+	for (int m = 0; m < 4; m++) {
+		int engaged = 0;
+		for (float vis : {0.75f, 1.f})
+			for (int shape = 0; shape < 3; shape++)
+				for (double hz : {55.0, 110.0, 220.0}) {
+					if (vis == 1.f && hz == 110.0 && shape < 2) {
+						float gn = 1.f;
+						double e = 0;
+						const double dn = gainSpreadDb(m, shape, hz, vis, 0.5f, 10.0, 20.0, &gn, &e);
+						worstNoonEarly = std::fmax(worstNoonEarly, e);
+						CHECK(dn <= 6.5, "%s %s %g Hz v %g Drift noon: leveller gain moves %.2f dB in 1 s, want <= 6.5", MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis, dn);
+						if (dn > worstNoon) {
+							worstNoon = dn;
+							std::snprintf(whereNoon, sizeof whereNoon, "%s %s %g Hz v %g", MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis);
+						}
+					}
+					float g = 1.f;
+					double e = 0;
+					const double d = gainSpreadDb(m, shape, hz, vis, 0.f, 20.0, 30.0, &g, &e);
+					if (!(g < 0.708f))
+						continue;
+					engaged++;
+					worstEarly = std::fmax(worstEarly, e);
+					CHECK(d < 1.0, "%s %s %g Hz v %g Drift 0: leveller gain moves %.2f dB in 1 s, want < 1", MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis, d);
+					if (d > worst) {
+						worst = d;
+						std::snprintf(where, sizeof where, "%s %s %g Hz v %g, gain %.1f dB", MODE_NAMES[m], SHAPE_NAMES[shape], hz, vis, 20.0 * std::log10(g));
+					}
+				}
+		CHECK(engaged >= 2, "%s: only %d steady drones engage the leveller, want >= 2", MODE_NAMES[m], engaged);
+		counted += engaged;
+	}
+	std::printf("  leveller_no_pumping: Drift 0, settled (20-30 s), %d drones turned down over 3 dB: worst %.2f dB in 1 s (%s); from 2 s, in the build-up: %.2f dB\n",
+	            counted, worst, where, worstEarly);
+	std::printf("  leveller_no_pumping: Drift noon (saw, square 110 Hz, v 1), 10-20 s: worst %.2f dB in 1 s (%s); from 2 s: %.2f dB\n", worstNoon, whereNoon,
+	            worstNoonEarly);
+}
+
+// Transparent when quiet: a +/-1 V sine (55, 110, 220 Hz) or +/-1 V noise at
+// Visibility 0.5, the other knobs at noon, Mix 1, every mode, Size 0.5 and 1:
+// the gain is exactly 1 at every sample.
+void levellerIdleWhenQuiet() {
+	float lowest = 1.f;
+	for (int m = 0; m < 4; m++)
+		for (float size : {0.5f, 1.f})
+			for (int shape : {2, 3})
+				for (double hz : {55.0, 110.0, 220.0}) {
+					if (shape == 3 && hz != 110.0)
+						continue; // noise: once
+					Rig* r = new Rig;
+					startIn(*r, m);
+					r->f.params[FogFrame::MIX] = 1.f;
+					r->f.params[FogFrame::SIZE] = size;
+					r->f.params[FogFrame::DAMP] = 0.5f;
+					r->f.params[FogFrame::BLOOM] = 0.5f;
+					r->f.params[FogFrame::DRIFT] = 0.5f;
+					float g = 1.f;
+					for (int i = 0; i < (int) (10 * RATE); i++) {
+						r->step(0.2f * drone(shape, hz, i));
+						g = r->eng.levelGain < g ? r->eng.levelGain : g;
+					}
+					CHECK(g == 1.f, "%s Size %g, +/-1 V %s %g Hz: leveller gain fell to %.6f, want 1", MODE_NAMES[m], size, shape == 3 ? "noise" : "sine", hz, g);
+					lowest = g < lowest ? g : lowest;
+					delete r;
+				}
+	std::printf("  leveller_idle_when_quiet: lowest gain %.6f\n", lowest);
+}
+
+// The leveller starts clean: after a loud drone has pulled its gain down,
+// reset(), setSampleRate() and a mode change each leave it at gain 1 with
+// both followers at 0 (at the mode change: the moment the network is
+// switched, under the faded-out wet), and so does waking from sleep (its
+// state, made stale on purpose while asleep, is cleared by the wake).
+void levellerResets() {
+	auto loud = [](Rig& r) {
+		droneRig(r, 0, 1.f, 0.5f, 1.f);
+		for (int i = 0; i < (int) (8 * RATE); i++)
+			r.step(drone(1, 220.0, i));
+		return r.eng.levelGain;
+	};
+	auto clear = [](const FogEngine& e) { return e.levelGain == 1.f && e.levelEnv == 0.f && e.levelSlow == 0.f; };
+	{
+		Rig* r = new Rig;
+		const float g = loud(*r);
+		r->eng.reset();
+		CHECK(g < 0.7f && clear(r->eng), "reset(): gain before %g (want < 0.7), after %g, followers %g %g", g, r->eng.levelGain, r->eng.levelEnv,
+		      r->eng.levelSlow);
+		delete r;
+	}
+	{
+		Rig* r = new Rig;
+		const float g = loud(*r);
+		r->eng.setSampleRate(96000.f);
+		CHECK(g < 0.7f && clear(r->eng), "setSampleRate(): gain before %g, after %g, followers %g %g", g, r->eng.levelGain, r->eng.levelEnv,
+		      r->eng.levelSlow);
+		delete r;
+	}
+	{
+		Rig* r = new Rig;
+		const float g = loud(*r);
+		r->f.mode = rka::fog::FRET;
+		bool seen = false, ok = false;
+		for (int i = 0; i < (int) (0.2 * RATE) && !seen; i++) {
+			const int before = r->eng.fadeState;
+			FogResult o;
+			r->vL = drone(1, 220.0, i);
+			r->eng.process(r->f, o);
+			if (before == 1 && r->eng.fadeState == 2) {
+				seen = true;
+				// The switch's wake() cleared it; this sample's wet (the new,
+				// empty network's) has gone through it since.
+				ok = r->eng.levelGain == 1.f && r->eng.levelSlow < 1e-3f;
+			}
+		}
+		CHECK(g < 0.7f && seen && ok, "mode change: gain before %g, switch seen %d, after it gain %g, slow follower %g", g, (int) seen, r->eng.levelGain,
+		      r->eng.levelSlow);
+		delete r;
+	}
+	{
+		Rig* r = new Rig;
+		r->f.params[FogFrame::MIX] = 1.f;
+		int guard = 0;
+		while (!r->eng.asleep() && guard++ < (int) (30 * RATE))
+			r->step(0.f);
+		CHECK(r->eng.asleep(), "never slept");
+		r->eng.levelEnv = r->eng.levelSlow = 30.f; // stale
+		r->eng.levelGain = 0.2f;
+		r->step(1.f);
+		CHECK(!r->eng.asleep() && r->eng.levelGain == 1.f && r->eng.levelSlow < 1.f,
+		      "wake: gain %g, followers %g %g, want gain 1 and clear followers", r->eng.levelGain, r->eng.levelEnv, r->eng.levelSlow);
+		delete r;
+	}
+	std::printf("  leveller_resets: clean after reset(), setSampleRate(), a mode change and a wake\n");
+}
+
 // ---- Sleep ----
 
 // Silence puts the engine to sleep after exactly its hold (at least 0.25 s),
@@ -592,15 +872,6 @@ void sleepNoClick() {
 	std::printf("  sleep_no_click: step at sleep %.3g V (limit %.3g)\n", d.maxStepAtSleep, lim);
 }
 
-// Both engines start in mode m at once (no fade from HAAR).
-void startIn(Rig& r, int m) {
-	r.f.mode = m;
-	r.eng.mode = (rka::fog::Mode) m;
-	r.eng.reset();
-}
-
-const char* MODE_NAMES[4] = {"HAAR", "FRET", "SMOKE", "ICE"};
-
 // Waking is transparent, in every mode: with Drift 0, a noise burst after
 // sleeping gives the same output as the same burst on a fresh engine (48 kHz,
 // so the divider has no phase: sample for sample).
@@ -704,6 +975,10 @@ int main() {
 	wetMakeupSmooth();
 	levelAcrossMix();
 	outputCeiling();
+	levellerTurnsDronesDown();
+	levellerNoPumping();
+	levellerIdleWhenQuiet();
+	levellerResets();
 	sleepAfterHold();
 	noSleepInTail();
 	sleepNoClick();

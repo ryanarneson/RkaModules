@@ -7,7 +7,7 @@
 //
 //   IN L, IN R (R normals to L; a poly cable sums to mono)
 //     |-- dry ------------------------------------------------+
-//     +-- low cut -> tone -> Bloom -> RateDivider -> Network -> limiter x mode fade
+//     +-- low cut -> tone -> Bloom -> RateDivider -> Network -> make-up -> leveller -> limiter x mode fade
 //                                                              |
 //   out = cos(Mix pi/2) dry + sin(Mix pi/2) wet  <-------------+
 //
@@ -20,10 +20,21 @@
 //   ramps over 5 ms, so a CV step or the dry kill switch does not click.
 // - Safety: every input and parameter is sanitised where it enters (NaN and
 //   infinity read 0). The limiter is on the wet only: the identity up to
-//   +/-9 V, then a tanh knee that ends at +/-10 V.
+//   +/-9 V, then a tanh knee that ends at +/-10 V. With the leveller before
+//   it, it catches only transients (the spikes a bright drone's edges make).
 // - Level: the wet is level-matched to the dry on average (full Mix is about as
-//   loud as dry for noise) by wetMakeup(). Loud resonant drones may reach the
-//   limiter's knee (9 V) and are soft-limited to 10 V.
+//   loud as dry for noise) by wetMakeup().
+// - Leveller: a slow automatic gain on the wet, after the make-up and before
+//   the limiter, one gain for L and R. A peak follower of the louder side
+//   (5 ms attack, 300 ms release) feeds a slower follower (50 ms attack, 3 s
+//   release); while that is over 6.5 V the gain is 6.5 V / it, else exactly 1.
+//   Held tones build up in the network to 4-8 dB over noise, with peaks to
+//   20-50 V; the leveller turns them down instead of the limiter clipping
+//   them. Noise's peaks are lone samples, which barely move the 5 ms
+//   follower: +/-5 V noise at the matched level sits at the threshold (the
+//   points that read up to +0.5 dB come out at about 0 dB, the rest are
+//   untouched), and anything quiet passes at a gain of exactly 1. Its state
+//   starts clean on every wake().
 // - Mode: the voicing follows FogFrame::mode. The first process() takes its
 //   frame's mode at once (a saved patch loads in its mode, no fade). After
 //   that, a change fades the wet out
@@ -40,7 +51,8 @@
 //   echoes of CLEAR at Size 1 do not fall asleep between hits), the engine
 //   skips the RateDivider and the network (wet 0) until a feed sample reaches
 //   QUIET. Buffers are not cleared: their contents are already below QUIET.
-//   reset(), a new rate and a mode change wake it.
+//   reset(), a new rate and a mode change wake it. The sleep test reads the
+//   wet before the leveller.
 // - The wet make-up follows its target (refreshed every 32 samples) through a
 //   30 ms one-pole, so a Visibility or Size change does not step the level.
 // - Only setSampleRate() allocates. process() allocates nothing and calls
@@ -118,8 +130,17 @@ struct FogEngine {
 	// Below this (V) the feed and the wet count as silence: -114 dB re 5 V.
 	static float quiet() { return 1e-5f; }
 
-	// Test only: bypass the limiter.
+	// The leveller (see the top of the file): its target (V) on the slow
+	// follower, and its four times (s).
+	static float levelTarget() { return 6.5f; }
+	static float levelAttack() { return 0.005f; }
+	static float levelRelease() { return 0.3f; }
+	static float levelSlowAttack() { return 0.05f; }
+	static float levelSlowRelease() { return 3.f; }
+
+	// Test only: bypass the limiter, or the leveller.
 	bool limiterEnabled = true;
+	bool levellerEnabled = true;
 
 	// Fathom's law, in [0, 1].
 	static float knob(const FogFrame& f, int param, int cvIndex, int att) {
@@ -147,6 +168,10 @@ struct FogEngine {
 		fadeStep = 1.f / (0.05f * hz + 1.f);
 		mixStep = 1.f / (0.005f * hz + 1.f);
 		makeupCoef = 1.f / (0.03f * hz + 1.f);
+		levelCoef[0] = 1.f / (levelAttack() * hz + 1.f);
+		levelCoef[1] = 1.f / (levelRelease() * hz + 1.f);
+		levelCoef[2] = 1.f / (levelSlowAttack() * hz + 1.f);
+		levelCoef[3] = 1.f / (levelSlowRelease() * hz + 1.f);
 		setLowCutCoeffs();
 		reset();
 	}
@@ -167,10 +192,13 @@ struct FogEngine {
 		wake();
 	}
 
-	// Awake, with the quiet count at 0 and the hold refreshed.
+	// Awake, with the quiet count at 0, the hold refreshed and the leveller
+	// clear (gain 1).
 	void wake() {
 		asleep_ = false;
 		makeupSnap = true;
+		levelEnv = levelSlow = 0.f;
+		levelGain = 1.f;
 		quietCount = 0;
 		updateHold();
 	}
@@ -306,6 +334,8 @@ struct FogEngine {
 			}
 			else
 				quietCount = 0;
+			if (levellerEnabled)
+				level(wetL, wetR);
 			if (limiterEnabled) {
 				wetL = limit(wetL);
 				wetR = limit(wetR);
@@ -332,6 +362,21 @@ struct FogEngine {
 	}
 
 	// ---- parts ----
+
+	// The leveller: both followers, then one gain on L and R. The inputs are
+	// finite (fogFinite above), so the followers are; they are flushed to 0
+	// under 1e-20 V, so a long fade cannot leave them denormal.
+	void level(float& l, float& r) {
+		const float al = l >= 0.f ? l : -l, ar = r >= 0.f ? r : -r;
+		const float a = al > ar ? al : ar;
+		levelEnv += (a - levelEnv) * (a > levelEnv ? levelCoef[0] : levelCoef[1]);
+		levelSlow += (levelEnv - levelSlow) * (levelEnv > levelSlow ? levelCoef[2] : levelCoef[3]);
+		levelEnv = levelEnv > 1e-20f ? levelEnv : 0.f;
+		levelSlow = levelSlow > 1e-20f ? levelSlow : 0.f;
+		levelGain = levelSlow > levelTarget() ? levelTarget() / levelSlow : 1.f;
+		l *= levelGain;
+		r *= levelGain;
+	}
 
 	// x unchanged up to the knee, then a tanh that ends at the ceiling.
 	static float limit(float x) {
@@ -440,6 +485,9 @@ struct FogEngine {
 	int fadeState = 0; // 0 steady, 1 fading out, 2 fading in
 	float makeup = 1.f, makeupTarget = 1.f, makeupCoef = 1.f; // the applied make-up and its target
 	int makeupCount = 0;
+	float levelCoef[4] = {1.f, 1.f, 1.f, 1.f}; // attack, release, slow attack, slow release
+	float levelEnv = 0.f, levelSlow = 0.f;      // the two followers (V)
+	float levelGain = 1.f;                      // the gain applied to the last wet sample
 	bool makeupSnap = true; // the next awake sample starts the make-up at its target
 	bool asleep_ = false;
 	bool started = false; // process() has run: later mode changes fade
