@@ -97,6 +97,8 @@ signal compresses the filter against itself: that is the growl.
 - **SUB**: the sub sine alone, ±5 V, before the SUB knob, the filter and
   the clipper, so it can feed a sub bus or a side-chain however the mix
   is set.
+- With L and R both unplugged the voice pauses to save CPU (SUB keeps
+  running); it resumes when either is patched.
 
 ## Credits
 

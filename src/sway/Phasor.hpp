@@ -57,7 +57,9 @@ static const float BELOW_ONE = 0.99999994f;
 inline float readPhase(double phase, float offset) {
 	double p = phase + offset;
 	p -= std::floor(p);
-	return std::fmin(float(p), BELOW_ONE);
+	// fmin(p, BELOW_ONE) without the libm call (NaN gives BELOW_ONE, as fmin).
+	const float f = float(p);
+	return f < BELOW_ONE ? f : BELOW_ONE;
 }
 
 } // namespace rka

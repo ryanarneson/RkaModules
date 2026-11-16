@@ -1,4 +1,5 @@
 #pragma once
+#include "FastMath.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -58,7 +59,8 @@ private:
 	}
 };
 
-// Walks for the seven saws and the sub, with their outputs as multipliers.
+// Walks for the seven saws and the sub, with their outputs as multipliers
+// (FastMath.hpp's exp2, within two float ulps of libm's, every sample).
 struct Drift {
 	static const int N = 7;
 	DriftWalk saws[N];
@@ -79,11 +81,11 @@ struct Drift {
 	void process(float amount, float dt) {
 		for (int i = 0; i < N; i++) {
 			saws[i].process(amount, dt);
-			pitchRatio[i] = std::exp2(saws[i].cents / 1200.f);
-			levelGain[i] = std::pow(10.f, saws[i].db / 20.f);
+			pitchRatio[i] = fastExp2(saws[i].cents / 1200.f);
+			levelGain[i] = fastDbToGain(saws[i].db);
 		}
 		sub.process(amount, dt);
-		subGain = std::pow(10.f, sub.db / 20.f);
+		subGain = fastDbToGain(sub.db);
 	}
 };
 

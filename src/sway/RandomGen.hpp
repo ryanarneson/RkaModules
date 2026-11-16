@@ -1,4 +1,5 @@
 #pragma once
+#include "FastMath.hpp"
 #include <cmath>
 #include <cstdint>
 
@@ -26,7 +27,8 @@ struct RandomGen {
 		if (p >= glide)
 			return next;
 		const float t = p / glide;
-		return prev + (next - prev) * (1.f - std::cos(float(M_PI) * t)) * 0.5f;
+		// cos(pi t) = sin(2 pi (t / 2 + 1 / 4)).
+		return prev + (next - prev) * (1.f - fastSin2pi(0.5f * t + 0.25f)) * 0.5f;
 	}
 
 private:

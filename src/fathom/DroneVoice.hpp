@@ -54,6 +54,7 @@ struct DroneVoice {
 		hpLeft.setCoefficients(f0, BUTTERWORTH_K, lastRate > 0.f ? lastRate : 48000.f);
 		hpRight = hpLeft;
 		block = 0;
+		hpKnown = false;
 	}
 
 	Out process(float f0Hz, float detune, float spread, float driftAmount, float subLevel, int subOctaves, float sampleRate) {
@@ -64,22 +65,28 @@ struct DroneVoice {
 			block = 0;
 		}
 		f0 += (clampF0(f0Hz) - f0) * slew;
-		if (block == 0) {
+		// Once a block, and only when the pitch or rate moved (tan is libm).
+		if (block == 0 && (!hpKnown || f0 != hpF0 || sampleRate != hpRate)) {
 			hpLeft.setCoefficients(f0, BUTTERWORTH_K, sampleRate);
 			hpRight.setCoefficients(f0, BUTTERWORTH_K, sampleRate);
+			hpKnown = true;
+			hpF0 = f0;
+			hpRate = sampleRate;
 		}
 		block = (block + 1) % BLOCK;
 
-		saws.setDetune(detune);
+		// The detune table is rebuilt only when DETUNE moves.
+		if (detune != lastDetune) {
+			saws.setDetune(detune);
+			lastDetune = detune;
+		}
 		drift.process(driftAmount, dt);
 		float l, r;
 		saws.process(f0, drift.pitchRatio, drift.levelGain, std::max(0.f, std::min(spread, 1.f)), dt, l, r);
 		l = hpLeft.process(l).hp * BODY_GAIN;
 		r = hpRight.process(r).hp * BODY_GAIN;
 
-		subPhase += f0 / (subOctaves == 2 ? 4.f : 2.f) * dt;
-		subPhase -= std::floor(subPhase);
-		const float sub = waveSin(float(subPhase));
+		const float sub = advanceSub(subOctaves, dt);
 		Out o;
 		o.left = l;
 		o.right = r;
@@ -88,9 +95,40 @@ struct DroneVoice {
 		return o;
 	}
 
+	// The sub alone, for when nothing is patched to the body's outputs:
+	// the pitch slew and the sub's phase run on, the saws, drift and
+	// high-passes pause (left, right and subMix are 0), and the next
+	// process() picks the body up where it paused.
+	Out processSubOnly(float f0Hz, int subOctaves, float sampleRate) {
+		const float dt = 1.f / sampleRate;
+		if (sampleRate != lastRate) {
+			slew = 1.f - std::exp(-dt / PITCH_SLEW_SEC);
+			lastRate = sampleRate;
+			block = 0;
+		}
+		f0 += (clampF0(f0Hz) - f0) * slew;
+		// The high-passes take this f0 on the next process().
+		block = 0;
+		Out o;
+		o.left = o.right = o.subMix = 0.f;
+		o.sub = advanceSub(subOctaves, dt);
+		return o;
+	}
+
 private:
 	float slew = 1.f;
 	float lastRate = 0.f;
+	float lastDetune = -1.f;
+	// The f0 and rate the high-passes' coefficients were worked out for.
+	bool hpKnown = false;
+	float hpF0 = 0.f;
+	float hpRate = 0.f;
+
+	float advanceSub(int subOctaves, float dt) {
+		subPhase += f0 / (subOctaves == 2 ? 4.f : 2.f) * dt;
+		subPhase -= std::floor(subPhase);
+		return waveSin(float(subPhase));
+	}
 
 	static float clampF0(float hz) {
 		return std::max(F0_MIN, std::min(hz, F0_MAX));
@@ -130,7 +168,7 @@ static const float DRIVE_OCTAVES = 4.f;
 static const float MAKEUP_EXP = 0.75f;
 
 // Ladder filter per side with the sub joining before or after it, drive
-// makeup, tanh soft clip, DC block at ~2 Hz; in and out +/-1.
+// makeup, tanh soft clip (FastMath.hpp's, within 1.5e-7 of libm's), DC block at ~2 Hz; in and out +/-1.
 struct OutputStage {
 	struct Params {
 		float cutoffHz = 1200.f;
@@ -154,6 +192,15 @@ struct OutputStage {
 		dcRight = DcBlock();
 		block = 0;
 		lastRate = 0.f;
+		octKnown = false;
+		logKnown = false;
+	}
+
+	// Whether the next process() reads p's cutoff, resonance and drive (once
+	// a block, and on a sample-rate change); between, only the type and the
+	// sub routing are read, so the caller may skip working the others out.
+	bool readsControls(float sampleRate) const {
+		return block == 0 || sampleRate != lastRate;
 	}
 
 	void process(const Params& p, float subMix, float sampleRate, float& left, float& right) {
@@ -164,23 +211,31 @@ struct OutputStage {
 			resCoef = 1.f - std::exp(-BLOCK / (sampleRate * RES_SLEW_SEC));
 			lastRate = sampleRate;
 			block = 0;
-			cutoffOct = std::log2(std::max(p.cutoffHz, 1.f));
+			cutoffOct = cutoffLog2(p.cutoffHz);
 			k = targetK(p);
 			driveOct = targetDriveOct(p);
 			ladderLeft.reset();
 			ladderRight.reset();
 		}
 		if (block == 0) {
-			cutoffOct += (std::log2(std::max(p.cutoffHz, 1.f)) - cutoffOct) * cutoffCoef;
+			cutoffOct += (cutoffLog2(p.cutoffHz) - cutoffOct) * cutoffCoef;
 			k += (targetK(p) - k) * resCoef;
 			// The drive is smoothed in octaves, like the cutoff, so a step
 			// ramps geometrically instead of jumping most of the way at once.
 			driveOct += (targetDriveOct(p) - driveOct) * resCoef;
-			const float fc = std::exp2(cutoffOct);
+			// The exp2s (libm) only when the smoothed values moved.
+			if (!octKnown || cutoffOct != fcOct) {
+				fc = std::exp2(cutoffOct);
+				fcOct = cutoffOct;
+			}
 			ladderLeft.setCoefficients(fc, k, p.type, sampleRate);
 			ladderRight.setCoefficients(fc, k, p.type, sampleRate);
-			driveGain = std::exp2(driveOct);
-			makeup = driveOct < 0.f ? std::exp2(-driveOct) : std::exp2(-MAKEUP_EXP * driveOct);
+			if (!octKnown || driveOct != gainOct) {
+				driveGain = std::exp2(driveOct);
+				makeup = driveOct < 0.f ? std::exp2(-driveOct) : std::exp2(-MAKEUP_EXP * driveOct);
+				gainOct = driveOct;
+			}
+			octKnown = true;
 		}
 		block = (block + 1) % BLOCK;
 
@@ -188,8 +243,8 @@ struct OutputStage {
 		const float subOut = p.subThroughFilter ? 0.f : subMix;
 		float l = ladderLeft.process(driveGain * (left + subIn)) * makeup + subOut;
 		float r = ladderRight.process(driveGain * (right + subIn)) * makeup + subOut;
-		left = dcLeft.process(std::tanh(CLIP_DRIVE * l), dcCoef);
-		right = dcRight.process(std::tanh(CLIP_DRIVE * r), dcCoef);
+		left = dcLeft.process(fastTanh(CLIP_DRIVE * l), dcCoef);
+		right = dcRight.process(fastTanh(CLIP_DRIVE * r), dcCoef);
 	}
 
 private:
@@ -202,6 +257,23 @@ private:
 	float driveGain = 1.f;
 	float makeup = 1.f;
 	float lastRate = 0.f;
+	// Caches of the libm calls above, keyed on their arguments.
+	bool octKnown = false;
+	float fcOct = 0.f;
+	float fc = 1000.f;
+	float gainOct = 0.f;
+	bool logKnown = false;
+	float logHz = 0.f;
+	float logValue = 0.f;
+
+	float cutoffLog2(float hz) {
+		if (!logKnown || hz != logHz) {
+			logValue = std::log2(std::max(hz, 1.f));
+			logHz = hz;
+			logKnown = true;
+		}
+		return logValue;
+	}
 
 	static float targetK(const Params& p) {
 		const float res = std::max(0.f, std::min(p.resonance, 1.f));

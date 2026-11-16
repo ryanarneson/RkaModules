@@ -1,12 +1,14 @@
 #pragma once
+#include "FastMath.hpp"
 #include <cmath>
 
 // Rack-independent waveforms of a normalized phase p in [0, 1), output in
 // [-1, 1]. SIN and TRI start at 0 rising, so they stay in phase.
 namespace rka {
 
+// sin(2 pi p) without libm (FastMath.hpp): within 2.5e-7 of the exact sine.
 inline float waveSin(float p) {
-	return std::sin(2.f * float(M_PI) * p);
+	return fastSin2pi(p);
 }
 
 inline float waveTri(float p) {
