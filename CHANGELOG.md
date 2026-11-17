@@ -9,6 +9,16 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Hadal**, a 10 HP rumble and noise bed:
+  - Three layers, Rumble, Hiss and Crackle, each with a level knob (audio
+    taper) and its own output.
+  - Depth, 0 to 11 km, darkens every layer at once while holding its level.
+  - Drift: slow random wander of each layer's level and colour, per side,
+    and of crackle's density; still at 0.
+  - CV with attenuverters on all five controls.
+  - L/R mix (rumble mono-safe, hiss wide, crackle panned); a patched layer
+    output leaves the mix; L alone carries the mono sum.
+  - Drawn as a depth gauge.
 - New module: **Fog**, a 10 HP stereo reverb:
   - Visibility sets the decay time in seconds, 0.4 s to 80 s, lettered
     CLEAR to DENSE; the time holds at any Size, and the tail always decays.
