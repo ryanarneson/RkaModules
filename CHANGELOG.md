@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.4 (2026-11-16): Hadal: Crackle soft-clipped and about 9 dB louder
 - 2.0.3 (2026-11-16): Hadal: first build for listening (rumble, hiss, crackle, Depth, Drift); Fog bottom row at 116 mm
 - 2.0.2 (2026-11-16): Fog: L/R phase fix below 300 Hz, Drift/Damp/Visibility smoothing, wet level scales with decay time, faster leveller attack, factory presets and manual
 - 2.0.1 (2026-11-16): Fog: cache-stagger CPU fix, silence sleep, matched wet level, wet leveller, FRET/SMOKE/ICE voicings, ICE feed-forward octave
