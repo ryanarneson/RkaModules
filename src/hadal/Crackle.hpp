@@ -99,7 +99,8 @@ struct Crackle {
 				modTarget = rng.unit();
 				modHold = (int) ((0.25f + 0.75f * rng.unit()) * fs / 32.f);
 			}
-			mod += (modTarget - mod) * (32.f / (0.2f * fs));
+			const float glide = 32.f / (0.2f * fs);
+			mod += (modTarget - mod) * (glide < 1.f ? glide : 1.f);   // never overshoots, at any rate
 		}
 		// Rate 0.15x to 1.85x the density, averaging 1x.
 		const float rate = density * (0.15f + 1.7f * mod);

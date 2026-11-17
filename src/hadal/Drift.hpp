@@ -26,6 +26,9 @@ struct Wander {
 		// as STEP / (tau fs) (tau >> STEP / fs here, so the error is tiny).
 		c1 = (float) STEP / (6.f * fs);
 		c2 = (float) STEP / (3.f * fs);
+		// At absurd rates (Rack allows 1 Hz) a step would overshoot and grow.
+		c1 = c1 < 1.f ? c1 : 1.f;
+		c2 = c2 < 1.f ? c2 : 1.f;
 	}
 
 	void seed(uint32_t s) {

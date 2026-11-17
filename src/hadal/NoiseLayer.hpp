@@ -78,8 +78,14 @@ struct LayerShape {
 // Output variance for white noise of variance 1/3 through the shape with the
 // low-pass at lpHz, at rate fs: (1/3) (2/fs) * integral over 0..fs/2 of |H|^2.
 // libm here: called only from setRate's table.
+inline double hpCorner(const LayerShape& s, double fs) {
+	// Below Nyquist at any rate: at absurd rates (Rack allows 1 Hz) the
+	// corner would otherwise wrap and the filter go unstable.
+	return s.hpHz < 0.2 * fs ? s.hpHz : 0.2 * fs;
+}
+
 inline double shapeVariance(const LayerShape& s, double lpHz, double fs) {
-	const double gl = std::tan(M_PI * lpHz / fs), gh = std::tan(M_PI * s.hpHz / fs);
+	const double gl = std::tan(M_PI * lpHz / fs), gh = std::tan(M_PI * hpCorner(s, fs) / fs);
 	const int N = 6000;
 	const double f0 = 0.25, f1 = 0.5 * fs * 0.9999;
 	double sum = 0, prevF = 0, prevV = 0;
@@ -125,7 +131,7 @@ struct ShapedNoise {
 			const double hz = std::min(std::pow(2.0, (double) (lo + i * tableStep)), 0.45 * fs);
 			gainTable[i] = (float) (1.0 / std::sqrt(shapeVariance(shape, hz, fs)));
 		}
-		const double gh = std::tan(M_PI * shape.hpHz / fs);
+		const double gh = std::tan(M_PI * hpCorner(shape, fs) / fs);
 		for (int c = 0; c < 2; c++) {
 			if (shape.hpOrder == 4) {
 				hp[c][0].set(gh, BW4_Q1);
