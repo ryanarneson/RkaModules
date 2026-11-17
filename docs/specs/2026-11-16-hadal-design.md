@@ -166,7 +166,10 @@ each within its own range:
     hold for sparse ticks (about 40 dB crest), so the cap wins. At the
     listening stop the user chose to soft-clip each tick (tanh, drive 3,
     normalised so the largest still reaches 5 V): about 0.1 V RMS at full
-    and noon Depth, 9 dB over plain scaling.
+    and noon Depth in each side of the mix, 9 dB over plain scaling; the
+    CRACKLE jack carries the mono sum of both sides, (L + R) / √2, about
+    0.14 V RMS. The ±5 V cap holds at Drift 0; Drift's level wander can
+    lift a tick by up to 4 dB (about 7.6 V at full Drift and 0 km).
   - That long-term RMS is what Depth holds within ±1.5 dB (*as built:*
     within 2 dB, because the soft clip squeezes bright, high-peak ticks
     more: -1.6 dB at 0 km, +0.6 dB at 11 km, re noon). Each tick's

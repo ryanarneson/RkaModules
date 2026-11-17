@@ -6,6 +6,7 @@
 #include "HadalEngine.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -143,7 +144,10 @@ void mix_ratio() {
 		const std::vector<float>& src = layer == 0 ? o.rumble : layer == 1 ? o.hiss : o.crackle;
 		double worst = 0, scale = 1e-9;
 		for (size_t i = 0; i < src.size(); i++) {
-			worst = std::max(worst, (double) std::fabs(o.l[i] - src[i] * rka::HadalEngine::MIX_GAIN));
+			// Crackle's jack is the mono sum of its panned sides, (L + R) / sqrt 2,
+			// so a tick panned hard right still reaches it at -3 dB at most.
+			const float mixed = layer == 2 ? (o.l[i] + o.r[i]) * 0.70710678f : o.l[i];
+			worst = std::max(worst, (double) std::fabs(mixed - src[i] * rka::HadalEngine::MIX_GAIN));
 			scale = std::max(scale, (double) std::fabs(src[i] * rka::HadalEngine::MIX_GAIN));
 		}
 		CHECK(worst <= 1e-4 * scale, "layer %d reaches L at %.2e off the fixed mix ratio (scale %.2f)", layer, worst,
@@ -417,6 +421,44 @@ void seeds_differ_and_repeat() {
 	CHECK(std::fabs(corr(oa.hiss, oc.hiss)) < 0.1, "two seeds must differ (hiss corr %.3f)", corr(oa.hiss, oc.hiss));
 }
 
+// Initialize restarts from the seed: after any history, a reset engine
+// matches a fresh one bit for bit.
+void reset_matches_fresh() {
+	Rig fresh(7), used(7);
+	for (Rig* g : {&fresh, &used}) {
+		g->levels(0.5f, 0.5f, 1.f);
+		g->f.params[F::DRIFT] = 1.f;
+	}
+	run(used, 7.f);
+	used.e.reset();
+	Out a = run(fresh, 3.f, 0.f), b = run(used, 3.f, 0.f);
+	size_t first = a.l.size();
+	for (size_t i = 0; i < a.l.size() && first == a.l.size(); i++)
+		if (a.l[i] != b.l[i] || a.r[i] != b.r[i] || a.crackle[i] != b.crackle[i])
+			first = i;
+	CHECK(first == a.l.size(), "after reset the output differs from a fresh engine from sample %zu", first);
+}
+
+// Initialize runs under Rack's engine lock: it must not rebuild the gain
+// tables (a sample-rate change does, off the audio path). Timed against
+// setSampleRate on the same engine.
+void reset_is_cheap() {
+	rka::HadalEngine e(1);
+	double tRate = 1e30, tReset = 1e30;
+	for (int k = 0; k < 5; k++) {
+		auto t0 = std::chrono::steady_clock::now();
+		e.setSampleRate(48000.f);
+		auto t1 = std::chrono::steady_clock::now();
+		e.reset();
+		auto t2 = std::chrono::steady_clock::now();
+		tRate = std::min(tRate, std::chrono::duration<double>(t1 - t0).count());
+		tReset = std::min(tReset, std::chrono::duration<double>(t2 - t1).count());
+	}
+	std::printf("  reset %.3f ms, setSampleRate %.3f ms\n", 1e3 * tReset, 1e3 * tRate);
+	CHECK(tReset < tRate / 20.0, "reset takes %.3f ms against setSampleRate's %.3f ms (want under 1/20)", 1e3 * tReset,
+	      1e3 * tRate);
+}
+
 void bad_rate_ignored() {
 	Rig ref, g;
 	ref.levels(0.f, 1.f, 0.f);
@@ -463,6 +505,8 @@ int main() {
 	headroom();
 	stereo_mix();
 	seeds_differ_and_repeat();
+	reset_matches_fresh();
+	reset_is_cheap();
 	bad_rate_ignored();
 	nan_cv_safe();
 	return rkatest::finish("hadal test_engine");

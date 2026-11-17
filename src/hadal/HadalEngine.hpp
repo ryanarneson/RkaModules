@@ -74,7 +74,7 @@ class HadalEngine {
 public:
 	static constexpr float FULL_V = 1.6f;                            // Rumble, Hiss RMS at full
 	static constexpr float CRACKLE_GAIN = 5.f;                       // V per shaped unit
-	static constexpr float CRACKLE_FULL_RMS = 0.107f;                // measured at noon Depth, 10/s
+	static constexpr float CRACKLE_FULL_RMS = 0.138f;                // the jack (mono sum), measured at noon Depth, 10/s
 	static constexpr float MIX_GAIN = 0.5f;
 	static constexpr float KNEE = 8.f, CEIL = 10.f;
 	static constexpr float DRIFT_LEVEL_DB = 4.f, DRIFT_COLOUR_OCT = 1.f / 3.f;
@@ -100,11 +100,13 @@ public:
 		ctl_ = 0;
 	}
 
+	// Initialize: reseed and clear every state, keeping the gain tables
+	// (Rack holds its engine lock while this runs).
 	void reset() {
 		seedAll();
-		const float fs = rate_;
-		rate_ = 0.f;
-		setSampleRate(fs);
+		rumble_.clear();
+		hiss_.clear();
+		ctl_ = 0;
 	}
 
 	void process(const HadalFrame& f, HadalResult& out) {
@@ -164,12 +166,9 @@ public:
 			colour[k] = DRIFT_COLOUR_OCT * driftS_ * wanders_[6 + k].next();
 		const float densityW = wanders_[9].next();
 		if (ctl_ == 0) {
-			rumble_.setDepth(depthS_);
-			rumble_.setColour(colour[0]);
-			hiss_.setDepth(depthS_);
-			hiss_.setColour(colour[1]);
-			crackle_.setDepth(depthS_);
-			crackle_.setColour(colour[2]);
+			rumble_.setDepthColour(depthS_, colour[0]);
+			hiss_.setDepthColour(depthS_, colour[1]);
+			crackle_.setDepthColour(depthS_, colour[2]);
 			crackle_.setDensity(DENSITY * fastExp2(driftS_ * densityW * 1.1375035f));   // log2(2.2)
 		}
 		ctl_ = ctl_ + 1 < 32 ? ctl_ + 1 : 0;
@@ -190,7 +189,9 @@ public:
 		for (int k = 0; k < 3; k++) {
 			const float g = scale[k] * gainS_[k];
 			const float l = side[k][0] * g * lvl[k][0], r = side[k][1] * g * lvl[k][1];
-			mono[k] = l;
+			// A layer's own jack: its left side (Rumble and Hiss, whose sides
+			// are alike), or Crackle's mono sum, so no panned tick goes missing.
+			mono[k] = k == 2 ? (l + r) * 0.70710678f : l;
 			mixL += MIX_GAIN * w_[k] * l;
 			mixR += MIX_GAIN * w_[k] * r;
 		}

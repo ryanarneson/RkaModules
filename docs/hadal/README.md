@@ -36,8 +36,9 @@ default. Going deeper darkens every layer at once, each within its own range:
 The corners move on a log scale, so equal turns give equal steps in octaves.
 **Depth does not change the level:** Rumble and Hiss each keep the same RMS
 level across the whole range, and Crackle stays within about 2 dB of its
-noon level (slightly quieter at 0 km, slightly louder at 11 km). Rumble
-never goes below 20 Hz, and Hiss never goes below about 250 Hz.
+noon level (slightly quieter at 0 km, slightly louder at 11 km). Rumble is
+high-passed at 20 Hz, with little energy below 15 Hz, and Hiss at about
+250 Hz.
 
 ### Rumble, Hiss, Crackle: levels
 
@@ -48,10 +49,12 @@ the L/R mix alike.
 
 - **Rumble and Hiss at full:** about 1.6 V RMS at their own outputs. Noise
   has high peaks, so these reach around the ±5 V audio standard.
-- **Crackle at full:** about 0.1 V RMS long-term, at Drift 0 and noon Depth.
-  It is sparse, so its average is low while its ticks are loud. Each tick is
-  soft-clipped, which brings the small and mid ticks up and rounds the
-  biggest, and no tick peaks above ±5 V.
+- **Crackle at full:** about 0.14 V RMS long-term on its own output, at
+  Drift 0 and noon Depth. It is sparse, so its average is low while its
+  ticks are loud. Each tick is soft-clipped, which brings the small and mid
+  ticks up and rounds the biggest; at Drift 0 no tick peaks above ±5 V.
+  Drift's level wander (up to +4 dB) can push the odd tick past that, to
+  about 5.3 V at the default Drift and 7.6 V at full.
 - **Defaults:** Rumble 50 %, Hiss 30 %, Crackle 0 %, so a freshly placed
   Hadal gives a usable bed at once.
 
@@ -95,6 +98,8 @@ zipper noise or clicks.
 ## Outputs
 
 - **RUMBLE, HISS, CRACKLE:** each layer alone, mono, at its knob's level.
+  CRACKLE is the mono sum of its panned ticks, so every tick reaches it,
+  a hard-panned one at most 3 dB down.
 - **Patching a layer output takes that layer out of the L/R mix**, so a
   layer sent elsewhere isn't doubled in the mix. Unplug it and it comes back.
   The change fades over about 10 ms, so it doesn't click. Nothing on the

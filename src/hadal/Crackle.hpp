@@ -48,14 +48,27 @@ struct Crackle {
 			y1[c] = y2[c] = 0;
 		update();
 	}
+	// A seed restarts the whole layer: random stream, clustering wander and
+	// the click filters (the tau and gain tables are kept).
 	void seed(uint32_t s) {
 		rng.seed(s);
+		mod = modTarget = 0.5f;
+		modHold = ctl = 0;
+		tickedNow = false;
+		panNow = 0.5f;
+		for (int c = 0; c < 2; c++)
+			y1[c] = y2[c] = 0;
 	}
 	void setDepth(float d01) {
 		depth = d01 >= 0.f ? (d01 <= 1.f ? d01 : 1.f) : 0.f;
 		update();
 	}
 	void setColour(float octaves) {
+		colour = octaves >= -1.f ? (octaves <= 1.f ? octaves : 1.f) : -1.f;
+		update();
+	}
+	void setDepthColour(float d01, float octaves) {
+		depth = d01 >= 0.f ? (d01 <= 1.f ? d01 : 1.f) : 0.f;
 		colour = octaves >= -1.f ? (octaves <= 1.f ? octaves : 1.f) : -1.f;
 		update();
 	}

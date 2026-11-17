@@ -119,12 +119,16 @@ struct ShapedNoise {
 	float gainTable[TABLE] = {};
 	float gain = 1.f;
 	Svf lp[2][2], hp[2][2];
+	// log2 of the shallow and deep low-pass corners, once (no libm per
+	// sample: update() runs at control rate on the audio thread).
+	float log2Shallow, log2Deep;
 
-	explicit ShapedNoise(const LayerShape& s) : shape(s) {}
+	explicit ShapedNoise(const LayerShape& s)
+	    : shape(s), log2Shallow((float) std::log2(s.lpShallowHz)), log2Deep((float) std::log2(s.lpDeepHz)) {}
 
 	void setRate(float rate) {
 		fs = rate;
-		const float lo = std::log2(shape.lpDeepHz) - 1.f, hi = std::log2(shape.lpShallowHz) + 1.f;
+		const float lo = log2Deep - 1.f, hi = log2Shallow + 1.f;
 		tableLo = lo;
 		tableStep = (hi - lo) / (TABLE - 1);
 		for (int i = 0; i < TABLE; i++) {
@@ -158,9 +162,25 @@ struct ShapedNoise {
 		update();
 	}
 
+	// Filter state to silence, tables kept (Initialize: no rebuild under
+	// Rack's engine lock).
+	void clear() {
+		for (int c = 0; c < 2; c++)
+			for (int j = 0; j < 2; j++) {
+				lp[c][j].clear();
+				hp[c][j].clear();
+			}
+	}
+
+	// Both at once, for the engine's control tick: one update().
+	void setDepthColour(float d01, float octaves) {
+		depth = d01 >= 0.f ? (d01 <= 1.f ? d01 : 1.f) : 0.f;
+		colour = octaves >= -1.f ? (octaves <= 1.f ? octaves : 1.f) : -1.f;
+		update();
+	}
+
 	void update() {
-		const float l0 = std::log2(shape.lpShallowHz), l1 = std::log2(shape.lpDeepHz);
-		float lc = l0 + depth * (l1 - l0) + colour;
+		float lc = log2Shallow + depth * (log2Deep - log2Shallow) + colour;
 		// Never above 0.45 fs (and the hiss never above 16 kHz).
 		float hz = fastExp2(lc);
 		const float cap = 0.45f * fs < 16000.f ? 0.45f * fs : 16000.f;
@@ -206,6 +226,12 @@ struct Rumble {
 	void setColour(float octaves) {
 		n.setColour(octaves);
 	}
+	void setDepthColour(float d01, float octaves) {
+		n.setDepthColour(d01, octaves);
+	}
+	void clear() {
+		n.clear();
+	}
 	// 90 % of each side's noise power is shared: correlation 0.9.
 	void process(float& l, float& r) {
 		const float c = rng.uniform(), a = rng.uniform(), b = rng.uniform();
@@ -230,6 +256,12 @@ struct Hiss {
 	}
 	void setColour(float octaves) {
 		n.setColour(octaves);
+	}
+	void setDepthColour(float d01, float octaves) {
+		n.setDepthColour(d01, octaves);
+	}
+	void clear() {
+		n.clear();
 	}
 	void process(float& l, float& r) {
 		l = n.filter(0, rng.uniform());
