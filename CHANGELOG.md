@@ -2,11 +2,24 @@
 
 ## Test builds
 
+- 2.0.5 (2026-11-17): Hadal: final review fixes (CRACKLE jack mono sum, cheap reset, no libm on the audio path)
+- 2.0.4 (2026-11-16): Hadal: Crackle soft-clipped and about 9 dB louder
+- 2.0.3 (2026-11-16): Hadal: first build for listening (rumble, hiss, crackle, Depth, Drift); Fog bottom row at 116 mm
 - 2.0.2 (2026-11-16): Fog: L/R phase fix below 300 Hz, Drift/Damp/Visibility smoothing, wet level scales with decay time, faster leveller attack, factory presets and manual
 - 2.0.1 (2026-11-16): Fog: cache-stagger CPU fix, silence sleep, matched wet level, wet leveller, FRET/SMOKE/ICE voicings, ICE feed-forward octave
 
 ## 2.0.0 (unreleased)
 
+- New module: **Hadal**, a 10 HP rumble and noise bed:
+  - Three layers, Rumble, Hiss and Crackle, each with a level knob (audio
+    taper) and its own output.
+  - Depth, 0 to 11 km, darkens every layer at once while holding its level.
+  - Drift: slow random wander of each layer's level and colour, per side,
+    and of crackle's density; still at 0.
+  - CV with attenuverters on all five controls.
+  - L/R mix (rumble mono-safe, hiss wide, crackle panned); a patched layer
+    output leaves the mix; L alone carries the mono sum.
+  - Drawn as a depth gauge.
 - New module: **Fog**, a 10 HP stereo reverb:
   - Visibility sets the decay time in seconds, 0.4 s to 80 s, lettered
     CLEAR to DENSE; the time holds at any Size, and the tail always decays.

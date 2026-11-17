@@ -1,6 +1,7 @@
 # Hadal: rumble and noise
 
-Status: idea, 2026-11-15. Not designed. 8 HP in the sketch. One of nine
+Status: built (2026-11-16, 10 HP). Design: `docs/specs/2026-11-16-hadal-design.md`;
+manual: `docs/hadal/README.md`. The text below is the original idea; the sketch was 8 HP. One of nine
 added to fill gaps for dark, space and horror ambient.
 
 ![mockup](hadal-mockup.svg)
