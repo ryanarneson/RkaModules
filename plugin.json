@@ -65,6 +65,16 @@
         "Stereo"
       ],
       "keywords": "reverb ambient space shimmer"
+    },
+    {
+      "slug": "Hadal",
+      "name": "Hadal",
+      "description": "Rumble and noise: a bed of sub rumble, hiss and crackle that Depth darkens and Drift moves, with an output per layer",
+      "tags": [
+        "Noise",
+        "Random"
+      ],
+      "keywords": "noise rumble hiss crackle ambient drone bed texture"
     }
   ]
 }
