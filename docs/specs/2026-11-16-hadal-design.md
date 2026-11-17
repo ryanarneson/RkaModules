@@ -162,7 +162,14 @@ each within its own range:
   - At full, Crackle's long-term RMS, at Drift 0 and the nominal density
     of 10 ticks per second, is a stated value, set by ear at the
     listening stop. The starting figure is 0.5 V.
-  - That long-term RMS is what Depth holds within ±1.5 dB. Each tick's
+  - *As built:* the ±5 V tick cap and a 0.5 V long-term RMS cannot both
+    hold for sparse ticks (about 40 dB crest), so the cap wins. At the
+    listening stop the user chose to soft-clip each tick (tanh, drive 3,
+    normalised so the largest still reaches 5 V): about 0.1 V RMS at full
+    and noon Depth, 9 dB over plain scaling.
+  - That long-term RMS is what Depth holds within ±1.5 dB (*as built:*
+    within 2 dB, because the soft clip squeezes bright, high-peak ticks
+    more: -1.6 dB at 0 km, +0.6 dB at 11 km, re noon). Each tick's
     energy stays the same as Depth moves, so a deep thud, being longer,
     peaks lower than a shallow tick.
   - Tick sizes come from a bounded, skewed distribution (mostly small,
@@ -193,6 +200,8 @@ each within its own range:
   real environment, which is never quite still.
 - **At 0** the bed is completely static: steady statistics, nothing
   moving.
+- *As built:* level wanders per layer and per side; colour wanders per
+  layer, the same on both sides (each layer's filters share one corner).
 - **At full:**
   - each layer's level wanders within about ±4 dB;
   - each layer's corner frequencies wander within about ±⅓ octave around
@@ -238,7 +247,9 @@ each within its own range:
   hover text must say so.
 - **Mono through L:** with R unpatched, L carries the mono sum of the
   mix, at about the loudness of one side of the stereo mix (measured on
-  noise).
+  noise). *As built:* (L + R) / √2, exactly one side's loudness on hiss;
+  rumble, whose sides correlate at about 0.9, is about 2.8 dB louder in
+  mono.
 - **Headroom:** with all three layers at full, the mix must stay within
   ±10 V without hard clipping. A gentle soft limit near 8–10 V is
   allowed as a safety net, but at default settings it must never act.
