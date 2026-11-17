@@ -81,7 +81,7 @@ struct hadal {
 	static BenchCase<Instance> benchCase(int k) {
 		// Budgets: about twice what an Apple M-series Mac measured, rounded
 		// up to the next 0.05 (idle 0.028: nothing patched, nothing computed;
-		// outputs 0.147 and busy 0.164, flat from 1 to 16 instances).
+		// outputs 0.172 and busy 0.185 with the crackle shaper, flat from 1 to 16 instances).
 		// Elsewhere: three times as much, provisional (not yet measured on
 		// x86-64).
 		const BenchCase<Instance> cases[BENCH_CASES] = {

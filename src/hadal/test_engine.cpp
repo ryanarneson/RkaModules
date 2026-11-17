@@ -101,6 +101,26 @@ void full_levels() {
 		for (float v : o.crackle)
 			pk = std::max(pk, std::fabs(v));
 		CHECK(pk <= 5.0f, "a crackle tick peaks at %.2f V (cap 5 V)", pk);
+		// Option D (soft-clipped ticks, turned up): at least 85 mV RMS,
+		// about 8 dB over the plain 5 V-peak scaling's 37 mV.
+		CHECK(rms(o.crackle) >= 0.085, "Crackle at full: %.4f V RMS (want >= 0.085 V)", rms(o.crackle));
+	}
+	// The soft clip squeezes bright (high-peak) ticks more than dark ones,
+	// so Crackle's level moves a little with Depth: within 2 dB of noon.
+	{
+		double at[3];
+		const float depths[3] = {0.f, 0.5f, 1.f};
+		for (int k = 0; k < 3; k++) {
+			Rig g;
+			g.levels(0.f, 0.f, 1.f);
+			g.f.params[F::DEPTH] = depths[k];
+			at[k] = rms(run(g, 60.f).crackle);
+		}
+		for (int k = 0; k < 3; k += 2) {
+			std::printf("  Crackle at depth %.0f: %+.2f dB re noon\n", depths[k], db(at[k] / at[1]));
+			CHECK(std::fabs(db(at[k] / at[1])) <= 2.0, "Crackle at depth %.0f is %+.2f dB re noon (want within 2)",
+			      depths[k], db(at[k] / at[1]));
+		}
 	}
 }
 

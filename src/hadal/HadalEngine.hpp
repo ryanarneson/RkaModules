@@ -7,7 +7,8 @@
 //   smoothed (30 ms one-poles): Depth, the three level gains (knob^2), Drift
 //   every 32 samples: Depth and Drift's colour and density into the layers
 //   the layers that are needed: a layer's output is patched, or L or R is
-//   layer outputs: the layer's left side x 1.6 V (Crackle: x 5 V / PEAK) x
+//   layer outputs: the layer's left side x 1.6 V (Crackle: soft-clipped by
+//     Crackle::shape, then x 5 V) x
 //     its level gain x Drift's level wander for that side
 //   the mix: each layer x MIX_GAIN x its mix weight (fading to 0 over 10 ms
 //     when its own output is patched), summed per side
@@ -72,8 +73,8 @@ struct HadalResult {
 class HadalEngine {
 public:
 	static constexpr float FULL_V = 1.6f;                            // Rumble, Hiss RMS at full
-	static constexpr float CRACKLE_GAIN = 5.f / hadal::Crackle::PEAK; // V per unit
-	static constexpr float CRACKLE_FULL_RMS = CRACKLE_GAIN;          // the unit layer's RMS is 1
+	static constexpr float CRACKLE_GAIN = 5.f;                       // V per shaped unit
+	static constexpr float CRACKLE_FULL_RMS = 0.107f;                // measured at noon Depth, 10/s
 	static constexpr float MIX_GAIN = 0.5f;
 	static constexpr float KNEE = 8.f, CEIL = 10.f;
 	static constexpr float DRIFT_LEVEL_DB = 4.f, DRIFT_COLOUR_OCT = 1.f / 3.f;
@@ -180,6 +181,8 @@ public:
 			hiss_.process(side[1][0], side[1][1]);
 		if (need[2]) {
 			crackle_.process(side[2][0], side[2][1]);
+			side[2][0] = hadal::Crackle::shape(side[2][0]);
+			side[2][1] = hadal::Crackle::shape(side[2][1]);
 			ticks_ += crackle_.ticked() ? 1 : 0;
 		}
 		const float scale[3] = {FULL_V, FULL_V, CRACKLE_GAIN};

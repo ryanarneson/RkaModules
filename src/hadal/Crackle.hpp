@@ -18,7 +18,8 @@
 //   brightest tau Drift can reach (0.03 ms) bounds it at PEAK. Overlapping
 //   ticks are kept under PEAK by a soft limit that only acts above 0.8 PEAK.
 //
-// The engine scales by 5 V / PEAK, so the largest tick reaches +-5 V.
+// The engine takes shape() of the output (a soft clip, then normalised) and
+// scales it by 5 V, so the largest tick reaches +-5 V.
 #include "FastMath.hpp"
 #include "Random.hpp"
 
@@ -80,6 +81,16 @@ struct Crackle {
 	}
 	float lastPan() const {
 		return panNow;
+	}
+
+	// The output shaper (option D, chosen at the listening checkpoint): a
+	// unit-layer sample to [-1, 1], tanh(DRIVE x / PEAK) / tanh(DRIVE).
+	// Small and mid ticks come up about 3x, the biggest are rounded under
+	// the cap: about +9 dB long-term at noon Depth (+7.5 at 0 km, +9.5 at
+	// 11 km, since bright ticks peak higher and are squeezed more).
+	static constexpr float DRIVE = 3.f;
+	static float shape(float x) {
+		return fastTanh(x * (DRIVE / PEAK)) * (1.f / 0.99505475f);   // 1 / tanh(3)
 	}
 
 	static float softLimit(float x) {
