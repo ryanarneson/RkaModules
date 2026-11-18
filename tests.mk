@@ -44,6 +44,11 @@ build/test/hadal/test_hostile: src/hadal/test_hostile.cpp src/testing.hpp $(wild
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/hadal $< -o $@
 
+# Ballast's hostile-input test: the sanitizers, and the counting operator new.
+build/test/ballast/test_hostile: src/ballast/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/ballast/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/ballast $< -o $@
+
 # Fog's hostile-input test: the sanitizers, and the counting operator new.
 build/test/fog/test_hostile: src/fog/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/fog/*.hpp)
 	@mkdir -p $(@D)

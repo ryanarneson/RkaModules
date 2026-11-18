@@ -183,6 +183,10 @@ public:
 	long limited() const {
 		return limited_;
 	}
+	// The DC blocker's output state per side, for the denormal test.
+	float dcState(int s) const {
+		return dcY_[s];
+	}
 
 private:
 	// The VCA law: an unpatched CV is fully open.
