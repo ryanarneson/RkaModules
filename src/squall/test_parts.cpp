@@ -3,10 +3,13 @@
 #include "testing.hpp"
 #include "squall/Gate.hpp"
 #include "squall/Memory.hpp"
+#include "squall/Swell.hpp"
 
 #include <cmath>
 #include <cstdlib>
+#include <algorithm>
 #include <initializer_list>
+#include <random>
 
 using namespace rka::squall;
 
@@ -121,6 +124,171 @@ static void gate_retrigger() {
 	CHECK(std::abs(high - 2400) <= 2, "then high for %d samples, want 2400", high);
 }
 
+
+// Swell: settle time (to within 5 % of a 0 -> 5 V step), in seconds.
+static double settleTime(float gap, float fs) {
+	Swell s;
+	s.setSampleRate(fs);
+	s.setGap(gap);
+	s.setState(0.f, 0.f);
+	s.setTarget(5.f);
+	long long n = 0;
+	long long lastOut = 0;
+	const long long maxN = (long long) (3.0 * gap * fs) + 10;
+	for (; n < maxN; n++) {
+		const float v = s.process();
+		if (std::fabs(v - 5.f) > 0.25f)
+			lastOut = n + 1;
+	}
+	return lastOut / (double) fs;
+}
+
+static void swell_settles() {
+	Swell s;
+	s.setSampleRate(48000.f);
+	s.setGap(1.f);
+	s.setState(0.f, 0.f);
+	s.setTarget(5.f);
+	float v = 0.f;
+	for (int i = 0; i < 24000; i++)
+		v = s.process();
+	CHECK(v < 2.5f, "at half a gap Swell is at %g V, want under 2.5", v);
+	for (int i = 0; i < 72000; i++)
+		v = s.process();
+	CHECK(std::fabs(v - 5.f) <= 0.25f, "at two gaps Swell is at %g V, want within 0.25 of 5", v);
+}
+
+static void swell_no_overshoot() {
+	// A step from rest, up and down, never passes its target.
+	for (float target : {5.f, -5.f}) {
+		Swell s;
+		s.setSampleRate(48000.f);
+		s.setGap(0.5f);
+		s.setState(0.f, 0.f);
+		s.setTarget(target);
+		float worst = 0.f;
+		for (int i = 0; i < 480000; i++) {
+			const float v = s.process();
+			worst = std::max(worst, target > 0.f ? v - target : target - v);
+		}
+		CHECK(worst <= 1e-6f, "step to %g overshoots by %g", target, worst);
+	}
+	// Random targets with reversals mid-glide: never outside the targets seen.
+	std::mt19937 rng(9);
+	std::uniform_real_distribution<float> u(-5.f, 5.f);
+	Swell s;
+	s.setSampleRate(48000.f);
+	s.setGap(0.2f);
+	s.setState(0.f, 0.f);
+	float lo = 0.f, hi = 0.f;
+	for (int k = 0; k < 400; k++) {
+		const float t = u(rng);
+		lo = std::min(lo, t);
+		hi = std::max(hi, t);
+		s.setTarget(t);
+		const int len = 500 + (int) (rng() % 20000);
+		for (int i = 0; i < len; i++) {
+			const float v = s.process();
+			CHECK(v >= lo - 1e-5f && v <= hi + 1e-5f, "Swell %g outside the targets [%g, %g]", v, lo, hi);
+			if (v < lo - 1e-5f || v > hi + 1e-5f)
+				return;
+		}
+	}
+}
+
+// The largest per-sample change of slope over random targets.
+static double worstSlopeChange(Swell& s, int targets, uint32_t seed) {
+	std::mt19937 rng(seed);
+	std::uniform_real_distribution<float> u(-5.f, 5.f);
+	double prev = s.out(), prevSlope = 0.0, worst = 0.0;
+	bool first = true;
+	for (int k = 0; k < targets; k++) {
+		s.setTarget(u(rng));
+		for (int i = 0; i < 20000; i++) {
+			const double v = s.process();
+			const double slope = v - prev;
+			if (!first)
+				worst = std::max(worst, std::fabs(slope - prevSlope));
+			first = false;
+			prevSlope = slope;
+			prev = v;
+		}
+	}
+	return worst;
+}
+
+static void swell_no_corner() {
+	Swell s;
+	s.setSampleRate(48000.f);
+	s.setGap(1.f);
+	s.setState(0.f, 0.f);
+	const double worst = worstSlopeChange(s, 100, 3);
+	CHECK(worst < 1e-6, "largest change of slope %g V/sample^2, bound 1e-6", worst);
+}
+
+static void swell_pace_follows_gap() {
+	const double base = settleTime(1.f, 1000.f);
+	for (float gap : {0.125f, 9.f, 600.f}) {
+		const float fs = 48000.f;
+		const double t = settleTime(gap, fs);
+		CHECK(std::fabs(t / gap / base - 1.0) < 0.05, "gap %g s at %g Hz: settles in %g s (%g gaps), want %g gaps", gap, fs, t, t / gap, base);
+	}
+}
+
+static void swell_brakes() {
+	Swell s;
+	s.setSampleRate(48000.f);
+	s.setGap(1.f);
+	s.setState(0.f, 0.f);
+	s.setTarget(5.f);
+	double prev = 0.0, slope = 0.0;
+	for (int i = 0; i < 24000; i++) {
+		const double v = s.process();
+		slope = v - prev;
+		prev = v;
+	}
+	const double moving = slope;
+	CHECK(moving > 1e-6, "mid-glide slope %g", moving);
+	s.setFrozen(true);
+	double worstChange = 0.0, last = slope;
+	for (int i = 0; i < 2880; i++) {   // 60 ms
+		const double v = s.process();
+		slope = v - prev;
+		prev = v;
+		worstChange = std::max(worstChange, std::fabs(slope - last));
+		last = slope;
+	}
+	CHECK(std::fabs(slope) < 0.01 * moving, "60 ms into Freeze the slope is %g of its %g", slope, moving);
+	CHECK(worstChange < 0.2 * moving, "braking changes the slope by up to %g per sample (moving %g)", worstChange, moving);
+	const double held = prev;
+	for (int i = 0; i < 48000; i++)
+		prev = s.process();
+	CHECK(std::fabs(prev - held) < 0.01, "frozen Swell drifts from %g to %g", held, prev);
+	s.setFrozen(false);
+	const double v0 = prev, v1 = s.process();
+	CHECK(std::fabs(v1 - v0) < 0.05 * moving, "on release the first step is %g (moving was %g): it starts from rest", v1 - v0, moving);
+}
+
+static void swell_stable_any_rate() {
+	{
+		Swell s;
+		s.setSampleRate(1.f);
+		s.setGap(0.125f);
+		s.setState(0.f, 0.f);
+		s.setTarget(5.f);
+		for (int i = 0; i < 100; i++) {
+			const float v = s.process();
+			CHECK(std::isfinite(v) && v >= -1e-4f && v <= 5.0001f, "1 Hz, 0.125 s gap: %g", v);
+		}
+	}
+	{
+		// 60 s at 768 kHz: a step is ~5e-8 of the value, under half a float
+		// ulp, so a float state would stall short of the target.
+		const double t = settleTime(60.f, 768000.f);
+		CHECK(t < 130.0, "768 kHz, 60 s gap: settles in %g s, want about 120", t);
+	}
+}
+
 int main() {
 	memory_loop_period();
 	memory_before_full();
@@ -128,5 +296,11 @@ int main() {
 	memory_wraps();
 	gate_length();
 	gate_retrigger();
+	swell_settles();
+	swell_no_overshoot();
+	swell_no_corner();
+	swell_pace_follows_gap();
+	swell_brakes();
+	swell_stable_any_rate();
 	return rkatest::finish("squall test_parts");
 }
