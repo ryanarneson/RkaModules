@@ -14,10 +14,18 @@ public:
 			fs_ = fs;
 	}
 
-	void fire(float seconds) {
+	// lowSeconds: the retrigger's drop (RETRIGGER_S, shorter for events
+	// closer together than that, so a fast clock still gets its edges).
+	void fire(float seconds, float lowSeconds = RETRIGGER_S) {
 		const long long n = samples(seconds);
-		if (high()) {
-			const long long low = samples(RETRIGGER_S);
+		if (lowLeft_ > 0) {
+			// Already dropped for a retrigger: rise as planned, for this
+			// length (a fast clock must not hold the gate low for ever).
+			pending_ = n;
+			return;
+		}
+		if (highLeft_ > 0) {
+			const long long low = samples(lowSeconds);
 			lowLeft_ = low;
 			pending_ = n;
 			highLeft_ = 0;

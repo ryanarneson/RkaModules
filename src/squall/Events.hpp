@@ -109,6 +109,11 @@ public:
 		return rate_;
 	}
 
+	// What is left of the current free-running wait (for tests).
+	double waitLeft() const {
+		return wait_ - acc_;
+	}
+
 private:
 	// [0, 1) and (0, 1], from all 32 bits.
 	double unit32() {
