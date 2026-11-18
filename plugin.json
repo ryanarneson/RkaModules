@@ -84,6 +84,16 @@
         "Mixer"
       ],
       "keywords": "mixer stereo vca level chain"
+    },
+    {
+      "slug": "Pan",
+      "name": "Pan",
+      "description": "Pan expander for Ballast: pan, CV and attenuverter per channel; true stereo pan or balance",
+      "tags": [
+        "Mixer",
+        "Expander"
+      ],
+      "keywords": "pan panning stereo balance ballast expander"
     }
   ]
 }

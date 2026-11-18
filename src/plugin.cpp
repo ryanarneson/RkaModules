@@ -13,6 +13,7 @@ void init(Plugin* p) {
 	p->addModel(modelFog);
 	p->addModel(modelHadal);
 	p->addModel(modelBallast);
+	p->addModel(modelPan);
 	p->addModel(modelShoal);
 	p->addModel(modelSluice);
 
