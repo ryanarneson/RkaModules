@@ -1,4 +1,5 @@
 #include "plugin.hpp"
+#include "BallastChain.hpp"
 #include "BallastEngine.hpp"
 #include "BallastLayout.hpp"
 #include "widgets.hpp"
@@ -73,6 +74,9 @@ struct Ballast : Module {
 	rka::BallastFrame frame;
 	rka::BallastResult result;
 	bool dcBlock = true;
+	// Whether the right-hand neighbour is an expander, kept up to date by
+	// onExpanderChange, so the walk costs nothing with no expander there.
+	bool expanderRight = false;
 
 	Ballast() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
@@ -96,6 +100,11 @@ struct Ballast : Module {
 
 	void onSampleRateChange(const SampleRateChangeEvent& e) override {
 		engine.setSampleRate(e.sampleRate);
+	}
+
+	void onExpanderChange(const ExpanderChangeEvent& e) override {
+		if (e.side == 1)
+			expanderRight = rightExpander.module && dynamic_cast<rka::BallastExpander*>(rightExpander.module);
 	}
 
 	void onReset() override {
@@ -143,12 +152,11 @@ struct Ballast : Module {
 		// cannot change under us; nothing is kept across samples).
 		rka::BallastExpander* chain[MAX_EXPANDERS];
 		int n = 0;
-		for (Module* m = rightExpander.module; m && n < MAX_EXPANDERS; m = m->rightExpander.module) {
-			rka::BallastExpander* x = dynamic_cast<rka::BallastExpander*>(m);
-			if (!x)
-				break;
-			chain[n++] = x;
-		}
+		if (expanderRight && (frame.outL || frame.outR))
+			n = rka::collectBallastExpanders(
+				rightExpander.module, chain, MAX_EXPANDERS, [](Module* m) { return m->rightExpander.module; },
+				[](Module* m) { return m->isBypassed(); },
+				[](Module* m) { return dynamic_cast<rka::BallastExpander*>(m); });
 
 		engine.process(frame, result, chain, n);
 

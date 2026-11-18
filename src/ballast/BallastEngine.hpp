@@ -154,6 +154,10 @@ public:
 		mixR += f.chainR.patched() ? f.chainR.sum() : chL;
 		for (int k = 0; k < chainLen; k++)
 			chain[k]->intoMix(mixL, mixR);
+		// An expander's NaN or inf stops here, before the DC blocker could
+		// hold it for good.
+		mixL = ballastFinite(mixL);
+		mixR = ballastFinite(mixR);
 		const float m = curve(pos_[BallastFrame::MASTER]) * vca(f.masterCv);
 		mixL *= m;
 		mixR *= m;

@@ -4,6 +4,7 @@
 // Spec: docs/specs/2026-11-17-ballast-design.md, "The expander connection".
 #include "testing.hpp"
 #include "BallastEngine.hpp"
+#include "BallastChain.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -184,6 +185,64 @@ void expander_attach_detach() {
 	CHECK(same, "after a detach the output must match a fresh engine bit for bit");
 }
 
+// An expander that writes NaN on one sample.
+struct Poison : rka::BallastExpander {
+	bool armed = true;
+	void postLevel(int, float& l, float& r, bool) override {
+		if (armed)
+			l = r = NAN;
+		armed = false;
+	}
+};
+
+// One NaN from an expander must not leave the outputs dead (DC blocker on,
+// the default).
+void expander_nan_recovers() {
+	Rig g;
+	g.f.dcBlock = true;
+	Poison p;
+	g.chain.push_back(&p);
+	settle(g, 1.f);
+	bool finite = true;
+	for (int i = 0; i < 4800; i++) {
+		g.step();
+		finite = finite && g.out.l == g.out.l && g.out.r == g.out.r;
+	}
+	CHECK(finite, "a NaN from an expander left the outputs NaN (L %g, R %g)", g.out.l, g.out.r);
+}
+
+// The chain walk over a stand-in for Rack's modules.
+struct Node {
+	Node* right = nullptr;
+	bool bypassed = false;
+	rka::BallastExpander* x = nullptr;
+};
+
+int walk(Node* first, rka::BallastExpander** out, int max) {
+	return rka::collectBallastExpanders(first, out, max, [](Node* n) { return n->right; },
+	                                    [](Node* n) { return n->bypassed; }, [](Node* n) { return n->x; });
+}
+
+void walk_skips_bypassed_and_stops_at_strangers() {
+	Gain a(Gain::POST, 0, 1.f, 0.f), b(Gain::POST, 0, 1.f, 0.f), c(Gain::POST, 0, 1.f, 0.f);
+	Node n1, n2, n3, stranger, n4;
+	n1.x = &a;
+	n2.x = &b;
+	n2.bypassed = true;
+	n3.x = &c;
+	n4.x = &a;
+	n1.right = &n2;
+	n2.right = &n3;
+	n3.right = &stranger;
+	stranger.right = &n4;
+	rka::BallastExpander* out[8];
+	const int k = walk(&n1, out, 8);
+	CHECK(k == 2 && out[0] == &a && out[1] == &c,
+	      "the walk found %d (want 2: a, then c; b is bypassed, the stranger ends the chain)", k);
+	CHECK(walk(nullptr, out, 8) == 0, "no neighbour: no expanders");
+	CHECK(walk(&n1, out, 1) == 1, "the walk must stop at max");
+}
+
 } // namespace
 
 int main() {
@@ -194,5 +253,7 @@ int main() {
 	chain_order();
 	no_expander_bit_identical();
 	expander_attach_detach();
+	expander_nan_recovers();
+	walk_skips_bypassed_and_stops_at_strangers();
 	return rkatest::finish("ballast test_expander");
 }

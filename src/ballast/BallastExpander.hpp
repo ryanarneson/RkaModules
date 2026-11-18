@@ -17,9 +17,15 @@
 //   intoMix(l, r)             the summed mix, CHAIN included, before Master
 //                             (a send's return).
 //
-// ch runs 0 to 3. Every method defaults to doing nothing. Calls come from
-// Ballast's process(), on the audio thread; an expander must not allocate
-// or block in them.
+// ch runs 0 to 3. Every method defaults to doing nothing.
+//
+// Threads and state: the calls come from Ballast's process(), which Rack may
+// run on a different engine thread from the expander's own process(), at
+// the same time. So everything an expander does per sample (reading its
+// params and inputs, smoothing, its own state) happens inside these calls,
+// never in its process(); its process() only sets its lights and outputs
+// from values the calls left. The calls must not allocate or block. A
+// bypassed expander is skipped (it is not called) without ending the chain.
 namespace rka {
 
 struct BallastExpander {
