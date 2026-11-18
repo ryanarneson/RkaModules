@@ -10,12 +10,24 @@
 //
 //   preLevel(ch, l, r)        each channel's input pair, before its Level and
 //                             CV (Offset);
-//   postLevel(ch, l, r, mono) each channel's pair after Level and CV (Pan,
-//                             Mute, Solo, Fade, send taps). mono is true when
-//                             the channel's IN L is patched and IN R is not
-//                             (r then holds IN L's copy);
+//   postLevel(ch, l, r, src)  each channel's pair after Level and CV (Pan,
+//                             Mute, Solo, Fade, send taps). src is MONO when
+//                             exactly one of IN L and IN R is patched (l and
+//                             r then both hold that jack's signal), STEREO
+//                             otherwise;
 //   intoMix(l, r)             the summed mix, CHAIN included, before Master
 //                             (a send's return).
+//
+// Ballast also calls linked() on each expander once per sample, before the
+// other calls and whether or not an output is patched: an expander may use
+// it to read its controls and advance its smoothing, and to know it is
+// linked. Just before that, on the first sample an expander is in the chain
+// after not being in it (placed, unbypassed, or a gap closed), Ballast calls
+// attached(). Both come from Ballast's thread: an expander must not work out
+// "newly attached" from a counter its own process() also writes, because
+// with several engine threads the two race. kind() names a kind of expander; Ballast keeps only the first
+// unbypassed expander of each nonzero kind (Pan is 1), so two of a kind never
+// stack. Kind 0 (the default) may repeat.
 //
 // ch runs 0 to 3. Every method defaults to doing nothing.
 //
@@ -28,18 +40,25 @@
 // bypassed expander is skipped (it is not called) without ending the chain.
 namespace rka {
 
+enum BallastSource { STEREO, MONO };
+
 struct BallastExpander {
 	virtual ~BallastExpander() {}
+	virtual int kind() const {
+		return 0;
+	}
+	virtual void linked() {}
+	virtual void attached() {}
 	virtual void preLevel(int ch, float& l, float& r) {
 		(void) ch;
 		(void) l;
 		(void) r;
 	}
-	virtual void postLevel(int ch, float& l, float& r, bool mono) {
+	virtual void postLevel(int ch, float& l, float& r, BallastSource src) {
 		(void) ch;
 		(void) l;
 		(void) r;
-		(void) mono;
+		(void) src;
 	}
 	virtual void intoMix(float& l, float& r) {
 		(void) l;

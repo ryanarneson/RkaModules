@@ -208,6 +208,14 @@ _BL_M = [round(31.35 + (i - 2.5) * 9.5, 2) for i in (4, 5)]     # the master col
 _BL_MX = round((_BL_M[0] + _BL_M[1]) / 2, 2)                    # Master, between them
 
 
+# Pan, Ballast's pan expander, 6 HP: one row per channel, the four rows
+# centred on the panel (no outputs to line up): Pan knob, attenuverter, CV
+# jack, traced right to left. LINK low and centred; the short foot mark (the
+# full one does not fit at 6 HP).
+_PN_X = [6.4, 15.24, 24.08]
+_PN_ROWS = [46.0, 64.0, 82.0, 100.0]
+
+
 def _hadal_on(x):
     return round(column_on_arc(*_HD_O, _HD_LIMB, x), 2)   # below the dial
 
@@ -500,6 +508,22 @@ PANELS = {
                (_BL_M[1], 83.0 + 4.2, "CLIP", 1.3, "dim")],
         preview={f"PARAM_LEVEL_{c}": dict(turn=67.5) for c in "1234"} | {"PARAM_MASTER": dict(turn=67.5)},
         screws=screws_at(12, "tr", "bl"),
+    ),
+    # Pan, Ballast's pan expander (see _PN_X above).
+    "Pan": dict(
+        dir="pan",
+        hp=6,
+        title="PAN",
+        subtitle="BALLAST EXPANDER",
+        components=[("param", f"PAN_{c}", _PN_X[0], y, str(c)) for c, y in zip("1234", _PN_ROWS)]
+        + [("param", f"PAN_{c}_ATT", _PN_X[1], y, None) for c, y in zip("1234", _PN_ROWS)]
+        + [("input", f"PAN_{c}_CV", _PN_X[2], y, None) for c, y in zip("1234", _PN_ROWS)]
+        + [("light", "LINK", 15.24, 112.0, None)],
+        traces=[[f"INPUT_PAN_{c}_CV", f"PARAM_PAN_{c}_ATT", f"PARAM_PAN_{c}"] for c in "1234"],
+        notes=[(15.24, 116.2, "LINK", 1.3, "dim"), (_PN_X[2], 39.0, "CV", 2.0, "dim")],
+        preview={"LIGHT_LINK": dict(lit=True)},
+        mark="R K A",
+        screws=screws_at(6, "tr", "bl"),
     ),
 }
 

@@ -2,6 +2,7 @@
 #include "BallastChain.hpp"
 #include "BallastEngine.hpp"
 #include "BallastLayout.hpp"
+#include "pan/PanCore.hpp"
 #include "widgets.hpp"
 
 #include <cmath>
@@ -77,6 +78,7 @@ struct Ballast : Module {
 	// Whether the right-hand neighbour is an expander, kept up to date by
 	// onExpanderChange, so the walk costs nothing with no expander there.
 	bool expanderRight = false;
+	rka::BallastLinker linker;
 
 	Ballast() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
@@ -120,7 +122,8 @@ struct Ballast : Module {
 
 	void dataFromJson(json_t* root) override {
 		json_t* j = json_object_get(root, "dcBlock");
-		dcBlock = j ? json_boolean_value(j) : true;
+		// On unless the saved value is false (missing or not a boolean: on).
+		dcBlock = !(j && json_is_false(j));
 	}
 
 	static void port(rka::BallastPort& p, Input& in) {
@@ -152,11 +155,12 @@ struct Ballast : Module {
 		// cannot change under us; nothing is kept across samples).
 		rka::BallastExpander* chain[MAX_EXPANDERS];
 		int n = 0;
-		if (expanderRight && (frame.outL || frame.outR))
+		if (expanderRight)
 			n = rka::collectBallastExpanders(
 				rightExpander.module, chain, MAX_EXPANDERS, [](Module* m) { return m->rightExpander.module; },
 				[](Module* m) { return m->isBypassed(); },
 				[](Module* m) { return dynamic_cast<rka::BallastExpander*>(m); });
+		linker.link(chain, n);
 
 		engine.process(frame, result, chain, n);
 
@@ -196,12 +200,36 @@ struct BallastWidget : ModuleWidget {
 		addOutput(createOutputCentered<rka::BrassPort>(mm2px(OUTPUT_R), module, Ballast::R_OUTPUT));
 	}
 
+	// Places a new module directly to the right, pushing neighbours along
+	// (after Venom's addExpander), as one undoable action.
+	void addExpander(Model* model) {
+		Module* m = model->createModule();
+		APP->engine->addModule(m);
+		ModuleWidget* w = model->createModuleWidget(m);
+		APP->scene->rack->setModulePosForce(w, Vec(box.pos.x + box.size.x, box.pos.y));
+		APP->scene->rack->addModule(w);
+		history::ModuleAdd* h = new history::ModuleAdd;
+		h->name = "create " + model->name;
+		h->setModule(w);
+		APP->history->push(h);
+	}
+
 	void appendContextMenu(Menu* menu) override {
 		Ballast* module = getModule<Ballast>();
 		if (!module)
 			return;
 		menu->addChild(new MenuSeparator);
 		menu->addChild(createBoolPtrMenuItem("DC blocker (3 Hz high-pass on the outputs)", "", &module->dcBlock));
+
+		// A Pan already acting on this Ballast greys the item out.
+		rka::BallastExpander* chain[Ballast::MAX_EXPANDERS];
+		const int n = rka::collectBallastExpanders(
+			module->rightExpander.module, chain, Ballast::MAX_EXPANDERS, [](Module* m) { return m->rightExpander.module; },
+			[](Module* m) { return m->isBypassed(); }, [](Module* m) { return dynamic_cast<rka::BallastExpander*>(m); });
+		bool hasPan = false;
+		for (int k = 0; k < n; k++)
+			hasPan = hasPan || chain[k]->kind() == rka::PanCore::KIND;
+		menu->addChild(createMenuItem("Add Pan expander", "", [this]() { addExpander(modelPan); }, hasPan));
 	}
 };
 

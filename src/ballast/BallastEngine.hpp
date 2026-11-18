@@ -4,8 +4,8 @@
 // chain onto it.
 //
 // Per sample, when either output is patched:
-//   each channel: IN L (summed), IN R (summed, or IN L's copy when
-//     unpatched); expanders' preLevel; x Level (the knob's curve, smoothed)
+//   each channel: IN L and IN R (each summed; either alone feeds both
+//     sides, a centred mono source); expanders' preLevel; x Level (the knob's curve, smoothed)
 //     x its CV (VCA law: clamp(CV / 10 V, 0, 1), 1 when unpatched, not
 //     smoothed); expanders' postLevel; summed per side
 //   + CHAIN L and R (R normalled to L), at unity; expanders' intoMix
@@ -98,11 +98,11 @@ public:
 		fadeStep_ = 1.f / (0.01f * fs);
 		// One-pole high-pass, y = a (y1 + x - x1), with a = e^(-2 pi fc / fs).
 		dcA_ = (float) std::exp(-2.0 * M_PI * DC_HZ / fs);
-		clipHold_ = (int) (0.15f * fs + 0.5f);
-		for (int s = 0; s < 2; s++)
-			dcX_[s] = dcY_[s] = 0.f;
-		clipLeft_ = 0;
-		snap_ = true;
+		// At least one sample, at any rate.
+		const int hold = (int) (0.15f * fs + 0.5f);
+		clipHold_ = hold > 1 ? hold : 1;
+		// Coefficients only: the DC blocker and the knob smoothing carry on
+		// across a rate change (construction and reset() start clean).
 	}
 
 	void reset() {
@@ -136,16 +136,18 @@ public:
 			const bool hasL = f.inL[c].patched(), hasR = f.inR[c].patched();
 			if (!hasL && !hasR && chainLen == 0)
 				continue;
-			float l = f.inL[c].sum();
-			float r = hasR ? f.inR[c].sum() : l;
+			// Either input alone is a centred mono source.
+			const float sl = hasL ? f.inL[c].sum() : 0.f, sr = hasR ? f.inR[c].sum() : 0.f;
+			float l = hasL ? sl : sr;
+			float r = hasR ? sr : sl;
 			for (int k = 0; k < chainLen; k++)
 				chain[k]->preLevel(c, l, r);
 			const float g = curve(pos_[c]) * vca(f.cv[c]);
 			l *= g;
 			r *= g;
-			const bool mono = hasL && !hasR;
+			const BallastSource src = hasL != hasR ? MONO : STEREO;
 			for (int k = 0; k < chainLen; k++)
-				chain[k]->postLevel(c, l, r, mono);
+				chain[k]->postLevel(c, l, r, src);
 			mixL += l;
 			mixR += r;
 		}
@@ -168,9 +170,10 @@ public:
 			r = dcBlock(1, r);
 		}
 		else {
-			dcX_[0] = l;
-			dcX_[1] = r;
-			dcY_[0] = dcY_[1] = 0.f;
+			// Off: track the input as the output, so turning the blocker on
+			// starts from here and an offset fades instead of stepping.
+			dcX_[0] = dcY_[0] = l;
+			dcX_[1] = dcY_[1] = r;
 		}
 		const bool over = (l > KNEE || l < -KNEE) || (r > KNEE || r < -KNEE);
 		if (over)
