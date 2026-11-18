@@ -250,19 +250,21 @@ void mono_normal_switch_no_click() {
 	};
 	double steady = 0, atSwitch = 0;
 	float prev = 0.f;
-	for (int i = 0; i < 24000; i++) {
+	for (int i = 0; i < 36000; i++) {
 		sine(i);
 		if (i == 12000)
 			g.f.outR = false;
+		if (i == 24000)
+			g.f.outR = true;
 		g.step();
 		const double d = std::fabs(g.out.l - prev);
 		if (i > 100 && i < 12000)
 			steady = std::max(steady, d);
-		if (i >= 12000 && i < 12000 + 960)
+		if ((i >= 12000 && i < 12000 + 960) || (i >= 24000 && i < 24000 + 960))
 			atSwitch = std::max(atSwitch, d);
 		prev = g.out.l;
 	}
-	CHECK(atSwitch <= 2 * steady + 0.01, "patching R steps L by %.4f V (steady %.4f)", atSwitch, steady);
+	CHECK(atSwitch <= 2 * steady + 0.01, "unpatching or patching R steps L by %.4f V (steady %.4f)", atSwitch, steady);
 }
 
 void knob_smoothing() {
@@ -402,6 +404,57 @@ void defaults_never_limit() {
 	CHECK(g.e.limited() == 0, "a 5 V sine at defaults was limited on %ld samples", g.e.limited());
 }
 
+// #38: turning the DC blocker on with DC present fades the offset away.
+void dc_on_no_step() {
+	Rig g;
+	g.f.dcBlock = false;
+	dcThrough(g, 2.f);
+	g.f.dcBlock = true;
+	float prev = g.out.l, worst = 0.f;
+	for (int i = 0; i < 1000; i++) {
+		g.step();
+		worst = std::max(worst, std::fabs(g.out.l - prev));
+		prev = g.out.l;
+	}
+	g.run((int) FS);
+	CHECK(worst < 0.01f, "turning the DC blocker on with 2 V DC steps the output by %.4f V", worst);
+	CHECK(std::fabs(g.out.l) < 1e-3f, "after 1 s the offset still reads %.4f V", g.out.l);
+}
+
+// #39: a sample-rate change keeps the DC blocker and the knob smoothing.
+void rate_change_keeps_state() {
+	Rig g;
+	g.f.dcBlock = true;
+	g.f.inL[0].channels = 1;
+	g.inL[0][0] = 2.f;
+	g.run((int) FS);
+	g.f.params[F::LEVEL_1] = 0.3f;
+	float prev = 0.f, steady = 0.f, across = 0.f;
+	for (int i = 0; i < 400; i++) {
+		if (i == 200)
+			g.e.setSampleRate(48000.f);
+		g.step();
+		const float d = std::fabs(g.out.l - prev);
+		if (i > 1 && i < 200)
+			steady = std::max(steady, d);
+		if (i >= 200 && i < 205)
+			across = std::max(across, d);
+		prev = g.out.l;
+	}
+	CHECK(across <= 2.f * steady + 1e-4f, "a rate change mid-glide steps the output by %.5f V (steady %.5f)", across,
+	      steady);
+}
+
+// #40: the CLIP light holds at least one sample at any rate.
+void clip_hold_min() {
+	Rig g;
+	g.e.setSampleRate(1.f);
+	g.f.inL[0].channels = 1;
+	g.inL[0][0] = 9.f;
+	g.step();
+	CHECK(g.out.clip, "at 1 Hz a sample over 8 V must light CLIP on that sample");
+}
+
 } // namespace
 
 int main() {
@@ -424,5 +477,8 @@ int main() {
 	hot_inputs_bounded();
 	clip_hold();
 	defaults_never_limit();
+	dc_on_no_step();
+	rate_change_keeps_state();
+	clip_hold_min();
 	return rkatest::finish("ballast test_engine");
 }

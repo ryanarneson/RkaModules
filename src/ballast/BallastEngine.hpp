@@ -98,11 +98,11 @@ public:
 		fadeStep_ = 1.f / (0.01f * fs);
 		// One-pole high-pass, y = a (y1 + x - x1), with a = e^(-2 pi fc / fs).
 		dcA_ = (float) std::exp(-2.0 * M_PI * DC_HZ / fs);
-		clipHold_ = (int) (0.15f * fs + 0.5f);
-		for (int s = 0; s < 2; s++)
-			dcX_[s] = dcY_[s] = 0.f;
-		clipLeft_ = 0;
-		snap_ = true;
+		// At least one sample, at any rate.
+		const int hold = (int) (0.15f * fs + 0.5f);
+		clipHold_ = hold > 1 ? hold : 1;
+		// Coefficients only: the DC blocker and the knob smoothing carry on
+		// across a rate change (construction and reset() start clean).
 	}
 
 	void reset() {
@@ -170,9 +170,10 @@ public:
 			r = dcBlock(1, r);
 		}
 		else {
-			dcX_[0] = l;
-			dcX_[1] = r;
-			dcY_[0] = dcY_[1] = 0.f;
+			// Off: track the input as the output, so turning the blocker on
+			// starts from here and an offset fades instead of stepping.
+			dcX_[0] = dcY_[0] = l;
+			dcX_[1] = dcY_[1] = r;
 		}
 		const bool over = (l > KNEE || l < -KNEE) || (r > KNEE || r < -KNEE);
 		if (over)

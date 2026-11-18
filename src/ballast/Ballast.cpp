@@ -120,7 +120,8 @@ struct Ballast : Module {
 
 	void dataFromJson(json_t* root) override {
 		json_t* j = json_object_get(root, "dcBlock");
-		dcBlock = j ? json_boolean_value(j) : true;
+		// On unless the saved value is false (missing or not a boolean: on).
+		dcBlock = !(j && json_is_false(j));
 	}
 
 	static void port(rka::BallastPort& p, Input& in) {

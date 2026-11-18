@@ -52,9 +52,9 @@ patched, the knob alone sets the level.
 
 ## Inputs and outputs
 
-- **IN L, IN R:** IN R is normalled to IN L, so a mono source in IN L sits
-  in the centre of both sides. With only IN R patched, the channel is on
-  the right only. A polyphonic cable is summed to one signal.
+- **IN L, IN R:** either input alone is a mono source in the centre of
+  both sides (each is normalled to the other). Before 2.0.8, IN R alone
+  played on the right only. A polyphonic cable is summed to one signal.
 - **CHAIN L, CHAIN R:** added to the mix at unity, after the channels and
   before Master. CHAIN R is normalled to CHAIN L. A polyphonic cable is
   summed. **Eight channels from two Ballasts:** patch the first Ballast's L
@@ -72,8 +72,9 @@ After Master, each side passes through:
 
 - **The DC blocker** (right-click menu, on by default): a gentle 3 Hz
   high-pass that removes any DC offset. A 30 Hz drone loses well under
-  0.1 dB. Turn it off to use Ballast as a CV mixer. It is saved with the
-  patch.
+  0.1 dB. Turn it off to use Ballast as a CV mixer. Turning it on while an
+  offset is present fades the offset away (about 50 ms) rather than
+  dropping it. It is saved with the patch.
 - **A soft limit:** nothing below 8 V is touched, and nothing ever leaves
   above 10 V. Four channels at unity can sum to around 20 V on peaks, more
   with CHAIN and Master turned up; the limit rounds them off instead of
@@ -96,5 +97,6 @@ Bypass silences both outputs.
 ## Other details
 
 - NaN or infinite values on any input or CV read as 0.
-- With neither output patched, Ballast does no work.
+- With neither output patched, Ballast does almost no work (the knobs'
+  smoothing still runs).
 - The module stores its knobs and the DC blocker setting with the patch.

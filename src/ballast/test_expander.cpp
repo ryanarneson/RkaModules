@@ -17,6 +17,9 @@ typedef rka::BallastFrame F;
 namespace {
 
 const float FS = 48000.f;
+// The DC blocker setting every Rig starts with; main runs the hook tests
+// with it off and on.
+bool gDcBlock = false;
 
 // Applies x * mul + add at one stage, to one channel (or all, ch = -1).
 struct Gain : rka::BallastExpander {
@@ -78,7 +81,7 @@ struct Rig {
 		f.chainL.v = chL;
 		f.chainR.v = chR;
 		f.outL = f.outR = true;
-		f.dcBlock = false;
+		f.dcBlock = gDcBlock;
 	}
 	void step() {
 		if (chain.empty())
@@ -184,7 +187,11 @@ void expander_attach_detach() {
 	Rig fresh, g;
 	Gain loud(Gain::POST, -1, 3.f, 0.5f);
 	bool finite = true, same = true;
-	for (int i = 0; i < 20000; i++) {
+	// With the DC blocker on, the one sample the expander acted on stays in
+	// the blocker's state and decays (3 Hz): match within 1e-5 V after 1 s.
+	// With it off: bit for bit at once.
+	const int from = gDcBlock ? 5001 + (int) FS : 5001;
+	for (int i = 0; i < 20000 + (int) FS; i++) {
 		const float x = std::sin(0.01f * i);
 		for (Rig* r : {&fresh, &g}) {
 			r->f.inL[0].channels = 1;
@@ -197,11 +204,12 @@ void expander_attach_detach() {
 		fresh.step();
 		g.step();
 		finite = finite && g.out.l == g.out.l && g.out.r == g.out.r;
-		if (i > 5001)
-			same = same && fresh.out.l == g.out.l && fresh.out.r == g.out.r;
+		if (i > from)
+			same = same && (gDcBlock ? std::fabs(fresh.out.l - g.out.l) < 1e-5f && std::fabs(fresh.out.r - g.out.r) < 1e-5f
+			                         : fresh.out.l == g.out.l && fresh.out.r == g.out.r);
 	}
 	CHECK(finite, "attaching and detaching an expander must keep the output finite");
-	CHECK(same, "after a detach the output must match a fresh engine bit for bit");
+	CHECK(same, "after a detach the output must match a fresh engine (DC blocker %s)", gDcBlock ? "on" : "off");
 }
 
 // An expander that writes NaN on one sample.
@@ -299,8 +307,12 @@ int main() {
 	into_mix_before_master();
 	source_type();
 	chain_order();
-	no_expander_bit_identical();
-	expander_attach_detach();
+	for (bool dc : {false, true}) {
+		gDcBlock = dc;
+		no_expander_bit_identical();
+		expander_attach_detach();
+	}
+	gDcBlock = false;
 	expander_nan_recovers();
 	walk_skips_bypassed_and_stops_at_strangers();
 	one_of_each_kind();
