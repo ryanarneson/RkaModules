@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="40.64mm" height="128.5mm" viewBox="0 0 40.64 128.5">
+<rect width="40.64" height="128.5" fill="#0d0e12"/>
+<circle cx="20.32" cy="34" r="24" fill="none" stroke="#1e232c" stroke-width="0.25"/>
+<circle cx="20.32" cy="34" r="40" fill="none" stroke="#1e232c" stroke-width="0.25"/>
+<circle cx="20.32" cy="34" r="56" fill="none" stroke="#1e232c" stroke-width="0.25"/>
+<path d="M7.6 79L7.6 72.5L7.6 64.3" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M20.32 79L20.32 72.5L20.32 52.35" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M33.04 79L33.04 72.5L33.04 64.3" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<circle cx="7.6" cy="60" r="4.6" fill="#0d0e12"/>
+<circle cx="33.04" cy="60" r="4.6" fill="#0d0e12"/>
+<circle cx="7.6" cy="72.5" r="3.1" fill="#0d0e12"/>
+<circle cx="20.32" cy="72.5" r="3.1" fill="#0d0e12"/>
+<circle cx="33.04" cy="72.5" r="3.1" fill="#0d0e12"/>
+<circle cx="7.6" cy="83" r="4.3" fill="#0d0e12"/>
+<circle cx="20.32" cy="83" r="4.3" fill="#0d0e12"/>
+<circle cx="33.04" cy="83" r="4.3" fill="#0d0e12"/>
+<circle cx="7.6" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="33.04" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="20.32" cy="102" r="1.3" fill="#0d0e12"/>
+<circle cx="20.32" cy="34" r="18" fill="#bab3a3" stroke="#9c7f52" stroke-width="0.7"/>
+<path d="M12.088 39.5L11.34 40 M11.174 37.789L10.342 38.133 M10.61 35.931L9.728 36.107 M10.42 34L9.52 34 M10.61 32.069L9.728 31.893 M12.088 28.5L11.34 28 M13.32 27L12.683 26.363 M14.82 25.768L14.32 25.02 M16.531 24.854L16.187 24.022 M18.389 24.29L18.213 23.408 M22.251 24.29L22.427 23.408 M24.109 24.854L24.453 24.022 M25.82 25.768L26.32 25.02 M27.32 27L27.957 26.363 M28.552 28.5L29.3 28 M30.03 32.069L30.912 31.893 M30.22 34L31.12 34 M30.03 35.931L30.912 36.107 M29.466 37.789L30.298 38.133 M28.552 39.5L29.3 40" fill="none" stroke="#161511" stroke-width="0.16"/>
+<path d="M13.32 41L12.118 42.202 M11.174 30.211L9.603 29.561 M20.32 24.1L20.32 22.4 M29.466 30.211L31.037 29.561 M27.32 41L28.522 42.202" fill="none" stroke="#161511" stroke-width="0.28"/>
+<rect x="3.2" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<rect x="15.92" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<rect x="28.64" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<text x="5.00" y="10.00" font-family="D-DIN Condensed" font-size="5.2" font-weight="normal" letter-spacing="1.4" text-anchor="start" fill="#bab3a3">SQUALL</text>
+<text x="5.00" y="13.80" font-family="D-DIN Condensed" font-size="1.7" font-weight="normal" letter-spacing="0.45" text-anchor="start" fill="#757062">RANDOM GATES &amp; CV</text>
+<text x="10.28" y="44.17" font-family="D-DIN Condensed" font-size="1.8" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511" transform="rotate(-135 10.15 44.17)">CALM</text>
+<text x="7.16" y="28.50" font-family="D-DIN Condensed" font-size="1.8" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511" transform="rotate(-67.5 7.04 28.50)">FAIR</text>
+<text x="20.45" y="19.62" font-family="D-DIN Condensed" font-size="1.8" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">CHANGE</text>
+<text x="33.73" y="28.50" font-family="D-DIN Condensed" font-size="1.8" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511" transform="rotate(67.5 33.60 28.50)">RAIN</text>
+<text x="30.61" y="44.17" font-family="D-DIN Condensed" font-size="1.8" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511" transform="rotate(135 30.49 44.17)">STORMY</text>
+<text x="20.62" y="50.00" font-family="D-DIN Condensed" font-size="2.3" font-weight="bold" letter-spacing="0.6" text-anchor="middle" fill="#161511">WEATHER</text>
+<text x="7.72" y="54.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">GUST</text>
+<text x="33.16" y="54.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">MEMORY</text>
+<text x="7.72" y="96.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CLOCK</text>
+<text x="33.16" y="96.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">FREEZE</text>
+<text x="7.72" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">STEP</text>
+<text x="20.45" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">SWELL</text>
+<text x="33.16" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">GATE</text>
+<text x="7.72" y="89.00" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CV</text>
+<text x="20.45" y="89.00" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CV</text>
+<text x="33.16" y="89.00" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CV</text>
+<text x="20.57" y="125.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.5" text-anchor="middle" fill="#757062">R K A · INSTRUMENTS</text>
+<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
+<circle id="param-WEATHER" cx="20.32" cy="34.0" r="1" fill="#ff0000"/>
+<circle id="param-GUST" cx="7.6" cy="60.0" r="1" fill="#ff0000"/>
+<circle id="param-MEMORY" cx="33.04" cy="60.0" r="1" fill="#ff0000"/>
+<circle id="param-GUST_ATT" cx="7.6" cy="72.5" r="1" fill="#ff0000"/>
+<circle id="param-WEATHER_ATT" cx="20.32" cy="72.5" r="1" fill="#ff0000"/>
+<circle id="param-MEMORY_ATT" cx="33.04" cy="72.5" r="1" fill="#ff0000"/>
+<circle id="input-GUST_CV" cx="7.6" cy="83.0" r="1" fill="#00ff00"/>
+<circle id="input-WEATHER_CV" cx="20.32" cy="83.0" r="1" fill="#00ff00"/>
+<circle id="input-MEMORY_CV" cx="33.04" cy="83.0" r="1" fill="#00ff00"/>
+<circle id="input-CLOCK" cx="7.6" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-FREEZE" cx="33.04" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="light-EVENT" cx="20.32" cy="102.0" r="1" fill="#ff00ff"/>
+<circle id="output-STEP" cx="7.6" cy="116.0" r="1" fill="#0000ff"/>
+<circle id="output-SWELL" cx="20.32" cy="116.0" r="1" fill="#0000ff"/>
+<circle id="output-GATE" cx="33.04" cy="116.0" r="1" fill="#0000ff"/>
+</g>
+</svg>
