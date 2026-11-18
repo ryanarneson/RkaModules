@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.11 (2026-11-18): Ballast: expander walk capped at 32 steps (a looped chain cannot hang); Pan: LINK dark when bypassed
 - 2.0.10 (2026-11-17): Pan: attach decided on Ballast's thread (fixes crackle with several engine threads)
 - 2.0.9 (2026-11-17): Pan: pan law menu, no boost by default (fixes clipping at hard pans)
 - 2.0.8 (2026-11-17): Pan: first build for listening; Ballast: either input alone is centred mono, DC blocker fades on (#38), keeps state across rate changes (#39), #40 fixes
