@@ -1,6 +1,8 @@
 # Ballast: four-channel stereo mixer
 
-Status: idea, 2026-11-15. Not designed.
+Status: built (2026-11-17, 12 HP). Design: `docs/specs/2026-11-17-ballast-design.md`;
+manual: `docs/ballast/README.md`. As built it has level CV (VCA law) and no
+pan: pan comes with the Pan expander, next. The text below is the original idea.
 
 ![mockup](ballast-mockup.svg)
 

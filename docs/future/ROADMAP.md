@@ -18,7 +18,7 @@ process and a plain panel; **M** needs real DSP work or tuning by ear;
 The existing three are already in the Instrument look
 (`docs/specs/2026-11-15-instrument-look-design.md`): Sway, Fathom and
 Shoal moved to it in PR #7, after Shoal's friendly mode landed in PR #6
-(both 2026-11-15). Sluice, Fog and Hadal were built in it from the start.
+(both 2026-11-15). Sluice, Fog, Hadal and Ballast were built in it from the start.
 
 ## 1. A whole patch from RKA alone
 
@@ -30,7 +30,7 @@ sound, space, loudness under control, stereo, and a safe output.
 | 1 | [Sluice](sluice.md) (built) | S | Four VCAs. The simplest DSP in the list, so the right first module to build new in the look; and nothing else can make a CV control loudness. |
 | 2 | [Fog](fog.md) (built) | L | Reverb. The largest single gain for this music: Fathom into Fog is already a piece. |
 | 3 | [Hadal](hadal.md) (built) | S | Rumble and noise. Cheap, immediately in genre, and the noise source Rigging will want. |
-| 4 | [Ballast](ballast.md) | M | Stereo mixer with pan CV. From here a patch needs no other maker's mixer. |
+| 4 | [Ballast](ballast.md) (built) | M | Stereo mixer with level CV; pan comes in its Pan expander, next. From here a patch needs no other maker's mixer. |
 | 5 | [Plimsoll](plimsoll.md) | M | Limiter. Drones into long reverb build up; this makes the output safe. |
 | 6 | [Lull](lull.md) | S | Slew. Slowing everything down is half of this music, and it is 2 HP of work. |
 

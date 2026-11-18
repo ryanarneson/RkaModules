@@ -11,6 +11,16 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Ballast**, a 12 HP four-channel stereo mixer:
+  - Four stereo channels (IN R normalled to IN L), each with a Level knob
+    (silence to +6 dB, unity at the long tick) and a level CV on the VCA
+    law: 0 V silent, 10 V the knob's level, never above it.
+  - Master with its own CV; CHAIN inputs before Master, for eight channels
+    from two Ballasts; L alone carries the mono sum.
+  - DC blocker (menu, on by default) and a soft limit (8 V knee, 10 V
+    ceiling) with a CLIP light.
+  - Ready for expanders on its right side; the Pan expander is next.
+  - Drawn as a clinometer.
 - New module: **Hadal**, a 10 HP rumble and noise bed:
   - Three layers, Rumble, Hiss and Crackle, each with a level knob (audio
     taper) and its own output.
