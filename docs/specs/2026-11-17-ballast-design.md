@@ -99,6 +99,8 @@ the left four, the master column pair on the right.
 - **Curve** (*designer's call*): gain = 2 x p^2.41 for knob position p in
   0..1 (an audio taper through unity at 0.75 and x2 at 1: about -8.5 dB at
   half, -23 dB at a quarter). The tooltip shows dB.
+  *As built:* the exponent is ln 2 / ln (4/3), about 2.4094, so 0.75 is
+  exactly unity (2.41 puts it at -0.0015 dB).
 - **Master** has the same range, curve and default, and acts on the whole
   mix, CHAIN included.
 
