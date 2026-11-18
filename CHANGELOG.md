@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.8 (2026-11-17): Pan: first build for listening; Ballast: either input alone is centred mono, DC blocker fades on (#38), keeps state across rate changes (#39), #40 fixes
 - 2.0.7 (2026-11-17): Ballast: final review fixes (bypassed expanders skipped, NaN stopped at the mix, cheap chain walk)
 - 2.0.6 (2026-11-17): Ballast: first build for listening (four stereo channels, VCA level CV, Master, CHAIN, DC blocker, CLIP)
 - 2.0.5 (2026-11-17): Hadal: final review fixes (CRACKLE jack mono sum, cheap reset, no libm on the audio path)
