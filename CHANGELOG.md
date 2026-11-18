@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.13 (2026-11-18): Squall: final review fixes (Gust in average-gap time: no burst on a clock switch, no rate change under Weather CV; inf on Clock/Freeze reads 0 V)
 - 2.0.12 (2026-11-18): Squall: first build for listening (random gates and CV: Weather, Gust, Memory, Clock, Freeze)
 - 2.0.11 (2026-11-18): Ballast: expander walk capped at 32 steps (a looped chain cannot hang); Pan: LINK dark when bypassed
 - 2.0.10 (2026-11-17): Pan: attach decided on Ballast's thread (fixes crackle with several engine threads)
