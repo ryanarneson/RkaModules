@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="60.96mm" height="128.5mm" viewBox="0 0 60.96 128.5">
+<rect width="60.96" height="128.5" fill="#0d0e12"/>
+<circle cx="50.35" cy="34" r="20" fill="none" stroke="#1e232c" stroke-width="0.25"/>
+<circle cx="50.35" cy="34" r="34" fill="none" stroke="#1e232c" stroke-width="0.25"/>
+<circle cx="50.35" cy="34" r="48" fill="none" stroke="#1e232c" stroke-width="0.25"/>
+<circle cx="50.35" cy="34" r="62" fill="none" stroke="#1e232c" stroke-width="0.25"/>
+<circle cx="50.35" cy="34" r="76" fill="none" stroke="#1e232c" stroke-width="0.25"/>
+<path d="M7.6 112L7.6 102L7.6 83L7.6 58.825" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M17.1 112L17.1 102L17.1 83L17.1 72.825" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M26.6 112L26.6 102L26.6 83L26.6 58.825" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M36.1 112L36.1 102L36.1 83L36.1 72.825" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M45.6 79L45.6 46L47.838 40.346" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<circle cx="7.6" cy="83" r="4.3" fill="#0d0e12"/>
+<circle cx="17.1" cy="83" r="4.3" fill="#0d0e12"/>
+<circle cx="26.6" cy="83" r="4.3" fill="#0d0e12"/>
+<circle cx="36.1" cy="83" r="4.3" fill="#0d0e12"/>
+<circle cx="7.6" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="17.1" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="26.6" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="36.1" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="7.6" cy="116" r="4.3" fill="#0d0e12"/>
+<circle cx="17.1" cy="116" r="4.3" fill="#0d0e12"/>
+<circle cx="26.6" cy="116" r="4.3" fill="#0d0e12"/>
+<circle cx="36.1" cy="116" r="4.3" fill="#0d0e12"/>
+<circle cx="45.6" cy="83" r="4.3" fill="#0d0e12"/>
+<circle cx="55.1" cy="83" r="1.3" fill="#0d0e12"/>
+<circle cx="45.6" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="55.1" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="7.6" cy="52" r="6.6" fill="#bab3a3" stroke="#9c7f52" stroke-width="0.45"/>
+<path d="M3.073 53.875L2.241 54.22 M2.7 52L1.8 52 M4.135 48.535L3.499 47.899 M5.725 47.473L5.38 46.641 M9.475 47.473L9.82 46.641 M11.065 48.535L11.701 47.899 M12.5 52L13.4 52 M12.127 53.875L12.959 54.22" fill="none" stroke="#161511" stroke-width="0.16"/>
+<path d="M4.135 55.465L3.004 56.596 M3.073 50.125L1.595 49.513 M7.6 47.1L7.6 45.5 M12.127 50.125L13.605 49.513 M11.065 55.465L12.196 56.596" fill="none" stroke="#161511" stroke-width="0.28"/>
+<circle cx="17.1" cy="66" r="6.6" fill="#bab3a3" stroke="#9c7f52" stroke-width="0.45"/>
+<path d="M12.573 67.875L11.741 68.22 M12.2 66L11.3 66 M13.635 62.535L12.999 61.899 M15.225 61.473L14.88 60.641 M18.975 61.473L19.32 60.641 M20.565 62.535L21.201 61.899 M22 66L22.9 66 M21.627 67.875L22.459 68.22" fill="none" stroke="#161511" stroke-width="0.16"/>
+<path d="M13.635 69.465L12.504 70.596 M12.573 64.125L11.095 63.513 M17.1 61.1L17.1 59.5 M21.627 64.125L23.105 63.513 M20.565 69.465L21.696 70.596" fill="none" stroke="#161511" stroke-width="0.28"/>
+<circle cx="26.6" cy="52" r="6.6" fill="#bab3a3" stroke="#9c7f52" stroke-width="0.45"/>
+<path d="M22.073 53.875L21.241 54.22 M21.7 52L20.8 52 M23.135 48.535L22.499 47.899 M24.725 47.473L24.38 46.641 M28.475 47.473L28.82 46.641 M30.065 48.535L30.701 47.899 M31.5 52L32.4 52 M31.127 53.875L31.959 54.22" fill="none" stroke="#161511" stroke-width="0.16"/>
+<path d="M23.135 55.465L22.004 56.596 M22.073 50.125L20.595 49.513 M26.6 47.1L26.6 45.5 M31.127 50.125L32.605 49.513 M30.065 55.465L31.196 56.596" fill="none" stroke="#161511" stroke-width="0.28"/>
+<circle cx="36.1" cy="66" r="6.6" fill="#bab3a3" stroke="#9c7f52" stroke-width="0.45"/>
+<path d="M31.573 67.875L30.741 68.22 M31.2 66L30.3 66 M32.635 62.535L31.999 61.899 M34.225 61.473L33.88 60.641 M37.975 61.473L38.32 60.641 M39.565 62.535L40.201 61.899 M41 66L41.9 66 M40.627 67.875L41.459 68.22" fill="none" stroke="#161511" stroke-width="0.16"/>
+<path d="M32.635 69.465L31.504 70.596 M31.573 64.125L30.095 63.513 M36.1 61.1L36.1 59.5 M40.627 64.125L42.105 63.513 M39.565 69.465L40.696 70.596" fill="none" stroke="#161511" stroke-width="0.28"/>
+<circle cx="50.35" cy="34" r="6.6" fill="#bab3a3" stroke="#9c7f52" stroke-width="0.45"/>
+<path d="M45.823 35.875L44.991 36.22 M45.45 34L44.55 34 M46.885 30.535L46.249 29.899 M48.475 29.473L48.13 28.641 M52.225 29.473L52.57 28.641 M53.815 30.535L54.451 29.899 M55.25 34L56.15 34 M54.877 35.875L55.709 36.22" fill="none" stroke="#161511" stroke-width="0.16"/>
+<path d="M46.885 37.465L45.754 38.596 M45.823 32.125L44.345 31.513 M50.35 29.1L50.35 27.5 M54.877 32.125L56.355 31.513 M53.815 37.465L54.946 38.596" fill="none" stroke="#161511" stroke-width="0.28"/>
+<rect x="41.2" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<rect x="50.7" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<text x="5.00" y="10.00" font-family="D-DIN Condensed" font-size="5.2" font-weight="normal" letter-spacing="1.4" text-anchor="start" fill="#bab3a3">BALLAST</text>
+<text x="5.00" y="13.80" font-family="D-DIN Condensed" font-size="1.7" font-weight="normal" letter-spacing="0.45" text-anchor="start" fill="#757062">STEREO MIXER</text>
+<text x="7.72" y="43.98" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">1</text>
+<text x="17.23" y="57.98" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">2</text>
+<text x="26.73" y="43.98" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">3</text>
+<text x="36.23" y="57.98" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">4</text>
+<text x="50.48" y="25.98" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">MASTER</text>
+<text x="45.73" y="96.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CHAIN</text>
+<text x="45.73" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">L</text>
+<text x="55.23" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">R</text>
+<text x="1.30" y="89.00" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#757062">CV</text>
+<text x="1.30" y="108.00" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#757062">IN L</text>
+<text x="1.30" y="122.00" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#757062">IN R</text>
+<text x="55.23" y="87.20" font-family="D-DIN Condensed" font-size="1.3" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CLIP</text>
+<text x="30.73" y="125.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.5" text-anchor="middle" fill="#757062">R K A · INSTRUMENTS</text>
+<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
+<circle id="param-LEVEL_1" cx="7.6" cy="52.0" r="1" fill="#ff0000"/>
+<circle id="param-LEVEL_2" cx="17.1" cy="66.0" r="1" fill="#ff0000"/>
+<circle id="param-LEVEL_3" cx="26.6" cy="52.0" r="1" fill="#ff0000"/>
+<circle id="param-LEVEL_4" cx="36.1" cy="66.0" r="1" fill="#ff0000"/>
+<circle id="input-CV_1" cx="7.6" cy="83.0" r="1" fill="#00ff00"/>
+<circle id="input-CV_2" cx="17.1" cy="83.0" r="1" fill="#00ff00"/>
+<circle id="input-CV_3" cx="26.6" cy="83.0" r="1" fill="#00ff00"/>
+<circle id="input-CV_4" cx="36.1" cy="83.0" r="1" fill="#00ff00"/>
+<circle id="input-IN_1L" cx="7.6" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-IN_2L" cx="17.1" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-IN_3L" cx="26.6" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-IN_4L" cx="36.1" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-IN_1R" cx="7.6" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="input-IN_2R" cx="17.1" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="input-IN_3R" cx="26.6" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="input-IN_4R" cx="36.1" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="param-MASTER" cx="50.35" cy="34.0" r="1" fill="#ff0000"/>
+<circle id="input-MASTER_CV" cx="45.6" cy="83.0" r="1" fill="#00ff00"/>
+<circle id="light-CLIP" cx="55.1" cy="83.0" r="1" fill="#ff00ff"/>
+<circle id="input-CHAIN_L" cx="45.6" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-CHAIN_R" cx="55.1" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="output-L" cx="45.6" cy="116.0" r="1" fill="#0000ff"/>
+<circle id="output-R" cx="55.1" cy="116.0" r="1" fill="#0000ff"/>
+</g>
+</svg>

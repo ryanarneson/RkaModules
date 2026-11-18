@@ -196,6 +196,18 @@ _HD_ATT_Y, _HD_CV_Y = 72.5, 83.0
 _HD_LAYER_Y, _HD_LR_Y = 102.0, 116.0
 
 
+# Ballast, four-channel stereo mixer. Six columns at 9.5 mm: channels 1-4,
+# then the master column pair. Each channel is one straight column: Level
+# on an ivory dB face (staggered, so the faces clear each other), CV, IN L,
+# IN R. Master on the same face top right, its CV traced up with one
+# elbow; CLIP beside it, CHAIN above the outputs, L and R on tiles in the
+# lower right corner. The rows are the house rows (83 as Hadal's CV, 102,
+# 116).
+_BL_X = [round(31.35 + (i - 2.5) * 9.5, 2) for i in range(4)]   # channels 1-4
+_BL_M = [round(31.35 + (i - 2.5) * 9.5, 2) for i in (4, 5)]     # the master column pair
+_BL_MX = round((_BL_M[0] + _BL_M[1]) / 2, 2)                    # Master, between them
+
+
 def _hadal_on(x):
     return round(column_on_arc(*_HD_O, _HD_LIMB, x), 2)   # below the dial
 
@@ -457,6 +469,37 @@ PANELS = {
                  "PARAM_HISS": dict(turn=-54), "PARAM_CRACKLE": dict(turn=-135),
                  "PARAM_DRIFT": dict(turn=-67.5)},
         screws=screws_at(10, "tr", "bl"),
+    ),
+    # Ballast, a four-channel stereo mixer (see _BL_X above).
+    "Ballast": dict(
+        dir="ballast",
+        hp=12,
+        title="BALLAST",
+        subtitle="STEREO MIXER",
+        components=[("param", f"LEVEL_{c}", x, y, str(c)) for c, x, y in zip("1234", _BL_X, (52.0, 66.0, 52.0, 66.0))]
+        + [("input", f"CV_{c}", x, 83.0, None) for c, x in zip("1234", _BL_X)]
+        + [("input", f"IN_{c}L", x, 102.0, None) for c, x in zip("1234", _BL_X)]
+        + [("input", f"IN_{c}R", x, 116.0, None) for c, x in zip("1234", _BL_X)]
+        + [("param", "MASTER", _BL_MX, 34.0, "MASTER"),
+           ("input", "MASTER_CV", _BL_M[0], 83.0, None),
+           ("light", "CLIP", _BL_M[1], 83.0, None),
+           ("input", "CHAIN_L", _BL_M[0], 102.0, "CHAIN"),
+           ("input", "CHAIN_R", _BL_M[1], 102.0, None),
+           ("output", "L", _BL_M[0], 116.0, "L"),
+           ("output", "R", _BL_M[1], 116.0, "R")],
+        sizes={f"PARAM_LEVEL_{c}": "face" for c in "1234"} | {"PARAM_MASTER": "face"},
+        circles=[(_BL_MX, 34.0, r) for r in (20, 34, 48, 62, 76)],
+        # Ticks every 22.5 degrees, long every 67.5: 0 dB (unity) is the long one at three quarters.
+        faces={f"PARAM_{n}": dict(r=6.6, ticks=12, major=3, tick_r=4.9, major_len=1.6)
+               for n in ["LEVEL_1", "LEVEL_2", "LEVEL_3", "LEVEL_4", "MASTER"]},
+        tiles=[dict(port="OUTPUT_L"), dict(port="OUTPUT_R")],
+        traces=[[f"INPUT_IN_{c}R", f"INPUT_IN_{c}L", f"INPUT_CV_{c}", f"PARAM_LEVEL_{c}"] for c in "1234"]
+        + [["INPUT_MASTER_CV", (_BL_M[0], 46.0), "PARAM_MASTER"]],
+        notes=[(1.3, 83.0 + 6.0, "CV", 2.0, "dim", "start"),
+               (1.3, 102.0 + 6.0, "IN L", 1.6, "dim", "start"), (1.3, 116.0 + 6.0, "IN R", 1.6, "dim", "start"),
+               (_BL_M[1], 83.0 + 4.2, "CLIP", 1.3, "dim")],
+        preview={f"PARAM_LEVEL_{c}": dict(turn=67.5) for c in "1234"} | {"PARAM_MASTER": dict(turn=67.5)},
+        screws=screws_at(12, "tr", "bl"),
     ),
 }
 
