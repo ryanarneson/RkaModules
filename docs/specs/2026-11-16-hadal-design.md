@@ -364,7 +364,8 @@ before the ranges are fixed.
 - **Rigging** takes Hadal's Hiss as its main excitation. Its tests can
   use Hadal's engine as a source.
 - **Squall's Noise output** stays a plain white or pink utility, with no
-  colour or Depth, so the two do not overlap.
+  colour or Depth, so the two do not overlap. *2026-11-18: moot; Squall
+  was built without a Noise output (`docs/specs/2026-11-18-squall-design.md`).*
 
 ## Left to the builder
 

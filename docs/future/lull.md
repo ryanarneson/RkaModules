@@ -1,6 +1,7 @@
 # Lull: a slew limiter
 
-Status: idea, 2026-11-15. Not designed. One of six 2 HP utilities.
+Status: idea, 2026-11-15. Not designed. One of six 2 HP utilities. Low priority (the user,
+2026-11-18): Squall's Swell and Sway's smoothing cover much of it for now.
 
 ![mockup](lull-mockup.svg)
 

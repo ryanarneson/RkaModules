@@ -18,7 +18,13 @@ process and a plain panel; **M** needs real DSP work or tuning by ear;
 The existing three are already in the Instrument look
 (`docs/specs/2026-11-15-instrument-look-design.md`): Sway, Fathom and
 Shoal moved to it in PR #7, after Shoal's friendly mode landed in PR #6
-(both 2026-11-15). Sluice, Fog, Hadal and Ballast were built in it from the start.
+(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan and Squall were built in it from the start.
+
+**Changes since (the user, 2026-11-18):** Squall was built next, ahead of
+Plimsoll and Lull. Plimsoll is skipped for now, since Ballast's soft limit
+and DC blocker already keep the output safe; it moves to the utilities that
+wait for a patch to call for them. Lull, a standalone slew, is a low
+priority. The numbers below are the original order.
 
 ## 1. A whole patch from RKA alone
 
@@ -30,9 +36,8 @@ sound, space, loudness under control, stereo, and a safe output.
 | 1 | [Sluice](sluice.md) (built) | S | Four VCAs. The simplest DSP in the list, so the right first module to build new in the look; and nothing else can make a CV control loudness. |
 | 2 | [Fog](fog.md) (built) | L | Reverb. The largest single gain for this music: Fathom into Fog is already a piece. |
 | 3 | [Hadal](hadal.md) (built) | S | Rumble and noise. Cheap, immediately in genre, and the noise source Rigging will want. |
-| 4 | [Ballast](ballast.md) (built) | M | Stereo mixer with level CV; pan comes in its Pan expander, next. From here a patch needs no other maker's mixer. |
-| 5 | [Plimsoll](plimsoll.md) | M | Limiter. Drones into long reverb build up; this makes the output safe. |
-| 6 | [Lull](lull.md) | S | Slew. Slowing everything down is half of this music, and it is 2 HP of work. |
+| 4 | [Ballast](ballast.md) (built) | M | Stereo mixer with level CV; pan in its Pan expander (built). From here a patch needs no other maker's mixer. |
+| 6 | [Lull](lull.md) (low priority) | S | Slew. Slowing everything down is half of this music, and it is 2 HP of work. Squall's Swell covers much of it for now. |
 
 ## 2. Texture
 
@@ -56,7 +61,7 @@ Mostly light DSP.
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
 | 12 | [Neap](neap.md) | S | Layered slow cycles that take a long time to repeat. |
-| 13 | [Reckoner](reckoner.md) | S | A wandering X and Y. With Ballast's pan inputs, sounds move by themselves. |
+| 13 | [Reckoner](reckoner.md) | S | A wandering X and Y. Into the Pan expander's CV, sounds move by themselves. |
 | 14 | [Watch](watch.md) | S | One ramp across a whole piece, and a trigger per section. |
 | 15 | [Tackle](tackle.md) | S | Scale and shift. By now there is a lot of modulation to tame. |
 | 16 | [Helm](helm.md) | M | Scene morph. Performing a long change with one hand. |
@@ -72,7 +77,7 @@ need room made for them.
 | 18 | [Ping](ping.md) | S | Sonar ping and echo. A small build with a large effect in space and horror pieces. |
 | 19 | [Buoy](buoy.md) | M | Bells struck by waves: generative, and never the same twice. |
 | 20 | [Lee](lee.md) | S | Ducker. Lets a ping or a bell clear space in the drone. |
-| 21 | [Squall](squall.md) | S | Random voltages and gates, to trigger the voices above. |
+| 21 | [Squall](squall.md) (built) | M | Random gates and CV with gusts and memory, to trigger the voices above. Built early, after Pan. |
 | 22 | [Foghorn](foghorn.md) | M | A second drone voice. Lower priority than it sounds: Fathom and Rigging already cover much of its ground. |
 | 23 | [Beacon](beacon.md) | S | Envelope. Useful once there are voices to shape and Sluice to shape them with. |
 
@@ -99,6 +104,7 @@ a gap between larger builds.
 | 30 | [Reef](reef.md) | S | Attenuators. Tackle may make it unnecessary. |
 | 31 | [Bell](bell.md) | S | Manual trigger. |
 | 32 | [Sextant](sextant.md) | S | Scanner between four sources. |
+| 5 | [Plimsoll](plimsoll.md) | M | Limiter. Skipped for now: Ballast's soft limit and DC blocker keep the output safe; built when long drones into reverb call for real limiting. |
 
 ## 7. Only if wanted
 

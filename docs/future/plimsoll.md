@@ -1,6 +1,8 @@
 # Plimsoll: a limiter
 
-Status: idea, 2026-11-15. Not designed. 8 HP in the sketch.
+Status: idea, 2026-11-15. Not designed. 8 HP in the sketch. Skipped for now (the user,
+2026-11-18): Ballast's soft limit (nothing past 10 V) and DC blocker already keep the output
+safe; it waits until a patch calls for it.
 
 ![mockup](plimsoll-mockup.svg)
 
