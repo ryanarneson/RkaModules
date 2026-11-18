@@ -33,7 +33,6 @@ namespace {
 struct TestPan : rka::PanCore {
 	rka::PanFrame in;
 	float cvv[4][16] = {};
-	int idleValue = 0;
 	TestPan() {
 		for (int c = 0; c < 4; c++) {
 			in.cv[c].v = cvv[c];
@@ -42,9 +41,6 @@ struct TestPan : rka::PanCore {
 	}
 	void readFrame(rka::PanFrame& f) override {
 		f = in;
-	}
-	int idle() const override {
-		return idleValue;
 	}
 };
 
@@ -157,7 +153,8 @@ void seeded_fuzz() {
 				g.f.inR[c].channels = (int) (next() * 3.f);
 			}
 			g.pan.in.stereoMode = (int) (next() * 3.f) - 0;   // 2 is invalid: treated as true pan
-			g.pan.idleValue = next() < 0.1f ? 5 : 0;
+			if (next() < 0.1f)
+				g.pan.attached();
 			g.f.outR = next() < 0.7f;
 			g.f.dcBlock = next() < 0.7f;
 			if (n % 65536 == 0) {

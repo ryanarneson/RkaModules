@@ -78,6 +78,7 @@ struct Ballast : Module {
 	// Whether the right-hand neighbour is an expander, kept up to date by
 	// onExpanderChange, so the walk costs nothing with no expander there.
 	bool expanderRight = false;
+	rka::BallastLinker linker;
 
 	Ballast() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
@@ -159,7 +160,7 @@ struct Ballast : Module {
 				rightExpander.module, chain, MAX_EXPANDERS, [](Module* m) { return m->rightExpander.module; },
 				[](Module* m) { return m->isBypassed(); },
 				[](Module* m) { return dynamic_cast<rka::BallastExpander*>(m); });
-		rka::linkBallastExpanders(chain, n);
+		linker.link(chain, n);
 
 		engine.process(frame, result, chain, n);
 

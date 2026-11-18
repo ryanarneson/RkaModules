@@ -1,15 +1,16 @@
 #pragma once
 // Pan's core (spec: docs/specs/2026-11-17-pan-design.md): a Ballast
 // expander, Rack-free. Pan.cpp only supplies readFrame() (its params and
-// inputs), idle() (how long since Ballast last linked it) and LINK.
+// inputs) and LINK; Ballast tells it attached() and linked().
 //
 // Ballast calls linked() once per sample: the core reads its controls,
 // smooths each knob (one-pole, about 10 ms) and forms each channel's pan
 //   position = clamp(smoothed knob + CV / 10 V x attenuverter, 0, 1)
 //   p = 2 position - 1 (-1 hard left, 0 centre, +1 hard right)
-// The CV is not smoothed. After a gap (idle() above 2, or the first link),
-// the knob smoothing restarts from centre, so attaching a panned Pan glides
-// in rather than clicking. Then postLevel() pans each channel, by one of two
+// The CV is not smoothed. When Ballast reports attached() (Pan newly in its
+// chain), and on the first link, the knob smoothing restarts from centre,
+// so attaching a panned Pan glides in rather than clicking. Nothing else
+// restarts it. Then postLevel() pans each channel, by one of two
 // pan laws (the user's choice, after a hard pan drove a hot mix into
 // Ballast's soft limit):
 //   no boost (law 0, the default): no sample leaves louder than the
@@ -57,8 +58,8 @@ public:
 
 	void linked() override {
 		readFrame(frame_);
-		const bool restart = first_ || idle() > 2;
-		first_ = false;
+		const bool restart = first_ || restart_;
+		first_ = restart_ = false;
 		for (int c = 0; c < 4; c++) {
 			const float knob = ballastFinite(frame_.knob[c]);
 			if (restart)
@@ -108,6 +109,12 @@ public:
 		}
 	}
 
+	// From Ballast's thread, just before linked(), when Pan is newly in its
+	// chain.
+	void attached() override {
+		restart_ = true;
+	}
+
 	// The pan position (0 hard left, 0.5 centre, 1 hard right), for tests.
 	float position(int ch) const {
 		return pos_[ch];
@@ -115,10 +122,6 @@ public:
 
 protected:
 	virtual void readFrame(PanFrame& f) = 0;
-	// Pan's process() calls since Ballast last linked it (0 when unknown).
-	virtual int idle() const {
-		return 0;
-	}
 
 private:
 	PanFrame frame_;
@@ -128,6 +131,7 @@ private:
 	bool balance_ = false;
 	bool constantLoudness_ = false;
 	bool first_ = true;
+	bool restart_ = false;
 };
 
 } // namespace rka

@@ -21,7 +21,11 @@
 // Ballast also calls linked() on each expander once per sample, before the
 // other calls and whether or not an output is patched: an expander may use
 // it to read its controls and advance its smoothing, and to know it is
-// linked. kind() names a kind of expander; Ballast keeps only the first
+// linked. Just before that, on the first sample an expander is in the chain
+// after not being in it (placed, unbypassed, or a gap closed), Ballast calls
+// attached(). Both come from Ballast's thread: an expander must not work out
+// "newly attached" from a counter its own process() also writes, because
+// with several engine threads the two race. kind() names a kind of expander; Ballast keeps only the first
 // unbypassed expander of each nonzero kind (Pan is 1), so two of a kind never
 // stack. Kind 0 (the default) may repeat.
 //
@@ -44,6 +48,7 @@ struct BallastExpander {
 		return 0;
 	}
 	virtual void linked() {}
+	virtual void attached() {}
 	virtual void preLevel(int ch, float& l, float& r) {
 		(void) ch;
 		(void) l;

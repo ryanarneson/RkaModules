@@ -33,10 +33,32 @@ int collectBallastExpanders(M* first, BallastExpander** out, int max, Next next,
 	return n;
 }
 
-// Ballast calls this on every sample it walks the chain.
-inline void linkBallastExpanders(BallastExpander* const* chain, int n) {
-	for (int k = 0; k < n; k++)
-		chain[k]->linked();
-}
+// Ballast's per-sample link step, on its own thread: attached() on each
+// expander that was not in the previous sample's chain, then linked() on
+// every one. The previous chain is kept as addresses for comparison only;
+// they are never dereferenced.
+class BallastLinker {
+public:
+	static const int MAX = 16;
+
+	void link(BallastExpander* const* chain, int n) {
+		n = n < MAX ? n : MAX;
+		for (int k = 0; k < n; k++) {
+			bool was = false;
+			for (int j = 0; j < lastN_ && !was; j++)
+				was = last_[j] == chain[k];
+			if (!was)
+				chain[k]->attached();
+			chain[k]->linked();
+		}
+		for (int k = 0; k < n; k++)
+			last_[k] = chain[k];
+		lastN_ = n;
+	}
+
+private:
+	const BallastExpander* last_[MAX] = {};
+	int lastN_ = 0;
+};
 
 } // namespace rka

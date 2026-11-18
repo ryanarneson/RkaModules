@@ -29,6 +29,10 @@ struct Gain : rka::BallastExpander {
 	int srcSeen = -1;    // the last source type passed for ch
 	float lSeen = 0, rSeen = 0;
 	int links = 0;
+	int attaches = 0;
+	void attached() override {
+		attaches++;
+	}
 	int kindId = 0;
 	int kind() const override {
 		return kindId;
@@ -274,9 +278,36 @@ void one_of_each_kind() {
 void linked_every_walk() {
 	Gain a(Gain::POST, 0, 1.f, 0.f), b(Gain::POST, 0, 1.f, 0.f);
 	rka::BallastExpander* chain[2] = {&a, &b};
-	rka::linkBallastExpanders(chain, 2);
-	rka::linkBallastExpanders(chain, 2);
+	rka::BallastLinker linker;
+	linker.link(chain, 2);
+	linker.link(chain, 2);
 	CHECK(a.links == 2 && b.links == 2, "linked() calls: %d and %d, want 2 each", a.links, b.links);
+}
+
+// attached() comes from Ballast's own thread, once, on the first sample an
+// expander is in the chain after not being in it: never from a counter the
+// expander's thread also writes (with 4 engine threads that raced, and Pan
+// restarted from centre every few samples: the crackle).
+void attached_on_change() {
+	Gain a(Gain::POST, 0, 1.f, 0.f), b(Gain::POST, 0, 1.f, 0.f);
+	rka::BallastLinker linker;
+	rka::BallastExpander* ab[2] = {&a, &b};
+	rka::BallastExpander* onlyA[1] = {&a};
+	rka::BallastExpander* onlyB[1] = {&b};
+	linker.link(onlyA, 1);
+	CHECK(a.attaches == 1, "a first linked: %d attaches, want 1", a.attaches);
+	for (int i = 0; i < 1000; i++)
+		linker.link(onlyA, 1);
+	CHECK(a.attaches == 1, "a linked 1000 more times: %d attaches, want still 1", a.attaches);
+	linker.link(ab, 2);
+	CHECK(a.attaches == 1 && b.attaches == 1, "b joins: attaches %d and %d, want 1 and 1", a.attaches, b.attaches);
+	linker.link(onlyB, 1);
+	linker.link(ab, 2);
+	CHECK(a.attaches == 2 && b.attaches == 1, "a leaves and returns: attaches %d and %d, want 2 and 1", a.attaches,
+	      b.attaches);
+	linker.link(nullptr, 0);
+	linker.link(onlyB, 1);
+	CHECK(b.attaches == 2, "an empty chain then b: b attaches %d, want 2", b.attaches);
 }
 
 void walk_skips_bypassed_and_stops_at_strangers() {
@@ -317,5 +348,6 @@ int main() {
 	walk_skips_bypassed_and_stops_at_strangers();
 	one_of_each_kind();
 	linked_every_walk();
+	attached_on_change();
 	return rkatest::finish("ballast test_expander");
 }

@@ -37,8 +37,11 @@ struct Pan : Module, rka::PanCore {
 		LIGHTS_LEN
 	};
 
-	// Pan's process() calls since Ballast last linked it: Pan's thread
-	// increments, Ballast's thread (in linked()) resets.
+	// Pan's process() calls since Ballast last linked it, for LINK only:
+	// Pan's thread adds (an atomic add), Ballast's thread (in linked())
+	// resets. It never decides anything audible: with several engine
+	// threads the two can interleave, so the restart on attach comes from
+	// Ballast instead (attached()), on its own thread.
 	std::atomic<int> idle_{1 << 20};
 	int stereoMode = 0;   // 0 true pan, 1 balance
 	int panLaw = 0;       // 0 no boost, 1 constant loudness
@@ -94,10 +97,6 @@ struct Pan : Module, rka::PanCore {
 		f.panLaw = panLaw;
 	}
 
-	int idle() const override {
-		return idle_.load(std::memory_order_relaxed);
-	}
-
 	void linked() override {
 		rka::PanCore::linked();
 		idle_.store(0, std::memory_order_relaxed);
@@ -106,7 +105,7 @@ struct Pan : Module, rka::PanCore {
 	void process(const ProcessArgs& args) override {
 		const int n = idle_.load(std::memory_order_relaxed);
 		if (n < (1 << 20))
-			idle_.store(n + 1, std::memory_order_relaxed);
+			idle_.fetch_add(1, std::memory_order_relaxed);
 		lights[LINK_LIGHT].setBrightness(n < (int) (0.05f * args.sampleRate) ? 1.f : 0.f);
 	}
 };

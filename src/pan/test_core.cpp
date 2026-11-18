@@ -25,7 +25,6 @@ double db(double g) {
 struct TestPan : rka::PanCore {
 	rka::PanFrame in;
 	float cvv[4][16] = {};
-	int idleValue = 0;
 	TestPan() {
 		for (int c = 0; c < 4; c++) {
 			in.knob[c] = 0.5f;
@@ -38,9 +37,6 @@ struct TestPan : rka::PanCore {
 	}
 	void readFrame(rka::PanFrame& f) override {
 		f = in;
-	}
-	int idle() const override {
-		return idleValue;
 	}
 	// Settle the smoothing at the current knobs (0.5 s, 50 time constants).
 	void settle() {
@@ -282,14 +278,27 @@ void attach_glides_from_centre() {
 	TestPan pan;
 	pan.in.knob[0] = 1.f;
 	pan.settle();
-	pan.idleValue = 3;   // not linked for a while
+	pan.attached();   // Ballast saw it arrive
 	pan.linked();
-	pan.idleValue = 0;
 	const float first = pan.position(0);
 	CHECK(first < 0.52f, "on re-attach the position starts from centre (got %.3f, knob at 1)", first);
 	pan.settle();
 	CHECK(std::fabs(pan.position(0) - 1.f) < 1e-3f, "after the glide the position reaches the knob (%.4f)",
 	      pan.position(0));
+}
+
+// Only attached() restarts the smoothing: linking alone, however often,
+// never moves a settled pan.
+void no_restart_without_attach() {
+	TestPan pan;
+	pan.in.knob[0] = 1.f;
+	pan.settle();
+	float lowest = 1.f;
+	for (int i = 0; i < 48000; i++) {
+		pan.linked();
+		lowest = std::min(lowest, pan.position(0));
+	}
+	CHECK(lowest == 1.f, "a settled hard-right pan dipped to %.4f without attached()", lowest);
 }
 
 void poly_cv_uses_channel_1() {
@@ -319,6 +328,7 @@ int main() {
 	cv_law();
 	knob_smoothing();
 	attach_glides_from_centre();
+	no_restart_without_attach();
 	poly_cv_uses_channel_1();
 	return rkatest::finish("pan test_core");
 }
