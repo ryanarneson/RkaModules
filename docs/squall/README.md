@@ -102,7 +102,7 @@ piece go from steady to stormy, or from wandering to looping, and back.
 - **SWELL:** a smooth drift through the same values as Step, never
   overshooting and never with a corner. It reaches a new value in about the
   average time between events, so its pace follows Weather: tens of minutes
-  per swing at Calm, a second or two at Stormy. In a burst it smooths
+  per swing at Calm, a fraction of a second at Stormy. In a burst it smooths
   through the quick changes; in a lull it arrives and rests.
 - **Range** (right-click menu, for Step and Swell together): **±5 V**
   (default), **0 to 10 V** (for level CVs such as Ballast's or Sluice's),

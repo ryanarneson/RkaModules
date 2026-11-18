@@ -191,11 +191,14 @@ void denormals() {
 		}
 	}
 	CHECK(normal, "Gust's excitation passes through subnormals (%g)", worst);
+	ev.setGust(1.f);
+	for (int i = 0; i < 50; i++)
+		ev.excite();
 	bool normalT = true;
 	for (int i = 0; i < 5000; i++) {
 		ev.tick(false);
-		const float xt = ev.tickExcitation();
-		normalT = normalT && (xt == 0.f || std::fabs(xt) > 1.17549435e-38f);
+		const double y = ev.excitation();
+		normalT = normalT && (y == 0.0 || std::fabs(y) > 2.2250738585072014e-308);
 	}
 	CHECK(normalT, "Gust's tick excitation passes through subnormals");
 }

@@ -109,12 +109,13 @@ public:
 		ctl_--;
 		memory_.setLength(f.loopLength);
 
-		const bool frozen = schmitt(f.freeze, freezeHigh_);
+		// NaN or inf on Clock and Freeze read as 0 V.
+		const bool frozen = schmitt(finite(f.freeze), freezeHigh_);
 		const bool clocked = f.clockPatched;
 		if (clocked != clocked_)
 			switchMode(clocked);
 		const bool wasHigh = clockHigh_;
-		const bool clockNow = clocked ? schmitt(f.clock, clockHigh_) : false;
+		const bool clockNow = clocked ? schmitt(finite(f.clock), clockHigh_) : false;
 		const bool edge = clocked && clockNow && !wasHigh;
 
 		if (!frozen) {
@@ -232,6 +233,10 @@ private:
 			case 3: return v01 * 2.f - 1.f;
 			default: return v01 * 10.f - 5.f;
 		}
+	}
+
+	static float finite(float v) {
+		return (v - v == 0.f) ? v : 0.f;
 	}
 
 	// A Schmitt trigger at 0.1 V and 1 V; NaN reads as low.

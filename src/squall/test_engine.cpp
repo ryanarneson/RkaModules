@@ -642,6 +642,88 @@ static void seeds_differ_and_repeat() {
 	CHECK(!ac, "different seeds must differ");
 }
 
+
+// Gust must not change the amount while Weather moves (final review).
+static void weather_cv_gusty() {
+	for (float g : {0.3f, 1.f}) {
+		for (int hz : {200, 1}) {
+			// 48 kHz, so the 32-sample control reads see the square evenly.
+			const float fs = 48000.f;
+			Rig rig(25u, fs);
+			rig.set(0.5f, g, 0.f);
+			rig.f.params[F::WEATHER_ATT] = 1.f;
+			rig.f.cv[0].channels = 1;
+			long long events = 0;
+			const long long n = 1000LL * 48000;
+			const long long half = 48000 / (2 * hz);
+			for (long long i = 0; i < n; i++) {
+				rig.cv[0][0] = (i / half) % 2 ? 5.f : -5.f;
+				if (rig.step())
+					events++;
+			}
+			const double want = 1000.0 * 0.5 * (weatherRate(0.f) + weatherRate(1.f));
+			// Gust 1 makes ~400 bursts in 1000 s: about 16 % of natural spread.
+			const double tol = g < 0.5f ? 0.12 : 0.30;
+			CHECK(std::fabs(events / want - 1.0) < tol, "Gust %g, %d Hz square on Weather: %lld events in 1000 s, want about %g", g, hz, events, want);
+		}
+	}
+}
+
+// Patching or unpatching the clock carries Gust's state over, without a
+// burst (final review).
+static void clock_switch_gusty() {
+	{
+		Rig rig(41u, 1000.f);
+		rig.set(0.5f, 1.f, 0.f);
+		rig.clocked(4000, 0.125f, nullptr);   // 500 s at 8 Hz
+		rig.f.clockPatched = false;
+		rig.f.clock = 0.f;
+		long long events = 0;
+		for (int i = 0; i < 5000; i++)
+			if (rig.step())
+				events++;
+		CHECK(events <= 8, "after unpatching the clock: %lld events in 5 s at Change (want about 0.6)", events);
+	}
+	{
+		// Free for an hour at Rain, Gust 1, then clocked: the first 40 ticks
+		// fire about p = 1/4 of the time, averaged over seeds.
+		long long fired = 0;
+		const int seeds = 20;
+		for (int s = 0; s < seeds; s++) {
+			Rig rig(100u + s, 200.f);
+			rig.set(0.75f, 1.f, 0.f);
+			for (long long i = 0; i < 3600LL * 200; i++)
+				rig.step();
+			const long long before = rig.e.debug().events;
+			rig.clocked(40, 0.1f, nullptr);
+			fired += rig.e.debug().events - before;
+		}
+		const double share = fired / (40.0 * seeds);
+		CHECK(share < 0.4, "after an hour free, the first 40 clocked ticks fire %g of the time (want about 0.25)", share);
+	}
+}
+
+// Infinite Clock and Freeze read as 0 V, as the manual says (final review).
+static void inf_clock_freeze_read_zero() {
+	Rig a(42u, 1000.f);
+	a.set(1.f, 0.f, 0.f);
+	a.f.freeze = INFINITY;
+	long long ev = 0;
+	for (int i = 0; i < 10000; i++)
+		if (a.step())
+			ev++;
+	CHECK(ev > 40, "+inf on Freeze must not freeze (%lld events in 10 s at Stormy)", ev);
+	Rig b(43u, 1000.f);
+	b.set(1.f, 0.f, 0.f);
+	b.f.clockPatched = true;
+	b.f.clock = INFINITY;
+	ev = 0;
+	for (int i = 0; i < 10000; i++)
+		if (b.step())
+			ev++;
+	CHECK(ev == 0, "+inf on Clock must read 0 V: no edges (%lld events)", ev);
+}
+
 int main() {
 	cv_law();
 	poly_cv_uses_channel_1();
@@ -669,5 +751,8 @@ int main() {
 	state_rejects_bad();
 	bad_rate_ignored();
 	seeds_differ_and_repeat();
+	weather_cv_gusty();
+	clock_switch_gusty();
+	inf_clock_freeze_read_zero();
 	return rkatest::finish("squall test_engine");
 }

@@ -3,17 +3,23 @@
 // happens. Rack-free; the engine (SquallEngine.hpp) owns Memory's replays and
 // calls excite() for every event, replayed or new.
 //
-// Free-running, a self-exciting (Hawkes) process with intensity
-//   lambda = rate(w) (1 - n) + x,   n = gust x N_MAX,
-// where each event adds a bump of area n to x, decaying with
-// tau = K / rate(w). The long-run rate is rate(w) whatever Gust is. Time is
-// rescaled: Lambda += lambda / fs each sample, and an event fires when
-// Lambda reaches an exponential draw E = -ln u. Lambda and x are doubles: at
-// 768 kHz a slow rate adds ~1e-8 a sample, which a float would lose.
+// A self-exciting (Hawkes) process that runs in average-gap time: each
+// step advances adv average gaps (rate(w) / fs a sample free-running, p(w)
+// a clock tick), and the expected events in a step are
+//   adv x ((1 - n) + y),   n = gust x N_MAX,
+// where y, Gust's excitation, is dimensionless: it decays by
+// d = exp(-adv / K) a step (tau = K average gaps), and each event adds
+// n (1 - d) / adv, a bump of area n in average gaps. Because y lives in
+// average gaps, the long-run rate is rate(w) whatever Gust is, however
+// Weather moves, and the one y carries across a clock being patched or
+// unpatched (final review: a per-mode excitation in seconds or ticks piled
+// up across a switch and inflated the rate under Weather CV).
 //
-// Clocked, the same on the tick grid: each tick fires with chance
-// clamp(p(w) (1 - n) + xt, 0, 1); xt decays by d = exp(-p / K) a tick and an
-// event adds n (1 - d), so a bump's total is n.
+// Free-running, time is rescaled: Lambda += adv ((1 - n) + y) a sample, and
+// an event fires when Lambda reaches an exponential draw E = -ln u. Lambda
+// and y are doubles: at 768 kHz a slow rate adds ~1e-8 a sample, which a
+// float would lose. Clocked, each tick fires with chance
+// clamp(adv ((1 - n) + y), 0, 1).
 #include "FastMath.hpp"
 #include "hadal/Random.hpp"
 #include "squall/SquallTuning.hpp"
@@ -71,13 +77,12 @@ public:
 	// One sample, free-running. mayFire false (a replay owns the timing):
 	// the excitation still decays, but nothing fires.
 	bool stepFree(bool mayFire = true) {
-		const double lambda = base_ + x_;
-		x_ *= decay_;
-		if (x_ < 1e-30)
-			x_ = 0.0;   // never subnormal: far below any rate that matters
+		const double expected = adv_ * (keep_ + y_);
+		decayY(decay_);
+		bump_ = bumpFree_;
 		if (!mayFire)
 			return false;
-		acc_ += lambda * invFs_;
+		acc_ += expected;
 		if (acc_ >= wait_) {
 			restartWait();
 			return true;
@@ -87,20 +92,19 @@ public:
 
 	// One clock tick.
 	bool tick(bool mayFire = true) {
-		float chance = baseTick_ + xt_;
-		xt_ *= decayTick_;
-		if (xt_ < 1e-20f)
-			xt_ = 0.f;
+		double chance = advTick_ * (keep_ + y_);
+		decayY(decayTick_);
+		bump_ = bumpTick_;
 		if (!mayFire)
 			return false;
-		chance = chance < 1.f ? chance : 1.f;
-		return unit32() < (double) chance;
+		chance = chance < 1.0 ? chance : 1.0;
+		return unit32() < chance;
 	}
 
 	// Every event, replayed or new, adds its bump.
+	// The bump is the one for the step just taken (free or clocked).
 	void excite() {
-		x_ += bump_;
-		xt_ += bumpTick_;
+		y_ += bump_;
 	}
 
 	// A new wait, from now (after a replay hands the timing back).
@@ -113,12 +117,9 @@ public:
 		return rate_;
 	}
 
-	// Gust's excitation, free and per tick (for tests).
+	// Gust's excitation y (for tests).
 	double excitation() const {
-		return x_;
-	}
-	float tickExcitation() const {
-		return xt_;
+		return y_;
 	}
 
 	// What is left of the current free-running wait (for tests).
@@ -135,26 +136,29 @@ private:
 		return (rng_.next() + 1.0) * (1.0 / 4294967296.0);
 	}
 
+	void decayY(double d) {
+		y_ *= d;
+		if (y_ < 1e-30)
+			y_ = 0.0;   // never subnormal: far below any rate that matters
+	}
+
 	void update() {
 		rate_ = weatherRate(w_);
 		const double n = (double) g_ * N_MAX;
-		base_ = rate_ * (1.0 - n);
-		// Per sample: x decays by exp(-1 / (tau fs)), tau = K / rate; a bump
-		// of n (1 - d) fs integrates (sum / fs) to n.
-		decay_ = fastExp2D(-rate_ / ((double) K * fs_) * 1.4426950408889634);
-		bump_ = n * (1.0 - decay_) * fs_;
-		invFs_ = 1.0 / fs_;
-		const float p = tickChance(w_);
-		baseTick_ = p * (1.f - (float) n);
-		decayTick_ = fastExp2(-p / K * 1.44269504f);
-		bumpTick_ = (float) n * (1.f - decayTick_);
+		keep_ = 1.0 - n;
+		adv_ = rate_ / fs_;
+		decay_ = fastExp2D(-adv_ / K * 1.4426950408889634);
+		bumpFree_ = n * (1.0 - decay_) / adv_;
+		advTick_ = tickChance(w_);
+		decayTick_ = fastExp2D(-advTick_ / K * 1.4426950408889634);
+		bumpTick_ = n * (1.0 - decayTick_) / advTick_;
 	}
 
 	rka::hadal::Random rng_;
 	float fs_ = 48000.f, w_ = 0.5f, g_ = 0.f;
-	double rate_ = 0.0, base_ = 0.0, decay_ = 1.0, bump_ = 0.0, invFs_ = 1.0 / 48000.0;
-	double x_ = 0.0, acc_ = 0.0, wait_ = 1.0;
-	float baseTick_ = 0.f, decayTick_ = 0.f, bumpTick_ = 0.f, xt_ = 0.f;
+	double rate_ = 0.0, keep_ = 1.0, adv_ = 0.0, decay_ = 1.0, bumpFree_ = 0.0;
+	double advTick_ = 0.0, decayTick_ = 0.0, bumpTick_ = 0.0, bump_ = 0.0;
+	double y_ = 0.0, acc_ = 0.0, wait_ = 1.0;
 };
 
 } // namespace squall
