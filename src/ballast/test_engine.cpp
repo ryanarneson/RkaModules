@@ -160,7 +160,7 @@ void normals() {
 		g.f.inR[0].channels = 1;
 		g.inR[0][0] = 1.f;
 		g.run(4800);
-		CHECK(g.out.l == 0.f && g.out.r > 0.f, "IN R alone: L must be silent (L %g, R %g)", g.out.l, g.out.r);
+		CHECK(g.out.l == g.out.r && g.out.l > 0.f, "IN R alone must be centred mono (L %g, R %g)", g.out.l, g.out.r);
 	}
 	{
 		Rig g;
@@ -169,6 +169,23 @@ void normals() {
 		g.run(4800);
 		CHECK(g.out.l == g.out.r && g.out.l > 0.f, "CHAIN R unpatched must take CHAIN L (L %g, R %g)", g.out.l, g.out.r);
 	}
+}
+
+// Either input alone is the same centred mono source.
+void normals_both_ways() {
+	Rig a, b;
+	a.f.inL[0].channels = 1;
+	a.inL[0][0] = 1.f;
+	b.f.inR[0].channels = 1;
+	b.inR[0][0] = 1.f;
+	bool same = true;
+	for (int i = 0; i < 4800; i++) {
+		a.step();
+		b.step();
+		same = same && a.out.l == b.out.l && a.out.r == b.out.r;
+	}
+	CHECK(same, "IN R alone must equal IN L alone on both outputs (L %g/%g, R %g/%g)", a.out.l, b.out.l, a.out.r,
+	      b.out.r);
 }
 
 void poly_inputs_summed() {
@@ -394,6 +411,7 @@ int main() {
 	cv_not_smoothed();
 	poly_cv_uses_channel_1();
 	normals();
+	normals_both_ways();
 	poly_inputs_summed();
 	mix_sum();
 	mono_normal();

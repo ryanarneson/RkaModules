@@ -6,6 +6,8 @@
 #include "BallastEngine.hpp"
 #include "BallastChain.hpp"
 
+#include <cstdint>
+
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -21,7 +23,16 @@ struct Gain : rka::BallastExpander {
 	enum Stage { PRE, POST, MIX } stage;
 	int ch;
 	float mul, add;
-	int monoSeen = -1;   // the last mono flag passed for ch
+	int srcSeen = -1;    // the last source type passed for ch
+	float lSeen = 0, rSeen = 0;
+	int links = 0;
+	int kindId = 0;
+	int kind() const override {
+		return kindId;
+	}
+	void linked() override {
+		links++;
+	}
 	Gain(Stage s, int c, float m, float a) : stage(s), ch(c), mul(m), add(a) {}
 	void preLevel(int c, float& l, float& r) override {
 		if (stage == PRE && (ch < 0 || c == ch)) {
@@ -29,9 +40,12 @@ struct Gain : rka::BallastExpander {
 			r = r * mul + add;
 		}
 	}
-	void postLevel(int c, float& l, float& r, bool mono) override {
-		if (c == ch)
-			monoSeen = mono ? 1 : 0;
+	void postLevel(int c, float& l, float& r, rka::BallastSource src) override {
+		if (c == ch) {
+			srcSeen = (int) src;
+			lSeen = l;
+			rSeen = r;
+		}
 		if (stage == POST && (ch < 0 || c == ch)) {
 			l = l * mul + add;
 			r = r * mul + add;
@@ -114,20 +128,25 @@ void into_mix_before_master() {
 	CHECK(std::fabs(v - m) < 1e-3f, "an intoMix +1 V must be scaled by Master (%g, want %g)", v, m);
 }
 
-void mono_flag() {
+void source_type() {
 	struct Case {
 		bool l, r;
-		int want;
-	} cases[] = {{true, false, 1}, {true, true, 0}, {false, true, 0}, {false, false, 0}};
+		rka::BallastSource want;
+	} cases[] = {{true, false, rka::MONO}, {false, true, rka::MONO}, {true, true, rka::STEREO}, {false, false, rka::STEREO}};
 	for (const Case& c : cases) {
 		Rig g;
 		Gain probe(Gain::POST, 0, 1.f, 0.f);
 		g.chain.push_back(&probe);
 		g.f.inL[0].channels = c.l ? 1 : 0;
 		g.f.inR[0].channels = c.r ? 1 : 0;
+		g.inL[0][0] = 0.25f;
+		g.inR[0][0] = 0.5f;
 		g.step();
-		CHECK(probe.monoSeen == c.want, "IN L %s, IN R %s: mono %d, want %d", c.l ? "patched" : "open",
-		      c.r ? "patched" : "open", probe.monoSeen, c.want);
+		CHECK(probe.srcSeen == (int) c.want, "IN L %s, IN R %s: source %d, want %d", c.l ? "patched" : "open",
+		      c.r ? "patched" : "open", probe.srcSeen, (int) c.want);
+		if (!c.l && c.r)
+			CHECK(probe.lSeen == probe.rSeen && probe.rSeen > 0.f, "MONO via IN R: l %g and r %g must both hold IN R",
+			      probe.lSeen, probe.rSeen);
 	}
 }
 
@@ -188,7 +207,7 @@ void expander_attach_detach() {
 // An expander that writes NaN on one sample.
 struct Poison : rka::BallastExpander {
 	bool armed = true;
-	void postLevel(int, float& l, float& r, bool) override {
+	void postLevel(int, float& l, float& r, rka::BallastSource) override {
 		if (armed)
 			l = r = NAN;
 		armed = false;
@@ -223,6 +242,35 @@ int walk(Node* first, rka::BallastExpander** out, int max) {
 	                                    [](Node* n) { return n->bypassed; }, [](Node* n) { return n->x; });
 }
 
+// One expander of each nonzero kind: the first unbypassed one.
+void one_of_each_kind() {
+	Gain a(Gain::POST, 0, 1.f, 0.f), b(Gain::POST, 0, 1.f, 0.f), c(Gain::POST, 0, 1.f, 0.f), d(Gain::POST, 0, 1.f, 0.f);
+	a.kindId = b.kindId = 1;
+	Node na, nb, nc, nd;
+	na.x = &a;
+	nb.x = &b;
+	nc.x = &c;
+	nd.x = &d;
+	na.right = &nb;
+	nb.right = &nc;
+	nc.right = &nd;
+	rka::BallastExpander* out[8];
+	int k = walk(&na, out, 8);
+	CHECK(k == 3 && out[0] == &a && out[1] == &c && out[2] == &d,
+	      "two of kind 1: the walk kept %d (want a, then the kind-0 c and d)", k);
+	na.bypassed = true;
+	k = walk(&na, out, 8);
+	CHECK(k == 3 && out[0] == &b && out[1] == &c, "with a bypassed, b must act (kept %d)", k);
+}
+
+void linked_every_walk() {
+	Gain a(Gain::POST, 0, 1.f, 0.f), b(Gain::POST, 0, 1.f, 0.f);
+	rka::BallastExpander* chain[2] = {&a, &b};
+	rka::linkBallastExpanders(chain, 2);
+	rka::linkBallastExpanders(chain, 2);
+	CHECK(a.links == 2 && b.links == 2, "linked() calls: %d and %d, want 2 each", a.links, b.links);
+}
+
 void walk_skips_bypassed_and_stops_at_strangers() {
 	Gain a(Gain::POST, 0, 1.f, 0.f), b(Gain::POST, 0, 1.f, 0.f), c(Gain::POST, 0, 1.f, 0.f);
 	Node n1, n2, n3, stranger, n4;
@@ -249,11 +297,13 @@ int main() {
 	post_level_same_sample();
 	pre_level_before_level();
 	into_mix_before_master();
-	mono_flag();
+	source_type();
 	chain_order();
 	no_expander_bit_identical();
 	expander_attach_detach();
 	expander_nan_recovers();
 	walk_skips_bypassed_and_stops_at_strangers();
+	one_of_each_kind();
+	linked_every_walk();
 	return rkatest::finish("ballast test_expander");
 }

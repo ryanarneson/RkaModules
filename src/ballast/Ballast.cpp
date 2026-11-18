@@ -152,11 +152,12 @@ struct Ballast : Module {
 		// cannot change under us; nothing is kept across samples).
 		rka::BallastExpander* chain[MAX_EXPANDERS];
 		int n = 0;
-		if (expanderRight && (frame.outL || frame.outR))
+		if (expanderRight)
 			n = rka::collectBallastExpanders(
 				rightExpander.module, chain, MAX_EXPANDERS, [](Module* m) { return m->rightExpander.module; },
 				[](Module* m) { return m->isBypassed(); },
 				[](Module* m) { return dynamic_cast<rka::BallastExpander*>(m); });
+		rka::linkBallastExpanders(chain, n);
 
 		engine.process(frame, result, chain, n);
 
