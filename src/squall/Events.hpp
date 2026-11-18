@@ -73,6 +73,8 @@ public:
 	bool stepFree(bool mayFire = true) {
 		const double lambda = base_ + x_;
 		x_ *= decay_;
+		if (x_ < 1e-30)
+			x_ = 0.0;   // never subnormal: far below any rate that matters
 		if (!mayFire)
 			return false;
 		acc_ += lambda * invFs_;
@@ -87,6 +89,8 @@ public:
 	bool tick(bool mayFire = true) {
 		float chance = baseTick_ + xt_;
 		xt_ *= decayTick_;
+		if (xt_ < 1e-20f)
+			xt_ = 0.f;
 		if (!mayFire)
 			return false;
 		chance = chance < 1.f ? chance : 1.f;
@@ -107,6 +111,14 @@ public:
 
 	double rate() const {
 		return rate_;
+	}
+
+	// Gust's excitation, free and per tick (for tests).
+	double excitation() const {
+		return x_;
+	}
+	float tickExcitation() const {
+		return xt_;
 	}
 
 	// What is left of the current free-running wait (for tests).

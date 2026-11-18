@@ -54,6 +54,11 @@ build/test/pan/test_hostile: src/pan/test_hostile.cpp src/testing.hpp $(wildcard
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/pan $< -o $@
 
+# Squall's hostile-input test: the sanitizers, and the counting operator new.
+build/test/squall/test_hostile: src/squall/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/squall/*.hpp src/hadal/Random.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/squall $< -o $@
+
 # Fog's hostile-input test: the sanitizers, and the counting operator new.
 build/test/fog/test_hostile: src/fog/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/fog/*.hpp)
 	@mkdir -p $(@D)
