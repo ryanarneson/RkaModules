@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="30.48mm" height="128.5mm" viewBox="0 0 30.48 128.5">
+<rect width="30.48" height="128.5" fill="#0d0e12"/>
+<path d="M20.08 46L15.24 46L10.7 46" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M20.08 64L15.24 64L10.7 64" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M20.08 82L15.24 82L10.7 82" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M20.08 100L15.24 100L10.7 100" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<circle cx="6.4" cy="46" r="4.6" fill="#0d0e12"/>
+<circle cx="6.4" cy="64" r="4.6" fill="#0d0e12"/>
+<circle cx="6.4" cy="82" r="4.6" fill="#0d0e12"/>
+<circle cx="6.4" cy="100" r="4.6" fill="#0d0e12"/>
+<circle cx="15.24" cy="46" r="3.1" fill="#0d0e12"/>
+<circle cx="15.24" cy="64" r="3.1" fill="#0d0e12"/>
+<circle cx="15.24" cy="82" r="3.1" fill="#0d0e12"/>
+<circle cx="15.24" cy="100" r="3.1" fill="#0d0e12"/>
+<circle cx="24.08" cy="46" r="4.3" fill="#0d0e12"/>
+<circle cx="24.08" cy="64" r="4.3" fill="#0d0e12"/>
+<circle cx="24.08" cy="82" r="4.3" fill="#0d0e12"/>
+<circle cx="24.08" cy="100" r="4.3" fill="#0d0e12"/>
+<circle cx="15.24" cy="112" r="1.3" fill="#0d0e12"/>
+<text x="5.00" y="10.00" font-family="D-DIN Condensed" font-size="5.2" font-weight="normal" letter-spacing="1.4" text-anchor="start" fill="#bab3a3">PAN</text>
+<text x="5.00" y="13.80" font-family="D-DIN Condensed" font-size="1.7" font-weight="normal" letter-spacing="0.45" text-anchor="start" fill="#757062">BALLAST EXPANDER</text>
+<text x="6.53" y="40.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">1</text>
+<text x="6.53" y="58.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">2</text>
+<text x="6.53" y="76.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">3</text>
+<text x="6.53" y="94.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">4</text>
+<text x="15.37" y="116.20" font-family="D-DIN Condensed" font-size="1.3" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">LINK</text>
+<text x="24.20" y="39.00" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CV</text>
+<text x="15.49" y="125.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.5" text-anchor="middle" fill="#757062">R K A</text>
+<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
+<circle id="param-PAN_1" cx="6.4" cy="46.0" r="1" fill="#ff0000"/>
+<circle id="param-PAN_2" cx="6.4" cy="64.0" r="1" fill="#ff0000"/>
+<circle id="param-PAN_3" cx="6.4" cy="82.0" r="1" fill="#ff0000"/>
+<circle id="param-PAN_4" cx="6.4" cy="100.0" r="1" fill="#ff0000"/>
+<circle id="param-PAN_1_ATT" cx="15.24" cy="46.0" r="1" fill="#ff0000"/>
+<circle id="param-PAN_2_ATT" cx="15.24" cy="64.0" r="1" fill="#ff0000"/>
+<circle id="param-PAN_3_ATT" cx="15.24" cy="82.0" r="1" fill="#ff0000"/>
+<circle id="param-PAN_4_ATT" cx="15.24" cy="100.0" r="1" fill="#ff0000"/>
+<circle id="input-PAN_1_CV" cx="24.08" cy="46.0" r="1" fill="#00ff00"/>
+<circle id="input-PAN_2_CV" cx="24.08" cy="64.0" r="1" fill="#00ff00"/>
+<circle id="input-PAN_3_CV" cx="24.08" cy="82.0" r="1" fill="#00ff00"/>
+<circle id="input-PAN_4_CV" cx="24.08" cy="100.0" r="1" fill="#00ff00"/>
+<circle id="light-LINK" cx="15.24" cy="112.0" r="1" fill="#ff00ff"/>
+</g>
+</svg>
