@@ -287,6 +287,104 @@ void nothing_patched_no_work() {
 	      g.e.work() - before, g.out.l);
 }
 
+// ---- The output stage (Task 3) ----
+
+// RMS of out.l over n samples of a sine at hz through channel 1, after a
+// settling run; DC blocker as given.
+double sineRms(bool dc, float hz, float settleS, float measureS) {
+	Rig g;
+	g.f.dcBlock = dc;
+	g.f.inL[0].channels = 1;
+	double s = 0;
+	const int a = (int) (settleS * FS), n = (int) (measureS * FS);
+	for (int i = 0; i < a + n; i++) {
+		g.inL[0][0] = std::sin(2.0 * 3.14159265358979 * hz * i / FS);
+		g.step();
+		if (i >= a)
+			s += (double) g.out.l * g.out.l;
+	}
+	return std::sqrt(s / n);
+}
+
+void dc_blocker() {
+	Rig g;
+	g.f.dcBlock = true;
+	g.f.inL[0].channels = 1;
+	g.inL[0][0] = 1.f;
+	g.run((int) FS);
+	CHECK(std::fabs(g.out.l) < 1e-3f, "1 V DC still reads %.4f V after 1 s with the blocker on", g.out.l);
+	const double l30 = db(sineRms(true, 30.f, 1.f, 1.f) / sineRms(false, 30.f, 1.f, 1.f));
+	const double l3 = db(sineRms(true, 3.f, 4.f, 2.f) / sineRms(false, 3.f, 4.f, 2.f));
+	std::printf("  DC blocker: 30 Hz %+.3f dB, 3 Hz %+.2f dB\n", l30, l3);
+	CHECK(l30 > -0.1, "the DC blocker takes %.3f dB off 30 Hz (want under 0.1)", -l30);
+	CHECK(std::fabs(l3 + 3.0) <= 0.5, "the DC blocker is %+.2f dB at 3 Hz (want -3 +- 0.5)", l3);
+}
+
+void dc_blocker_off() {
+	Rig g;
+	g.f.dcBlock = false;
+	CHECK(dcThrough(g, 1.f) == 1.f, "with the blocker off, 1 V DC must pass exactly (got %.6f)", g.out.l);
+}
+
+void limit_curve() {
+	Rig g;
+	CHECK(dcThrough(g, 7.9f) == 7.9f && g.e.limited() == 0, "7.9 V must pass untouched (got %.4f, %ld limited)", g.out.l,
+	      g.e.limited());
+	Rig h;
+	CHECK(dcThrough(h, 30.f) <= 10.f && h.out.l > 9.f, "30 V must read at most 10 V (got %.4f)", h.out.l);
+	Rig n;
+	const float nine = dcThrough(n, 9.f);
+	CHECK(nine < 9.f && nine > 8.5f, "9 V must be softened above the 8 V knee (reads %.4f; want 8.5 to 9)", nine);
+	Rig k;
+	const float just = dcThrough(k, 8.001f);
+	CHECK(std::fabs(just - 8.001f) < 1e-3f, "the limit must be continuous at 8 V (8.001 V reads %.5f)", just);
+}
+
+void hot_inputs_bounded() {
+	Rig g;
+	for (int p = 0; p < F::PARAMS_LEN; p++)
+		g.f.params[p] = 1.f;
+	for (int c = 0; c < 4; c++)
+		g.f.inL[c].channels = g.f.inR[c].channels = 1;
+	g.f.chainL.channels = g.f.chainR.channels = 1;
+	bool ok = true, lit = false;
+	for (int i = 0; i < 48000; i++) {
+		const float v = (i / 100) % 2 ? 10.f : -10.f;
+		for (int c = 0; c < 4; c++)
+			g.inL[c][0] = g.inR[c][0] = v;
+		g.chL[0] = g.chR[0] = v;
+		g.step();
+		ok = ok && g.out.l == g.out.l && g.out.r == g.out.r && std::fabs(g.out.l) <= 10.f && std::fabs(g.out.r) <= 10.f;
+		lit = lit || g.out.clip;
+	}
+	CHECK(ok, "hot inputs must leave the outputs finite and within 10 V");
+	CHECK(lit, "hot inputs must light CLIP");
+}
+
+void clip_hold() {
+	Rig g;
+	g.f.inL[0].channels = 1;
+	g.run(100);
+	int lit = 0;
+	for (int i = 0; i < 20000; i++) {
+		g.inL[0][0] = i == 0 ? 9.f : 0.f;
+		g.step();
+		lit += g.out.clip ? 1 : 0;
+	}
+	CHECK(std::abs(lit - 7200) <= 1, "one sample over 8 V lit CLIP for %d samples (want 150 ms = 7200 +- 1)", lit);
+}
+
+void defaults_never_limit() {
+	Rig g;
+	g.f.dcBlock = true;
+	g.f.inL[0].channels = 1;
+	for (int i = 0; i < 96000; i++) {
+		g.inL[0][0] = 5.f * std::sin(2.f * 3.14159265f * 440.f * i / FS);
+		g.step();
+	}
+	CHECK(g.e.limited() == 0, "a 5 V sine at defaults was limited on %ld samples", g.e.limited());
+}
+
 } // namespace
 
 int main() {
@@ -302,5 +400,11 @@ int main() {
 	mono_normal_switch_no_click();
 	knob_smoothing();
 	nothing_patched_no_work();
+	dc_blocker();
+	dc_blocker_off();
+	limit_curve();
+	hot_inputs_bounded();
+	clip_hold();
+	defaults_never_limit();
 	return rkatest::finish("ballast test_engine");
 }

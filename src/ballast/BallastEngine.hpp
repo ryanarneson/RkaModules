@@ -67,6 +67,7 @@ class BallastEngine {
 public:
 	static const int TABLE = 256;   // intervals; 0.75 falls on a point
 	static constexpr float KNEE = 8.f, CEIL = 10.f;
+	static constexpr double DC_HZ = 3.0;
 
 	BallastEngine() {
 		for (int i = 0; i <= TABLE; i++)
@@ -95,12 +96,21 @@ public:
 		rate_ = fs;
 		smooth_ = (float) (1.0 - std::exp(-1.0 / (0.01 * fs)));
 		fadeStep_ = 1.f / (0.01f * fs);
+		// One-pole high-pass, y = a (y1 + x - x1), with a = e^(-2 pi fc / fs).
+		dcA_ = (float) std::exp(-2.0 * M_PI * DC_HZ / fs);
+		clipHold_ = (int) (0.15f * fs + 0.5f);
+		for (int s = 0; s < 2; s++)
+			dcX_[s] = dcY_[s] = 0.f;
+		clipLeft_ = 0;
 		snap_ = true;
 	}
 
 	void reset() {
+		for (int s = 0; s < 2; s++)
+			dcX_[s] = dcY_[s] = 0.f;
+		clipLeft_ = 0;
 		snap_ = true;
-		work_ = 0;
+		work_ = limited_ = 0;
 	}
 
 	void process(const BallastFrame& f, BallastResult& out, BallastExpander* const* chain = nullptr,
@@ -149,13 +159,29 @@ public:
 		mixR *= m;
 		float l = mono_ * (mixL + mixR) * 0.70710678f + (1.f - mono_) * mixL;
 		float r = mixR;
-		out.l = l;
-		out.r = r;
-		out.clip = false;
+		if (f.dcBlock) {
+			l = dcBlock(0, l);
+			r = dcBlock(1, r);
+		}
+		else {
+			dcX_[0] = l;
+			dcX_[1] = r;
+			dcY_[0] = dcY_[1] = 0.f;
+		}
+		const bool over = (l > KNEE || l < -KNEE) || (r > KNEE || r < -KNEE);
+		if (over)
+			clipLeft_ = clipHold_;
+		out.clip = clipLeft_ > 0;
+		clipLeft_ -= clipLeft_ > 0 ? 1 : 0;
+		out.l = limit(l);
+		out.r = limit(r);
 	}
 
 	long work() const {
 		return work_;
+	}
+	long limited() const {
+		return limited_;
 	}
 
 private:
@@ -165,6 +191,27 @@ private:
 			return 1.f;
 		const float g = cv.first() * 0.1f;
 		return g > 0.f ? (g < 1.f ? g : 1.f) : 0.f;
+	}
+
+	float dcBlock(int s, float x) {
+		float y = dcA_ * (dcY_[s] + x - dcX_[s]);
+		if (y < 1e-20f && y > -1e-20f)
+			y = 0.f;   // no denormals after silence
+		dcX_[s] = x;
+		dcY_[s] = y;
+		return y;
+	}
+
+	// The soft limit (Hadal's curve): untouched to the knee, never above
+	// the ceiling.
+	float limit(float x) {
+		const float a = x >= 0.f ? x : -x;
+		if (a <= KNEE)
+			return x;
+		limited_++;
+		const float room = CEIL - KNEE;
+		const float y = KNEE + room * fastTanh((a - KNEE) / room);
+		return x >= 0.f ? y : -y;
 	}
 
 	float ramp(float v, float target) const {
@@ -180,8 +227,10 @@ private:
 	float smooth_ = 0.002f, fadeStep_ = 0.002f;
 	float pos_[BallastFrame::PARAMS_LEN] = {};
 	float mono_ = 0.f;
+	float dcA_ = 0.9996f, dcX_[2] = {0, 0}, dcY_[2] = {0, 0};
+	int clipHold_ = 7200, clipLeft_ = 0;
 	bool snap_ = true;
-	long work_ = 0;
+	long work_ = 0, limited_ = 0;
 };
 
 } // namespace rka
