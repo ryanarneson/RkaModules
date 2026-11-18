@@ -15,6 +15,13 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Pan**, a 6 HP expander for Ballast:
+  - Pan knob, CV and attenuverter for each of Ballast's four channels.
+  - Mono sources panned; stereo sources by true pan (default) or balance.
+  - Pan law: no boost (default; panning never raises a level) or constant
+    loudness (up to +3 dB at the sides).
+  - Centre changes nothing; attaching glides in from centre; LINK light;
+    add it from Ballast's menu (Add Pan expander).
 - New module: **Ballast**, a 12 HP four-channel stereo mixer:
   - Four stereo channels (IN R normalled to IN L), each with a Level knob
     (silence to +6 dB, unity at the long tick) and a level CV on the VCA
@@ -23,7 +30,9 @@
     from two Ballasts; L alone carries the mono sum.
   - DC blocker (menu, on by default) and a soft limit (8 V knee, 10 V
     ceiling) with a CLIP light.
-  - Ready for expanders on its right side; the Pan expander is next.
+  - Expanders on its right side (Pan). Either input alone is a centred mono
+    source (2.0.7 played IN R alone on the right only). Turning the DC
+    blocker on fades an offset away; a sample-rate change keeps its state.
   - Drawn as a clinometer.
 - New module: **Hadal**, a 10 HP rumble and noise bed:
   - Three layers, Rumble, Hiss and Crackle, each with a level knob (audio

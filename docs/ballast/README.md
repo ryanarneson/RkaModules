@@ -85,10 +85,14 @@ After Master, each side passes through:
 
 ## Expanders
 
-Ballast is built to take expanders: modules placed directly against its
-right side, which act on its channels on the same sample. None ships yet.
-**The Pan expander is next**: pan, pan CV and an attenuverter for each
-channel. Mute, solo, fades, offsets and aux sends may follow.
+Ballast takes expanders: modules placed directly against its right side,
+which act on its channels on the same sample.
+
+- **[Pan](../pan/README.md)**: pan, pan CV and an attenuverter for each
+  channel, with true stereo pan or balance. Add one from Ballast's
+  right-click menu (**Add Pan expander**) or place it from the browser.
+
+Mute, solo, fades, offsets and aux sends may follow.
 
 ## Bypass
 
