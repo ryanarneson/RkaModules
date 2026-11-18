@@ -14,6 +14,7 @@ void init(Plugin* p) {
 	p->addModel(modelHadal);
 	p->addModel(modelBallast);
 	p->addModel(modelPan);
+	p->addModel(modelSquall);
 	p->addModel(modelShoal);
 	p->addModel(modelSluice);
 

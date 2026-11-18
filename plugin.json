@@ -94,6 +94,17 @@
         "Expander"
       ],
       "keywords": "pan panning stereo balance ballast expander"
+    },
+    {
+      "slug": "Squall",
+      "name": "Squall",
+      "description": "Random gates and CV: Weather sets how much happens, Gust bunches it into bursts, Memory replays the recent past; free-running or clocked",
+      "tags": [
+        "Random",
+        "Sample and hold",
+        "Clock modulator"
+      ],
+      "keywords": "random gates cv weather gust memory loop sample hold drift ambient"
     }
   ]
 }
