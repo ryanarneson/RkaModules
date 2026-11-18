@@ -12,11 +12,17 @@
 
 namespace rka {
 
+static const int MAX_STEPS = 32;   // modules looked at, at most, per walk
+
 template <class M, class Next, class Bypassed, class As>
 int collectBallastExpanders(M* first, BallastExpander** out, int max, Next next, Bypassed bypassed, As as) {
 	int n = 0;
 	uint32_t seen = 0;
-	for (M* m = first; m && n < max; m = next(m)) {
+	// Capped by steps, not by expanders kept: skipped ones (bypassed, or a
+	// second of a kind) do not count, so links that loop (two Pans dragged
+	// past each other, a damaged patch) would otherwise never end.
+	int steps = 0;
+	for (M* m = first; m && n < max && steps < MAX_STEPS; m = next(m), steps++) {
 		BallastExpander* x = as(m);
 		if (!x)
 			break;

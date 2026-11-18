@@ -102,6 +102,13 @@ struct Pan : Module, rka::PanCore {
 		idle_.store(0, std::memory_order_relaxed);
 	}
 
+	// Bypassed, Rack calls this instead of process(): Ballast skips a
+	// bypassed Pan, so LINK goes dark.
+	void processBypass(const ProcessArgs& args) override {
+		Module::processBypass(args);
+		lights[LINK_LIGHT].setBrightness(0.f);
+	}
+
 	void process(const ProcessArgs& args) override {
 		const int n = idle_.load(std::memory_order_relaxed);
 		if (n < (1 << 20))

@@ -275,6 +275,25 @@ void one_of_each_kind() {
 	CHECK(k == 3 && out[0] == &b && out[1] == &c, "with a bypassed, b must act (kept %d)", k);
 }
 
+// A chain whose links loop (two Pans pointing at each other while being
+// dragged, or a damaged patch) must still end: the walk is capped by steps
+// taken, not by expanders kept (a second Pan or a bypassed one is skipped
+// without counting).
+void walk_ends_on_a_loop() {
+	Gain a(Gain::POST, 0, 1.f, 0.f), b(Gain::POST, 0, 1.f, 0.f);
+	a.kindId = b.kindId = 1;
+	Node na, nb;
+	na.x = &a;
+	nb.x = &b;
+	na.right = &nb;
+	nb.right = &na;
+	rka::BallastExpander* out[8];
+	const int k = walk(&na, out, 8);
+	CHECK(k == 1 && out[0] == &a, "two Pans in a loop: kept %d (want 1, a)", k);
+	na.bypassed = nb.bypassed = true;
+	CHECK(walk(&na, out, 8) == 0, "two bypassed expanders in a loop: the walk must end with none kept");
+}
+
 void linked_every_walk() {
 	Gain a(Gain::POST, 0, 1.f, 0.f), b(Gain::POST, 0, 1.f, 0.f);
 	rka::BallastExpander* chain[2] = {&a, &b};
@@ -346,6 +365,7 @@ int main() {
 	gDcBlock = false;
 	expander_nan_recovers();
 	walk_skips_bypassed_and_stops_at_strangers();
+	walk_ends_on_a_loop();
 	one_of_each_kind();
 	linked_every_walk();
 	attached_on_change();
