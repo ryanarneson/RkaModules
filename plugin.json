@@ -75,6 +75,15 @@
         "Random"
       ],
       "keywords": "noise rumble hiss crackle ambient drone bed texture"
+    },
+    {
+      "slug": "Ballast",
+      "name": "Ballast",
+      "description": "Four-channel stereo mixer: Level and a VCA level CV per channel, Master with CV, chain inputs, DC-blocked soft-limited out, expander-ready",
+      "tags": [
+        "Mixer"
+      ],
+      "keywords": "mixer stereo vca level chain"
     }
   ]
 }

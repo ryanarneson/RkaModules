@@ -12,6 +12,7 @@ void init(Plugin* p) {
 	p->addModel(modelFathom);
 	p->addModel(modelFog);
 	p->addModel(modelHadal);
+	p->addModel(modelBallast);
 	p->addModel(modelShoal);
 	p->addModel(modelSluice);
 
