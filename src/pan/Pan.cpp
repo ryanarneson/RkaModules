@@ -41,6 +41,7 @@ struct Pan : Module, rka::PanCore {
 	// increments, Ballast's thread (in linked()) resets.
 	std::atomic<int> idle_{1 << 20};
 	int stereoMode = 0;   // 0 true pan, 1 balance
+	int panLaw = 0;       // 0 no boost, 1 constant loudness
 	float sampleRate = 48000.f;
 
 	Pan() {
@@ -63,11 +64,13 @@ struct Pan : Module, rka::PanCore {
 
 	void onReset() override {
 		stereoMode = 0;
+		panLaw = 0;
 	}
 
 	json_t* dataToJson() override {
 		json_t* root = json_object();
 		json_object_set_new(root, "stereoMode", json_integer(stereoMode));
+		json_object_set_new(root, "panLaw", json_integer(panLaw));
 		return root;
 	}
 
@@ -75,6 +78,8 @@ struct Pan : Module, rka::PanCore {
 		json_t* j = json_object_get(root, "stereoMode");
 		const int m = j && json_is_integer(j) ? (int) json_integer_value(j) : 0;
 		stereoMode = m == 1 ? 1 : 0;
+		json_t* l = json_object_get(root, "panLaw");
+		panLaw = l && json_is_integer(l) && json_integer_value(l) == 1 ? 1 : 0;
 	}
 
 	// Called from Ballast's thread, once per sample.
@@ -86,6 +91,7 @@ struct Pan : Module, rka::PanCore {
 			f.cv[c].channels = inputs[PAN_1_CV_INPUT + c].getChannels();
 		}
 		f.stereoMode = stereoMode;
+		f.panLaw = panLaw;
 	}
 
 	int idle() const override {
@@ -132,6 +138,10 @@ struct PanWidget : ModuleWidget {
 		if (!module)
 			return;
 		menu->addChild(new MenuSeparator);
+		menu->addChild(createIndexPtrSubmenuItem("Pan law",
+		                                         {"No boost (panning never raises a level)",
+		                                          "Constant loudness (up to +3 dB at the sides)"},
+		                                         &module->panLaw));
 		menu->addChild(createIndexPtrSubmenuItem("Stereo sources", {"True pan (move the whole image)", "Balance"},
 		                                         &module->stereoMode));
 	}

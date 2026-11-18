@@ -150,6 +150,19 @@ fit at 6 HP). Screws top right and bottom left.
 
 ### The pan laws
 
+*As built (the user's choice at the listening stop):* hard pans drove a hot
+mix into Ballast's soft limit (CLIP lit, crackle), because the laws below
+boost at the sides (mono +3 dB, true pan of a near-mono stereo source
++6 dB). Pan now has a **Pan law** menu, saved as `panLaw`:
+- **No boost** (default): no sample leaves louder than the louder side went
+  in. Mono: the equal-power gains below, each held to 1 (unity on the near
+  side hard over). True pan: R' = R (1 - s/2) + L s/2 (hard right is
+  (L + R) / 2).
+- **Constant loudness:** mono as below (+3 dB at the sides); true pan
+  R' = R (1 - (1 - 1/sqrt 2) s) + L s / sqrt 2 (hard right (L + R) / sqrt 2,
+  at most +3 dB).
+Balance is unchanged under both. The formulas below were the first build's.
+
 With p from -1 (hard left) to +1 (hard right), 0 at centre. **At p = 0
 every law is the identity**, so attaching Pan at centre changes nothing.
 

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 
 typedef rka::BallastFrame BF;
@@ -110,8 +111,10 @@ void centre_is_identity() {
 	}
 }
 
+// Constant loudness (pan law 1): equal power, +3 dB at the sides.
 void mono_law() {
 	TestPan pan;
+	pan.in.panLaw = 1;
 	const float x = 0.8f;
 	for (float knob : {0.f, 1.f}) {
 		pan.in.knob[0] = knob;
@@ -135,6 +138,7 @@ void mono_law() {
 
 void mono_equal_power_under_cv() {
 	TestPan pan;
+	pan.in.panLaw = 1;
 	pan.in.att[0] = 1.f;
 	pan.in.cv[0].channels = 1;
 	pan.settle();
@@ -155,22 +159,64 @@ float panned(TestPan& pan, float knob, float& l, float& r, rka::BallastSource sr
 	return 0.f;
 }
 
-void true_pan() {
+// True pan of a stereo source: p >= 0, theta = p pi / 2, s = sin theta:
+// L' = L cos theta, R' = R (1 - (1 - k) s) + L k s; k = 1/2 with no boost
+// (hard right is (L + R) / 2), 1 / sqrt 2 for constant loudness.
+void true_pan_law(int law, float k) {
 	TestPan pan;
+	pan.in.panLaw = law;
 	const float L = 0.6f, R = -0.3f;
 	float l = L, r = R;
 	panned(pan, 1.f, l, r, rka::STEREO);
-	CHECK(std::fabs(l) < 1e-6f && std::fabs(r - (R + L)) < 1e-5f, "true pan hard right: L %g R %g, want 0 and %g", l, r,
-	      R + L);
+	CHECK(std::fabs(l) < 1e-6f && std::fabs(r - k * (R + L)) < 1e-5f, "law %d true pan hard right: L %g R %g, want 0 %g",
+	      law, l, r, k * (R + L));
+	const float c = std::cos(PI / 4.f), s = std::sin(PI / 4.f);
 	l = L, r = R;
 	panned(pan, 0.75f, l, r, rka::STEREO);   // p = 0.5
-	const float c = std::cos(PI / 4.f), s = std::sin(PI / 4.f);
-	CHECK(std::fabs(l - L * c) < 1e-5f && std::fabs(r - (R + L * s)) < 1e-5f, "true pan p 0.5: L %g R %g, want %g %g",
-	      l, r, L * c, R + L * s);
+	CHECK(std::fabs(l - L * c) < 1e-5f && std::fabs(r - (R * (1.f - (1.f - k) * s) + L * k * s)) < 1e-5f,
+	      "law %d true pan p 0.5: L %g R %g", law, l, r);
 	l = L, r = R;
 	panned(pan, 0.25f, l, r, rka::STEREO);   // p = -0.5
-	CHECK(std::fabs(r - R * c) < 1e-5f && std::fabs(l - (L + R * s)) < 1e-5f, "true pan p -0.5: L %g R %g, want %g %g",
-	      l, r, L + R * s, R * c);
+	CHECK(std::fabs(r - R * c) < 1e-5f && std::fabs(l - (L * (1.f - (1.f - k) * s) + R * k * s)) < 1e-5f,
+	      "law %d true pan p -0.5: L %g R %g", law, l, r);
+}
+
+void true_pan() {
+	true_pan_law(0, 0.5f);
+	true_pan_law(1, 0.70710678f);
+}
+
+// No boost (pan law 0, the default): no sample ever leaves louder than the
+// louder of the channel's two sides went in, at any pan, mono or stereo,
+// true pan or balance; and a mono source holds unity on its own side.
+void no_boost() {
+	TestPan pan;
+	float l = 0.8f, r = 0.8f;
+	panned(pan, 0.f, l, r, rka::MONO);
+	CHECK(std::fabs(l - 0.8f) < 1e-5f && std::fabs(r) < 1e-5f, "no boost, mono hard left: L %g R %g, want 0.8 and 0", l,
+	      r);
+	uint32_t s = 3;
+	auto next = [&]() {
+		s = s * 1664525u + 1013904223u;
+		return (float) (s >> 8) / 16777216.f * 2.f - 1.f;
+	};
+	double worst = 0;
+	for (int mode = 0; mode < 2; mode++) {
+		pan.in.stereoMode = mode;
+		for (int i = 0; i <= 40; i++) {
+			pan.in.knob[0] = i / 40.f;
+			pan.settle();
+			for (int k = 0; k < 200; k++) {
+				const float L = next(), R = next();
+				const rka::BallastSource src = k % 2 ? rka::MONO : rka::STEREO;
+				float a = L, b = src == rka::MONO ? L : R;
+				const float in = std::max(std::fabs(a), std::fabs(b));
+				pan.postLevel(0, a, b, src);
+				worst = std::max(worst, (double) std::max(std::fabs(a), std::fabs(b)) - in);
+			}
+		}
+	}
+	CHECK(worst <= 1e-5, "with no boost, a pan raised a sample by %.2e V", worst);
 }
 
 void balance() {
@@ -228,8 +274,8 @@ void knob_smoothing() {
 	q.cvv[0][0] = 5.f;
 	float l = 1.f, r = 1.f;
 	q.apply(0, l, r, rka::MONO);
-	CHECK(std::fabs(l) < 1e-5f && std::fabs(r - std::sqrt(2.f)) < 1e-5f, "a CV step must land at once (L %g R %g)", l,
-	      r);
+	CHECK(std::fabs(l) < 1e-5f && std::fabs(r - 1.f) < 1e-5f, "a CV step must land at once (L %g R %g, want 0 and 1)",
+	      l, r);
 }
 
 void attach_glides_from_centre() {
@@ -268,6 +314,7 @@ int main() {
 	mono_law();
 	mono_equal_power_under_cv();
 	true_pan();
+	no_boost();
 	balance();
 	cv_law();
 	knob_smoothing();
