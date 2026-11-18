@@ -44,6 +44,11 @@ build/test/hadal/test_hostile: src/hadal/test_hostile.cpp src/testing.hpp $(wild
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/hadal $< -o $@
 
+# Ballast's hostile-input test: the sanitizers, and the counting operator new.
+build/test/ballast/test_hostile: src/ballast/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/ballast/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/ballast $< -o $@
+
 # Fog's hostile-input test: the sanitizers, and the counting operator new.
 build/test/fog/test_hostile: src/fog/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/fog/*.hpp)
 	@mkdir -p $(@D)
@@ -141,7 +146,7 @@ bench: build/bench/bench
 # pre-optimisation references, built with the plugin's floating-point and
 # architecture flags so they check what the plugin computes.
 PLUGIN_MATH_TEST_FLAGS = -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR)
-PLUGIN_MATH_TESTS = build/test/fathom/test_fast_math build/test/fathom/test_engine build/test/sway/test_engine build/test/sluice/test_engine build/test/fog/test_blocks build/test/fog/test_network build/test/fog/test_engine build/test/fog/test_modes build/test/fog/test_stereo build/test/hadal/test_layers build/test/hadal/test_engine
+PLUGIN_MATH_TESTS = build/test/fathom/test_fast_math build/test/fathom/test_engine build/test/sway/test_engine build/test/sluice/test_engine build/test/fog/test_blocks build/test/fog/test_network build/test/fog/test_engine build/test/fog/test_modes build/test/fog/test_stereo build/test/hadal/test_layers build/test/hadal/test_engine build/test/ballast/test_engine build/test/ballast/test_expander
 $(filter $(TEST_BINS),$(PLUGIN_MATH_TESTS)): build/test/%: src/%.cpp $(wildcard src/*.hpp $(MODULES:%=src/%/*.hpp) $(MODULES:%=src/%/testdata/ref/*.hpp))
 	@mkdir -p $(@D)
 	$(CXX) $(PLUGIN_MATH_TEST_FLAGS) -Isrc -I$(<D) $< -o $@

@@ -1,7 +1,7 @@
 {
   "slug": "rka",
   "name": "RKA",
-  "version": "2.0.5",
+  "version": "2.0.7",
   "license": "GPL-3.0-or-later",
   "brand": "RKA",
   "author": "Ryan Arneson",
@@ -75,6 +75,15 @@
         "Random"
       ],
       "keywords": "noise rumble hiss crackle ambient drone bed texture"
+    },
+    {
+      "slug": "Ballast",
+      "name": "Ballast",
+      "description": "Four-channel stereo mixer: Level and a VCA level CV per channel, Master with CV, chain inputs, DC-blocked soft-limited out, expander-ready",
+      "tags": [
+        "Mixer"
+      ],
+      "keywords": "mixer stereo vca level chain"
     }
   ]
 }

@@ -2,6 +2,8 @@
 
 ## Test builds
 
+- 2.0.7 (2026-11-17): Ballast: final review fixes (bypassed expanders skipped, NaN stopped at the mix, cheap chain walk)
+- 2.0.6 (2026-11-17): Ballast: first build for listening (four stereo channels, VCA level CV, Master, CHAIN, DC blocker, CLIP)
 - 2.0.5 (2026-11-17): Hadal: final review fixes (CRACKLE jack mono sum, cheap reset, no libm on the audio path)
 - 2.0.4 (2026-11-16): Hadal: Crackle soft-clipped and about 9 dB louder
 - 2.0.3 (2026-11-16): Hadal: first build for listening (rumble, hiss, crackle, Depth, Drift); Fog bottom row at 116 mm
@@ -10,6 +12,16 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Ballast**, a 12 HP four-channel stereo mixer:
+  - Four stereo channels (IN R normalled to IN L), each with a Level knob
+    (silence to +6 dB, unity at the long tick) and a level CV on the VCA
+    law: 0 V silent, 10 V the knob's level, never above it.
+  - Master with its own CV; CHAIN inputs before Master, for eight channels
+    from two Ballasts; L alone carries the mono sum.
+  - DC blocker (menu, on by default) and a soft limit (8 V knee, 10 V
+    ceiling) with a CLIP light.
+  - Ready for expanders on its right side; the Pan expander is next.
+  - Drawn as a clinometer.
 - New module: **Hadal**, a 10 HP rumble and noise bed:
   - Three layers, Rumble, Hiss and Crackle, each with a level knob (audio
     taper) and its own output.

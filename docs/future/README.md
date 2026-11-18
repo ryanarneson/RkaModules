@@ -5,7 +5,7 @@ can be picked up later. Each is a concept and a rough panel sketch in the
 Instrument look (`docs/specs/2026-11-15-instrument-look-design.md`), not a
 design: names are working titles and have not been checked against the VCV
 Library, and the control sets are first guesses made to draw the panels.
-Sluice, Fog and Hadal have since been designed and built (their pages point to
+Sluice, Fog, Hadal and Ballast have since been designed and built (their pages point to
 their specs and manuals); the rest have not been through a design
 conversation yet.
 
@@ -25,7 +25,7 @@ takes one more instrument and builds its panel geometry from it.
 | [Squall](squall.md) | Random source | An aneroid barometer | 8 HP |
 | [Knot](knot.md) | Clock, divider, multiplier | Knots counted on a log line | 8 HP |
 | [Beacon](beacon.md) | Envelope and function generator | A lighthouse | 8 HP |
-| [Ballast](ballast.md) | Four-channel stereo mixer | A clinometer | 12 HP |
+| [Ballast](ballast.md) | Four-channel stereo mixer (built) | A clinometer | 12 HP |
 | [Sounding](sounding.md) | Eight-step sequencer | A line of soundings on a chart | 12 HP |
 | [Fog](fog.md) | Reverb (built) | A visibility scale | 10 HP |
 | [Sextant](sextant.md) | Scanner and crossfader | A sextant | 8 HP |

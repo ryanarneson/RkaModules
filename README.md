@@ -8,6 +8,7 @@ VCV Rack 2 modules.
 | [**Fathom**](docs/fathom/README.md) | 10 | Deep bass drone voice: sub sine, 7-saw supersaw, drift, ladder filter |
 | [**Sluice**](docs/sluice/README.md) | 10 | Quad VCA: Level and CV per row, Lin/Exp, DC-coupled, polyphonic, normalled inputs and a mix downward |
 | [**Fog**](docs/fog/README.md) | 10 | Stereo reverb: Visibility sets the decay in seconds (0.4 to 80 s), four modes, Size, Damp, Bloom, Drift, CV on all five |
+| [**Ballast**](docs/ballast/README.md) | 12 | Four-channel stereo mixer: Level and a VCA level CV per channel, Master with CV, CHAIN inputs, a DC-blocked, soft-limited out, ready for expanders |
 | [**Hadal**](docs/hadal/README.md) | 10 | Rumble and noise bed: Rumble, Hiss and Crackle darkened together by Depth (0 to 11 km), slow Drift, CV on all five, a layer out each and an L/R mix |
 | [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware, with a mouse-driven settings list |
 
@@ -46,6 +47,9 @@ src/fog/                 the Fog reverb: Fog.cpp, FogEngine.hpp and the Rack-fre
 src/hadal/               the Hadal noise bed: Hadal.cpp, HadalEngine.hpp and the
                          Rack-free layers (NoiseLayer.hpp, Crackle.hpp, Drift.hpp,
                          Random.hpp), test_*.cpp, bench.inc, HadalLayout.hpp
+src/ballast/             the Ballast mixer: Ballast.cpp, BallastEngine.hpp (Rack-free),
+                         BallastExpander.hpp (the expander interface), test_*.cpp,
+                         bench.inc, BallastLayout.hpp
 src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   Shoal.cpp              module and widget, mapped onto shoal::Host
   FriendlyList.hpp       the friendly-mode list widget on the lower screen
