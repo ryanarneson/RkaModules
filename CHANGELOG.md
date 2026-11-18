@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.7 (2026-11-17): Ballast: final review fixes (bypassed expanders skipped, NaN stopped at the mix, cheap chain walk)
 - 2.0.6 (2026-11-17): Ballast: first build for listening (four stereo channels, VCA level CV, Master, CHAIN, DC blocker, CLIP)
 - 2.0.5 (2026-11-17): Hadal: final review fixes (CRACKLE jack mono sum, cheap reset, no libm on the audio path)
 - 2.0.4 (2026-11-16): Hadal: Crackle soft-clipped and about 9 dB louder
