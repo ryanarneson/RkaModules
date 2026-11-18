@@ -76,6 +76,29 @@ inline double fastExp2D(double x) {
 	return p * pow2iD(int(n));
 }
 
+// log2(x) for finite x > 0, within 1e-7 absolute (tested to 1e-3 over
+// 1e-9 ... 1 by Squall): x = m 2^e with m in [sqrt 1/2, sqrt 2), and
+// log2 m = 2 / ln 2 atanh t, t = (m - 1) / (m + 1), |t| < 0.172, by the
+// series to t^7. No libm. x <= 0 or NaN returns -126 (Squall only feeds it
+// (0, 1]).
+inline float fastLog2(float x) {
+	if (!(x > 0.f))
+		return -126.f;
+	uint32_t bits;
+	std::memcpy(&bits, &x, sizeof(bits));
+	int e = (int) ((bits >> 23) & 0xffu) - 127;
+	bits = (bits & 0x007fffffu) | 0x3f800000u;   // m in [1, 2)
+	float m;
+	std::memcpy(&m, &bits, sizeof(m));
+	if (m > 1.41421356f) {
+		m *= 0.5f;
+		e += 1;
+	}
+	const float t = (m - 1.f) / (m + 1.f), t2 = t * t;
+	const float s = t * (1.f + t2 * (1.f / 3 + t2 * (1.f / 5 + t2 * (1.f / 7))));
+	return (float) e + 2.88539008f * s;
+}
+
 // 10^(db / 20): decibels to gain.
 inline float fastDbToGain(float db) {
 	return fastExp2(db * 0.166096404744368f);  // log2(10) / 20
