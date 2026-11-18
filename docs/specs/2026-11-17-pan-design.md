@@ -186,6 +186,12 @@ panned Pan is a step back to centre; the manual says so (*designer's
 call*: a fade there would need a crossfade in Ballast, not worth it for an
 edit made rarely and usually in silence).
 
+*As built:* "newly attached" is decided on Ballast's thread: Ballast keeps
+last sample's chain (BallastLinker) and calls a new hook, `attached()`, on an
+expander newly in it; Pan restarts from centre only then. The first build
+inferred it from a counter both threads wrote, and with several engine
+threads lost updates made Pan restart every few samples (crackle).
+
 ### LINK
 
 Lit while a Ballast has called `linked()` within the last 50 ms (a counter
