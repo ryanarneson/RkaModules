@@ -10,6 +10,7 @@ VCV Rack 2 modules.
 | [**Fog**](docs/fog/README.md) | 10 | Stereo reverb: Visibility sets the decay in seconds (0.4 to 80 s), four modes, Size, Damp, Bloom, Drift, CV on all five |
 | [**Ballast**](docs/ballast/README.md) | 12 | Four-channel stereo mixer: Level and a VCA level CV per channel, Master with CV, CHAIN inputs, a DC-blocked, soft-limited out, ready for expanders |
 | [**Pan**](docs/pan/README.md) | 6 | Ballast's pan expander: pan, CV and attenuverter per channel; true stereo pan or balance; no-boost or constant-loudness pan law |
+| [**Squall**](docs/squall/README.md) | 8 | Random gates and CV: Weather (one event in 10 min to 8 a second), Gust bursts, Memory loops, Step, Swell and a gate that follows the weather, free or clocked, Freeze |
 | [**Hadal**](docs/hadal/README.md) | 10 | Rumble and noise bed: Rumble, Hiss and Crackle darkened together by Depth (0 to 11 km), slow Drift, CV on all five, a layer out each and an L/R mix |
 | [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware, with a mouse-driven settings list |
 
@@ -53,6 +54,9 @@ src/ballast/             the Ballast mixer: Ballast.cpp, BallastEngine.hpp (Rack
                          bench.inc, BallastLayout.hpp
 src/pan/                 the Pan expander: Pan.cpp, PanCore.hpp (Rack-free, a
                          BallastExpander), test_*.cpp, bench.inc, PanLayout.hpp
+src/squall/              the Squall random source: Squall.cpp, SquallEngine.hpp and the
+                         Rack-free parts (Events.hpp, Memory.hpp, Gate.hpp, Swell.hpp,
+                         SquallTuning.hpp), test_*.cpp, bench.inc, SquallLayout.hpp
 src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   Shoal.cpp              module and widget, mapped onto shoal::Host
   FriendlyList.hpp       the friendly-mode list widget on the lower screen

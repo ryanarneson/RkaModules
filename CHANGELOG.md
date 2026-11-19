@@ -2,6 +2,8 @@
 
 ## Test builds
 
+- 2.0.13 (2026-11-18): Squall: final review fixes (Gust in average-gap time: no burst on a clock switch, no rate change under Weather CV; inf on Clock/Freeze reads 0 V)
+- 2.0.12 (2026-11-18): Squall: first build for listening (random gates and CV: Weather, Gust, Memory, Clock, Freeze)
 - 2.0.11 (2026-11-18): Ballast: expander walk capped at 32 steps (a looped chain cannot hang); Pan: LINK dark when bypassed
 - 2.0.10 (2026-11-17): Pan: attach decided on Ballast's thread (fixes crackle with several engine threads)
 - 2.0.9 (2026-11-17): Pan: pan law menu, no boost by default (fixes clipping at hard pans)
@@ -16,6 +18,15 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Squall**, an 8 HP random source of gates and CV:
+  - Weather sets how much happens: one event in 10 minutes (Calm) to 8 a
+    second (Stormy); with a clock, the chance of an event per tick.
+  - Gust bunches events into self-exciting bursts and lulls without
+    changing the average; Memory replays the last 4, 8 or 16 events, from
+    never to an exact loop, saved with the patch.
+  - Step, Swell (a smooth drift through the same values) and a gate whose
+    length follows the weather; four ranges; Freeze; CV and attenuverter
+    on Weather, Gust and Memory.
 - New module: **Pan**, a 6 HP expander for Ballast:
   - Pan knob, CV and attenuverter for each of Ballast's four channels.
   - Mono sources panned; stereo sources by true pan (default) or balance.

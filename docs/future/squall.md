@@ -1,6 +1,8 @@
 # Squall: a random source
 
-Status: idea, 2026-11-15. Not designed.
+Status: built (2026-11-18, 8 HP). Design: `docs/specs/2026-11-18-squall-design.md`;
+manual: `docs/squall/README.md`. As built there is no Noise output (Hadal makes noise), Slew
+became Memory, and the subtitle is RANDOM GATES & CV. The text below is the original idea.
 
 ![mockup](squall-mockup.svg)
 

@@ -215,6 +215,11 @@ _BL_MX = round((_BL_M[0] + _BL_M[1]) / 2, 2)                    # Master, betwee
 _PN_X = [6.4, 15.24, 24.08]
 _PN_ROWS = [46.0, 64.0, 82.0, 100.0]
 
+# Squall: the hero's centre, and three columns.
+_SQ_O = (20.32, 34.0)
+_SQ_X = [7.6, 20.32, 33.04]
+_SQ_COLS = ["GUST", "WEATHER", "MEMORY"]
+
 
 def _hadal_on(x):
     return round(column_on_arc(*_HD_O, _HD_LIMB, x), 2)   # below the dial
@@ -524,6 +529,41 @@ PANELS = {
         preview={"LIGHT_LINK": dict(lit=True)},
         mark="R K A",
         screws=screws_at(6, "tr", "bl"),
+    ),
+    # Squall, random gates and CV, drawn as an aneroid barometer
+    # (docs/specs/2026-11-18-squall-design.md). Weather is the hero; its
+    # words sit evenly round the face, each a real rate (Calm one event per
+    # 10 min ... Stormy 8 per s). Three columns: Gust | Weather's CV path |
+    # Memory, each knob, attenuverter, CV; then Clock, the event light and
+    # Freeze, and the three outputs, on Hadal's and Ballast's rows.
+    "Squall": dict(
+        dir="squall",
+        hp=8,
+        title="SQUALL",
+        subtitle="RANDOM GATES & CV",
+        components=[("param", "WEATHER", *_SQ_O, "WEATHER"),
+                    ("param", "GUST", _SQ_X[0], 60.0, "GUST"),
+                    ("param", "MEMORY", _SQ_X[2], 60.0, "MEMORY")]
+        + [("param", n + "_ATT", x, 72.5, None) for n, x in zip(_SQ_COLS, _SQ_X)]
+        + [("input", n + "_CV", x, 83.0, None) for n, x in zip(_SQ_COLS, _SQ_X)]
+        + [
+                    ("input", "CLOCK", _SQ_X[0], 102.0, "CLOCK"),
+                    ("input", "FREEZE", _SQ_X[2], 102.0, "FREEZE"),
+                    ("light", "EVENT", _SQ_X[1], 102.0, None)]
+        + [("output", n, x, 116.0, n) for n, x in zip(["STEP", "SWELL", "GATE"], _SQ_X)],
+        sizes={"PARAM_WEATHER": "hero"},
+        circles=[(*_SQ_O, r) for r in (24, 40, 56)],
+        faces={"PARAM_WEATHER": dict(r=18.0, ticks=24, major=6, words_size=1.8,
+                                     words=[(-135, "CALM"), (-67.5, "FAIR"), (0, "CHANGE"),
+                                            (67.5, "RAIN"), (135, "STORMY")])},
+        tiles=[dict(port=f"OUTPUT_{n}") for n in ("STEP", "SWELL", "GATE")],
+        traces=[[f"INPUT_{n}_CV", f"PARAM_{n}_ATT", f"PARAM_{n}"] for n in _SQ_COLS],
+        label_at={"PARAM_WEATHER": "face"},
+        notes=[(x, 83.0 + 6.0, "CV", 1.6, "dim") for x in _SQ_X],
+        # As it opens: Weather at noon (Change), Gust 0.3, Memory 0.
+        preview={"PARAM_WEATHER": dict(turn=0), "PARAM_GUST": dict(turn=-54),
+                 "PARAM_MEMORY": dict(turn=-135), "LIGHT_EVENT": dict(lit=True)},
+        screws=screws_at(8, "tr", "bl"),
     ),
 }
 
