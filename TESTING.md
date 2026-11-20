@@ -194,6 +194,8 @@ instance, Apple M-series Mac:
 | Pan measured (with Ballast) | 0.034 | 0.187 | 0.211 |
 | Squall budget | 0.05 | 0.05 | 0.1 |
 | Squall measured | 0.023 | 0.024 | 0.029 |
+| Rigging budget | 0.3 | 0.3 | 0.55 |
+| Rigging measured | 0.13 | 0.13 | 0.26 |
 
 Sluice also has a mixDown case (as busy, but only D connected): budget 2.25,
 measured 1.11. Its budgets are about twice the measurement, rounded up to
@@ -369,20 +371,20 @@ Three habits behind most of them:
 
 ## What each module has today
 
-| | Sway | Fathom | Shoal | Sluice | Fog | Hadal | Ballast | Pan | Squall |
-|---|---|---|---|---|---|---|---|---|---|
-| Rack-free core with offline tests | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| `-Wall -Wextra`, `-Werror` in CI | Yes | Yes | No (vendored firmware warns) | Yes | Yes | Yes | Yes | Yes | Yes |
-| Sanitizers | No | No | Yes | Partly (`test_hostile` only: the fuzz, hostile input, sample rates, allocation) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) |
-| Hostile-input and sample-rate sweeps | Partly | Partly | Yes | Yes (NaN, infinity, 1e30, a sample-rate change, 1 Hz to 768 kHz, 0 and negative rates) | Yes (NaN and infinity on every input, CV and parameter, 1 Hz to 768 kHz, 0, negative and NaN rates, a rate change over a tail) | Yes (NaN and infinity on every CV, 1 Hz to 768 kHz, 0, negative, NaN and 1e9 rates, rate changes) | Yes (NaN and infinity on every input, CV and CHAIN, 1 Hz to 768 kHz, 0, negative, NaN and 1e9 rates, rate changes) | Yes (NaN and infinity on every knob, attenuverter and CV, 0, negative, NaN and 1e9 rates) | Yes (NaN and infinity on every CV, Clock and Freeze, 1 Hz to 768 kHz, 0, negative, NaN and 1e9 rates, rate changes) |
-| Random fuzz with seeds | No | No | Yes | Yes (`test_hostile`: 600 fixed-seed trials against a scalar model; no seed sweep) | Yes (`test_hostile`: 200 fixed-seed trials; no seed sweep) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, patch states and rates, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, poly counts, patch states and rates, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed Pan and Ballast controls, modes and links, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, clock, Freeze, menus and rates, fixed seed) |
-| Golden saved-state image | No (params only) | No (params only) | Yes | No (params only) | No (params only) | No (params only) | No (params and `dcBlock`) | No (params and `stereoMode`) | No (params, `range`, `loopLength`, `history`, `step` and `swell`; round trip and bad values tested on the engine) |
-| Allocation check on the audio path | No | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| Thread tests | Not needed (no shared state) | Not needed | Yes | Not needed | Not needed | Not needed | Not needed | Not needed (one atomic counter) | Not needed (no shared state) |
-| CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes (`make shoal-bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`, with Ballast) | Yes (`make bench`) |
-| No libm call per sample, knobs still | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Not checked | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) |
-| No writable global state | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make shoal-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) |
-| Smoke screenshot | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| | Sway | Fathom | Shoal | Sluice | Fog | Hadal | Ballast | Pan | Squall | Rigging |
+|---|---|---|---|---|---|---|---|---|---| --- |
+| Rack-free core with offline tests | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| `-Wall -Wextra`, `-Werror` in CI | Yes | Yes | No (vendored firmware warns) | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Sanitizers | No | No | Yes | Partly (`test_hostile` only: the fuzz, hostile input, sample rates, allocation) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) |
+| Hostile-input and sample-rate sweeps | Partly | Partly | Yes | Yes (NaN, infinity, 1e30, a sample-rate change, 1 Hz to 768 kHz, 0 and negative rates) | Yes (NaN and infinity on every input, CV and parameter, 1 Hz to 768 kHz, 0, negative and NaN rates, a rate change over a tail) | Yes (NaN and infinity on every CV, 1 Hz to 768 kHz, 0, negative, NaN and 1e9 rates, rate changes) | Yes (NaN and infinity on every input, CV and CHAIN, 1 Hz to 768 kHz, 0, negative, NaN and 1e9 rates, rate changes) | Yes (NaN and infinity on every knob, attenuverter and CV, 0, negative, NaN and 1e9 rates) | Yes (NaN and infinity on every CV, Clock and Freeze, 1 Hz to 768 kHz, 0, negative, NaN and 1e9 rates, rate changes) | Yes (NaN, infinity and 1e30 on every input, CV and knob, 1 Hz to 768 kHz, 0, negative and NaN rates, rate changes while ringing, a tuned square with Ring at 60 s, STRUM at audio rate) |
+| Random fuzz with seeds | No | No | Yes | Yes (`test_hostile`: 600 fixed-seed trials against a scalar model; no seed sweep) | Yes (`test_hostile`: 200 fixed-seed trials; no seed sweep) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, patch states and rates, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, poly counts, patch states and rates, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed Pan and Ballast controls, modes and links, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, clock, Freeze, menus and rates, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, triggers, patch states and rates; no seed sweep) |
+| Golden saved-state image | No (params only) | No (params only) | Yes | No (params only) | No (params only) | No (params only) | No (params and `dcBlock`) | No (params and `stereoMode`) | No (params, `range`, `loopLength`, `history`, `step` and `swell`; round trip and bad values tested on the engine) | No (params and `freePitch`) |
+| Allocation check on the audio path | No | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Thread tests | Not needed (no shared state) | Not needed | Yes | Not needed | Not needed | Not needed | Not needed | Not needed (one atomic counter) | Not needed (no shared state) | Not needed (no shared state) |
+| CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes (`make shoal-bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`, with Ballast) | Yes (`make bench`) | Yes (`make bench`) |
+| No libm call per sample, knobs still | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Not checked | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) |
+| No writable global state | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make shoal-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) |
+| Smoke screenshot | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 
 Fog also has `make fog-soak` (opt-in, minutes, not in `make test`): every
 mode at v = 1 and three corners of Size, Damp and Drift, 10 minutes of noise

@@ -105,6 +105,17 @@
         "Clock modulator"
       ],
       "keywords": "random gates cv weather gust memory loop sample hold drift ambient"
+    },
+    {
+      "slug": "Rigging",
+      "name": "Rigging",
+      "description": "Six tuned strings: a drone from any sound, or struck by a trigger or a new note; seven chords, a level per string, Ring to 60 s, Damp, Spread, CV on Chord, Ring and Damp",
+      "tags": [
+        "Resonator",
+        "Physical modeling",
+        "Drone"
+      ],
+      "keywords": "strings resonator karplus strong pluck strum drone chord comb ambient"
     }
   ]
 }
