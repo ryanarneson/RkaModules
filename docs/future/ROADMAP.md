@@ -18,7 +18,7 @@ process and a plain panel; **M** needs real DSP work or tuning by ear;
 The existing three are already in the Instrument look
 (`docs/specs/2026-11-15-instrument-look-design.md`): Sway, Fathom and
 Shoal moved to it in PR #7, after Shoal's friendly mode landed in PR #6
-(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall and Rigging were built in it from the start.
+(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging and Wake were built in it from the start.
 
 **Changes since (the user, 2026-11-18):** Squall was built next, ahead of
 Plimsoll and Lull. Plimsoll is skipped for now, since Ballast's soft limit
@@ -27,8 +27,9 @@ wait for a patch to call for them. Lull, a standalone slew, is a low
 priority. The numbers below are the original order.
 
 **Changes since (the user, 2026-11-20):** Narrows, a stereo filter, was
-added, to be built soon: it follows Wake. It has no number in the original
-order.
+added, to be built soon: it follows Wake, which was built the same day
+as a smaller module than its sketch (a stereo echo, 14 HP). Narrows has no
+number in the original order.
 
 ## 1. A whole patch from RKA alone
 
@@ -52,7 +53,7 @@ is the one to build first and reuse.
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
 | 7 | [Rigging](rigging.md) (built) | M | Six tuned strings. Hadal's noise through Rigging is a tuned drone: a second voice from two modules already built; struck by Squall, it also covers some of Ping's and Buoy's ground. |
-| 8 | [Wake](wake.md) | L | The full delay. Its Freeze, feedback Send and Return, and four tap outputs make it a hub for a patch. |
+| 8 | [Wake](wake.md) (built) | L | The delay. Built as a stereo echo for struck sounds, with three styles, Ratio, ping pong and Freeze; the taps and the Send and Return of the first sketch were left out. Its moving read point (`src/DelayTap.hpp`) is the code Eddy and Spindrift reuse. |
 | new | [Narrows](narrows.md) | M | Stereo filter: low-pass, band-pass or high-pass by a Mode control, with a comb and a ping input. The collection has no filter outside Fathom's voice, and every texture module here wants one after it. Two cores on a switch: Fathom's ladder, reused, and a state-variable filter; the comb reuses Rigging's delay line. |
 | 9 | [Eddy](eddy.md) | M | Tape loop. Reuses Wake's buffer code; gives layered, decaying loops. |
 | 10 | [Spindrift](spindrift.md) | L | Grain cloud. The first module with a window to draw; the user singled it out. |

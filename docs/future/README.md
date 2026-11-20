@@ -5,7 +5,7 @@ can be picked up later. Each is a concept and a rough panel sketch in the
 Instrument look (`docs/specs/2026-11-15-instrument-look-design.md`), not a
 design: names are working titles and have not been checked against the VCV
 Library, and the control sets are first guesses made to draw the panels.
-Sluice, Fog, Hadal, Ballast (with its Pan expander), Squall and Rigging have since been designed and built (their pages point to
+Sluice, Fog, Hadal, Ballast (with its Pan expander), Squall, Rigging and Wake have since been designed and built (their pages point to
 their specs and manuals); the rest have not been through a design
 conversation yet.
 
@@ -18,7 +18,7 @@ takes one more instrument and builds its panel geometry from it.
 
 | Module | What it does | The instrument | Width |
 |--------|--------------|----------------|-------|
-| [Wake](wake.md) | Comprehensive stereo tap delay | A ship's wake | 18 HP |
+| [Wake](wake.md) | Stereo echo (built) | A ship's wake | 14 HP |
 | [Eddy](eddy.md) | Tape loop (reworked from a small delay) | An eddy, drawn as a spiral | 10 HP |
 | [Neap](neap.md) | Very slow, layered modulation | A tide-predicting machine | 12 HP |
 | [Bearing](bearing.md) | Quantiser | A compass rose | 10 HP |

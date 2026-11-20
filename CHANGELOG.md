@@ -25,6 +25,21 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Wake**, a 14 HP stereo echo:
+  - Echoes from 10 ms to 10 s behind a struck sound, in three styles:
+    Tape (pitch bends when Time moves; repeats soften), Analog (darker and
+    grittier, more so at long times) and Digital (clean; Time changes
+    without a bend).
+  - Ratio sets the two sides' times against each other in seven steps;
+    Ping Pong bounces the echoes left and right.
+  - Feedback to 110 %, bounded; Tone darkens or thins each repeat; Diffuse
+    smears them; Drift wavers the echo time, each side its own way.
+  - Freeze (button and gate) holds what is in the delay, unchanged, for as
+    long as wanted.
+  - A clock input: Time becomes a multiple of the clock, 1/4 to 4.
+  - CV on Time (with attenuverter), Feedback and Mix; stereo in and out;
+    soft-limited.
+  - Drawn as a ship's wake.
 - New module: **Rigging**, 14 HP, six tuned strings:
   - Any sound in keeps the strings ringing: a tuned drone from noise. A
     trigger at STRUM strikes them, or with nothing in STRUM a new note at
