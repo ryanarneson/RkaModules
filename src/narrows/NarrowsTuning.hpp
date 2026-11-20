@@ -45,8 +45,20 @@ static const float STATE_K0 = 1.41421356f;
 static const float STATE_K_TOP = -0.05f;
 static const float STATE_CLIP = 2.6f;
 
-// Drive at full: octaves of gain (24 dB).
+// The ladder's pitch correction above the onset. Its self-oscillation falls
+// flat as the feedback k rises past 4: by (107.2 e - 42 e^2) (1 - 2.3 g)
+// cents, e = k - 4 and g the per-pole tan (measured, 30 Hz to 4 kHz at
+// 44.1 and 96 kHz). The engine raises the ladder's g by the same amount;
+// A and B are those cents as a natural-log ratio (x ln 2 / 1200).
+static const float PITCH_FIX_A = 0.061921f;
+static const float PITCH_FIX_B = -0.024260f;
+static const float PITCH_FIX_G = 2.3f;
+
+// Drive at full: octaves of gain (24 dB). The output is turned down by
+// DRIVE_MAKEUP of that, in octaves: less than all of it, since a driven
+// core is already holding the level back.
 static const float DRIVE_OCTAVES = 4.f;
+static const float DRIVE_MAKEUP = 0.62f;
 
 // Comb: the feedback at the ends of the knob.
 static const float COMB_MAX = 0.95f;
