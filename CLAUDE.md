@@ -78,5 +78,6 @@ layout.
 - Reference plugins cloned beside this repo in `~/ws/plugins`:
   AudibleInstruments (official, Mutable ports), SanguineMonsters (large
   plugin, CI pattern copied from it), forsitan-modulare (header-only DSP +
-  offline test harness, the pattern used here), pichenettes-eurorack
-  (Mutable Instruments firmware DSP).
+  offline test harness, the pattern used here), eurorack
+  (pichenettes/eurorack: Mutable Instruments firmware DSP, with Beads;
+  its `stmlib` submodule is not checked out).
