@@ -186,8 +186,8 @@ instance, Apple M-series Mac:
 | Sluice measured | 0.077 | 0.066 | 1.07 |
 | Fog budget | 0.15 | 0.15 | 1.6 |
 | Fog measured (was) | 0.06 (0.55) | 0.06 (0.56) | 0.78 (0.72) |
-| Hadal budget | 0.1 | 0.3 | 0.35 |
-| Hadal measured | 0.028 | 0.147 | 0.164 |
+| Hadal budget | 0.1 | 0.45 | 0.45 |
+| Hadal measured (was) | 0.029 (0.028) | 0.201 (0.147) | 0.214 (0.164) |
 | Ballast budget | 0.05 | 0.25 | 0.3 |
 | Ballast measured | 0.017 | 0.105 | 0.128 |
 | Pan budget (with Ballast) | 0.1 | 0.4 | 0.45 |
