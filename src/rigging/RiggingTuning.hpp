@@ -29,6 +29,12 @@ constexpr float LOOP_KNEE = 12.f, LOOP_CEIL = 16.f;
 // read between two bounded samples overshoots a little).
 constexpr float LOOP_OVERSHOOT = 1.25f;
 
+// The strike: a burst of noise into each string, about one period long,
+// peaking at STRIKE_LEVEL volts, low-passed by a one-pole with this
+// coefficient a sample (1: none) so it is not all edge.
+constexpr float STRIKE_LEVEL = 4.f;
+constexpr float STRIKE_SMOOTH = 0.5f;
+
 // The audio input is high-passed here before the strings: a string's loop
 // passes DC as it does its own pitch, so DC in would ring as DC.
 constexpr float INPUT_HIGHPASS_HZ = 3.f;
