@@ -135,7 +135,7 @@ int editorRow(int app) {
 }
 
 // One scripted session per app: seeded CV and clocks, the editor gesture,
-// and a few more controls. `draw`: draw both screens every 17 ticks.
+// and a few more controls. `draw`: draw both screens and read the scope view every 17 ticks.
 void scriptedSession(Core& c, int app, bool draw) {
 	c.setEncoderAcceleration(false); // queued detents land on the intended row
 	c.selectApp(app);
@@ -152,6 +152,8 @@ void scriptedSession(Core& c, int app, bool draw) {
 			if (draw && i % 17 == 0) {
 				menu(c);
 				scope(c);
+				shoal::ScopeView v;
+				c.scopeView(v);
 			}
 		}
 	};
