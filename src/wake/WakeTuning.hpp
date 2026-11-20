@@ -42,8 +42,12 @@ constexpr float STYLE_RAMP_S = 0.03f;
 constexpr float LOOP_KNEE = 12.f, LOOP_CEIL = 16.f;
 constexpr float LOOP_DC_HZ = 5.f;
 
-// Drift: the wander's depth at full, as pitch (by ear).
-constexpr float DRIFT_CENTS = 30.f;
+// Drift (by ear). Each side's tape speed wanders by up to DRIFT_DEPTH (15
+// cents) at full; what comes out differs from what went in by the two
+// speeds, so pitch moves by up to twice that (30 cents). The wander is
+// Hadal's, run DRIFT_SPEEDUP times faster: a new heading every 0.3 to 1.2 s.
+constexpr float DRIFT_DEPTH = 0.0087019f;   // 2^(15/1200) - 1
+constexpr float DRIFT_SPEEDUP = 25.f;
 
 // Freeze and the switches.
 constexpr float JOIN_S = 0.01f;

@@ -121,18 +121,21 @@ struct DelayTap {
 		return out;
 	}
 
-	// Loop the last delay() samples (to the nearest sample, so the loop
-	// repeats exactly). The caller stops writing the line. The join is
-	// `joinSeconds` long, or a quarter of the loop if that is shorter, and
-	// reads up to that much beyond the loop: the line needs maxDelay of at
-	// least the range's top plus the join plus 4.
-	void freeze(float joinSeconds) {
+	// Loop the last `loopSamples` (or, if 0, the last delay() samples), to
+	// the nearest sample, so the loop repeats exactly. The caller stops
+	// writing the line. Playback carries straight on from the last read.
+	// The join is `joinSeconds` long, or a quarter of the loop if that is
+	// shorter, and reads up to that much beyond the loop: the line needs
+	// maxDelay of at least the longest loop plus the join plus 4.
+	void freeze(float joinSeconds, float loopSamples = 0.f) {
 		if (frozen_)
 			return;
 		// A fade in progress ends here: the loop is the audio at the delay
 		// being faded to.
 		fading_ = pending_ = fromLoop_ = false;
-		loop_ = std::floor(d_ + 0.5);
+		loop_ = std::floor((loopSamples >= 1.f ? (double) loopSamples : d_) + 0.5);
+		if (loop_ < d_)
+			loop_ = std::floor(d_ + 0.5);   // never shorter than where the read is
 		if (loop_ < 4.0)
 			loop_ = 4.0;
 		double join = std::floor((double) joinSeconds * fs_);
@@ -140,9 +143,14 @@ struct DelayTap {
 			join = std::floor(loop_ * 0.25);
 		join_ = join >= 1.0 ? join : 1.0;
 		// The last read was `d_` back; the line now stands still, so the
-		// next sample is one nearer. The loop spans delays loop + 1 .. 2
-		// (two clear of the newest sample, for the interpolator).
-		q_ = 2.0;
+		// next sample is one nearer: delay d_ - 1 = loop + 1 - q. The loop
+		// spans delays loop + 1 .. 2 (two clear of the newest sample, for
+		// the interpolator).
+		q_ = loop_ + 2.0 - d_;
+		while (q_ >= loop_)
+			q_ -= loop_;
+		if (q_ < 0.0)
+			q_ = 0.0;
 		frozen_ = true;
 	}
 

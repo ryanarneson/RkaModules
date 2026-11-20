@@ -156,7 +156,7 @@ void freeze_repeats() {
 	Rig g;
 	rka::hadal::Random rng;
 	rng.seed(7);
-	g.tap.snap(2000.4f);
+	g.tap.snap(2000.f);
 	for (int i = 0; i < 12000; i++) {
 		g.line.write(rng.uniform());
 		g.tap.process(g.line, 0.f);
@@ -182,6 +182,37 @@ void freeze_repeats() {
 				break;
 			}
 	CHECK(same > L * 0.6, "the frozen loop must be the line's own audio (%d of %d samples found)", same, L);
+}
+
+// A loop longer than the delay (the engine's read is a little short of the
+// echo time): it is as long as asked, repeats exactly, and still carries
+// straight on from the last read.
+void freeze_longer_loop() {
+	Rig g;
+	g.tap.snap(1500.f);
+	float last = 0.f;
+	for (int i = 0; i < 12000; i++)
+		last = g.sine(37.0);
+	(void) last;
+	g.tap.freeze(0.01f, 2000.f);
+	const float first0 = g.tap.process(g.line, 0.f);
+	const double next = std::sin(TWO_PI * 37.0 * (double) (g.n - 1500) / FS);
+	CHECK(std::fabs(first0 - next) < 1e-4, "a longer loop carries on from the read: %.6f, want %.6f", first0, next);
+	const int L = 2000;
+	std::vector<float> first(L);
+	first[0] = first0;
+	for (int i = 1; i < L; i++)
+		first[i] = g.tap.process(g.line, 0.f);
+	double worst = 0;
+	for (int k = 0; k < 20; k++)
+		for (int i = 0; i < L; i++)
+			worst = std::max(worst, (double) std::fabs(g.tap.process(g.line, 0.f) - first[i]));
+	CHECK(worst < 1e-6, "a loop of 2000 from a read at 1500 repeats every 2000 samples (off by %g)", worst);
+	// And not every 1500.
+	double diff = 0;
+	for (int i = 0; i + 1500 < L; i++)
+		diff = std::max(diff, (double) std::fabs(first[i] - first[i + 1500]));
+	CHECK(diff > 0.1, "the loop is the asked length, not the delay's");
 }
 
 // The join: no step beyond the signal's ordinary ones, for long and very
@@ -308,6 +339,7 @@ int main() {
 	crossfade_no_bend();
 	latest_target_wins();
 	freeze_repeats();
+	freeze_longer_loop();
 	freeze_join();
 	freeze_mod();
 	bounds();
