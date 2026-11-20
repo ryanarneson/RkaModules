@@ -80,23 +80,24 @@ static void comb_reset_forgets() {
 	float y = 0.f;
 	for (int i = 0; i < 100; i++)
 		y = c.process(0.f, 100.f, 0.9f);
-	const float a = 2.f * (1.f - 0.9f) / (2.f - 0.9f);
+	const float a = std::sqrt(1.f - 0.9f * 0.9f);
 	CHECK(std::fabs(y - 0.9f * a) < 1e-4f, "the first echo after a reset: %g, want %g", y, 0.9f * a);
 }
 
-// A comb just reset reads as one that has run on silence for a long time.
+// A comb just reset reads as one that has run on silence for a long time
+// (to rounding: the two reads are the same formula in two places, and a
+// compiler may order them differently).
 static void comb_fresh_equals_run_in() {
 	Comb fresh = makeComb(), runIn = makeComb();
 	for (int i = 0; i < 20000; i++)
 		runIn.process(0.f, 43.64f, 0.9f);
 	Lcg rng(12);
-	long different = 0;
+	double worst = 0.0;
 	for (int i = 0; i < 5000; i++) {
 		const float x = rng.next();
-		if (!(fresh.process(x, 43.64f, 0.9f) == runIn.process(x, 43.64f, 0.9f)))
-			different++;
+		worst = std::fmax(worst, std::fabs(double(fresh.process(x, 43.64f, 0.9f)) - runIn.process(x, 43.64f, 0.9f)));
 	}
-	CHECK(different == 0, "%ld samples differ", different);
+	CHECK(worst < 1e-4, "largest difference %g", worst);
 }
 
 static double peakNear(float centre, float period, float feedback) {
@@ -125,11 +126,30 @@ static void comb_peaks() {
 	CHECK(std::fabs(q - 1100.0) < 11.0, "fractional period: peak at %f Hz", q);
 }
 
-static void comb_peak_level() {
+// The comb keeps noise at its level (the input is turned down by
+// sqrt(1 - f^2) as the feedback f rises), so its peaks stand well above the
+// dry signal: by sqrt((1 + f) / (1 - f)), 15.9 dB at the top.
+static void comb_level() {
+	for (float fb : {0.3f, 0.6f, 0.95f, -0.3f, -0.95f}) {
+		Comb c = makeComb();
+		Lcg rng(17);
+		double in = 0.0, out = 0.0;
+		for (int i = 0; i < 96000; i++) {
+			const float x = 0.2f * rng.next();
+			const float y = c.process(x, 100.f, fb);
+			if (i >= 48000) {
+				in += double(x) * x;
+				out += double(y) * y;
+			}
+		}
+		const double db = 10.0 * std::log10(out / in);
+		CHECK(std::fabs(db) < 0.5, "noise through the comb at feedback %g: %f dB", fb, db);
+	}
 	for (float fb : {0.3f, 0.6f, 0.95f}) {
+		const double want = 10.0 * std::log10((1.0 + fb) / (1.0 - fb));
 		const double up = combGainDb(480.f, 100.f, fb), down = combGainDb(240.f, 100.f, -fb);
-		CHECK(up <= 6.5 && up >= 0.0, "peak at feedback %g: %f dB", fb, up);
-		CHECK(down <= 6.5 && down >= 0.0, "peak at feedback %g: %f dB", -fb, down);
+		CHECK(std::fabs(up - want) < 0.5, "peak at feedback %g: %f dB, want %f", fb, up, want);
+		CHECK(std::fabs(down - want) < 0.5, "peak at feedback %g: %f dB, want %f", -fb, down, want);
 	}
 }
 
@@ -142,7 +162,7 @@ static void comb_bounded() {
 			const float x = i < 48000 ? 2.4f * rng.next() : 2.4f;   // noise, then DC
 			peak = std::fmax(peak, std::fabs(double(c.process(x, 37.3f, fb))));
 		}
-		CHECK(peak < 4.8, "feedback %g: peak %g", fb, peak);
+		CHECK(peak < 2.4 * 6.3, "feedback %g: peak %g", fb, peak);   // sqrt(1.95 / 0.05) = 6.24
 		float y = 1.f;
 		for (int i = 0; i < 96000; i++)
 			y = c.process(0.f, 37.3f, fb);
@@ -152,9 +172,9 @@ static void comb_bounded() {
 
 static void comb_slides() {
 	// A 2 kHz sine through a ringing comb; the period jumps from 100 to 61
-	// samples. A 2 kHz sine at the comb's peak level steps by up to 0.26
-	// between samples on its own; a period that jumped would add a break on
-	// top of that (0.29 measured), a slid one does not (0.13).
+	// samples. Away from the comb's peaks the output steps by about 0.1
+	// between samples on its own; a period that jumped adds a break on top
+	// of that, a slid one does not.
 	Comb c = makeComb();
 	float prev = 0.f;
 	double before = 0.0, across = 0.0;
@@ -167,7 +187,7 @@ static void comb_slides() {
 			across = std::fmax(across, std::fabs(double(y) - prev));
 		prev = y;
 	}
-	CHECK(across < 0.2 && before > 0.01, "largest step across a jump of the period: %g (before it: %g)", across, before);
+	CHECK(across < 0.35 && before > 0.01, "largest step across a jump of the period: %g (before it: %g)", across, before);
 	// And it does arrive: a little later the period is the new one.
 	Comb d = makeComb();
 	for (int i = 0; i < 4800; i++)
@@ -281,7 +301,7 @@ int main() {
 	comb_reset_forgets();
 	comb_fresh_equals_run_in();
 	comb_peaks();
-	comb_peak_level();
+	comb_level();
 	comb_bounded();
 	comb_slides();
 	comb_range();

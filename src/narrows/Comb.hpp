@@ -4,9 +4,11 @@
 // harmonics; with negative feedback they sit halfway between. Rack-free;
 // only allocate() allocates.
 //
-// y[n] = a x[n] + feedback y[n - period], where a falls as the feedback
-// rises so a peak comes out at most 6 dB above the dry level
-// (a = 2 (1 - |f|) / (2 - |f|), and the peak gain is a / (1 - |f|)).
+// y[n] = a x[n] + feedback y[n - period], with a = sqrt(1 - feedback^2):
+// noise comes out as loud as it went in, and the peaks stand above it by
+// sqrt((1 + |f|) / (1 - |f|)), 15.9 dB at the top (the user, 2026-11-20:
+// the first rule, a peak at most 6 dB over dry, left a pinged comb too
+// quiet).
 // At feedback exactly 0 the input is returned untouched, and still
 // written, so turning the comb in finds the line full.
 #include "../DelayLine.hpp"
@@ -64,8 +66,13 @@ struct Comb {
 			put(x);
 			return x;
 		}
-		const float f = feedback < 0.f ? -feedback : feedback;
-		const float a = 2.f * (1.f - f) / (2.f - f);
+		// The input gain, worked out only when the feedback moves.
+		if (feedback != gainFor) {
+			gainFor = feedback;
+			const float sq = 1.f - feedback * feedback;
+			gain = sq > 0.f ? std::sqrt(sq) : 0.f;
+		}
+		const float a = gain;
 		// Read before this sample is written: delay d - 1 is d samples back.
 		float y = a * x + feedback * echo(d - 1.f);
 		// Nothing subnormal goes round, and a NaN does not stay.
@@ -110,6 +117,7 @@ private:
 	float d = 0.f;
 	float top = COMB_MIN_SAMPLES;
 	float coef = 1.f;
+	float gainFor = 0.f, gain = 1.f;
 };
 
 } // namespace narrows
