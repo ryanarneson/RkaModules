@@ -18,7 +18,7 @@ process and a plain panel; **M** needs real DSP work or tuning by ear;
 The existing three are already in the Instrument look
 (`docs/specs/2026-11-15-instrument-look-design.md`): Sway, Fathom and
 Shoal moved to it in PR #7, after Shoal's friendly mode landed in PR #6
-(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan and Squall were built in it from the start.
+(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall and Rigging were built in it from the start.
 
 **Changes since (the user, 2026-11-18):** Squall was built next, ahead of
 Plimsoll and Lull. Plimsoll is skipped for now, since Ballast's soft limit
@@ -47,7 +47,7 @@ is the one to build first and reuse.
 
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
-| 7 | [Rigging](rigging.md) | M | Resonators. Hadal's noise through Rigging is a tuned drone: a second voice from two modules already built. |
+| 7 | [Rigging](rigging.md) (built) | M | Six tuned strings. Hadal's noise through Rigging is a tuned drone: a second voice from two modules already built; struck by Squall, it also covers some of Ping's and Buoy's ground. |
 | 8 | [Wake](wake.md) | L | The full delay. Its Freeze, feedback Send and Return, and four tap outputs make it a hub for a patch. |
 | 9 | [Eddy](eddy.md) | M | Tape loop. Reuses Wake's buffer code; gives layered, decaying loops. |
 | 10 | [Spindrift](spindrift.md) | L | Grain cloud. The first module with a window to draw; the user singled it out. |

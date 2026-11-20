@@ -15,5 +15,6 @@ extern Model* modelHadal;
 extern Model* modelBallast;
 extern Model* modelPan;
 extern Model* modelSquall;
+extern Model* modelRigging;
 extern Model* modelShoal;
 extern Model* modelSluice;

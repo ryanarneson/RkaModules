@@ -2,6 +2,8 @@
 
 ## Test builds
 
+- 2.0.17 (2026-11-19): Rigging: final review fixes (the pitch glide ends; DC cannot pile up in a string or thump through a level knob; Ring changes ramp; a slewed note is one strike; Initialize cancels a rake; typed values in the tooltips)
+- 2.0.16 (2026-11-19): Rigging: first build for listening (six tuned strings: drone from any sound, struck by STRUM or a new note at V/OCT)
 - 2.0.15 (2026-11-19): Shoal: final review fixes (lanes always match the pixels shown, overlay clipped to the rack view, Harrington patch in the manual)
 - 2.0.14 (2026-11-19): Shoal: upper screen lanes and smooth views (traces, X/Y, note circle, grid); strip dividers; patches to try in the manual
 - 2.0.13 (2026-11-18): Squall: final review fixes (Gust in average-gap time: no burst on a clock switch, no rate change under Weather CV; inf on Clock/Freeze reads 0 V)
@@ -20,6 +22,17 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Rigging**, 14 HP, six tuned strings:
+  - Any sound in keeps the strings ringing: a tuned drone from noise. A
+    trigger at STRUM strikes them, or with nothing in STRUM a new note at
+    V/OCT does; both at once, in one tuning.
+  - Seven chords (Unison, Octaves, Fifths, Minor, Sus, Cluster, Bell), a
+    level per string, Tune and V/OCT.
+  - Ring from 0.1 s to 60 s, the drone's loudness held steady across it;
+    Damp darkens the strings as they ring; Spread rakes a strike across the
+    six, from a stab to 1.5 s.
+  - CV on Chord, Ring and Damp; stereo in and out; soft-limited.
+  - Drawn as a ship's rigging.
 - New module: **Squall**, an 8 HP random source of gates and CV:
   - Weather sets how much happens: one event in 10 minutes (Calm) to 8 a
     second (Stormy); with a clock, the chance of an event per tick.

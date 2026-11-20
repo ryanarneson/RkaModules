@@ -216,6 +216,11 @@ _PN_X = [6.4, 15.24, 24.08]
 _PN_ROWS = [46.0, 64.0, 82.0, 100.0]
 
 # Squall: the hero's centre, and three columns.
+# Rigging's masthead, columns and the six level knobs under the stays.
+_RG_O = (57.0, 15.0)
+_RG_X = [16.0, 38.0, 50.5, 63.0]
+_RG_LEVELS = [(9.0, 33.0), (19.6, 39.5), (30.2, 43.8), (40.8, 46.6), (51.4, 48.2), (62.0, 48.8)]
+
 _SQ_O = (20.32, 34.0)
 _SQ_X = [7.6, 20.32, 33.04]
 _SQ_COLS = ["GUST", "WEATHER", "MEMORY"]
@@ -566,6 +571,53 @@ PANELS = {
         preview={"PARAM_WEATHER": dict(turn=0), "PARAM_GUST": dict(turn=-54),
                  "PARAM_MEMORY": dict(turn=-135), "LIGHT_EVENT": dict(lit=True)},
         screws=screws_at(8, "tr", "bl"),
+    ),
+    # Rigging, six tuned strings (docs/specs/2026-11-19-rigging-design.md),
+    # drawn as a ship's rigging: six brass stays run from the masthead to
+    # the six string-level knobs, 1 (the lowest string) to 6. Tune is the
+    # hero, lettered in octaves round C2 as Fathom's Pitch, with V/OCT under
+    # it; Chord, Ring and Damp each over their CV; then Strum, Spread, the
+    # strike light and Mix, and the ins and outs, on the other modules' rows.
+    "Rigging": dict(
+        dir="rigging",
+        hp=14,
+        title="RIGGING",
+        subtitle="SIX TUNED STRINGS",
+        components=[("param", f"LEVEL_{i + 1}", x, y, str(i + 1)) for i, (x, y) in enumerate(_RG_LEVELS)]
+        + [("param", "TUNE", 16.0, 62.5, "TUNE"),
+           ("param", "CHORD", _RG_X[1], 64.0, "CHORD"),
+           ("param", "RING", _RG_X[2], 64.0, "RING"),
+           ("param", "DAMP", _RG_X[3], 64.0, "DAMP"),
+           ("input", "VOCT", 16.0, 83.0, "V/OCT"),
+           ("input", "CHORD_CV", _RG_X[1], 83.0, None),
+           ("input", "RING_CV", _RG_X[2], 83.0, None),
+           ("input", "DAMP_CV", _RG_X[3], 83.0, None),
+           ("input", "STRUM", 16.0, 102.0, "STRUM"),
+           ("param", "SPREAD", _RG_X[1], 102.0, "SPREAD"),
+           ("light", "STRIKE", _RG_X[2], 102.0, None),
+           ("param", "MIX", _RG_X[3], 102.0, "MIX"),
+           ("input", "L", 10.5, 116.0, "IN L"),
+           ("input", "R", 24.0, 116.0, "IN R"),
+           ("output", "L", _RG_X[2], 116.0, "L"),
+           ("output", "R", _RG_X[3], 116.0, "R")],
+        # A dial, not the hero knob: the octave numerals need the room (as
+        # Fathom's Pitch).
+        sizes={"PARAM_TUNE": "dial"},
+        origins=[_RG_O],
+        circles=[(*_RG_O, r) for r in (30, 52, 74, 96)],
+        ropes=[[_RG_O, f"PARAM_LEVEL_{i + 1}"] for i in range(6)],
+        faces={"PARAM_TUNE": dict(r=14.0, ticks=48, major=12, numerals=["-2", "-1", "0", "+1", "+2"])},
+        tiles=[dict(port="OUTPUT_L"), dict(port="OUTPUT_R")],
+        traces=[[f"INPUT_{n}_CV", f"PARAM_{n}"] for n in ("CHORD", "RING", "DAMP")],
+        label_at={"PARAM_TUNE": "face", "INPUT_VOCT": "below"},
+        notes=[(x, 89.0, "CV", 1.6, "dim") for x in _RG_X[1:]],
+        # As it opens: Tune at C2, Fifths, Ring 4 s, Damp a third, Spread
+        # 60 ms, Mix and every level full.
+        preview=dict({"PARAM_TUNE": dict(turn=0), "PARAM_CHORD": dict(turn=-45), "PARAM_RING": dict(turn=21),
+                      "PARAM_DAMP": dict(turn=-46), "PARAM_SPREAD": dict(turn=-43), "PARAM_MIX": dict(turn=135),
+                      "LIGHT_STRIKE": dict(lit=True)},
+                     **{f"PARAM_LEVEL_{i + 1}": dict(turn=135) for i in range(6)}),
+        screws=screws_at(14, "tr", "bl"),
     ),
 }
 

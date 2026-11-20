@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="71.12mm" height="128.5mm" viewBox="0 0 71.12 128.5">
+<rect width="71.12" height="128.5" fill="#0d0e12"/>
+<circle cx="57" cy="15" r="30" fill="none" stroke="#1e232c" stroke-width="0.25"/>
+<circle cx="57" cy="15" r="52" fill="none" stroke="#1e232c" stroke-width="0.25"/>
+<circle cx="57" cy="15" r="74" fill="none" stroke="#1e232c" stroke-width="0.25"/>
+<circle cx="57" cy="15" r="96" fill="none" stroke="#1e232c" stroke-width="0.25"/>
+<path d="M55.4 15L58.6 15 M57 13.4L57 16.6" fill="none" stroke="#9c7f52" stroke-width="0.2"/>
+<circle cx="57" cy="15" r="0.8" fill="none" stroke="#9c7f52" stroke-width="0.2"/>
+<path d="M38 79L38 68.3" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M50.5 79L50.5 68.3" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M63 79L63 68.3" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M57 15L9 33" fill="none" stroke="#9c7f52" stroke-width="0.4" stroke-linejoin="round"/>
+<path d="M57 15L19.6 39.5" fill="none" stroke="#9c7f52" stroke-width="0.4" stroke-linejoin="round"/>
+<path d="M57 15L30.2 43.8" fill="none" stroke="#9c7f52" stroke-width="0.4" stroke-linejoin="round"/>
+<path d="M57 15L40.8 46.6" fill="none" stroke="#9c7f52" stroke-width="0.4" stroke-linejoin="round"/>
+<path d="M57 15L51.4 48.2" fill="none" stroke="#9c7f52" stroke-width="0.4" stroke-linejoin="round"/>
+<path d="M57 15L62 48.8" fill="none" stroke="#9c7f52" stroke-width="0.4" stroke-linejoin="round"/>
+<circle cx="9" cy="33" r="4.6" fill="#0d0e12"/>
+<circle cx="19.6" cy="39.5" r="4.6" fill="#0d0e12"/>
+<circle cx="30.2" cy="43.8" r="4.6" fill="#0d0e12"/>
+<circle cx="40.8" cy="46.6" r="4.6" fill="#0d0e12"/>
+<circle cx="51.4" cy="48.2" r="4.6" fill="#0d0e12"/>
+<circle cx="62" cy="48.8" r="4.6" fill="#0d0e12"/>
+<circle cx="38" cy="64" r="4.6" fill="#0d0e12"/>
+<circle cx="50.5" cy="64" r="4.6" fill="#0d0e12"/>
+<circle cx="63" cy="64" r="4.6" fill="#0d0e12"/>
+<circle cx="16" cy="83" r="4.3" fill="#0d0e12"/>
+<circle cx="38" cy="83" r="4.3" fill="#0d0e12"/>
+<circle cx="50.5" cy="83" r="4.3" fill="#0d0e12"/>
+<circle cx="63" cy="83" r="4.3" fill="#0d0e12"/>
+<circle cx="16" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="38" cy="102" r="4.6" fill="#0d0e12"/>
+<circle cx="50.5" cy="102" r="1.3" fill="#0d0e12"/>
+<circle cx="63" cy="102" r="4.6" fill="#0d0e12"/>
+<circle cx="10.5" cy="116" r="4.3" fill="#0d0e12"/>
+<circle cx="24" cy="116" r="4.3" fill="#0d0e12"/>
+<circle cx="16" cy="62.5" r="14" fill="#bab3a3" stroke="#9c7f52" stroke-width="0.63"/>
+<path d="M10.125 67.321L9.429 67.892 M9.681 66.722L8.933 67.222 M9.297 66.083L8.504 66.507 M8.979 65.408L8.147 65.753 M8.727 64.706L7.866 64.967 M8.546 63.983L7.663 64.158 M8.437 63.245L7.541 63.333 M8.4 62.5L7.5 62.5 M8.437 61.755L7.541 61.667 M8.546 61.017L7.663 60.842 M8.727 60.294L7.866 60.033 M9.297 58.917L8.504 58.493 M9.681 58.278L8.933 57.778 M10.125 57.679L9.429 57.108 M10.626 57.126L9.99 56.49 M11.179 56.625L10.608 55.929 M11.778 56.181L11.278 55.433 M12.417 55.797L11.993 55.004 M13.092 55.479L12.747 54.647 M13.794 55.227L13.533 54.366 M14.517 55.046L14.342 54.163 M15.255 54.937L15.167 54.041 M16.745 54.937L16.833 54.041 M17.483 55.046L17.658 54.163 M18.206 55.227L18.467 54.366 M18.908 55.479L19.253 54.647 M19.583 55.797L20.007 55.004 M20.222 56.181L20.722 55.433 M20.821 56.625L21.392 55.929 M21.374 57.126L22.01 56.49 M21.875 57.679L22.571 57.108 M22.319 58.278L23.067 57.778 M22.703 58.917L23.496 58.493 M23.273 60.294L24.134 60.033 M23.454 61.017L24.337 60.842 M23.563 61.755L24.459 61.667 M23.6 62.5L24.5 62.5 M23.563 63.245L24.459 63.333 M23.454 63.983L24.337 64.158 M23.273 64.706L24.134 64.967 M23.021 65.408L23.853 65.753 M22.703 66.083L23.496 66.507 M22.319 66.722L23.067 67.222 M21.875 67.321L22.571 67.892" fill="none" stroke="#161511" stroke-width="0.16"/>
+<path d="M10.626 67.874L9.424 69.076 M8.979 59.592L7.408 58.941 M16 54.9L16 53.2 M23.021 59.592L24.592 58.941 M21.374 67.874L22.576 69.076" fill="none" stroke="#161511" stroke-width="0.28"/>
+<rect x="46.1" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<rect x="58.6" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<text x="5.00" y="10.00" font-family="D-DIN Condensed" font-size="5.2" font-weight="normal" letter-spacing="1.4" text-anchor="start" fill="#bab3a3">RIGGING</text>
+<text x="5.00" y="13.80" font-family="D-DIN Condensed" font-size="1.7" font-weight="normal" letter-spacing="0.45" text-anchor="start" fill="#757062">SIX TUNED STRINGS</text>
+<text x="8.01" y="71.15" font-family="D-DIN Condensed" font-size="1.9" font-weight="normal" letter-spacing="0" text-anchor="middle" fill="#161511">-2</text>
+<text x="5.56" y="58.83" font-family="D-DIN Condensed" font-size="1.9" font-weight="normal" letter-spacing="0" text-anchor="middle" fill="#161511">-1</text>
+<text x="16.00" y="51.86" font-family="D-DIN Condensed" font-size="1.9" font-weight="normal" letter-spacing="0" text-anchor="middle" fill="#161511">0</text>
+<text x="26.44" y="58.83" font-family="D-DIN Condensed" font-size="1.9" font-weight="normal" letter-spacing="0" text-anchor="middle" fill="#161511">+1</text>
+<text x="23.99" y="71.15" font-family="D-DIN Condensed" font-size="1.9" font-weight="normal" letter-spacing="0" text-anchor="middle" fill="#161511">+2</text>
+<text x="9.12" y="27.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">1</text>
+<text x="19.73" y="34.00" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">2</text>
+<text x="30.32" y="38.30" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">3</text>
+<text x="40.92" y="41.10" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">4</text>
+<text x="51.52" y="42.70" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">5</text>
+<text x="62.12" y="43.30" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">6</text>
+<text x="16.30" y="74.50" font-family="D-DIN Condensed" font-size="2.3" font-weight="bold" letter-spacing="0.6" text-anchor="middle" fill="#161511">TUNE</text>
+<text x="38.12" y="58.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">CHORD</text>
+<text x="50.62" y="58.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">RING</text>
+<text x="63.12" y="58.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">DAMP</text>
+<text x="16.12" y="89.58" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">V/OCT</text>
+<text x="16.12" y="96.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">STRUM</text>
+<text x="38.12" y="96.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">SPREAD</text>
+<text x="63.12" y="96.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">MIX</text>
+<text x="10.62" y="110.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">IN L</text>
+<text x="24.12" y="110.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">IN R</text>
+<text x="50.62" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">L</text>
+<text x="63.12" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">R</text>
+<text x="38.12" y="89.00" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CV</text>
+<text x="50.62" y="89.00" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CV</text>
+<text x="63.12" y="89.00" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CV</text>
+<text x="35.81" y="125.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.5" text-anchor="middle" fill="#757062">R K A · INSTRUMENTS</text>
+<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
+<circle id="param-LEVEL_1" cx="9.0" cy="33.0" r="1" fill="#ff0000"/>
+<circle id="param-LEVEL_2" cx="19.6" cy="39.5" r="1" fill="#ff0000"/>
+<circle id="param-LEVEL_3" cx="30.2" cy="43.8" r="1" fill="#ff0000"/>
+<circle id="param-LEVEL_4" cx="40.8" cy="46.6" r="1" fill="#ff0000"/>
+<circle id="param-LEVEL_5" cx="51.4" cy="48.2" r="1" fill="#ff0000"/>
+<circle id="param-LEVEL_6" cx="62.0" cy="48.8" r="1" fill="#ff0000"/>
+<circle id="param-TUNE" cx="16.0" cy="62.5" r="1" fill="#ff0000"/>
+<circle id="param-CHORD" cx="38.0" cy="64.0" r="1" fill="#ff0000"/>
+<circle id="param-RING" cx="50.5" cy="64.0" r="1" fill="#ff0000"/>
+<circle id="param-DAMP" cx="63.0" cy="64.0" r="1" fill="#ff0000"/>
+<circle id="input-VOCT" cx="16.0" cy="83.0" r="1" fill="#00ff00"/>
+<circle id="input-CHORD_CV" cx="38.0" cy="83.0" r="1" fill="#00ff00"/>
+<circle id="input-RING_CV" cx="50.5" cy="83.0" r="1" fill="#00ff00"/>
+<circle id="input-DAMP_CV" cx="63.0" cy="83.0" r="1" fill="#00ff00"/>
+<circle id="input-STRUM" cx="16.0" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="param-SPREAD" cx="38.0" cy="102.0" r="1" fill="#ff0000"/>
+<circle id="light-STRIKE" cx="50.5" cy="102.0" r="1" fill="#ff00ff"/>
+<circle id="param-MIX" cx="63.0" cy="102.0" r="1" fill="#ff0000"/>
+<circle id="input-L" cx="10.5" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="input-R" cx="24.0" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="output-L" cx="50.5" cy="116.0" r="1" fill="#0000ff"/>
+<circle id="output-R" cx="63.0" cy="116.0" r="1" fill="#0000ff"/>
+</g>
+</svg>
