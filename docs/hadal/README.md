@@ -47,16 +47,20 @@ audio taper (the square of the knob position), so most of the travel is in
 the useful range. The knob sets the layer's level at its own output and in
 the L/R mix alike.
 
-- **Rumble and Hiss at full:** about 1.6 V RMS at their own outputs. Noise
-  has high peaks, so these reach around the ±5 V audio standard.
+- **Hiss at full:** about 1.6 V RMS at its own output. Noise has high
+  peaks, so it reaches around the ±5 V audio standard.
+- **Rumble at full:** about 3.2 V RMS at its own output, twice Hiss's
+  voltage and about as loud as a ±5 V sine. The ear is weak below 100 Hz,
+  so Rumble needs the extra to be heard beside Hiss. Its peaks run into the
+  output's soft limit (8 V knee, 10 V ceiling), which rounds them.
 - **Crackle at full:** about 0.14 V RMS long-term on its own output, at
   Drift 0 and noon Depth. It is sparse, so its average is low while its
   ticks are loud. Each tick is soft-clipped, which brings the small and mid
   ticks up and rounds the biggest; at Drift 0 no tick peaks above ±5 V.
   Drift's level wander (up to +4 dB) can push the odd tick past that, to
   about 5.3 V at the default Drift and 7.6 V at full.
-- **Defaults:** Rumble 50 %, Hiss 30 %, Crackle 0 %, so a freshly placed
-  Hadal gives a usable bed at once.
+- **Defaults:** Rumble 70 % (about 1.6 V RMS at its own output, half that
+  in each side of the mix), Hiss 30 %, Crackle 0 %, so a freshly placed Hadal gives a usable bed at once.
 
 ### Crackle: what it is
 
@@ -115,9 +119,11 @@ zipper noise or clicks.
   loudness; rumble, whose sides are nearly the same, about 3 dB louder.
   Patching or unpatching R crossfades over 10 ms.
 - **Headroom:** every output has a soft limit that starts at 8 V and never
-  passes 10 V. At default settings it never acts. With a layer at full it
+  passes 10 V. At default settings it never acts. With Hiss at full it
   catches only occasional noise peaks, a few more when Drift pushes the
-  level up.
+  level up. With Rumble at full, its own output's peaks are rounded
+  steadily (about 1 sample in 100); in the mix, at half the level, only the
+  odd peak is.
 - With nothing patched, Hadal does no work. A layer that isn't patched
   and isn't needed for the mix isn't computed.
 

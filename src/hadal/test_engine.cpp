@@ -81,7 +81,7 @@ void full_levels() {
 		Rig g;
 		g.levels(1.f, 0.f, 0.f);
 		Out o = run(g, 10.f);
-		CHECK(std::fabs(db(rms(o.rumble) / 1.6)) <= 1.0, "Rumble at full: %.3f V RMS (want 1.6 +- 1 dB)", rms(o.rumble));
+		CHECK(std::fabs(db(rms(o.rumble) / 3.2)) <= 1.0, "Rumble at full: %.3f V RMS (want 3.2 +- 1 dB)", rms(o.rumble));
 	}
 	{
 		Rig g;
@@ -146,6 +146,10 @@ void mix_ratio() {
 		for (size_t i = 0; i < src.size(); i++) {
 			// Crackle's jack is the mono sum of its panned sides, (L + R) / sqrt 2,
 			// so a tick panned hard right still reaches it at -3 dB at most.
+			// Rumble at full peaks into its jack's soft limit; the mix, at half
+			// the level, does not. Compare where the jack is under the knee.
+			if (std::fabs(src[i]) >= rka::HadalEngine::KNEE)
+				continue;
 			const float mixed = layer == 2 ? (o.l[i] + o.r[i]) * 0.70710678f : o.l[i];
 			worst = std::max(worst, (double) std::fabs(mixed - src[i] * rka::HadalEngine::MIX_GAIN));
 			scale = std::max(scale, (double) std::fabs(src[i] * rka::HadalEngine::MIX_GAIN));
@@ -201,7 +205,8 @@ void patched_layer_leaves_mix() {
 	Out back = run(g, 1.f, 0.05f);
 	double worst = 0;
 	for (size_t i = 0; i < back.l.size(); i++)
-		worst = std::max(worst, (double) std::fabs(back.l[i] - back.rumble[i] * rka::HadalEngine::MIX_GAIN));
+		if (std::fabs(back.rumble[i]) < rka::HadalEngine::KNEE)   // under the jack's soft limit
+			worst = std::max(worst, (double) std::fabs(back.l[i] - back.rumble[i] * rka::HadalEngine::MIX_GAIN));
 	CHECK(worst < 1e-4, "an unpatched Rumble must return to L in full (off by %.2e)", worst);
 }
 
@@ -387,7 +392,7 @@ void headroom() {
 		CHECK(pk <= 10.f, "all layers at full, depth %.1f: mix peaks at %.2f V (want <= 10)", d, pk);
 	}
 	Rig g;   // the defaults
-	g.levels(0.5f, 0.3f, 0.f);
+	g.levels(0.7f, 0.3f, 0.f);
 	g.f.params[F::DRIFT] = 0.25f;
 	g.f.patched[0] = g.f.patched[1] = g.f.patched[2] = false;
 	const long before = g.e.limited();
