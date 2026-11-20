@@ -1,7 +1,9 @@
 # Rigging: a resonator bank
 
-Status: idea, 2026-11-15. Not designed. 12 HP in the sketch. One of nine
-added to fill gaps for dark, space and horror ambient.
+Status: built (2026-11-19, 14 HP). Design: `docs/specs/2026-11-19-rigging-design.md`;
+manual: `docs/rigging/README.md`. As built the six are modelled strings; Strum rakes them
+low to high by Spread; a new note at V/OCT strikes when STRUM is unpatched; CV on Chord,
+Ring and Damp; no drone with nothing patched in. The text below is the original idea.
 
 ![mockup](rigging-mockup.svg)
 

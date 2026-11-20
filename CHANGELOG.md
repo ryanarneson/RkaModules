@@ -21,6 +21,17 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Rigging**, 14 HP, six tuned strings:
+  - Any sound in keeps the strings ringing: a tuned drone from noise. A
+    trigger at STRUM strikes them, or with nothing in STRUM a new note at
+    V/OCT does; both at once, in one tuning.
+  - Seven chords (Unison, Octaves, Fifths, Minor, Sus, Cluster, Bell), a
+    level per string, Tune and V/OCT.
+  - Ring from 0.1 s to 60 s, the drone's loudness held steady across it;
+    Damp darkens the strings as they ring; Spread rakes a strike across the
+    six, from a stab to 1.5 s.
+  - CV on Chord, Ring and Damp; stereo in and out; soft-limited.
+  - Drawn as a ship's rigging.
 - New module: **Squall**, an 8 HP random source of gates and CV:
   - Weather sets how much happens: one event in 10 minutes (Calm) to 8 a
     second (Stormy); with a clock, the chance of an event per tick.

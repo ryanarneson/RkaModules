@@ -5,7 +5,7 @@ can be picked up later. Each is a concept and a rough panel sketch in the
 Instrument look (`docs/specs/2026-11-15-instrument-look-design.md`), not a
 design: names are working titles and have not been checked against the VCV
 Library, and the control sets are first guesses made to draw the panels.
-Sluice, Fog, Hadal, Ballast (with its Pan expander) and Squall have since been designed and built (their pages point to
+Sluice, Fog, Hadal, Ballast (with its Pan expander), Squall and Rigging have since been designed and built (their pages point to
 their specs and manuals); the rest have not been through a design
 conversation yet.
 
@@ -70,7 +70,7 @@ are Doldrums, Rigging, Hadal and Sluice.
 | Module | What it does | The instrument | Width |
 |--------|--------------|----------------|-------|
 | [Doldrums](doldrums.md) | Spectral freeze and stretch | A ship becalmed | 10 HP |
-| [Rigging](rigging.md) | Resonator bank | Wind in the rigging | 12 HP |
+| [Rigging](rigging.md) | Six tuned strings (built) | Wind in the rigging | 14 HP |
 | [Hadal](hadal.md) | Rumble and noise bed (built) | The deepest ocean zone | 10 HP |
 | [Sluice](sluice.md) | Four VCAs (built) | A sluice gate | 10 HP |
 | [Doppler](doppler.md) | Frequency shifter | The Doppler effect | 8 HP |
