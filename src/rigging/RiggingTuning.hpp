@@ -32,12 +32,33 @@ constexpr float LOOP_OVERSHOOT = 1.25f;
 // The strike: a burst of noise into each string, about one period long,
 // peaking at STRIKE_LEVEL volts, low-passed by a one-pole with this
 // coefficient a sample (1: none) so it is not all edge.
-constexpr float STRIKE_LEVEL = 4.f;
+constexpr float STRIKE_LEVEL = 5.2f;
 constexpr float STRIKE_SMOOTH = 0.5f;
 
 // The audio input is high-passed here before the strings: a string's loop
 // passes DC as it does its own pitch, so DC in would ring as DC.
 constexpr float INPUT_HIGHPASS_HZ = 3.f;
+
+// Levels. The audio input into the strings (on top of each string's own
+// share, which keeps the drone's loudness steady across Ring), and the
+// strings' sum on its way to the soft limit.
+constexpr float INPUT_GAIN = 1.f;
+constexpr float OUTPUT_GAIN = 1.f;
+
+// Where the six strings sit, -1 (left) to +1 (right): the lowest in the
+// middle, the higher ones further out, side about.
+constexpr float PAN[6] = {0.f, -0.25f, 0.25f, -0.5f, 0.5f, -0.75f};
+
+// The strings' sum is untouched to OUT_KNEE volts and never passes OUT_CEIL
+// (Ballast's curve); its DC is blocked below OUT_DC_HZ.
+constexpr float OUT_KNEE = 8.f, OUT_CEIL = 10.f, OUT_DC_HZ = 5.f;
+
+// A new note at V/OCT (STRUM unpatched) strikes: a move of more than
+// NOTE_STEP_V within NOTE_WINDOW_S; then none for NOTE_HOLD_S.
+constexpr float NOTE_STEP_V = 1.f / 30.f, NOTE_WINDOW_S = 0.001f, NOTE_HOLD_S = 0.01f;
+
+// The strike light, and the smoothing of levels and Mix.
+constexpr float LIGHT_S = 0.1f, SMOOTH_S = 0.005f;
 
 } // namespace rigging
 } // namespace rka
