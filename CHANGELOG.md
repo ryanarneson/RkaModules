@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.20 (2026-11-20): Wake: first build for listening (stereo echo: Tape, Analog and Digital styles, Ratio, ping pong, Freeze, Diffuse, Drift, clock)
 - 2.0.19 (2026-11-20): Hadal: Rumble audible at depth (band 160-70 Hz, overtones from a soft clip that deepens with Depth); 2.5 V RMS at full with peaks inside +-5 V; default 80 %
 - 2.0.18 (2026-11-20): Hadal: Rumble louder (3.2 V RMS at full, twice the old level; default 70 %)
 - 2.0.17 (2026-11-19): Rigging: final review fixes (the pitch glide ends; DC cannot pile up in a string or thump through a level knob; Ring changes ramp; a slewed note is one strike; Initialize cancels a rake; typed values in the tooltips)
