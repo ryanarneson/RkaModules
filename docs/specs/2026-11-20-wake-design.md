@@ -108,6 +108,15 @@ fit the generator's rules without crowding the lettering.
 
 ## Controls and behaviour
 
+*As built (2026-11-20, after the final review):* the loop's colour and
+Diffuse sit on the way into the delay line, so the line holds exactly what
+is heard and a frozen loop is the echo that was playing. A crossfade
+(Digital's change of time, and the release from Freeze) is linear and
+takes 40 ms; a freeze waits for one to finish. A clock edge more than four
+periods after the last is a restart, not a period. Drift is a wander of
+each side's tape speed, so short echoes waver less than long ones. With R
+unpatched L carries the average of the two sides.
+
 ### Time: the echo time
 
 - 10 ms to 10 s on a log scale; default 300 ms. The tooltip shows

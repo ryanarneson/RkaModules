@@ -126,6 +126,35 @@ void crossfade_no_bend() {
 	CHECK(std::abs(n - 1920) <= 2, "a 40 ms fade takes %d samples (want 1920)", n);
 }
 
+// A crossfade never adds level, and a change of a few samples does not
+// fade at all (the two reads are nearly the same signal): it glides.
+void crossfade_adds_no_level() {
+	Rig g;
+	g.tap.snap(4800.f);
+	for (int i = 0; i < 20000; i++)
+		g.sine(440.0);
+	// Back and forth between delays at many phase differences.
+	float peak = 0.f;
+	for (int k = 0; k < 40; k++) {
+		g.tap.setTarget(k % 2 ? 4800.f : 4800.f + 109.f * (1 + k % 5), true);
+		for (int i = 0; i < 2400; i++)
+			peak = std::max(peak, std::fabs(g.sine(440.0)));
+	}
+	CHECK(peak <= 1.001f, "crossfading between two reads of a unit sine peaks at %.4f (want no more than 1)", peak);
+	Rig h;
+	h.tap.snap(4800.f);
+	for (int i = 0; i < 6000; i++)
+		h.sine(440.0);
+	h.tap.setTarget(4801.f, true);
+	CHECK(!h.tap.fading() && h.tap.moving(), "a one-sample change glides, with no fade");
+	int n = 0;
+	while (h.tap.moving() && n++ < 200000)
+		h.sine(440.0);
+	CHECK(h.tap.delay() == 4801.f && !h.tap.fading(), "and lands (%.4f)", h.tap.delay());
+	h.tap.setTarget(4811.f, true);
+	CHECK(h.tap.fading(), "a ten-sample change fades");
+}
+
 void latest_target_wins() {
 	Rig g;
 	g.tap.snap(4800.f);
@@ -337,6 +366,7 @@ int main() {
 	steady();
 	glide_bends_and_lands();
 	crossfade_no_bend();
+	crossfade_adds_no_level();
 	latest_target_wins();
 	freeze_repeats();
 	freeze_longer_loop();

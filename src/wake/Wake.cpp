@@ -122,6 +122,8 @@ struct Wake : Module {
 		configParam(DRIFT_PARAM, 0.f, 1.f, defaults.params[F::DRIFT], "Drift (slow waver of the echo time)", "%", 0.f, 100.f);
 		configButton(STYLE_PARAM, "Style (Tape, Analog, Digital)");
 		configSwitch(FREEZE_PARAM, 0.f, 1.f, 0.f, "Freeze (holds what is in the delay)", {"Off", "On"});
+		// Randomize must not freeze the module (usually on an empty delay).
+		paramQuantities[FREEZE_PARAM]->randomizeEnabled = false;
 		configSwitch(PINGPONG_PARAM, 0.f, 1.f, 0.f, "Ping pong (echoes bounce left and right)", {"Off", "On"});
 		configInput(FEEDBACK_CV_INPUT, "Feedback CV");
 		configInput(CLOCK_INPUT, "Clock (Time becomes a multiple of it)");

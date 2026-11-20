@@ -50,11 +50,15 @@ Noon is ×1: one echo per clock tick. The tooltip shows the step.
 
 - The tempo is taken from the time between the last two ticks, so it
   follows a clock that changes.
+- A clock that pauses and starts again keeps its tempo: a gap of more
+  than four ticks is not taken for a tick. (A clock that really slows by
+  more than that is followed one tick late.)
 - Time's CV moves along the same steps, so a clocked echo is always on the
   clock's grid.
-- If the result would be longer than 10 s it is halved until it fits.
+- If the result would be longer than 10 s it is halved until it fits; if
+  shorter than 10 ms, doubled.
 - If the clock stops, the last tempo holds. Unplug it and the knob is
-  milliseconds again.
+  milliseconds again; plugged back in, it needs two ticks to be followed.
 
 ### Ratio: the two sides
 
@@ -111,14 +115,17 @@ change is smooth, with no click. It opens on Tape.
 | **Analog** | Pitch bends, a little faster than Tape | Darker, and darker still as Time gets longer (about 5 kHz at short times, 1.5 kHz at a second and beyond); driven harder, so repeats turn gritty |
 | **Digital** | The echo crossfades to the new time: no bend | Clean and full; only Tone changes them |
 
-A pitch bend never goes further than two octaves either way.
+A pitch bend never goes further than two octaves either way. In Digital a
+very small change of time (a few samples, as from a slow, shallow CV) is
+slid, not crossfaded, which bends pitch by a hair.
 
 ### Diffuse: sinking back
 
 Diffuse smears each pass through the loop, so repeats blur further each
 time round and the echo turns toward a wash. At 0 it is out of the path
-and repeats are exact. It does not change the echo time or the repeats'
-level.
+and repeats are exact. It does not change the repeats' level, and each
+smeared repeat stays centred on its echo time. Turning it up from exactly
+0 shifts the echo by a few milliseconds as it comes in.
 
 ### Drift: slow movement
 
@@ -140,13 +147,16 @@ either means.
 
 - Nothing new goes into the delay. The input still passes to the output
   through Mix.
-- The frozen sound does not fade, dull or build. Feedback, Tone, Diffuse
-  and Style have no effect on it.
+- The frozen sound is exactly the echo that was playing, and it does not
+  fade, dull or build. Feedback, Tone, Diffuse and Style have no effect
+  on it while it is held.
 - **Time, Ratio, the clock and Ping Pong are held** while frozen. Changes
   you make take effect when you release.
 - Drift still acts, so a frozen sound is not perfectly static. Turn Drift
   to 0 for an exact loop.
-- Freezing and releasing fade over a hundredth of a second.
+- Freezing is seamless; releasing fades back over a few hundredths of a
+  second. A freeze asked for while Time is still crossfading (Digital), or
+  just after a release, waits for that fade to finish: 40 ms at most.
 
 The button's state is saved with the patch; the sound in the delay is not.
 
@@ -203,8 +213,8 @@ adds to the knob: 10 V is its full travel.
 
 ## Bypass
 
-Bypassed, the inputs pass straight to the outputs, with the same
-normalling.
+Bypassed, the inputs pass straight to the outputs: either input alone
+goes to both.
 
 ## Other details
 
@@ -214,4 +224,5 @@ normalling.
 - What goes into the delay is limited to ±24 V.
 - A change of sample rate, and Initialize, empty the delay and unfreeze.
 - Saved with the patch: the knobs, Style, Freeze and Ping Pong.
+- Randomize does not touch Freeze or Style.
 - CPU: about 0.15 % of a core at 48 kHz.

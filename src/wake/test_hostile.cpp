@@ -200,6 +200,44 @@ void gates_at_audio_rate() {
 	CHECK(ok, "an audio-rate gate and clock left the output or the time out of bounds (%g s)", g.e.seconds(0));
 }
 
+// A gate toggling every sample must not cost much more than no gate, at
+// any rate (a release rewrites a stretch of the line), nor mute the delay.
+void gate_cost_is_bounded() {
+	double seconds[2] = {0, 0};
+	for (int k = 0; k < 2; k++) {
+		Rig g(11);
+		rka::hadal::Random rng;
+		rng.seed(9);
+		g.e.setSampleRate(768000.f);
+		const auto t0 = std::chrono::steady_clock::now();
+		for (int i = 0; i < 768000; i++) {
+			loud(g, rng);
+			g.f.freezeGate = k == 1 && (i & 1) ? 10.f : 0.f;
+			g.step();
+		}
+		seconds[k] = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+	}
+	CHECK(seconds[1] < 4.0 * seconds[0] + 0.05, "a gate toggling every sample at 768 kHz costs %.3f s a second (idle: %.3f s)", seconds[1],
+	      seconds[0]);
+	// After such a gate, the delay still takes sound in.
+	Rig g(12);
+	g.f.params[F::MIX] = 1.f;
+	g.f.params[F::TIME] = 0.2f;
+	for (int i = 0; i < 48000; i++) {
+		g.f.inL = g.f.inR = 0.f;
+		g.f.freezeGate = (i & 1) ? 10.f : 0.f;
+		g.step();
+	}
+	g.f.freezeGate = 0.f;
+	float peak = 0.f;
+	for (int i = 0; i < 48000; i++) {
+		g.f.inL = g.f.inR = i >= 9600 && i < 9700 ? 5.f : 0.f;
+		g.step();
+		peak = std::fmax(peak, std::fabs(g.r.l));
+	}
+	CHECK(peak > 4.f, "after an audio-rate gate an echo still returns at full level (%.2f V)", peak);
+}
+
 // Review Focus 4: Time's CV as noise, in Tape.
 void time_cv_as_noise() {
 	for (int style = 0; style < 3; style++) {
@@ -371,6 +409,7 @@ int main() {
 	rate_change_recovers();
 	hostile_inputs();
 	gates_at_audio_rate();
+	gate_cost_is_bounded();
 	time_cv_as_noise();
 	minutes_at_110();
 	no_allocation_in_process();

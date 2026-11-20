@@ -4,12 +4,14 @@
 //
 // Two sides, left and right, each a delay line read by a moving tap
 // (DelayTap). Each sample, per side:
-//   y    = the tap's read (Drift wavers it)
-//   loop = colour(smear(y))            Diffuse, then Tone and the style
-//   wet  = loop, or y itself while frozen
-//   write: the input plus Feedback x the loop output that feeds this side
-//          (its own; in Ping Pong the left takes the right's, and the right
-//          takes the left's at full level and no input)
+//   wet   = the tap's read (Drift wavers it)
+//   x     = the input plus Feedback x the wet signal that feeds this side
+//           (its own; in Ping Pong the left takes the right's, and the right
+//           takes the left's at full level and no input)
+//   write = colour(smear(x))           Diffuse, then Tone and the style
+// So the line holds exactly what is heard: the first echo has been through
+// the loop's colour once, each repeat once more, and a frozen loop is the
+// sound that was playing, DC-blocked and bounded like the rest.
 // Frozen, nothing is written and each tap loops its last stretch.
 // The outputs are the equal-power mix of the input and the wet signal,
 // soft-limited; with R unpatched, L carries the average of the two.
@@ -105,16 +107,22 @@ public:
 		ringPos_ = 0;
 		clock_.reset();
 		frozen_ = gateHigh_ = false;
-		frozenMix_ = 0.f;
 		writeGain_ = 1.f;
+		written_ = 0;
+		clockWasPatched_ = false;
 		snap_ = true;
 		countdown_ = 0;
 	}
 
 	void process(const WakeFrame& f, WakeResult& r) {
 		using namespace wake;
+		// Unplugged, the clock is forgotten: plugged back in, it needs two
+		// fresh edges.
 		if (f.clockPatched)
 			clock_.process(finite(f.clock));
+		else if (clockWasPatched_)
+			clock_.reset();
+		clockWasPatched_ = f.clockPatched;
 
 		// Freeze: the latch, or the gate.
 		const float gate = finite(f.freezeGate);
@@ -131,22 +139,30 @@ public:
 			countdown_ = CONTROL_SAMPLES;
 			controls(f, wantFrozen);
 		}
-		if (wantFrozen != frozen_) {
+		// A freeze waits for a crossfade to finish (40 ms at most), which
+		// it would otherwise cut short with a step: so a gate that drops
+		// for a moment, or a freeze just after Time moved, does not click.
+		if (wantFrozen != frozen_ && !(wantFrozen && (tap_[0].fading() || tap_[1].fading()))) {
 			frozen_ = wantFrozen;
 			for (int s = 0; s < 2; s++) {
 				if (frozen_) {
-					tap_[s].freeze(JOIN_S, seconds_[s] * fs_);
+					tap_[s].freeze(JOIN_S, seconds_[s] * fs_, true);
 				}
 				else {
 					tap_[s].release();
 					// Writing starts again at another place in the sound:
 					// the old end fades out and the new start fades in,
-					// so the line holds no step to play back later.
-					line_[s].fadeOutNewest(switchSamples_);
+					// so the line holds no step to play back later. Only
+					// what was written since the last release is faded
+					// (never the same samples twice, and never more work
+					// than there were writes).
+					line_[s].fadeOutNewest(written_ < switchSamples_ ? written_ : switchSamples_);
 				}
 			}
-			if (!frozen_)
+			if (!frozen_) {
 				writeGain_ = 0.f;
+				written_ = 0;
+			}
 		}
 
 		// The input: either jack alone is both sides.
@@ -155,25 +171,31 @@ public:
 		const float inL = rawL > INPUT_MAX ? INPUT_MAX : rawL < -INPUT_MAX ? -INPUT_MAX : rawL;
 		const float inR = rawR > INPUT_MAX ? INPUT_MAX : rawR < -INPUT_MAX ? -INPUT_MAX : rawR;
 
-		float y[2], loop[2];
+		float y[2];
 		for (int s = 0; s < 2; s++) {
 			mod_[s] += modStep_[s];
 			y[s] = tap_[s].process(line_[s], mod_[s]);
-			loop[s] = colour_[s].process(smear_[s].process(y[s]));
 		}
 
 		feedback_ = glide(feedback_, feedbackTarget_);
 		pp_ = ramp(pp_, ppTarget_);
-		frozenMix_ = ramp(frozenMix_, frozen_ ? 1.f : 0.f);
 		if (!frozen_) {
 			writeGain_ = ramp(writeGain_, 1.f);
 			const float mono = 0.5f * (inL + inR);
-			line_[0].write(writeGain_ * (inL + pp_ * (mono - inL) + feedback_ * (loop[0] + pp_ * (loop[1] - loop[0]))));
-			line_[1].write(writeGain_ * ((1.f - pp_) * (inR + feedback_ * loop[1]) + pp_ * loop[0]));
+			const float xL = inL + pp_ * (mono - inL) + feedback_ * (y[0] + pp_ * (y[1] - y[0]));
+			const float xR = (1.f - pp_) * (inR + feedback_ * y[1]) + pp_ * y[0];
+			line_[0].write(writeGain_ * colour_[0].process(smear_[0].process(xL)));
+			line_[1].write(writeGain_ * colour_[1].process(smear_[1].process(xR)));
+			if (written_ < switchSamples_)
+				written_++;
 		}
-		// Frozen, the tap's own sound: nothing in the loop touches it.
-		const float wetL = loop[0] + frozenMix_ * (y[0] - loop[0]);
-		const float wetR = loop[1] + frozenMix_ * (y[1] - loop[1]);
+		else {
+			// Nothing is written; the filters run on silence, so they
+			// hold nothing stale when writing starts again.
+			for (int s = 0; s < 2; s++)
+				colour_[s].process(smear_[s].process(0.f));
+		}
+		const float wetL = y[0], wetR = y[1];
 
 		dry_ = glide(dry_, dryTarget_);
 		wet_ = glide(wet_, wetTarget_);
@@ -316,7 +338,15 @@ private:
 			i1 = i1 < 0 ? i1 + ringLen_ : i1;
 			const double then = run_[s][(size_t) i0] + (double) (frac < 1.f ? frac : 0.f) * (run_[s][(size_t) i1] - run_[s][(size_t) i0]);
 			const float target = depth > 0.f ? -depth * (float) (sum_[s] - then) : 0.f;
-			modStep_[s] = snap_ ? 0.f : (target - mod_[s]) / CONTROL_SAMPLES;
+			// The offset moves no faster than the wander itself can move
+			// it. A change of Time or Ratio changes how far back the sum
+			// looks, and so the target, at once: the offset slews to it,
+			// with no more pitch than Drift ever gives. (A floor, so the
+			// offset still comes home when Drift is turned to 0.)
+			const float fastest = 2.2f * (depth > 0.1f * DRIFT_DEPTH ? depth : 0.1f * DRIFT_DEPTH);
+			float step = (target - mod_[s]) / CONTROL_SAMPLES;
+			step = step > fastest ? fastest : step < -fastest ? -fastest : step;
+			modStep_[s] = snap_ ? 0.f : step;
 			if (snap_)
 				mod_[s] = target;
 			// Keep the running total small (it only matters as differences).
@@ -358,8 +388,9 @@ private:
 	float styleT_ = 1.f, styleStep_ = 1.f, glideSeconds_ = -1.f, glideOctaves_ = -1.f;
 	float seconds_[2] = {0.3f, 0.3f};
 	float feedback_ = 0.f, feedbackTarget_ = 0.f, dry_ = 1.f, dryTarget_ = 1.f, wet_ = 0.f, wetTarget_ = 0.f;
-	float pp_ = 0.f, ppTarget_ = 0.f, mono_ = 0.f, frozenMix_ = 0.f, writeGain_ = 1.f;
-	int switchSamples_ = 480;
+	float pp_ = 0.f, ppTarget_ = 0.f, mono_ = 0.f, writeGain_ = 1.f;
+	int switchSamples_ = 480, written_ = 0;
+	bool clockWasPatched_ = false;
 	float smooth_ = 1.f, switchStep_ = 1.f;
 	bool frozen_ = false, gateHigh_ = false, snap_ = true;
 	int countdown_ = 0;

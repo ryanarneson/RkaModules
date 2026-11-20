@@ -85,6 +85,17 @@ void clock_follower() {
 	for (int i = 0; i < 500000; i++)
 		c.process(0.f);
 	CHECK(c.locked() && c.periodSamples() == 24000.f, "a stopped clock keeps its period (%g)", c.periodSamples());
+	// Started again after a long pause: the pause is not a period.
+	bool held = true;
+	for (int i = 0; i < 24000 * 3; i++) {
+		c.process(i % 24000 < 480 ? 10.f : 0.f);
+		held = held && c.periodSamples() == 24000.f;
+	}
+	CHECK(held && c.locked(), "a clock restarted after a pause keeps its period throughout (%g)", c.periodSamples());
+	// One that slows to a third is followed.
+	for (int i = 0; i < 72000 * 3; i++)
+		c.process(i % 72000 < 480 ? 10.f : 0.f);
+	CHECK(c.periodSamples() == 72000.f, "a clock that slows to a third is followed (%g)", c.periodSamples());
 	// A ripple on a high level makes no edges; nor does one under 1 V.
 	c.reset();
 	for (int i = 0; i < 48000; i++)

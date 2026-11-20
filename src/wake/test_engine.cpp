@@ -564,6 +564,255 @@ void style_change_ramps() {
 	CHECK(jump <= allowed, "changing style on a loud signal steps %.4f V a sample (allowed %.4f)", jump, allowed);
 }
 
+// The final review's findings, each first seen to fail.
+
+// A crossfade must never add level: inside the feedback loop a bump is
+// gain, and a Time that keeps moving a little (an LFO, a clock whose period
+// jitters by a sample) would hold or grow the repeats below 100 %.
+void crossfades_add_no_gain() {
+	// Time under a slow, small LFO, Digital, Feedback 80 %: a burst decays.
+	Rig g;
+	g.time(0.4f);
+	g.feedback(0.8f);
+	g.f.params[F::TIME_ATT] = 1.f;
+	double late = 0;
+	for (int i = 0; i < 48000 * 60; i++) {
+		g.f.timeCv = 0.02f * (float) std::sin(TWO_PI * 0.3 * i / 48000.0);
+		g.step(i < 48000 ? (float) std::sin(TWO_PI * 220.0 * i / 48000.0) : 0.f);
+		if (i >= 48000 * 55)
+			late += (double) g.r.l * g.r.l;
+	}
+	CHECK(std::sqrt(late / (48000 * 5)) < 1e-3, "Feedback 80 %% with Time under a small LFO: %.4f V RMS a minute after a burst (want gone)",
+	      std::sqrt(late / (48000 * 5)));
+	// A clock whose period alternates by a sample, Feedback 90 %.
+	Rig h;
+	h.f.clockPatched = true;
+	h.f.params[F::TIME] = 0.5f;
+	h.feedback(0.9f);
+	late = 0;
+	long next = 0;
+	int beat = 0;
+	float peak = 0.f;
+	for (long i = 0; i < 48000L * 90; i++) {
+		if (i == next) {
+			next += 22153 + (beat++ % 2);
+			h.f.clock = 10.f;
+		}
+		else if (i > next - 22000)
+			h.f.clock = 0.f;
+		h.step(i > 96000 && i < 144000 ? (float) std::sin(TWO_PI * 220.0 * i / 48000.0) : 0.f);
+		peak = std::max(peak, std::fabs(h.r.l));
+		if (i >= 48000L * 85)
+			late += (double) h.r.l * h.r.l;
+	}
+	CHECK(std::sqrt(late / (48000 * 5)) < 1e-2 && peak < 5.f,
+	      "Feedback 90 %% on a clock that jitters by a sample: %.4f V RMS after 80 s, peak %.2f V (want decayed)",
+	      std::sqrt(late / (48000 * 5)), peak);
+	// And at Feedback 0 no echo is louder than what went in.
+	Rig k;
+	k.time(0.2f);
+	k.f.params[F::TIME_ATT] = 1.f;
+	float wet = 0.f;
+	for (int i = 0; i < 48000 * 10; i++) {
+		k.f.timeCv = 0.5f * (float) std::sin(TWO_PI * 0.7 * i / 48000.0);
+		k.step((float) std::sin(TWO_PI * 220.0 * i / 48000.0));
+		wet = std::max(wet, std::fabs(k.r.l));
+	}
+	CHECK(wet <= 1.02f, "Digital with Time moving: the echo peaks at %.3f V for a 1 V input (want no gain)", wet);
+}
+
+// With Drift on, a change of Time or Ratio must not jerk Drift's offset.
+void drift_does_not_jerk() {
+	const float bound = 2.3f * DRIFT_DEPTH;   // the wander's own fastest, and a little
+	for (int style = 0; style < 3; style++)
+		for (uint32_t seed = 1; seed <= 4; seed++) {
+			Rig g(48000.f, seed);
+			g.f.style = style;
+			g.f.params[F::DRIFT] = 1.f;
+			g.time(1.f);
+			long n = 0;
+			float prevMod[2] = {0.f, 0.f}, slope = 0.f, prev = 0.f, jump = 0.f, peak = 0.f;
+			for (int i = 0; i < 48000 * 16; i++) {
+				if (i == 48000 * 6)
+					g.time(2.f);
+				if (i == 48000 * 9)
+					g.f.params[F::RATIO] = 0.f;
+				if (i == 48000 * 12)
+					g.f.params[F::RATIO] = 6.f;
+				g.step(2.f * (float) std::sin(TWO_PI * 100.0 * n++ / 48000.0));
+				for (int s = 0; s < 2; s++) {
+					if (i > 48000)
+						slope = std::max(slope, std::fabs(g.e.driftSamples(s) - prevMod[s]));
+					prevMod[s] = g.e.driftSamples(s);
+				}
+				if (i > 48000 * 5) {
+					jump = std::max(jump, std::fabs(g.r.l - prev));
+					peak = std::max(peak, std::fabs(g.r.l));
+				}
+				prev = g.r.l;
+			}
+			CHECK(slope <= bound, "style %d seed %u: Drift's offset moves %.4f a sample on a Time change (want at most %.4f)", style,
+			      seed, slope, bound);
+			const float allowed = 6.f * peak * (float) (TWO_PI * 100.0 / 48000.0);
+			CHECK(jump <= allowed, "style %d seed %u: a Time change with Drift on steps %.3f V (allowed %.3f)", style, seed, jump, allowed);
+		}
+}
+
+// Freezing again inside the release's fade, and freezing while a crossfade
+// is running, must not step.
+void refreeze_does_not_click() {
+	for (int style : {0, 2})
+		for (int gapSamples : {48, 480, 2400}) {
+			Rig g;
+			g.f.style = style;
+			g.time(0.25f);
+			g.feedback(0.5f);
+			long n = 0;
+			float prev = 0.f, jump = 0.f;
+			for (int i = 0; i < 48000 * 3; i++) {
+				g.f.freezeGate = (i > 48000 && i < 96000) || i > 96000 + gapSamples ? 5.f : 0.f;
+				g.step(2.f * (float) std::sin(TWO_PI * 220.0 * n++ / 48000.0));
+				if (i > 40000)
+					jump = std::max(jump, std::fabs(g.r.l - prev));
+				prev = g.r.l;
+			}
+			const float allowed = 4.f * 4.f * (float) (TWO_PI * 220.0 / 48000.0);   // up to 4 V of sine and echoes
+			CHECK(jump <= allowed, "style %d: a gate gap of %d samples steps %.3f V (allowed %.3f)", style, gapSamples, jump, allowed);
+		}
+	// Digital: move Time, freeze 15 ms later.
+	Rig g;
+	g.time(0.25f);
+	g.feedback(0.5f);
+	long n = 0;
+	float prev = 0.f, jump = 0.f;
+	for (int i = 0; i < 48000 * 3; i++) {
+		if (i == 48000)
+			g.time(0.4f);
+		if (i == 48000 + 720)
+			g.f.freeze = true;
+		g.step(2.f * (float) std::sin(TWO_PI * 220.0 * n++ / 48000.0));
+		if (i > 40000)
+			jump = std::max(jump, std::fabs(g.r.l - prev));
+		prev = g.r.l;
+	}
+	CHECK(jump <= 4.f * 4.f * (float) (TWO_PI * 220.0 / 48000.0), "freezing during a crossfade steps %.3f V", jump);
+	// Freezing is seamless to the sample (Digital, no feedback: the echo
+	// is the sine itself).
+	Rig h;
+	h.time(0.1f);
+	n = 0;
+	prev = 0.f;
+	float atFreeze = 0.f;
+	for (int i = 0; i < 48000; i++) {
+		if (i == 30000)
+			h.f.freeze = true;
+		h.step(2.f * (float) std::sin(TWO_PI * 220.0 * n++ / 48000.0));
+		if (i >= 30000 && i < 30040)
+			atFreeze = std::max(atFreeze, std::fabs(h.r.l - prev));
+		prev = h.r.l;
+	}
+	const float slope = 2.f * (float) (TWO_PI * 220.0 / 48000.0);
+	CHECK(atFreeze <= 1.2f * slope, "the freeze itself steps %.4f V (the sine's slope is %.4f)", atFreeze, slope);
+}
+
+// What Freeze holds is the echo that was sounding: the same level and
+// brightness in every style and at any Tone, and no DC.
+void frozen_is_what_was_heard() {
+	struct Case { int style; float tone; };
+	for (const Case& c : {Case{0, 0.5f}, Case{1, 0.5f}, Case{2, 0.2f}, Case{2, 0.9f}}) {
+		// One second of noise in; it is heard as an echo in the next
+		// second. One rig plays it; the other freezes just as the echo
+		// begins, and plays the same second from its loop.
+		double level[2] = {0, 0}, top[2] = {0, 0};
+		for (int k = 0; k < 2; k++) {
+			Rig g;
+			rka::hadal::Random rng;
+			rng.seed(9);
+			g.f.style = c.style;
+			g.f.params[F::TONE] = c.tone;
+			g.time(1.f);
+			float prev = 0.f;
+			for (int i = 0; i < 48000 * 2; i++) {
+				if (k == 1 && i == 48000)
+					g.f.freeze = true;
+				g.step(i < 48000 ? 3.f * rng.uniform() : 0.f);
+				const double d = (double) g.r.l - prev;
+				prev = g.r.l;
+				if (i >= 52800 && i < 91200) {
+					level[k] += (double) g.r.l * g.r.l;
+					top[k] += d * d;
+				}
+			}
+		}
+		CHECK(level[0] > 1.0, "style %d: the echo should be sounding", c.style);
+		CHECK(std::fabs(db(std::sqrt(level[1] / level[0]))) < 0.5 && std::fabs(db(std::sqrt(top[1] / top[0]))) < 0.5,
+		      "style %d, Tone %.1f: frozen, the echo is %+.2f dB and its top %+.2f dB (want the same sound)", c.style, c.tone,
+		      db(std::sqrt(level[1] / level[0])), db(std::sqrt(top[1] / top[0])));
+	}
+	// DC in: none in the echo, and none in the frozen sound.
+	Rig g;
+	g.time(0.2f);
+	float frozenDc = 0.f;
+	for (int i = 0; i < 48000 * 6; i++) {
+		if (i == 48000 * 4)
+			g.f.freeze = true;
+		g.step(5.f);
+		if (i > 48000 * 5)
+			frozenDc = std::max(frozenDc, std::fabs(g.r.l));
+	}
+	CHECK(frozenDc < 0.05f, "5 V DC in: the frozen sound holds %.3f V (want none)", frozenDc);
+}
+
+// A clock that pauses and starts again: the pause is not a period.
+void clock_restart() {
+	Rig g;
+	g.f.clockPatched = true;
+	g.f.params[F::TIME] = 0.5f;
+	float longest = 0.f;
+	for (long i = 0; i < 48000L * 20; i++) {
+		const bool running = i < 48000L * 5 || i > 48000L * 5 + 350400;   // a 7.3 s pause
+		g.f.clock = running && (i % 24000) < 480 ? 10.f : 0.f;
+		g.step(0.f);
+		if (i > 48000 * 2)
+			longest = std::max(longest, g.e.seconds(0));
+	}
+	CHECK(std::fabs(longest - 0.5f) < 0.01f && std::fabs(g.e.seconds(0) - 0.5f) < 0.01f,
+	      "a 0.5 s clock paused for 7.3 s: Time reached %.2f s and ends at %.2f s (want 0.5 throughout)", longest, g.e.seconds(0));
+	// A clock that really slows is followed, a beat late at most.
+	Rig h;
+	h.f.clockPatched = true;
+	h.f.params[F::TIME] = 0.5f;
+	long next = 0, edge = 0;
+	for (long i = 0; i < 48000L * 20; i++) {
+		if (i == next) {
+			edge = i;
+			next += i < 48000L * 5 ? 12000 : 36000;   // 0.25 s, then 0.75 s
+		}
+		h.f.clock = i - edge < 480 ? 10.f : 0.f;
+		h.step(0.f);
+	}
+	CHECK(std::fabs(h.e.seconds(0) - 0.75f) < 0.01f, "a clock that slows from 0.25 to 0.75 s is followed (%.3f s)", h.e.seconds(0));
+	// Unplugged and plugged back in: two fresh edges before it is believed.
+	Rig k;
+	k.f.clockPatched = true;
+	k.f.params[F::TIME] = 0.5f;
+	for (long i = 0; i < 48000L * 3; i++) {
+		k.f.clock = (i % 24000) < 480 ? 10.f : 0.f;
+		k.step(0.f);
+	}
+	k.f.clockPatched = false;
+	for (long i = 0; i < 48000L * 3 + 5000; i++)
+		k.step(0.f);
+	k.f.clockPatched = true;
+	bool early = false;
+	for (long i = 0; i < 20000; i++) {
+		k.f.clock = i < 480 ? 10.f : 0.f;   // one edge only
+		k.step(0.f);
+		early = early || k.e.clockStep() >= 0;
+	}
+	CHECK(!early, "a replugged clock must not be believed on its first edge");
+}
+
 void stereo() {
 	// L alone and R alone are the same source.
 	Rig a, b;
@@ -677,6 +926,11 @@ int main() {
 	ping_pong();
 	no_clicks();
 	style_change_ramps();
+	crossfades_add_no_gain();
+	drift_does_not_jerk();
+	refreeze_does_not_click();
+	frozen_is_what_was_heard();
+	clock_restart();
 	stereo();
 	mix_law();
 	limit();

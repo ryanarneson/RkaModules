@@ -4,6 +4,8 @@
 #include "FastMath.hpp"
 #include "wake/WakeTuning.hpp"
 
+#include <cstdint>
+
 namespace rka {
 namespace wake {
 
@@ -78,7 +80,10 @@ inline float fitTime(float seconds, float tMax) {
 }
 
 // The clock's period: samples between the last two rising edges (0.1 V /
-// 1 V Schmitt trigger). A stopped clock keeps its period.
+// 1 V Schmitt trigger). A stopped clock keeps its period, and when it
+// starts again the pause is not taken for a period: an edge more than
+// PAUSE_PERIODS periods after the last one only starts the count afresh.
+// (A clock that really slows by more than that is followed a beat late.)
 struct ClockFollower {
 	void reset() {
 		high_ = seen_ = locked_ = false;
@@ -86,8 +91,11 @@ struct ClockFollower {
 		period_ = 0.f;
 	}
 
+	static constexpr uint32_t COUNT_MAX = 1u << 30;
+	static constexpr float PAUSE_PERIODS = 4.f;
+
 	void process(float volts) {
-		if (count_ < (1L << 40))
+		if (count_ < COUNT_MAX)
 			count_++;
 		if (high_) {
 			if (volts <= 0.1f)
@@ -96,7 +104,8 @@ struct ClockFollower {
 		}
 		if (volts >= 1.f) {
 			high_ = true;
-			if (seen_) {
+			const bool pause = count_ >= COUNT_MAX || (locked_ && (float) count_ > PAUSE_PERIODS * period_);
+			if (seen_ && !pause) {
 				period_ = (float) count_;
 				locked_ = true;
 			}
@@ -114,7 +123,7 @@ struct ClockFollower {
 
 private:
 	bool high_ = false, seen_ = false, locked_ = false;
-	long count_ = 0;
+	uint32_t count_ = 0;   // 32 bits everywhere (long is 32 bits on Windows)
 	float period_ = 0.f;
 };
 

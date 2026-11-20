@@ -9,6 +9,10 @@
 //   and its slope is held so pitch stays within a set number of octaves.
 // - Crossfade: the output fades from the old delay to the new one, so there
 //   is no bend. A target that arrives during a fade waits; the latest wins.
+//   The fade is linear: its two gains sum to 1, so it can dip but never
+//   adds level (inside a feedback loop a bump would be gain). A change of
+//   under SMALL_CHANGE samples glides instead: two reads that close are
+//   nearly the same signal, and a fade between them is pointless.
 // - Frozen: the line is no longer written, and the tap plays its last
 //   `delay()` samples round and round. The join fades from the loop's end
 //   into the audio just before its start, which runs straight on into the
@@ -25,6 +29,8 @@
 namespace rka {
 
 struct DelayTap {
+	static constexpr double SMALL_CHANGE = 4.0;
+
 	void setSampleRate(float fs) {
 		if (!(fs > 0.f))
 			return;
@@ -77,8 +83,12 @@ struct DelayTap {
 			pending_ = true;
 			return;
 		}
-		if (t != d_)
-			startFade(t);
+		const double gap = t - d_;
+		if (gap > -SMALL_CHANGE && gap < SMALL_CHANGE) {
+			target_ = t;   // glides
+			return;
+		}
+		startFade(t);
 		target_ = d_;
 	}
 
@@ -104,15 +114,18 @@ struct DelayTap {
 		if (!fading_)
 			return live;
 		const float old = fromLoop_ ? loopRead(line, slope) : line.read((float) fadeFrom_ + mod);
-		// Equal power: the two are different stretches of audio.
-		const float a = fade_;
-		const float out = old * fastSin2pi(0.25f + 0.25f * a) + live * fastSin2pi(0.25f * a);
+		// Linear: never louder than the louder of the two.
+		const float out = old + fade_ * (live - old);
 		fade_ += fadeStep_;
 		if (fade_ >= 1.f) {
 			fading_ = fromLoop_ = false;
 			if (pending_) {
 				pending_ = false;
-				if (pendingD_ != d_) {
+				const double gap = pendingD_ - d_;
+				if (gap > -SMALL_CHANGE && gap < SMALL_CHANGE) {
+					target_ = pendingD_;
+				}
+				else {
 					startFade(pendingD_);
 					target_ = d_;
 				}
@@ -123,11 +136,16 @@ struct DelayTap {
 
 	// Loop the last `loopSamples` (or, if 0, the last delay() samples), to
 	// the nearest sample, so the loop repeats exactly. The caller stops
-	// writing the line. Playback carries straight on from the last read.
+	// writing the line. Playback carries straight on from the last read:
+	// say whether the line was written once more after that read
+	// (`wroteSinceRead`: a caller that reads, then writes, each sample) or
+	// not (one that writes, then reads).
 	// The join is `joinSeconds` long, or a quarter of the loop if that is
 	// shorter, and reads up to that much beyond the loop: the line needs
 	// maxDelay of at least the longest loop plus the join plus 4.
-	void freeze(float joinSeconds, float loopSamples = 0.f) {
+	// A crossfade in progress is cut short (a step): a caller that minds
+	// waits for fading() to end first.
+	void freeze(float joinSeconds, float loopSamples = 0.f, bool wroteSinceRead = false) {
 		if (frozen_)
 			return;
 		// A fade in progress ends here: the loop is the audio at the delay
@@ -142,11 +160,12 @@ struct DelayTap {
 		if (join > loop_ * 0.25)
 			join = std::floor(loop_ * 0.25);
 		join_ = join >= 1.0 ? join : 1.0;
-		// The last read was `d_` back; the line now stands still, so the
-		// next sample is one nearer: delay d_ - 1 = loop + 1 - q. The loop
-		// spans delays loop + 1 .. 2 (two clear of the newest sample, for
-		// the interpolator).
-		q_ = loop_ + 2.0 - d_;
+		// The last read was `d_` back. The line now stands still, so the
+		// next sample is one nearer, delay d_ - 1; or, if the line was
+		// written once after that read, still d_. The read is at delay
+		// loop + 1 - q, and the loop spans delays loop + 1 .. 2 (two clear
+		// of the newest sample, for the interpolator).
+		q_ = loop_ + (wroteSinceRead ? 1.0 : 2.0) - d_;
 		while (q_ >= loop_)
 			q_ -= loop_;
 		if (q_ < 0.0)
@@ -175,6 +194,10 @@ struct DelayTap {
 	}
 	bool moving() const {
 		return fading_ || d_ != target_;
+	}
+	// A crossfade (between delays, or out of a frozen loop) is running.
+	bool fading() const {
+		return fading_;
 	}
 
 private:
