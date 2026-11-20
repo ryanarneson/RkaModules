@@ -116,6 +116,16 @@
         "Drone"
       ],
       "keywords": "strings resonator karplus strong pluck strum drone chord comb ambient"
+    },
+    {
+      "slug": "Wake",
+      "name": "Wake",
+      "description": "Stereo echo, 10 ms to 10 s: Tape, Analog and Digital styles, a Ratio between the sides, ping pong, Freeze, Diffuse, Drift, a clock input, CV on Time, Feedback and Mix",
+      "tags": [
+        "Delay",
+        "Clock modulator"
+      ],
+      "keywords": "delay echo tape analog bbd digital ping pong freeze diffuse stereo ambient"
     }
   ]
 }
