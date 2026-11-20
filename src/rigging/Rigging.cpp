@@ -6,6 +6,8 @@
 #include "RiggingLayout.hpp"
 #include "widgets.hpp"
 
+#include <cstdlib>
+
 
 struct Rigging : Module {
 	enum ParamId {
@@ -71,6 +73,21 @@ struct Rigging : Module {
 		std::string getDisplayValueString() override {
 			return rka::rigging::chordName(int(std::round(getValue())));
 		}
+		// A typed value is a chord's name (or the start of one), or its
+		// number, 1 to 7.
+		void setDisplayValueString(std::string s) override {
+			for (int c = 0; c < rka::rigging::kChords; c++) {
+				const std::string name = rka::rigging::chordName(c);
+				if (!s.empty() && s.size() <= name.size() && string::lowercase(name.substr(0, s.size())) == string::lowercase(s)) {
+					setValue((float) c);
+					return;
+				}
+			}
+			char* end = nullptr;
+			const long n = std::strtol(s.c_str(), &end, 10);
+			if (end != s.c_str() && n >= 1 && n <= rka::rigging::kChords)
+				setValue((float) (n - 1));
+		}
 		std::string getUnit() override {
 			return "";
 		}
@@ -82,6 +99,12 @@ struct Rigging : Module {
 			const float s = rka::RiggingEngine::ringSeconds(getValue());
 			return s < 10.f ? string::f("%.2f s", s) : string::f("%.0f s", s);
 		}
+		// A typed value is seconds.
+		void setDisplayValueString(std::string s) override {
+			const float seconds = std::strtof(s.c_str(), nullptr);
+			if (seconds > 0.f)
+				setValue(rka::RiggingEngine::ringKnob(seconds));
+		}
 		std::string getUnit() override {
 			return "";
 		}
@@ -92,6 +115,18 @@ struct Rigging : Module {
 		std::string getDisplayValueString() override {
 			const float s = rka::RiggingEngine::spreadSeconds(getValue());
 			return s < 1.f ? string::f("%.0f ms", s * 1000.f) : string::f("%.2f s", s);
+		}
+		// A typed value is milliseconds, or seconds if it ends in "s" alone
+		// ("0.5 s"); "250" and "250 ms" are both a quarter of a second.
+		void setDisplayValueString(std::string s) override {
+			char* end = nullptr;
+			float v = std::strtof(s.c_str(), &end);
+			if (end == s.c_str() || !(v >= 0.f))
+				return;
+			while (*end == ' ')
+				end++;
+			const bool seconds = (*end == 's' || *end == 'S');
+			setValue(rka::RiggingEngine::spreadKnob(seconds ? v : v / 1000.f));
 		}
 		std::string getUnit() override {
 			return "";

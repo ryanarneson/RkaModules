@@ -72,14 +72,14 @@ struct rigging {
 	static const int BENCH_CASES = 3;
 	static BenchCase<Instance> benchCase(int k) {
 		// Budgets: about twice what an Apple M-series Mac measured, rounded
-		// up to the next 0.05 (idle 0.13, outputs 0.13, busy 0.27, flat from
+		// up to the next 0.05 (idle 0.14, outputs 0.14, busy 0.30, flat from
 		// 1 to 16 instances). Elsewhere: three times as much, provisional
 		// (not yet measured on x86-64).
 		const BenchCase<Instance> cases[BENCH_CASES] = {
 			// name     inputs   Apple arm64  elsewhere
 			{"idle", idle, 0.3, 0.9},
 			{"outputs", outputs, 0.3, 0.9},
-			{"busy", busy, 0.55, 1.65},
+			{"busy", busy, 0.6, 1.8},
 		};
 		return cases[k];
 	}

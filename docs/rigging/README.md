@@ -35,7 +35,11 @@ The right-click menu has **Free pitch** (below).
   inputs.
 - **Played from one cable.** With nothing in STRUM, a **new note at
   V/OCT strikes the strings**: a sequencer's pitch output alone plays
-  Rigging. A slow glide or a gentle LFO on V/OCT only bends the pitch.
+  Rigging. A new note is a jump of more than about a third of a semitone;
+  a note that slides to its pitch is still one strike. A slow glide or a
+  gentle LFO on V/OCT only bends the pitch, the same note repeated does
+  not strike again (use STRUM for that), and plugging a cable carrying a
+  voltage into V/OCT, or pulling it out, is a jump like any other.
 
 With nothing patched in and no strikes, Rigging is silent: it has no sound
 of its own.
@@ -76,7 +80,8 @@ Changing chord bends the ringing strings to their new notes.
 Each knob is how loud its string is in the mix, 0 to 100 %. A string keeps
 ringing with its level down, so bringing a level up in the middle of a
 drone fades in a string that is already sounding. Turn a string out to
-change the chord: Minor without string 4 is Fifths.
+change the chord: Minor without string 4 (its third) is neither major nor
+minor.
 
 ### Ring: how long the strings sound
 
@@ -139,7 +144,7 @@ rests between two.
   string is there.
 - **MIX:** the dry input fully left, the strings alone fully right (the
   default: a drone from noise wants no noise in it).
-- **Level.** Noise at ±5 V in gives a drone of about ±5 V; a single struck
+- **Level.** Noise at ±5 V in gives a drone of about ±3 V; a single struck
   string peaks at 1.5 to 4 V and all six at once at about 6 V. The strings
   are soft-limited below ±10 V, with nothing changed under 8 V.
 - A polyphonic cable into an audio input is summed; into V/OCT, a CV or
@@ -169,6 +174,8 @@ cable alone to both.
 
 - NaN or infinite values on any input read as 0 V; the strings hear an
   input only up to ±24 V.
+- Typing into a tooltip: Ring takes seconds, Spread milliseconds (or
+  "0.5 s"), Chord a name or a number from 1 to 7.
 - A change of sample rate retunes the strings and silences them.
 - Two Riggings never strike identically.
 - Rigging stores its knobs and the Free pitch setting; the strings'

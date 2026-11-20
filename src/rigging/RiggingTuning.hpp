@@ -52,11 +52,14 @@ constexpr float OUTPUT_GAIN = 1.f;
 constexpr float PAN[6] = {0.f, -0.25f, 0.25f, -0.5f, 0.5f, -0.75f};
 
 // The strings' sum is untouched to OUT_KNEE volts and never passes OUT_CEIL
-// (Ballast's curve); its DC is blocked below OUT_DC_HZ.
+// (Ballast's curve). Each string's DC is blocked below OUT_DC_HZ before its
+// level knob, so DC a string holds (a strike's burst leaves a little) is
+// never heard as a thump when a level moves.
 constexpr float OUT_KNEE = 8.f, OUT_CEIL = 10.f, OUT_DC_HZ = 5.f;
 
 // A new note at V/OCT (STRUM unpatched) strikes: a move of more than
-// NOTE_STEP_V within NOTE_WINDOW_S; then none for NOTE_HOLD_S.
+// NOTE_STEP_V within NOTE_WINDOW_S; then none until V/OCT has kept still
+// (moving slower than that) for NOTE_HOLD_S.
 constexpr float NOTE_STEP_V = 1.f / 30.f, NOTE_WINDOW_S = 0.001f, NOTE_HOLD_S = 0.01f;
 
 // The strike light, and the smoothing of levels and Mix.

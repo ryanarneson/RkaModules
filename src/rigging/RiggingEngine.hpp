@@ -5,8 +5,8 @@
 // Each sample: a strike if STRUM rose (or, with nothing in STRUM, if V/OCT
 // jumped to a new note); the audio input, high-passed, into the strings
 // (1, 3, 5 from L; 2, 4, 6 from R) with each string's share and its burst;
-// the six strings, each times its level, panned and summed; DC blocked,
-// soft-limited; mixed with the dry input. The controls are read every 16
+// the six strings, each with its DC blocked, times its level, panned and
+// summed; soft-limited; mixed with the dry input. The controls are read every 16
 // samples; libm is used only when one of them moved.
 #include <cmath>
 #include <cstdint>
@@ -69,7 +69,11 @@ public:
 	void reset() {
 		for (int k = 0; k < rigging::kStrings; k++)
 			strings_[k].clear();
-		inL_ = inR_ = outL_ = outR_ = 0.f;
+		strike_.clear();
+		hold_ = still_ = lightLeft_ = 0;
+		inL_ = inR_ = 0.f;
+		for (int k = 0; k < rigging::kStrings; k++)
+			dc_[k] = 0.f;
 		countdown_ = 0;
 		first_ = true;
 		tune_ = voct_ = ring_ = damp_ = mix_ = -1e9f;
@@ -102,8 +106,13 @@ public:
 		else {
 			strumHigh_ = false;
 			if (hold_ > 0) {
-				hold_--;
+				// After a note: no other until V/OCT has been still for
+				// NOTE_HOLD_S (a note that slews to its pitch is one note).
+				const float moved = voct - noteRef_;
+				still_ = (moved > noteStep_ || moved < -noteStep_) ? 0 : still_ + 1;
 				noteRef_ = voct;
+				if (still_ >= holdSamples_)
+					hold_ = 0;
 			}
 			else {
 				// The reference follows V/OCT at most NOTE_STEP_V a
@@ -114,7 +123,8 @@ public:
 				if (gap > NOTE_STEP_V || gap < -NOTE_STEP_V) {
 					hit = true;
 					noteRef_ = voct;
-					hold_ = holdSamples_;
+					hold_ = 1;
+					still_ = 0;
 				}
 			}
 		}
@@ -145,20 +155,18 @@ public:
 		float wetL = 0.f, wetR = 0.f;
 		for (int k = 0; k < kStrings; k++) {
 			const float y = strings_[k].process(feed[k & 1] * share_[k] + burst[k]);
+			// No DC from a string, and so none for its level to step.
+			dc_[k] += outputHp_ * (y - dc_[k]);
+			if (dc_[k] < 1e-20f && dc_[k] > -1e-20f)
+				dc_[k] = 0.f;
 			level_[k] = glide(level_[k], levelTarget_[k]);
-			const float v = y * level_[k];
+			const float v = (y - dc_[k]) * level_[k];
 			wetL += v * panL_[k];
 			wetR += v * panR_[k];
 		}
-		// No DC; then the soft limit.
-		outL_ += outputHp_ * (wetL - outL_);
-		outR_ += outputHp_ * (wetR - outR_);
-		if (outL_ < 1e-20f && outL_ > -1e-20f)
-			outL_ = 0.f;
-		if (outR_ < 1e-20f && outR_ > -1e-20f)
-			outR_ = 0.f;
-		wetL = limit((wetL - outL_) * OUTPUT_GAIN);
-		wetR = limit((wetR - outR_) * OUTPUT_GAIN);
+		// The soft limit.
+		wetL = limit(wetL * OUTPUT_GAIN);
+		wetR = limit(wetR * OUTPUT_GAIN);
 
 		dry_ = glide(dry_, dryTarget_);
 		wet_ = glide(wet_, wetTarget_);
@@ -175,10 +183,24 @@ public:
 		knob01 = !(knob01 > 0.f) ? 0.f : knob01 > 1.f ? 1.f : knob01;
 		return 0.1f * (float) std::pow(600.0, (double) knob01);
 	}
+	// Ring's knob for a time in seconds (a value typed into the tooltip).
+	static float ringKnob(float seconds) {
+		if (!(seconds > 0.1f))
+			return 0.f;
+		const float k = (float) (std::log((double) seconds / 0.1) / std::log(600.0));
+		return k > 1.f ? 1.f : k;
+	}
 	// Spread's law: 0 to 1.5 s, fine near 0.
 	static float spreadSeconds(float knob01) {
 		knob01 = !(knob01 > 0.f) ? 0.f : knob01 > 1.f ? 1.f : knob01;
 		return 1.5f * knob01 * knob01 * knob01;
+	}
+
+	static float spreadKnob(float seconds) {
+		if (!(seconds > 0.f))
+			return 0.f;
+		const float k = (float) std::cbrt((double) seconds / 1.5);
+		return k > 1.f ? 1.f : k;
 	}
 
 	// For the tests and the tooltip: where string k is now, the chord, and
@@ -287,8 +309,9 @@ private:
 	float tune_ = -1e9f, voct_ = -1e9f, ring_ = -1e9f, damp_ = -1e9f, mix_ = -1e9f;
 	float dry_ = 0.f, wet_ = 1.f, dryTarget_ = 0.f, wetTarget_ = 1.f;
 	float inputHp_ = 0.f, outputHp_ = 0.f, smooth_ = 0.01f, noteStep_ = 1e-3f;
-	float inL_ = 0.f, inR_ = 0.f, outL_ = 0.f, outR_ = 0.f, noteRef_ = 0.f;
-	long lightSamples_ = 4800, lightLeft_ = 0, holdSamples_ = 480, hold_ = 0, strikes_ = 0;
+	float inL_ = 0.f, inR_ = 0.f, noteRef_ = 0.f;
+	float dc_[rigging::kStrings] = {0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
+	long lightSamples_ = 4800, lightLeft_ = 0, holdSamples_ = 480, hold_ = 0, still_ = 0, strikes_ = 0;
 	int chord_ = -1, lastChord_ = -1, countdown_ = 0;
 	bool first_ = true, strumHigh_ = false;
 };

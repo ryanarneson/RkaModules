@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <initializer_list>
 #include <new>
+#include <vector>
 
 static thread_local long tAllocs = 0;
 
@@ -85,25 +86,28 @@ void extreme_rates() {
 	CHECK(good && std::fabs(g.e.stringHz(0) - 65.40639f) < 0.01f, "a bad sample rate upset the engine (string 1 at %g Hz)", g.e.stringHz(0));
 }
 
-// The pitch of string 1 alone, from the zero crossings of the output over a
-// second (an independent path: no Fourier sum, nothing of the engine's).
-double pitchByCrossings(Rig& g, float fs) {
-	long first = -1, last = -1, count = 0;
-	float prev = 0.f;
-	const long n = (long) fs;
-	for (long i = 0; i < n; i++) {
+// The pitch of string 1 alone, from the lag at which half a second of the
+// output best matches itself (an independent path: no Fourier sum, nothing
+// of the engine's). Lags from 40 to 100 Hz, refined between samples.
+double pitchByAutocorrelation(Rig& g, float fs) {
+	std::vector<float> x((size_t) (fs * 0.5f));
+	for (float& v : x) {
 		g.step();
-		const float v = g.r.l;
-		if (prev <= 0.f && v > 0.f) {
-			if (first < 0)
-				first = i;
-			else
-				count++;
-			last = i;
-		}
-		prev = v;
+		v = g.r.l;
 	}
-	return count > 0 ? (double) count * fs / (double) (last - first) : 0.0;
+	const int lo = (int) (fs / 100.f), hi = (int) (fs / 40.f);
+	std::vector<double> c((size_t) hi + 2, 0.0);
+	const size_t n = x.size() - (size_t) hi - 2;
+	for (int lag = lo - 1; lag <= hi + 1; lag++)
+		for (size_t i = 0; i < n; i++)
+			c[(size_t) lag] += (double) x[i] * x[i + (size_t) lag];
+	int best = lo;
+	for (int lag = lo; lag <= hi; lag++)
+		if (c[(size_t) lag] > c[(size_t) best])
+			best = lag;
+	const double a = c[(size_t) best - 1], b = c[(size_t) best], d = c[(size_t) best + 1];
+	const double shift = (a - 2.0 * b + d) != 0.0 ? 0.5 * (a - d) / (a - 2.0 * b + d) : 0.0;
+	return fs / (best + shift);
 }
 
 void rate_change_recovers() {
@@ -111,7 +115,7 @@ void rate_change_recovers() {
 	g.f.inLPatched = true;
 	for (int j = 1; j < 6; j++)
 		g.f.params[F::LEVEL_1 + j] = 0.f;
-	g.f.params[F::DAMP] = 1.f;   // near-pure: one crossing a period
+	g.f.params[F::DAMP] = 0.6f;
 	g.f.params[F::RING] = 0.8f;
 	rka::hadal::Random rng;
 	rng.seed(2);
@@ -123,12 +127,13 @@ void rate_change_recovers() {
 			good = good && g.step();
 		}
 	}
+	// Input off; strike, and measure from 50 ms on (the burst is over).
 	g.f.inL = 0.f;
 	g.f.strumPatched = true;
 	g.f.strum = 10.f;
-	for (int i = 0; i < 24000; i++)
+	for (int i = 0; i < 2400; i++)
 		good = good && g.step();
-	const double hz = pitchByCrossings(g, 48000.f);
+	const double hz = pitchByAutocorrelation(g, 48000.f);
 	CHECK(good, "outputs left 10 V or went non-finite across 44.1k -> 768k -> 48k");
 	CHECK(std::fabs(1200.0 * std::log2(hz / 65.40639)) < 10.0, "after 44.1k -> 768k -> 48k string 1 is at %g Hz, want 65.41", hz);
 }

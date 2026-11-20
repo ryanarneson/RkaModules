@@ -194,8 +194,8 @@ instance, Apple M-series Mac:
 | Pan measured (with Ballast) | 0.034 | 0.187 | 0.211 |
 | Squall budget | 0.05 | 0.05 | 0.1 |
 | Squall measured | 0.023 | 0.024 | 0.029 |
-| Rigging budget | 0.3 | 0.3 | 0.55 |
-| Rigging measured | 0.13 | 0.13 | 0.26 |
+| Rigging budget | 0.3 | 0.3 | 0.6 |
+| Rigging measured | 0.14 | 0.14 | 0.30 |
 
 Sluice also has a mixDown case (as busy, but only D connected): budget 2.25,
 measured 1.11. Its budgets are about twice the measurement, rounded up to

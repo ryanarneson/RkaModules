@@ -32,6 +32,15 @@ public:
 		burst_[string] = n < 8 ? 8 : n > 2000000 ? 2000000 : n;
 	}
 
+	// Nothing due, nothing sounding.
+	void clear() {
+		for (int k = 0; k < kStrings; k++) {
+			wait_[k] = -1;
+			left_[k] = 0;
+		}
+		pending_ = 0;
+	}
+
 	void trigger() {
 		for (int k = 0; k < kStrings; k++)
 			wait_[k] = (long) ((double) spread_ * fs_ * k / (kStrings - 1) + 0.5);

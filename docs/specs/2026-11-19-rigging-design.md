@@ -244,8 +244,9 @@ Smoothed against zipper noise.
   strings** (the user asked for this after seeing it in Rings): one cable
   from a sequencer plays Rigging. A new note is a jump of more than 0.4
   semitone (33 mV) within a millisecond; a slow glide or a gentle LFO on
-  V/OCT does not strike. After a strike from a note, none follows for
-  10 ms, so a noisy or stepping edge is one strike. The Tune knob and
+  V/OCT does not strike. After a strike from a note, none follows until
+  V/OCT has kept still for 10 ms, so a noisy, stepping or slewed edge is
+  one strike. The Tune knob and
   Chord never strike. With a cable in STRUM, only STRUM strikes.
 - A new trigger during a rake starts a new rake; strikes still to come
   from the old one are dropped.
@@ -275,7 +276,8 @@ Smoothed against zipper noise.
   equal power between; **default fully right** (a drone from noise wants
   no noise in it).
 - Level: white noise at ±5 V in, Fifths, every level up, Ring and Damp at
-  their defaults, gives about ±5 V peaks out. A soft limit on the string
+  their defaults, gives about ±3 V peaks out (as built and as the user
+  heard it at the listening stop; first written as ±5 V). A soft limit on the string
   sum (as Ballast's and Fog's) keeps anything hotter under about ±10 V
   without a hard edge, and each string's loop is kept bounded by itself
   whatever the input.

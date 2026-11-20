@@ -150,7 +150,9 @@ void chord_pitches() {
 					continue;
 				const long n = 24000;
 				const double got = measureHz(g.mono, want, 4800, n);
-				CHECK(std::fabs(cents(got, want)) < 5.0, "%s string %d: %.3f Hz in the mix, want %.3f (%.1f cents)", rka::rigging::chordName(chord), k + 1,
+				// (Loose: in most chords a lower string's overtone sits on this
+				// pitch, and a string's overtones are a few cents off true.)
+				CHECK(std::fabs(cents(got, want)) < 8.0, "%s string %d: %.3f Hz in the mix, want %.3f (%.1f cents)", rka::rigging::chordName(chord), k + 1,
 				      got, want, cents(got, want));
 			}
 			CHECK(g.e.chord() == chord, "chord() is %d", g.e.chord());
@@ -170,7 +172,7 @@ void drone() {
 	Rig g;
 	g.record(7.0, true);
 	const float peak = Rig::peak(g.left, 5 * 48000);
-	CHECK(peak > 2.5f && peak < 10.f, "white noise at +-5 V in, defaults: peaks of %g V out", peak);
+	CHECK(peak > 2.2f && peak < 4.5f, "white noise at +-5 V in, defaults: peaks of %g V out (about 3)", peak);
 	const double a = Rig::rms(g.left, 3 * 48000, 5 * 48000), b = Rig::rms(g.left, 5 * 48000, 7 * 48000);
 	CHECK(std::fabs(20.0 * std::log10(a / b)) < 2.0, "the drone is not steady: %.3g then %.3g V RMS", a, b);
 	double lo = 1e9, hi = 0.0;
@@ -529,6 +531,18 @@ void note_strikes() {
 		h.run(0.3);
 		CHECK(h.e.strikes() == 2, "two notes 20 ms apart: %ld strikes", h.e.strikes());
 	}
+	// A note that slews to its pitch (a sequencer with glide, a slew
+	// limiter) is one note: no second strike while V/OCT is still moving.
+	for (const auto& k : std::initializer_list<std::pair<float, double>>{{1.f, 0.015}, {2.f, 0.04}, {1.f, 0.005}, {3.f, 0.05}}) {
+		Rig g;
+		g.run(0.3);
+		std::vector<std::pair<long, float>> slew;
+		const long n = std::lround(k.second * kFs);
+		for (long i = 0; i <= n; i++)
+			slew.push_back({100 + i, k.first * (float) i / (float) n});
+		const int got = strikesIn(g, 24000, slew);
+		CHECK(got == 1, "%g V slewed over %g ms: %d strikes", k.first, k.second * 1000.0, got);
+	}
 	{
 		Rig g;
 		g.f.strumPatched = true;
@@ -648,7 +662,54 @@ void no_dc() {
 	CHECK(std::fabs(mean / 96000.0) < 0.02, "noise on a 5 V offset: %.3g V DC out", mean / 96000.0);
 }
 
+// Initialize in the middle of a rake: nothing more is struck, and silence.
+void reset_cancels_a_rake() {
+	Rig g;
+	g.f.params[F::SPREAD] = 1.f;
+	g.run(0.1);
+	g.strum();
+	g.run(0.4);          // strings 1 and 2 struck; four to come
+	g.e.reset();
+	g.record(1.5);
+	CHECK(Rig::peak(g.mono) == 0.f, "after a reset mid-rake the output peaks at %g V", Rig::peak(g.mono));
+}
+
+// Many strikes on high strings, then a level turned down in the silence
+// after: no thump. (DC a string held was once stepped by its level knob:
+// 4.5 V.)
+void no_thump_from_a_level() {
+	Rig g;
+	g.f.voct = 5.f;
+	g.f.strumPatched = true;
+	g.f.params[F::RING] = ringKnob(1.0);
+	g.f.params[F::SPREAD] = 0.f;
+	g.run(0.1);
+	for (int strike = 0; strike < 600; strike++) {
+		g.f.strum = 10.f;
+		g.run(0.001);
+		g.f.strum = 0.f;
+		g.run(0.049);
+	}
+	g.record(5.0);
+	CHECK(Rig::peak(g.mono, 4 * 48000) < 0.01f, "5 s after the strikes the output still peaks at %g V", Rig::peak(g.mono, 4 * 48000));
+	g.f.params[F::LEVEL_4] = 0.f;
+	g.f.params[F::LEVEL_5] = 0.f;
+	g.record(1.0);
+	CHECK(Rig::peak(g.mono) < 0.02f, "levels 4 and 5 turned down in the silence: a thump of %g V", Rig::peak(g.mono));
+	g.f.voct = 0.f;
+	g.record(1.0);
+	CHECK(Rig::peak(g.mono) < 0.1f, "V/OCT returned to 0 in the silence: a thump of %g V", Rig::peak(g.mono));
+}
+
 void laws() {
+	// The laws' inverses, for a value typed into the tooltip.
+	for (float k : {0.f, 0.1f, 0.5f, 0.9f, 1.f}) {
+		CHECK(std::fabs(RiggingEngine::ringKnob(RiggingEngine::ringSeconds(k)) - k) < 1e-4f, "Ring's law does not invert at %g", k);
+		CHECK(std::fabs(RiggingEngine::spreadKnob(RiggingEngine::spreadSeconds(k)) - k) < 1e-4f, "Spread's law does not invert at %g", k);
+	}
+	CHECK(RiggingEngine::ringKnob(1e9f) == 1.f && RiggingEngine::ringKnob(0.f) == 0.f && RiggingEngine::ringKnob(NAN) == 0.f &&
+	      RiggingEngine::spreadKnob(99.f) == 1.f && RiggingEngine::spreadKnob(-1.f) == 0.f, "the inverses clamp");
+
 	CHECK(std::fabs(RiggingEngine::ringSeconds(0.f) - 0.1f) < 1e-4f && std::fabs(RiggingEngine::ringSeconds(1.f) / 60.f - 1.f) < 1e-3f, "Ring's law: %g to %g s",
 	      RiggingEngine::ringSeconds(0.f), RiggingEngine::ringSeconds(1.f));
 	CHECK(std::fabs(RiggingEngine::ringSeconds(ringKnob(4.0)) / 4.f - 1.f) < 1e-3f, "Ring's law at 4 s");
@@ -676,6 +737,8 @@ int main() {
 	chord_cv_no_chatter();
 	note_strikes();
 	strum_edges();
+	reset_cancels_a_rake();
+	no_thump_from_a_level();
 	clamps();
 	nan_inputs();
 	no_dc();

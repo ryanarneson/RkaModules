@@ -11,13 +11,20 @@
 //   the period less the one sample of the write and the low-pass's phase
 //   delay at the fundamental.
 // - Ring. The gain per trip is 10^(-3 / (f * T60)), raised by what the
-//   Hermite read loses at the fundamental, but kept under 1 (the read is
-//   flat at DC: above 1 the loop would grow there). So the highest strings
-//   cannot ring long: about 1.4 s at 3.5 kHz and 0.7 s at 5 kHz at 44.1 kHz.
+//   Hermite read loses at the fundamental, but never past a 60 s Ring's
+//   gain (the read is flat at DC, where this is the loop's gain). So the
+//   highest strings cannot ring long: about 1.4 s at 3.5 kHz and 0.7 s at
+//   5 kHz at 44.1 kHz.
 // - Damp. A one-pole low-pass set so the fundamental loses exactly
 //   rate / f per trip; harmonic n then loses about n * n times that. It is
 //   not made up for, so Damp shortens the ring too.
-// - A new pitch glides; the delay's length moves a little each sample.
+// - DC. The loop holds DC as it holds the string's pitch (a filter in the
+//   loop to block it pulls a low string's overtones out of tune with its
+//   fundamental: 10 cents at C2 for a 3 Hz blocker). So the gain is never
+//   more than a 60 s Ring's, DC in the loop dies as fast as that at worst,
+//   and whoever uses a string blocks DC at its output.
+// - A new pitch glides; the delay's length and the gain move a little each
+//   sample, never in a step.
 // - The bound is the identity below its knee, so a quiet string rings for
 //   exactly as long as the gain says.
 #include <cmath>
@@ -71,8 +78,9 @@ public:
 	void snap() {
 		hz_ = targetHz_;
 		coefficients();
-		length_ = lengthTarget_;
-		lengthStep_ = 0.f;
+		length_ = lengthGoal_ = lengthTarget_;
+		gain_ = gainGoal_ = gainTarget_;
+		lengthStep_ = gainStep_ = 0.f;
 		steps_ = 0;
 		dirty_ = false;
 	}
@@ -90,7 +98,12 @@ public:
 		}
 		if (steps_ > 0) {
 			length_ += lengthStep_;
-			steps_--;
+			gain_ += gainStep_;
+			// The last step lands exactly (sixteen small additions do not).
+			if (--steps_ == 0) {
+				length_ = lengthGoal_;
+				gain_ = gainGoal_;
+			}
 		}
 		const float y = delay_.read(length_);
 		lp_ += a_ * (y - lp_);
@@ -117,6 +130,9 @@ public:
 	}
 
 	float frequency() const { return hz_; }
+	// Still on its way to a new pitch, Ring or Damp (and so still working
+	// coefficients out at each control tick).
+	bool gliding() const { return dirty_; }
 	float periodSamples() const { return fs_ / hz_; }
 	// The gain to give a steady, noise-like input so the string is about as
 	// loud whatever Ring is: 1 / sqrt of the sum, over its harmonics, of each
@@ -127,20 +143,27 @@ private:
 	enum { kControl = 16 };
 
 	// One control tick while something moved: glide the pitch, then the
-	// coefficients for where it is now, reached over the next kControl samples.
+	// coefficients for where it is now; the delay's length and the gain
+	// reach them over the next kControl samples, so neither a new pitch nor
+	// a new Ring is a step in the sound. The glide arrives: when a step is
+	// too small to register, it is taken whole.
 	void control() {
 		if (hz_ != targetHz_) {
-			const float k = 1.f - (float) std::exp(-(double) kControl / (GLIDE_TAU_S * fs_));
-			const float logNow = (float) std::log2(hz_), logTarget = (float) std::log2(targetHz_);
-			float next = logNow + (logTarget - logNow) * k;
-			// Within a hundredth of a cent: arrived.
-			if (std::fabs(logTarget - next) < 1e-5f)
+			const double k = 1.0 - std::exp(-(double) kControl / ((double) GLIDE_TAU_S * fs_));
+			const double logNow = std::log2((double) hz_), logTarget = std::log2((double) targetHz_);
+			const double next = logNow + (logTarget - logNow) * k;
+			const float hzNext = (float) std::exp2(next);
+			// Within a hundredth of a cent, or no longer moving: arrived.
+			if (std::fabs(logTarget - next) < 1e-5 || hzNext == hz_)
 				hz_ = targetHz_;
 			else
-				hz_ = (float) std::exp2(next);
+				hz_ = hzNext;
 		}
 		coefficients();
-		lengthStep_ = (lengthTarget_ - length_) / (float) kControl;
+		gainGoal_ = gainTarget_;
+		lengthGoal_ = lengthTarget_;
+		gainStep_ = (gainGoal_ - gain_) / (float) kControl;
+		lengthStep_ = (lengthGoal_ - length_) / (float) kControl;
 		steps_ = kControl;
 		dirty_ = hz_ != targetHz_;
 	}
@@ -196,10 +219,12 @@ private:
 		}
 		if (hermiteGain > 1e-3)
 			gain /= hermiteGain;
-		// Under 1 at DC, whatever was made up.
-		if (gain > 0.999999)
-			gain = 0.999999;
-		gain_ = (float) gain;
+		// The make-up never takes the gain past a 60 s Ring's: this is the
+		// loop's gain at DC, and DC must die too.
+		const double most = std::exp(-6.907755278982137 / (60.0 * hz_));
+		if (gain > most)
+			gain = most;
+		gainTarget_ = (float) gain;
 		lengthTarget_ = (float) (length < 1.0 ? 1.0 : length);
 
 		// The input's share. Under white noise harmonic n comes out with
@@ -231,7 +256,8 @@ private:
 	float fs_ = 48000.f;
 	float targetHz_ = 65.40639f, hz_ = 65.40639f, ring_ = 4.f, damp_ = 0.f;
 	float length_ = 100.f, lengthTarget_ = 100.f, lengthStep_ = 0.f;
-	float gain_ = 0.f, a_ = 1.f, lp_ = 0.f, share_ = 1.f;
+	float gain_ = 0.f, gainTarget_ = 0.f, gainStep_ = 0.f, a_ = 1.f, lp_ = 0.f, share_ = 1.f;
+	float lengthGoal_ = 100.f, gainGoal_ = 0.f;
 	int countdown_ = 0, steps_ = 0;
 	bool dirty_ = true;
 };

@@ -310,9 +310,87 @@ void rate_change() {
 	CHECK(std::isfinite(c.process(NAN)) && c.process(NAN) == c.process(0.f), "a NaN sample in reads as 0");
 }
 
+// A glide ends: some time after a change of pitch the string has stopped
+// working its coefficients out (it did not, once: the last step of the
+// glide rounded to nothing, short of "arrived").
+void glide_ends() {
+	for (float fs : {44100.f, 48000.f, 96000.f})
+		for (float from : {65.406f, 261.63f, 1046.5f, 4186.f})
+			for (float ratio : {1.0595f, 2.f, 0.5f, 1.4983f}) {
+				String s = make(fs, from, 4.f, 0.33f);
+				CHECK(!s.gliding(), "a string at rest is gliding");
+				s.setFrequency(from * ratio);
+				CHECK(s.gliding(), "a string given a new pitch is not gliding");
+				run(s, 0.5, fs);
+				CHECK(!s.gliding() && s.frequency() == from * ratio, "%g to %g Hz at %g: still gliding half a second on (at %.6f Hz)", from, from * ratio,
+				      fs, s.frequency());
+			}
+}
+
+// DC in a string's loop dies, at worst as slowly as a 60 s Ring, so strikes
+// cannot pile it up. (The loop passes DC as it does its own pitch, and a
+// strike's burst is not exactly balanced about zero. Once, the gain of a
+// high string was held just under 1 whatever Ring was: DC sat in it for a
+// quarter of an hour, and 600 strikes left 10 V of it.)
+void dc_dies_with_ring() {
+	const double fs = 48000.0;
+	for (float hz : {6272.f, 8372.f, 2093.f}) {
+		String s = make(fs, hz, 1.f, 0.33f);
+		rka::hadal::Random rng;
+		rng.seed(11);
+		// 600 strikes, 20 a second, each a burst of smoothed noise about a
+		// period long (as Strike.hpp makes them), then 5 s of rest.
+		const long n = std::max(8L, std::lround(s.periodSamples()));
+		float lp = 0.f;
+		for (int strike = 0; strike < 600; strike++)
+			for (long i = 0; i < 2400; i++) {
+				float in = 0.f;
+				if (i < n) {
+					lp = i == 0 ? 0.f : lp;
+					lp += 0.5f * (rng.uniform() - lp);
+					in = 5.2f * lp;
+				}
+				s.process(in);
+			}
+		run(s, 4.0, fs);
+		const std::vector<float> x = run(s, 1.0, fs);
+		double mean = 0.0;
+		for (float v : x)
+			mean += v;
+		mean /= x.size();
+		CHECK(std::fabs(mean) < 1.0, "%g Hz, Ring 1 s: %.3g V of DC in the string 5 s after 600 strikes", hz, mean);
+		// And it is on its way out: a 60 s fall is 1 dB a second.
+		run(s, 9.0, fs);
+		const std::vector<float> y = run(s, 1.0, fs);
+		double later = 0.0;
+		for (float v : y)
+			later += v;
+		later /= y.size();
+		CHECK(std::fabs(later) <= std::fabs(mean) * 0.4 + 1e-4, "%g Hz: DC %.3g V, then %.3g V 10 s later", hz, mean, later);
+	}
+}
+
+// A sudden change of Ring does not step the output: the gain moves a
+// little each sample.
+void ring_change_is_smooth() {
+	const double fs = 48000.0;
+	String s = make(fs, 220.f, 60.f, 0.7f);
+	strike(s);
+	const std::vector<float> x = run(s, 1.0, fs);
+	const double before = largestStep(x, 48000 - 2400, 48000);
+	s.setRing(0.1f);
+	const std::vector<float> y = run(s, 0.01, fs);
+	const double during = std::max(largestStep(y, 0, 480), (double) std::fabs(y[0] - x.back()));
+	// (The note is collapsing in a tenth of a second: some steepening is its own.)
+	CHECK(during < 2.0 * before, "Ring 60 s to 0.1 s on a ringing string: a step of %.4g, %.4g before it", during, before);
+}
+
 } // namespace
 
 int main() {
+	glide_ends();
+	dc_dies_with_ring();
+	ring_change_is_smooth();
 	tuning();
 	ring();
 	damp();
