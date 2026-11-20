@@ -47,15 +47,51 @@ each cross the whole panel.
 
 ## Screens
 
-- The **upper screen** is the o_C screen the hardware shows when idle:
-  the current app's scope or status view. It is the same in both modes.
+- The **upper screen** shows the current app at work: the view the
+  hardware shows when idle. In hardware mode it is the o_C screen itself,
+  pixel for pixel. In friendly mode Shoal marks which part belongs to
+  which output, and draws some apps' views itself, with smooth lines (see
+  "The upper screen in friendly mode" below).
 - The **lower screen** is the settings list (friendly mode) or the o_C
   menu screen (hardware mode).
-- The strip above them shows the four output voltages, each under its
-  channel's letter.
+- The strip above them shows the four output voltages, each in its own
+  cell under its channel's letter.
 - The scales outside the two screens count firmware pixels: a tick every
   8, a longer one every 32, numbered under the lower screen. They are
   128 by 64, as on the hardware.
+
+### The upper screen in friendly mode
+
+Each app arranges its view in its own way, so thin lines divide the screen
+into one lane per output (or pair of outputs), with the output's letter in
+each lane's corner.
+
+| App | What the upper screen shows | Lanes |
+| --- | --- | --- |
+| Quadraturia, Piqued, Dialectic Ping Pong | The four outputs as smooth traces, the last 4 seconds, newest at the right | Four rows, A at the top |
+| Low-rents | Two smooth curves: output A (across) against B (up), and C against D; the last 4 seconds, fading with age | Two halves: A × B, C × D |
+| Automatonnetz | The playhead's last four cells on the 5 by 5 grid (the disc is where it is now), and the chord on the circle of twelve notes | None |
+| Harrington 1200 | The chord on the circle of twelve notes; the last four moves, newest at the top (+ where the move arrived at a major chord, − at a minor one; * is a reset); the chord's three notes | None |
+| CopierMaschine, Quantermain, References | The o_C screen | Four columns, A to D |
+| Meta-Q, Sequins | The o_C screen: each channel's pitch (outputs A and B) | Two halves: A, B |
+| Viznutcracker sweet | The o_C screen: each formula's recent bytes as a pattern, newest in the middle | Four rows, A at the top |
+| Acid Curds | The o_C screen | None |
+
+- **Reading a trace.** Each lane has its own scale, fixed for the app, with
+  a faint line at 0 V: Piqued's lanes run from 0 V at the bottom to +5 V
+  at the top, Dialectic Ping Pong's from 0 V to +6.25 V, and
+  Quadraturia's from −3.75 V to +6.25 V (its LFOs swing both sides of
+  0 V). Anything shorter than a trace's finest step (about 16 ms) is still
+  drawn, as a spike.
+- **The circle of notes** has C at the top and goes up a semitone at each
+  step clockwise; the chord's three notes are the discs, named beside
+  them.
+- **Against the hardware.** The smooth views show the same things as the
+  o_C screen, laid out differently: the o_C screen puts the four traces in
+  four quarters, draws Piqued's envelope shapes behind them, and plots
+  Low-rents from right to left. UI MODE's hardware mode shows it as it is.
+- Changing app, initializing or loading a patch starts the traces and
+  curves again from empty.
 
 ## Friendly mode
 

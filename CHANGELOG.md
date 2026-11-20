@@ -115,6 +115,14 @@
 - New module: **Shoal**, 28 HP: the Ornament & Crime v1.3.6 firmware and
   all 13 apps in hardware mode; its settings save with the patch.
   - Drawn as ripples from two sources.
+  - In friendly mode the upper screen marks each output's lane with
+    dividers and letters, and draws six apps' views itself with smooth
+    lines: four stacked traces (Quadraturia, Piqued, Dialectic Ping Pong),
+    X/Y curves (Low-rents), the grid path and note circle (Automatonnetz)
+    and the note circle with its moves and chord (Harrington 1200).
+    Hardware mode keeps the o_C screen. The voltage strip has a cell per
+    output.
+  - The manual has patches to try for each app.
 - One look for every module, "Instrument": brass and ivory on near-black,
   main controls on enamel dial faces, knurled knobs, a traced line from
   each CV jack through its attenuverter to the control it moves, outputs
