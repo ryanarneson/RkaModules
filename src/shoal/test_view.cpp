@@ -65,8 +65,16 @@ void kinds_and_lanes() {
 		CHECK(v.app == app, "%s: view.app %d", n, v.app);
 		CHECK(v.kind == want[app].kind, "%s: kind %d, want %d", n, (int) v.kind, (int) want[app].kind);
 		CHECK(v.lanes == want[app].lanes, "%s: lanes %d, want %d", n, (int) v.lanes, (int) want[app].lanes);
+		// A trace lane's range is the app's own: the envelopes rest at 0 V
+		// (Piqued inverted rests at +5 V and falls to 0), Ping Pong reaches
+		// the top of the output range, and Quadraturia swings both sides.
+		const float wantLo = app == 5 ? -3.75f : 0.f, wantHi = app == 7 ? 5.f : app == 5 || app == 9 ? 6.25f : 0.f;
+		CHECK(v.laneLo == (v.kind == ViewKind::Traces ? wantLo : 0.f) && v.laneHi == wantHi, "%s: lane range %g to %g V", n, v.laneLo,
+		      v.laneHi);
 		if (v.kind != ViewKind::GridCircle && v.kind != ViewKind::CircleText) {
 			ScopeView zero = ScopeView();
+			zero.laneLo = v.laneLo;
+			zero.laneHi = v.laneHi;
 			zero.app = v.app;
 			zero.kind = v.kind;
 			zero.lanes = v.lanes;

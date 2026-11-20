@@ -15,6 +15,7 @@
 
 namespace shoal {
 constexpr int kNumApps = 13, kNumChannels = 4;
+static_assert(kScopeChannels == kNumChannels, "a history lane per output");
 constexpr int kFrameW = 128, kFrameH = 64, kFrameBytes = 1024;
 constexpr int kStateBytes = 2048;
 constexpr double kTickHz = 1e6 / 60.0;

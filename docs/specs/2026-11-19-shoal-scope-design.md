@@ -102,14 +102,17 @@ show in both modes.
 ### Traces
 
 - Four lanes of equal height, a thin divider between them, the lane's
-  letter at its top left, a faint centre line at 0 V.
+  letter at its top left, a faint line at 0 V.
 - Time runs left to right, newest at the right edge, scrolling. The window
   is **4 s** (about the firmware's own span at 60 frames a second).
-- Vertical scale: each lane spans **-5 V to +5 V** by default; a trace
-  beyond that is clipped at the lane's edge (Shoal's outputs can reach
-  about -3.7 V to +6.3 V on the hardware scale). Builder's choice whether
-  to instead fit -4 V to +6.5 V; one fixed scale for all lanes either way,
-  no auto-ranging.
+- Vertical scale: fixed per app, so each lane is filled by what the app
+  puts out (the user's correction: in a ±5 V lane an envelope would use
+  only the top half). Piqued: 0 V at the lane's bottom to +5 V at its top
+  (an inverted envelope rests at +5 V and falls to 0). Dialectic Ping
+  Pong: 0 V to +6.25 V. Quadraturia: −3.75 V to +6.25 V, the whole output
+  range. A trace beyond the range is clipped at the lane's edge. The faint
+  line marks 0 V (the lane's bottom edge for the envelopes). No
+  auto-ranging.
 - `Host` records the history on the engine thread: per output, a ring of
   **256 columns**, each the minimum and maximum output over its 260 ticks
   (15.6 ms), so a 1 ms trigger still shows as a spike. The widget draws

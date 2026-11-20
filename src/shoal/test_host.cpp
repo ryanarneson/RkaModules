@@ -4,9 +4,12 @@
 #include <atomic>
 #include <cmath>
 #include <cstdlib>
+#include <algorithm>
 #include <cstring>
+#include <memory>
 #include <new>
 #include <thread>
+#include <vector>
 
 #include "testing.hpp"
 #include "Host.hpp"
@@ -805,6 +808,222 @@ void testEditsFromUiThread() {
 
 } // namespace
 
+// --- The output history published for the upper screen (ScopeView.hpp). ---
+
+struct Scoped {
+	shoal::ScopeView view;
+	shoal::ScopeHistory hist;
+};
+
+// Heap-held: a history is 16 kB.
+std::unique_ptr<Scoped> scoped(Host& h) {
+	std::unique_ptr<Scoped> s(new Scoped);
+	h.scope(s->view, s->hist);
+	return s;
+}
+
+// The published columns and points against the test's own record of every
+// tick's outputs. The host is run at one tick a sample, so the record is
+// complete; where the host's windows start is found, not assumed: exactly
+// one alignment must fit.
+void testHistoryMatchesOutputs() {
+	Host h(1);
+	h.setSampleRate(shoal::kTickHz);
+	// Viznutcracker sweet: outputs that jump both ways within a column.
+	CHECK(h.post(selectApp(10)), "select Viznutcracker sweet");
+	// 6 s: longer than either ring, so both have wrapped.
+	const long n = (long) (6.0 * shoal::kTickHz);
+	std::vector<float> rec[shoal::kNumChannels];
+	for (long i = 0; i < n; i++) {
+		h.process();
+		for (int ch = 0; ch < shoal::kNumChannels; ch++)
+			rec[ch].push_back(h.out(ch));
+	}
+	const auto s = scoped(h);
+	CHECK(s->view.app == 10, "view.app %d", s->view.app);
+	CHECK(s->hist.columns == shoal::kTraceColumns, "columns %d", s->hist.columns);
+	CHECK(s->hist.points == shoal::kXyPoints, "points %d", s->hist.points);
+	// Columns: the newest ends at tick `end`; column k from the end covers
+	// the 260 ticks ending at end - 260 k.
+	const int cols = 250;
+	int fits = 0;
+	// The outputs must turn round inside most columns, or a column's last
+	// value would pass for its highest.
+	int turning = 0;
+	for (int col = 6; col < 250; col++) {
+		const long e = n - 1 - 260L * col;
+		float hi = rec[0][e];
+		for (long t = e - 259; t <= e; t++)
+			hi = std::max(hi, rec[0][t]);
+		turning += hi > rec[0][e] + 0.1f ? 1 : 0;
+	}
+	CHECK(turning > 100, "output A turned round inside only %d columns: the test proves little", turning);
+	bool moved = false;
+	for (long end = n - 1; end > n - 1 - 600; end--) {
+		bool ok = true;
+		for (int k = 0; k < cols && ok; k++) {
+			const int col = s->hist.columns - 1 - k;
+			for (int ch = 0; ch < shoal::kNumChannels && ok; ch++) {
+				float lo = rec[ch][end - 260L * k], hi = lo;
+				for (long t = end - 260L * k - 259; t <= end - 260L * k; t++) {
+					lo = std::min(lo, rec[ch][t]);
+					hi = std::max(hi, rec[ch][t]);
+				}
+				ok = s->hist.lo[ch][col] == lo && s->hist.hi[ch][col] == hi;
+				moved = moved || hi - lo > 0.01f;
+			}
+		}
+		fits += ok ? 1 : 0;
+	}
+	CHECK(moved, "the outputs did not move: the test proves nothing");
+	CHECK(fits == 1, "the last %d columns fit the recorded outputs at %d alignments, want 1", cols, fits);
+	const int pts = 500;
+	int fitsXy = 0;
+	for (long end = n - 1; end > n - 1 - 400; end--) {
+		bool ok = true;
+		for (int k = 0; k < pts && ok; k++)
+			for (int ch = 0; ch < shoal::kNumChannels && ok; ch++)
+				ok = s->hist.xy[ch][s->hist.points - 1 - k] == rec[ch][end - 32L * k];
+		fitsXy += ok ? 1 : 0;
+	}
+	CHECK(fitsXy == 1, "the last %d X/Y points fit the recorded outputs at %d alignments, want 1", pts, fitsXy);
+}
+
+// Empty on a new host, filling to 256 columns and 512 points, then scrolling.
+void testHistoryFillsThenScrolls() {
+	Host h(1);
+	h.setSampleRate(shoal::kTickHz);
+	CHECK(scoped(h)->hist.columns == 0 && scoped(h)->hist.points == 0, "a new host's history is not empty");
+	int lastCols = 0, lastPts = 0;
+	bool grows = true;
+	for (int step = 0; step < 60; step++) {
+		run(h, 0.1, shoal::kTickHz);
+		const auto s = scoped(h);
+		grows = grows && s->hist.columns >= lastCols && s->hist.points >= lastPts;
+		lastCols = s->hist.columns;
+		lastPts = s->hist.points;
+		if (step == 4)
+			CHECK(lastCols >= 28 && lastCols <= 33 && lastPts >= 240 && lastPts <= 262, "after 0.5 s: %d columns, %d points",
+			      lastCols, lastPts);
+	}
+	CHECK(grows, "the history shrank while running");
+	CHECK(lastCols == shoal::kTraceColumns && lastPts == shoal::kXyPoints, "after 6 s: %d columns, %d points", lastCols, lastPts);
+}
+
+// One Piqued envelope, at engine rates where ticks and samples do not line
+// up: it shows in lane A as one run of columns, about as long as the
+// envelope, and nowhere else.
+void testSpikeShows() {
+	for (double rate : {8000.0, 48000.0, 768000.0}) {
+		Host h(1);
+		h.setSampleRate(rate);
+		CHECK(h.post(selectApp(7)), "select Piqued");
+		// Piqued plays every envelope once when it is selected: let that
+		// leave the 4 s history first.
+		run(h, 5.0, rate);
+		h.setGate(0, 10.f);
+		double above = 0.0;   // seconds output A spent over 1 V
+		const long n = std::lround(1.0 * rate);
+		for (long i = 0; i < n; i++) {
+			if (i == std::lround(0.002 * rate))
+				h.setGate(0, 0.f);
+			h.process();
+			above += h.out(0) > 1.f ? 1.0 / rate : 0.0;
+		}
+		const auto s = scoped(h);
+		CHECK(above > 0.001, "at %g Hz the envelope never passed 1 V", rate);
+		int first = -1, last = -1, count = 0;
+		bool others = false;
+		for (int col = 0; col < s->hist.columns; col++) {
+			if (s->hist.hi[0][col] > 1.f) {
+				first = first < 0 ? col : first;
+				last = col;
+				count++;
+			}
+			for (int ch = 1; ch < shoal::kNumChannels; ch++)
+				others = others || s->hist.hi[ch][col] > 1.f;
+		}
+		const double column = 260.0 / shoal::kTickHz;
+		CHECK(count >= 1 && count == last - first + 1, "at %g Hz: %d columns over 1 V, from %d to %d", rate, count, first, last);
+		CHECK(count >= (int) (above / column) && count <= (int) (above / column) + 2, "at %g Hz: %d columns for %g s over 1 V", rate,
+		      count, above);
+		CHECK(!others, "at %g Hz the envelope shows in another lane", rate);
+	}
+}
+
+// Nothing from before an app change, a restore or a reset is published
+// after it.
+void testHistoryClearedOnChange() {
+	Host h(1);
+	h.setSampleRate(shoal::kTickHz);
+	CHECK(h.post(selectApp(5)), "select Quadraturia");
+	run(h, 2.0, shoal::kTickHz);
+	CHECK(scoped(h)->hist.columns > 100, "no history to clear");
+	CHECK(h.post(selectApp(7)), "select Piqued");
+	bool seen = false;
+	for (int i = 0; i < 2000 && !seen; i++) {
+		h.process();
+		const auto s = scoped(h);
+		if (s->view.app == 7) {
+			seen = true;
+			CHECK(s->hist.columns <= 1 && s->hist.points <= 9, "the first Piqued view has %d columns, %d points", s->hist.columns,
+			      s->hist.points);
+		}
+		else {
+			CHECK(s->view.app == 5, "view.app %d between the apps", s->view.app);
+		}
+	}
+	CHECK(seen, "Piqued's view was never published");
+	for (int mode = 0; mode < 2; mode++) {
+		run(h, 2.0, shoal::kTickHz);
+		CHECK(scoped(h)->hist.columns > 100, "no history to clear");
+		if (mode == 0) {
+			Image img;
+			InputRange r;
+			h.snapshot(img.bytes, &r);
+			h.requestRestore(img.bytes, r);
+		}
+		else {
+			h.requestReset();
+		}
+		run(h, 0.05, shoal::kTickHz);   // 833 ticks: three frames
+		const auto s = scoped(h);
+		CHECK(s->hist.columns <= 4 && s->hist.points <= 27, "%s: %d columns, %d points left", mode ? "reset" : "restore", s->hist.columns,
+		      s->hist.points);
+	}
+}
+
+// Another thread reading as fast as it can gets whole histories.
+void testHistoryNotTorn() {
+	Host h(1);
+	h.setSampleRate(kRate);
+	CHECK(h.post(selectApp(5)), "select Quadraturia");
+	run(h, 0.1);
+	std::atomic<bool> stop{false};
+	std::atomic<long> reads{0}, bad{0};
+	std::thread ui([&]() {
+		std::unique_ptr<Scoped> s(new Scoped);
+		while (!stop.load()) {
+			h.scope(s->view, s->hist);
+			bool ok = s->view.app == 5 && s->hist.columns >= 0 && s->hist.columns <= shoal::kTraceColumns && s->hist.points >= 0 &&
+			          s->hist.points <= shoal::kXyPoints;
+			for (int ch = 0; ch < shoal::kNumChannels && ok; ch++) {
+				for (int c = 0; c < s->hist.columns && ok; c++)
+					ok = s->hist.lo[ch][c] <= s->hist.hi[ch][c] && s->hist.lo[ch][c] > -3.76f && s->hist.hi[ch][c] < 6.26f;
+				for (int p = 0; p < s->hist.points && ok; p++)
+					ok = s->hist.xy[ch][p] > -3.76f && s->hist.xy[ch][p] < 6.26f;
+			}
+			bad += ok ? 0 : 1;
+			reads++;
+		}
+	});
+	run(h, 2.0);
+	stop.store(true);
+	ui.join();
+	CHECK(reads.load() > 100, "the reader ran only %ld times", reads.load());
+	CHECK(bad.load() == 0, "%ld of %ld histories were torn or out of range", bad.load(), reads.load());
+}
+
 int main() {
 	testTickRate();
 	testCopierThroughHost();
@@ -823,5 +1042,10 @@ int main() {
 	testEditAfterRestore();
 	testModelFollowsEncoders();
 	testEditsFromUiThread();
+	testHistoryMatchesOutputs();
+	testHistoryFillsThenScrolls();
+	testSpikeShows();
+	testHistoryClearedOnChange();
+	testHistoryNotTorn();
 	return rkatest::finish("test_host");
 }

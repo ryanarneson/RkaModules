@@ -31,6 +31,10 @@ struct ScopeView {
 	uint8_t app;                    // index into Core::appName
 	ViewKind kind;
 	Lanes lanes;
+	// Traces: the voltages at the bottom and the top of every lane. Fixed
+	// for the app, so a lane is filled by what the app puts out: 0 to +5 V
+	// for Piqued's envelopes, not half of a +-5 V lane.
+	float laneLo, laneHi;
 	// GridCircle, CircleText: the chord's pitch classes, 0 (C) to 11.
 	uint8_t notes[3];
 	// GridCircle: the last cells visited, newest first; column and row, 0 to 4.
@@ -39,6 +43,21 @@ struct ScopeView {
 	// first ("+P", "-L"), and the chord's notes with octaves ("C4", "D#3").
 	char transforms[4][kViewText];
 	char chord[3][kViewText];
+};
+
+// The four outputs' recent past, recorded by shoal::Host on the engine
+// thread and published with the frames. Oldest first; `columns` and
+// `points` entries are valid (fewer than the arrays hold until they fill).
+constexpr int kScopeChannels = 4;
+constexpr int kTraceColumns = 256, kTraceColumnTicks = 260;   // 4 s of traces
+constexpr int kXyPoints = 512, kXyPointTicks = 32;            // 1 s of X/Y
+struct ScopeHistory {
+	// Traces: each column is the lowest and highest output over its ticks,
+	// so an event shorter than a column still shows.
+	float lo[kScopeChannels][kTraceColumns], hi[kScopeChannels][kTraceColumns];
+	// X/Y: plain samples.
+	float xy[kScopeChannels][kXyPoints];
+	int16_t columns, points;
 };
 
 }

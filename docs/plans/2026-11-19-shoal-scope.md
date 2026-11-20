@@ -35,7 +35,7 @@
   | 10 | Pixels | Rows4 | A, B, C, D |
   | 11 | Pixels | None | |
 
-- **Traces:** 256 columns of 260 ticks each (min and max of the output over the column), newest at the right; each lane spans −5 V (bottom) to +5 V (top), clipped to the lane; a centre line at 0 V.
+- **Traces:** 256 columns of 260 ticks each (min and max of the output over the column), newest at the right; each lane spans `ScopeView::laneLo` (bottom) to `laneHi` (top): Piqued 0 to +5 V, Dialectic Ping Pong 0 to +6.25 V, Quadraturia −3.75 to +6.25 V (the user's correction to the first ±5 V); clipped to the lane; a line at 0 V.
 - **X/Y:** 512 points per pair, one every 32 ticks (plain samples); higher voltage right and up; each axis spans the output range −3.75 V to +6.25 V; newest brightest, fading to 15 % at the oldest.
 - **Note circle:** twelve positions, C at the top, clockwise by semitone.
 - **Hardware mode:** the firmware's scope frame exactly as today; no dividers, letters or smooth views.

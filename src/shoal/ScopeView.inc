@@ -36,6 +36,12 @@ void kindOf(int app, ScopeView& v) {
 		case 9:
 			v.kind = ViewKind::Traces;
 			v.lanes = Lanes::Rows4;
+			// Quadraturia swings both sides of 0 V, over the whole output
+			// range. Piqued's envelopes run 0 to +5 V (inverted: +5 V down
+			// to 0, APP_ENVGEN.ino). Ping Pong's rise from 0 V to the top
+			// of the output range (APP_BBGEN.ino).
+			v.laneLo = app == 5 ? -3.75f : 0.f;
+			v.laneHi = app == 7 ? 5.f : 6.25f;
 			break;
 		case 6:   // Low-rents: OC::vectorscope_render
 			v.kind = ViewKind::XY;
