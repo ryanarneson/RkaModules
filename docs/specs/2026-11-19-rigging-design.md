@@ -109,8 +109,8 @@ stmlib's DSP since 2023):
   string's loop.
 - **Rings can strum itself**: with nothing in its trigger input it
   strikes when the note at V/OCT changes, or when it hears an onset in
-  the audio. Rigging does not (a strike needs STRUM); it would be a small
-  addition if wanted.
+  the audio. Rigging takes the first of these (the user, 2026-11-19; see
+  "Strum and Spread"); it does not listen for onsets.
 - **A pluck is noise for one period of the string**, low-passed, not a
   fixed few milliseconds: the burst's length follows the pitch.
 - It also has stiffness (an all-pass in the loop that stretches the
@@ -240,6 +240,13 @@ Smoothed against zipper noise.
   others evenly between, always low to high: **0** fully left (all six at
   once, a stab) to **1.5 s** fully right (a slow rake), on a curve with
   fine control near zero; default about 60 ms.
+- **With nothing patched to STRUM, a new note at V/OCT strikes the
+  strings** (the user asked for this after seeing it in Rings): one cable
+  from a sequencer plays Rigging. A new note is a jump of more than 0.4
+  semitone (33 mV) within a millisecond; a slow glide or a gentle LFO on
+  V/OCT does not strike. After a strike from a note, none follows for
+  10 ms, so a noisy or stepping edge is one strike. The Tune knob and
+  Chord never strike. With a cable in STRUM, only STRUM strikes.
 - A new trigger during a rake starts a new rake; strikes still to come
   from the old one are dropped.
 - A strike is as loud as a healthy drone (my call on the numbers): one
@@ -334,6 +341,9 @@ TESTING.md applies in full. Particular to Rigging:
   60 s as at Ring 1 s; Spread 0 strikes all six in the
   same sample; Spread at its top strikes them 0.3 s apart in order; a new
   trigger cancels the rest of a rake; no two strikes' bursts are equal.
+  With STRUM unpatched: a step of a semitone on V/OCT strikes once, a
+  1 V/s ramp and a 0.2 semitone step do not, and with STRUM patched no
+  V/OCT change strikes.
 - **No clicks.** A step on V/OCT, a Chord change and a fast Ring or Damp
   CV on a ringing string: no sample-to-sample jump beyond what the
   signal's own slope explains.
