@@ -275,7 +275,8 @@ private:
 				t = timeSeconds(knob) * fastExp2(cv);
 				t = t < TIME_MIN_S ? TIME_MIN_S : t > tMax_ ? tMax_ : t;
 			}
-			const float ratio = finite(f.params[WakeFrame::RATIO]);
+			float ratio = finite(f.params[WakeFrame::RATIO]);
+			ratio = ratio < 0.f ? 0.f : ratio > 6.f ? 6.f : ratio;   // before the cast: a huge value is not an int
 			ratioTimes((int) (ratio + 0.5f), t, seconds_[0], seconds_[1]);
 			ppTarget_ = f.pingPong ? 1.f : 0.f;
 		}
