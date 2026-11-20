@@ -3,6 +3,7 @@
 #include "Host.hpp"
 #include "PatchState.hpp"
 #include "ShoalLayout.hpp"
+#include "ScopeScreen.hpp"
 #include "widgets.hpp"
 
 // Shoal: the Ornament & Crime firmware on a fake O&C. shoal::Host runs it;
@@ -214,6 +215,9 @@ struct ShoalWidget : ModuleWidget {
 	// The lower screen: the firmware's menu (hardware mode) and the friendly
 	// list over it; step() shows one of them.
 	rka::PixelScreen* menuScreen = nullptr;
+	// The upper screen: the firmware's scope frame, and in friendly mode its
+	// lanes and the views Shoal draws itself.
+	shoal::ScopeScreen* scopeScreen = nullptr;
 	shoal::FriendlyList* friendlyList = nullptr;
 
 	shoal::Host* host() {
@@ -237,8 +241,26 @@ struct ShoalWidget : ModuleWidget {
 		for (const Vec& screw : SCREWS)
 			addChild(createWidgetCentered<rka::Screw>(mm2px(screw)));
 
-		addScreen(SCREEN_SCOPE, false);
-		menuScreen = addScreen(SCREEN_EDITOR, true);
+		scopeScreen = createWidget<shoal::ScopeScreen>(mm2px(SCREEN_SCOPE.pos));
+		scopeScreen->box.size = mm2px(SCREEN_SCOPE.size);
+		scopeScreen->colour = RkaTheme::SIGNAL;
+		scopeScreen->source = [=](uint8_t* frame) {
+			shoal::Host* h = host();
+			if (!h)
+				return false;
+			uint8_t other[shoal::kFrameBytes];
+			h->frames(other, frame);
+			return true;
+		};
+		scopeScreen->screenSource = [=](uint8_t* frame, shoal::ScopeView& view, shoal::ScopeHistory& history) {
+			shoal::Host* h = host();
+			if (!h)
+				return false;
+			h->screen(frame, view, history);
+			return true;
+		};
+		addChild(scopeScreen);
+		menuScreen = addMenuScreen(SCREEN_EDITOR);
 		friendlyList = createWidget<shoal::FriendlyList>(mm2px(SCREEN_EDITOR.pos));
 		friendlyList->box.size = mm2px(SCREEN_EDITOR.size);
 		friendlyList->host = host();
@@ -288,14 +310,15 @@ struct ShoalWidget : ModuleWidget {
 		const bool friendly = !m || m->params[Shoal::UI_MODE_PARAM].getValue() > 0.5f;
 		friendlyList->setVisible(friendly);
 		menuScreen->setVisible(!friendly);
+		scopeScreen->friendly = friendly;
 		// A hidden widget is not stepped: edits the host refused before the
 		// switch to hardware mode are offered here every frame as well.
 		friendlyList->flush();
 		ModuleWidget::step();
 	}
 
-	// The scope frame, or the menu (editor) frame, of whichever host is live.
-	rka::PixelScreen* addScreen(const math::Rect& mm, bool menu) {
+	// The menu (editor) frame of whichever host is live.
+	rka::PixelScreen* addMenuScreen(const math::Rect& mm) {
 		rka::PixelScreen* s = createWidget<rka::PixelScreen>(mm2px(mm.pos));
 		s->box.size = mm2px(mm.size);
 		s->colour = RkaTheme::SIGNAL;
@@ -304,10 +327,7 @@ struct ShoalWidget : ModuleWidget {
 			if (!h)
 				return false;
 			uint8_t other[shoal::kFrameBytes];
-			if (menu)
-				h->frames(frame, other);
-			else
-				h->frames(other, frame);
+			h->frames(frame, other);
 			return true;
 		};
 		addChild(s);

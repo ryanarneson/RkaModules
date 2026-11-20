@@ -47,15 +47,51 @@ each cross the whole panel.
 
 ## Screens
 
-- The **upper screen** is the o_C screen the hardware shows when idle:
-  the current app's scope or status view. It is the same in both modes.
+- The **upper screen** shows the current app at work: the view the
+  hardware shows when idle. In hardware mode it is the o_C screen itself,
+  pixel for pixel. In friendly mode Shoal marks which part belongs to
+  which output, and draws some apps' views itself, with smooth lines (see
+  "The upper screen in friendly mode" below).
 - The **lower screen** is the settings list (friendly mode) or the o_C
   menu screen (hardware mode).
-- The strip above them shows the four output voltages, each under its
-  channel's letter.
+- The strip above them shows the four output voltages, each in its own
+  cell under its channel's letter.
 - The scales outside the two screens count firmware pixels: a tick every
   8, a longer one every 32, numbered under the lower screen. They are
   128 by 64, as on the hardware.
+
+### The upper screen in friendly mode
+
+Each app arranges its view in its own way, so thin lines divide the screen
+into one lane per output (or pair of outputs), with the output's letter in
+each lane's corner.
+
+| App | What the upper screen shows | Lanes |
+| --- | --- | --- |
+| Quadraturia, Piqued, Dialectic Ping Pong | The four outputs as smooth traces, the last 4 seconds, newest at the right | Four rows, A at the top |
+| Low-rents | Two smooth curves: output A (across) against B (up), and C against D; the last 4 seconds, fading with age | Two halves: A × B, C × D |
+| Automatonnetz | The playhead's last four cells on the 5 by 5 grid (the disc is where it is now), and the chord on the circle of twelve notes | None |
+| Harrington 1200 | The chord on the circle of twelve notes; the last four moves, newest at the top (+ where the move arrived at a major chord, − at a minor one; * is a reset); the chord's three notes | None |
+| CopierMaschine, Quantermain, References | The o_C screen | Four columns, A to D |
+| Meta-Q, Sequins | The o_C screen: each channel's pitch (outputs A and B) | Two halves: A, B |
+| Viznutcracker sweet | The o_C screen: each formula's recent bytes as a pattern, newest in the middle | Four rows, A at the top |
+| Acid Curds | The o_C screen | None |
+
+- **Reading a trace.** Each lane has its own scale, fixed for the app, with
+  a faint line at 0 V: Piqued's lanes run from 0 V at the bottom to +5 V
+  at the top, Dialectic Ping Pong's from 0 V to +6.25 V, and
+  Quadraturia's from −3.75 V to +6.25 V (its LFOs swing both sides of
+  0 V). Anything shorter than a trace's finest step (about 16 ms) is still
+  drawn, as a spike.
+- **The circle of notes** has C at the top and goes up a semitone at each
+  step clockwise; the chord's three notes are the discs, named beside
+  them.
+- **Against the hardware.** The smooth views show the same things as the
+  o_C screen, laid out differently: the o_C screen puts the four traces in
+  four quarters, draws Piqued's envelope shapes behind them, and plots
+  Low-rents from right to left. UI MODE's hardware mode shows it as it is.
+- Changing app, initializing or loading a patch starts the traces and
+  curves again from empty.
 
 ## Friendly mode
 
@@ -270,6 +306,15 @@ the four outputs play the same line, each a step later than the last.
   "> BB P2" change the result; "> BB P0" and "> BB P1" do nothing (a slip
   in the firmware: P2's value is used in P0's place).
 - **Hardware mode:** user scale notes (see "What stays in hardware mode").
+- **Patches to try:**
+  - *A canon from one line.* Squall's Step into CV 1, a clock into TRIG 1,
+    A to D into four voices: each plays the same melody one step behind
+    the last. Pan them apart so the line travels.
+  - *A frozen loop.* The same patch, with a gate into TRIG 2: while it is
+    high the outputs cycle the last "hold (buflen)" notes. Drop the gate to
+    let new notes in.
+  - *No melody needed.* "CV source" TM: the app makes its own slowly
+    changing line from a clock alone.
 
 ### Harrington 1200
 
@@ -295,6 +340,17 @@ smooth chord changes driven by gates.
   "Output mode" Tune puts the root on all four, for tuning.
 - **Start with** "Transpose", "Root mode", "Inversion", "Trigger type".
   No hardware-only editor; "Reset all settings" restores the defaults.
+- **Patches to try:**
+  - *Chord changes from three gates.* Three clock divisions into TRIG 2, 3
+    and 4; B, C, D into three voices and A, the root, into Fathom's V/OCT
+    as a pedal bass. The chords drift through related keys over a bass
+    that holds.
+  - *A progression from one clock.* "Trigger type" Eucl, a clock into
+    TRIG 2, 3 or 4 (not TRIG 1, which resets the chord every time), and
+    the "EuFill" rows raised from 0 (at 0 a move never happens): the
+    patterns decide which move comes when.
+  - *Harmony by the weather.* Squall's Gate into TRIG 2, Weather near
+    Fair: the chord turns major or minor at random moments.
 
 ### Automatonnetz
 
@@ -317,6 +373,15 @@ chord sequences that wander, or an arpeggiator over them.
   "Reset" sends the playhead to the start and "Clock" moves it one step;
   "Clear grid" refills the grid as "Clr" says (zero: empty, no moves).
 - **Hardware mode:** the cells themselves ("Cells" row).
+- **Patches to try:**
+  - *Wandering chords.* A slow clock into TRIG 1; B, C, D into three
+    voices and on into Fog. A new module's grid is random, so this plays
+    at once; "Step X" and "Step Y" change the route.
+  - *An arpeggio over the walk.* "OutA" arp, a fast clock into TRIG 2 and
+    the slow one into TRIG 1: A plays the chord's notes one at a time, for
+    a fourth voice.
+  - *Moving the key.* A slow stepped CV into CV 1 (Squall's Step at ±1 V)
+    sets the root at each clock.
 
 ### Quantermain
 
@@ -338,6 +403,15 @@ and so make its own melodies.
 - **Start with** "Scale", "Root", "Active notes", "Octave"; "Copy scale
   to other channels" and "Reset mask" act on the tab shown.
 - **Hardware mode:** user scale notes.
+- **Patches to try:**
+  - *Four melodies in one key.* Each channel's "CV Source" Turing and
+    "Trigger source" its own TRIG input, with four clock divisions into
+    TRIG 1 to 4. Set "Scale" once, then "Copy scale to other channels".
+  - *Tuned LFOs.* Sway into CV 1 to 4 with "Trigger source" cnt+: each
+    channel quantizes all the time, so the LFOs become rising and falling
+    scales.
+  - *Notes from the weather.* Squall's Step into CV 1 and its Gate into
+    TRIG 1, "Trigger source" TR1: one note of the scale per event.
 
 ### Meta-Q
 
@@ -359,6 +433,15 @@ melodies that change key or mode as the patch goes on.
 - **Start with** "scale #", "scale", "root #1", "Active notes",
   "seq_mode". The slot rows shown are those of the slot "scale #" picks.
 - **Hardware mode:** user scale notes.
+- **Patches to try:**
+  - *A melody that changes mode.* A melodic CV into CV 1 with its clock
+    into TRIG 1; "seq_mode" TR+3 and a much slower clock into TRIG 2. Fill
+    the four slots with related scales.
+  - *Key changes by CV.* "CV aux." root and a slow stepped CV into CV 2
+    move the whole line.
+  - *A voice with no extra modules.* A is the pitch and C its gate
+    (the default "aux.output"): enough for an oscillator and its envelope
+    or a Sluice channel.
 
 ### Quadraturia
 
@@ -379,6 +462,16 @@ modulations: sweeps across a filter bank, panning, rhythmic accents.
   spread up to a quarter cycle apart, and below 0 their rates spread
   instead. "B freq ratio" to "D freq ratio" set ratios to A. No
   hardware-only editor; "Phase reset" is TRIG 1 by hand.
+- **Patches to try:**
+  - *Four drones in turn.* A to D into Ballast's four level CVs, with
+    "Phase/frq sprd" turned up: the channels fade one after another. The
+    LFOs are not centred on 0 V, so set "Offset" and "Output range" until
+    each channel closes fully.
+  - *A room that never sits still.* "Phase/frq sprd" below 0, so the four
+    rates differ, into Fog's Size, Damp, Bloom and Drift CVs with the
+    attenuverters low.
+  - *In time.* "Tap tempo" on and the clock into TRIG 3; a gate into TRIG
+    4 doubles the rate for a fill.
 
 ### Low-rents
 
@@ -397,6 +490,14 @@ modulation.
 - **Start with** "Freq 1", "Freq 2", "Rho/c 1", "Rho/c 2" and "LFreq 1
   Rng" (the Lorenz speed range; the Rössler ignores it). No
   hardware-only editor.
+- **Patches to try:**
+  - *Filter and pan that belong together.* A into a filter's cutoff CV and
+    B into a Pan CV: both come from one attractor, so they move in a
+    related way that never repeats.
+  - *From calm to wild.* A slow Sway LFO into CV 2 moves "Rho/c 1": the
+    path goes from steady orbits to wide swings and back.
+  - *Hold that.* A gate into TRIG 4 freezes all four outputs where they
+    are, until it drops.
 
 ### Piqued
 
@@ -418,6 +519,16 @@ subset of a clock.
   "Release" for the four-segment types) and "Attack mult", "Decay mult"
   for longer times. "Eucl length" (Off) with "Fill" and "Offset" thins
   the triggers. Nothing is hardware-only.
+- **Patches to try:**
+  - *Four envelopes, four voices.* Triggers into TRIG 1 to 4 and A to D
+    into Sluice's four CV inputs, each channel with its own "Attack" and
+    "Decay".
+  - *Rhythms from one clock.* One clock into all four TRIG inputs and a
+    different "Eucl length" and "Fill" on each channel: each envelope
+    fires on its own pattern.
+  - *One long sweep.* Set channel B's "Trigger input" to channel A's end
+    of cycle, C's to B's and D's to C's: one trigger starts four stages in
+    a row.
 
 ### Sequins
 
@@ -442,6 +553,17 @@ modes add an arpeggiator and steps chosen by CV.
   so the outputs repeat one note until the steps are edited.
 - **Hardware mode:** step pitches and sequence lengths, and user scale
   notes.
+- **Patches to try:**
+  - *A bass line with its own gate.* A clock into TRIG 1, A into Fathom's
+    V/OCT, and C (the gate, or "aux. mode" AD for an envelope) into a
+    Sluice CV. Edit the step pitches in hardware mode first: a new module
+    plays one note.
+  - *Two lines that slip.* Give channel B a different "Steps" count (7
+    against 8): the two lines move against each other and meet again
+    every 56 steps.
+  - *Steps chosen by CV.* "playmode" CV#1 and Squall's Swell (0 to 10 V)
+    into CV 1: the sequence is scanned by the voltage, not played in
+    order.
 
 ### Dialectic Ping Pong
 
@@ -457,6 +579,14 @@ and patterns that speed up as they die away.
   is thrown) and "Amplitude" (the height it starts from, 0 by default).
   "Hard reset" Yes restarts it from that height at each trigger. No
   hardware-only editor.
+- **Patches to try:**
+  - *A dropped ball.* A trigger into TRIG 1 and A into a Sluice CV, with
+    a short sound through that channel (Hadal's Crackle, or a blip): the
+    hits come faster as they die away.
+  - *Four balls, four weights.* One trigger into all four TRIG inputs,
+    with a different "Gravity" and "Bounce loss" on each channel.
+  - *A wobble that settles.* An output into a filter's cutoff CV or Fog's
+    Bloom CV.
 
 ### Viznutcracker sweet
 
@@ -473,6 +603,15 @@ triggers, they are stepped CV.
   part below −3.75 V is clipped by the output range.
 - **Start with** "Equation", "Speed", "Pitch" and "Parameter 0" to
   "Parameter 2". It runs without any trigger. No hardware-only editor.
+- **Patches to try:**
+  - *Gritty audio.* Raise "Speed" and listen to A through Ballast, with
+    Fog after it to soften; "Parameter 0" to "Parameter 2" change the
+    texture.
+  - *Patterns as CV.* "Step mode" Yes and a clock into TRIG 1: A steps
+    through the formula. Into Quantermain it is a looping 8-bit melody;
+    into a filter, a stepped pattern.
+  - *A formula that changes.* "CV1 ->" equ (or a parameter) and Squall's
+    Step into CV 1.
 
 ### Acid Curds
 
@@ -498,6 +637,15 @@ four-note chord on it, stepping through progressions of chords you make.
   for real fifths.
 - **Hardware mode:** the chords and progressions ("Chords" row), and user
   scale notes.
+- **Patches to try:**
+  - *Harmonize a melody.* A melodic CV into CV 1, its clock into TRIG 1,
+    A to D into four voices. Pick a seven-note "scale" such as Ionian, so
+    the chords are thirds and fifths of the key.
+  - *Chords on a slower clock.* Add chords in hardware mode, set "chords
+    trg src" TR2 and put a gate that is high once a bar on TRIG 2: the
+    melody runs at the clock and the chord changes each bar.
+  - *A pad.* A slow clock and four voices into Fog with a long
+    Visibility.
 
 ### References
 
@@ -517,6 +665,15 @@ checking how well they track.
 - **Start with** "Octave" and "Semitone".
 - **Hardware mode:** "Autotune", which needs the same frequency reading
   and so has nothing to measure in Shoal.
+- **Patches to try:**
+  - *Tuning four oscillators.* The same "Octave" and "Semitone" on every
+    channel, A to D into the four V/OCT inputs: tune them to each other
+    by ear.
+  - *Checking octaves.* "Mod range oct" 1 and "Mod rate (s)" 1: the pitch
+    jumps an octave every second, and an oscillator that tracks badly
+    sounds out of tune with itself.
+  - *A fixed chord.* A different "Semitone" on each channel holds a
+    four-note chord for a drone, with no sequencer.
 
 ## Saving, initialize, randomize
 

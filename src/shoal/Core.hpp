@@ -11,9 +11,11 @@
 #include <cstdint>
 
 #include "Friendly.hpp"
+#include "ScopeView.hpp"
 
 namespace shoal {
 constexpr int kNumApps = 13, kNumChannels = 4;
+static_assert(kScopeChannels == kNumChannels, "a history lane per output");
 constexpr int kFrameW = 128, kFrameH = 64, kFrameBytes = 1024;
 constexpr int kStateBytes = 2048;
 constexpr double kTickHz = 1e6 / 60.0;
@@ -73,6 +75,9 @@ public:
 	// frame, so neither disturbs the other or the firmware's UI state.
 	void drawMenu(uint8_t* dst);       // dst is kFrameBytes
 	void drawScope(uint8_t* dst);      // dst is kFrameBytes
+	// What the scope view shows, as data (ScopeView.hpp): for the panel's own
+	// drawing of it. Reads only; never allocates or locks.
+	void scopeView(ScopeView& out) const;
 	// Frame layout (weegfx, the SH1106's page order): 8 pages of 8 rows,
 	// 128 bytes per page; pixel (x, y) is bit (y % 8) of byte
 	// (y / 8) * 128 + x, set = lit. (0, 0) is top left. False off-frame.

@@ -52,6 +52,8 @@ public:
 		std::memcpy(menu_, engineMenu_, kFrameBytes);
 		std::memcpy(scope_, engineScope_, kFrameBytes);
 		model_ = engineModel_;
+		view_ = engineView_;
+		history_ = engineHistory_;
 		app_.store(engineApp_);
 		appMenuOpen_.store(engineAppMenuOpen_);
 	}
@@ -143,6 +145,24 @@ public:
 		std::lock_guard<std::mutex> lock(frameMutex_);
 		out = model_;
 	}
+	// The scope view (ScopeView.hpp) and the outputs' history published with
+	// the latest frames. The history holds nothing from before the view's
+	// app was selected, or from before a restore or reset.
+	void scope(ScopeView& view, ScopeHistory& history) {
+		std::lock_guard<std::mutex> lock(frameMutex_);
+		view = view_;
+		history = history_;
+	}
+	// The upper screen in one call: the scope frame (kFrameBytes), the view
+	// and the history of one publish. Read separately (frames, then scope),
+	// a publish could fall between and give one app's view over the next
+	// app's frame.
+	void screen(uint8_t* scopeFrame, ScopeView& view, ScopeHistory& history) {
+		std::lock_guard<std::mutex> lock(frameMutex_);
+		std::memcpy(scopeFrame, scope_, kFrameBytes);
+		view = view_;
+		history = history_;
+	}
 	// The latest saved image (kStateBytes) and its input range. Also deletes
 	// a Core the engine has retired.
 	void snapshot(uint8_t* state, InputRange* range) {
@@ -195,6 +215,8 @@ private:
 	bool framesDue_ = false, stateDue_ = false;
 	uint8_t engineMenu_[kFrameBytes] = {}, engineScope_[kFrameBytes] = {};
 	FriendlyModel engineModel_ = {};
+	ScopeView engineView_ = {};
+	ScopeHistory engineHistory_ = {};
 	int engineApp_ = 0;
 	bool engineAppMenuOpen_ = false;
 	uint8_t engineState_[kStateBytes] = {};
@@ -204,6 +226,8 @@ private:
 	std::mutex frameMutex_;
 	uint8_t menu_[kFrameBytes] = {}, scope_[kFrameBytes] = {};
 	FriendlyModel model_ = {};
+	ScopeView view_ = {};
+	ScopeHistory history_ = {};
 	std::atomic<int> app_{0};
 	std::atomic<bool> appMenuOpen_{false};
 
@@ -267,9 +291,76 @@ private:
 		core_->drawMenu(engineMenu_);
 		core_->drawScope(engineScope_);
 		core_->friendlyModel(engineModel_);
+		core_->scopeView(engineView_);
 		engineApp_ = core_->app();
 		engineAppMenuOpen_ = core_->appMenuOpen();
+		// A history belongs to one app: what the last one left is dropped
+		// with the first view of the next (however the app was changed).
+		if (engineView_.app != ringApp_) {
+			ringApp_ = engineView_.app;
+			clearHistory();
+		}
+		unrollHistory();
 	}
+
+	// --- The outputs' history (engine thread). Rings; `head` is the next
+	// entry written, `count` how many are valid. ---
+
+	void clearHistory() {
+		columnHead_ = columnCount_ = columnTicks_ = 0;
+		pointHead_ = pointCount_ = pointTicks_ = 0;
+	}
+
+	// After each tick: widen the open column, and close it, or take an X/Y
+	// point, when its ticks are up.
+	void recordOutputs() {
+		for (int ch = 0; ch < kNumChannels; ch++) {
+			const float v = core_->out(ch);
+			if (columnTicks_ == 0 || v < openLo_[ch])
+				openLo_[ch] = v;
+			if (columnTicks_ == 0 || v > openHi_[ch])
+				openHi_[ch] = v;
+			if (pointTicks_ == kXyPointTicks - 1)
+				ringXy_[ch][pointHead_] = v;
+		}
+		if (++columnTicks_ >= kTraceColumnTicks) {
+			for (int ch = 0; ch < kNumChannels; ch++) {
+				ringLo_[ch][columnHead_] = openLo_[ch];
+				ringHi_[ch][columnHead_] = openHi_[ch];
+			}
+			columnHead_ = (columnHead_ + 1) % kTraceColumns;
+			columnCount_ = columnCount_ < kTraceColumns ? columnCount_ + 1 : kTraceColumns;
+			columnTicks_ = 0;
+		}
+		if (++pointTicks_ >= kXyPointTicks) {
+			pointHead_ = (pointHead_ + 1) % kXyPoints;
+			pointCount_ = pointCount_ < kXyPoints ? pointCount_ + 1 : kXyPoints;
+			pointTicks_ = 0;
+		}
+	}
+
+	// The rings, oldest first, into the copy that is published.
+	void unrollHistory() {
+		engineHistory_.columns = (int16_t) columnCount_;
+		engineHistory_.points = (int16_t) pointCount_;
+		const int c0 = (columnHead_ - columnCount_ + kTraceColumns) % kTraceColumns;
+		const int p0 = (pointHead_ - pointCount_ + kXyPoints) % kXyPoints;
+		for (int ch = 0; ch < kNumChannels; ch++) {
+			for (int i = 0; i < columnCount_; i++) {
+				engineHistory_.lo[ch][i] = ringLo_[ch][(c0 + i) % kTraceColumns];
+				engineHistory_.hi[ch][i] = ringHi_[ch][(c0 + i) % kTraceColumns];
+			}
+			for (int i = 0; i < pointCount_; i++)
+				engineHistory_.xy[ch][i] = ringXy_[ch][(p0 + i) % kXyPoints];
+		}
+	}
+
+	float ringLo_[kNumChannels][kTraceColumns] = {}, ringHi_[kNumChannels][kTraceColumns] = {};
+	float ringXy_[kNumChannels][kXyPoints] = {};
+	float openLo_[kNumChannels] = {}, openHi_[kNumChannels] = {};
+	int columnHead_ = 0, columnCount_ = 0, columnTicks_ = 0;
+	int pointHead_ = 0, pointCount_ = 0, pointTicks_ = 0;
+	int ringApp_ = -1;
 
 	// Swap in a pending replacement Core. False when one is pending but the
 	// UI holds the lock (try again at the next sample).
@@ -305,6 +396,7 @@ private:
 			if (buttons_[b])
 				core_->setButton((Button) b, true);
 		stateDue_ = false;  // an unpublished save predates the restore
+		clearHistory();     // the retired core's outputs
 		// Unpublished frames and model are the retired core's: drop them and
 		// draw the new core's at the next tick, so the next published model
 		// is the new core's.
@@ -355,6 +447,7 @@ private:
 	// Draw and save when due; publish what is due unless the UI holds the
 	// lock, in which case the next tick tries again.
 	void afterTick() {
+		recordOutputs();
 		if (--frameCountdown_ <= 0) {
 			frameCountdown_ = kFrameTicks;
 			drawFrames();
@@ -364,6 +457,8 @@ private:
 			std::memcpy(menu_, engineMenu_, kFrameBytes);
 			std::memcpy(scope_, engineScope_, kFrameBytes);
 			model_ = engineModel_;
+			view_ = engineView_;
+			history_ = engineHistory_;
 			frameMutex_.unlock();
 			app_.store(engineApp_);
 			appMenuOpen_.store(engineAppMenuOpen_);

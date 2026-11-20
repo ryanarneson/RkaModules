@@ -72,5 +72,8 @@
 // (Friendly.inc includes the FriendlyAdapters<n>.inc files).
 #include "Friendly.inc"
 
+// The upper screen's view as data (ScopeView.hpp).
+#include "ScopeView.inc"
+
 // shoal::Core.
 #include "CoreImpl.inc"

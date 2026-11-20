@@ -387,6 +387,11 @@ void Core::friendlyModel(FriendlyModel& out) const {
 	friendly::model(friendly::adapterFor(OC::apps::index_of(OC::global_settings.current_app_id)), out);
 }
 
+void Core::scopeView(ScopeView& out) const {
+	Scope scope(impl_->ctx.get());
+	view::fill(OC::apps::index_of(OC::global_settings.current_app_id), out);
+}
+
 bool Core::friendlyEdit(const FriendlyEdit& e) {
 	Scope scope(impl_->ctx.get());
 	return friendly::edit(friendly::adapterFor(OC::apps::index_of(OC::global_settings.current_app_id)), e);

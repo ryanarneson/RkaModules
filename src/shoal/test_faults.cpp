@@ -155,6 +155,7 @@ void testEverySettingSwept() {
 						in.run(c, 200);
 						c.drawMenu(frame);
 						c.drawScope(frame);
+						{ shoal::ScopeView sv; c.scopeView(sv); }
 						visits++;
 						if (!allFinite(c)) {
 							CHECK(false, "%s, range %d, ch %d, %s = %d: outputs finite", an, (int) range, ch, s.name,
@@ -239,6 +240,7 @@ void testControlsMash() {
 			t += n;
 			c.drawMenu(frame);
 			c.drawScope(frame);
+			{ shoal::ScopeView sv; c.scopeView(sv); }
 			if (!c.appMenuOpen() && c.app() != app)
 				c.selectApp(app);
 		}
@@ -278,6 +280,7 @@ void testRandomSettingCombinations() {
 				if (t % 400 == 0) {
 					c.drawMenu(frame);
 					c.drawScope(frame);
+					{ shoal::ScopeView sv; c.scopeView(sv); }
 				}
 			});
 			CHECK(ok, "%s, trial %d: outputs finite", Core::appName(app), trial);
@@ -377,10 +380,12 @@ void testScopeAfterVectorscope() {
 		run(c, 0.002);
 		low += c.outCode(2) < 32768 || c.outCode(3) < 32768;
 		c.drawScope(frame);
+		{ shoal::ScopeView sv; c.scopeView(sv); }
 	}
 	CHECK(low > 0, "C or D went below 1.25 V");
 	c.selectApp(7);
 	c.drawScope(frame);
+	{ shoal::ScopeView sv; c.scopeView(sv); }
 	CHECK(allFinite(c), "drew the scope after the vectorscope");
 }
 
@@ -502,6 +507,7 @@ void testReferencesLowPitchName() {
 	for (int k = 0; k < 4; k++) {
 		c.tick();
 		c.drawScope(frame);
+		{ shoal::ScopeView sv; c.scopeView(sv); }
 	}
 	CHECK(allFinite(c), "drew the low pitch");
 }
@@ -594,6 +600,7 @@ void testH1200LowNotes() {
 		run(c, 0.01);
 		c.drawMenu(frame);
 		c.drawScope(frame);
+		{ shoal::ScopeView sv; c.scopeView(sv); }
 	}
 	CHECK(allFinite(c), "drew the low notes");
 }

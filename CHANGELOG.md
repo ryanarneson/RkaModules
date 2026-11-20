@@ -2,6 +2,8 @@
 
 ## Test builds
 
+- 2.0.15 (2026-11-19): Shoal: final review fixes (lanes always match the pixels shown, overlay clipped to the rack view, Harrington patch in the manual)
+- 2.0.14 (2026-11-19): Shoal: upper screen lanes and smooth views (traces, X/Y, note circle, grid); strip dividers; patches to try in the manual
 - 2.0.13 (2026-11-18): Squall: final review fixes (Gust in average-gap time: no burst on a clock switch, no rate change under Weather CV; inf on Clock/Freeze reads 0 V)
 - 2.0.12 (2026-11-18): Squall: first build for listening (random gates and CV: Weather, Gust, Memory, Clock, Freeze)
 - 2.0.11 (2026-11-18): Ballast: expander walk capped at 32 steps (a looped chain cannot hang); Pan: LINK dark when bypassed
@@ -114,6 +116,14 @@
 - New module: **Shoal**, 28 HP: the Ornament & Crime v1.3.6 firmware and
   all 13 apps in hardware mode; its settings save with the patch.
   - Drawn as ripples from two sources.
+  - In friendly mode the upper screen marks each output's lane with
+    dividers and letters, and draws six apps' views itself with smooth
+    lines: four stacked traces (Quadraturia, Piqued, Dialectic Ping Pong),
+    X/Y curves (Low-rents), the grid path and note circle (Automatonnetz)
+    and the note circle with its moves and chord (Harrington 1200).
+    Hardware mode keeps the o_C screen. The voltage strip has a cell per
+    output.
+  - The manual has patches to try for each app.
 - One look for every module, "Instrument": brass and ivory on near-black,
   main controls on enamel dial faces, knurled knobs, a traced line from
   each CV jack through its attenuverter to the control it moves, outputs
