@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.22 (2026-11-20): Narrows: first build for listening (polyphonic stereo filter: ladder and state cores, Mode sweep LP/BP/HP, drive, self-oscillation, comb, Ping, Spread)
 - 2.0.21 (2026-11-20): Wake: final review fixes (crossfades add no level, so a clocked or modulated Digital echo decays as it should; Freeze holds exactly the echo that was playing; no clicks on re-freeze or on Time changes with Drift on; a paused clock keeps its tempo)
 - 2.0.20 (2026-11-20): Wake: first build for listening (stereo echo: Tape, Analog and Digital styles, Ratio, ping pong, Freeze, Diffuse, Drift, clock)
 - 2.0.19 (2026-11-20): Hadal: Rumble audible at depth (band 160-70 Hz, overtones from a soft clip that deepens with Depth); 2.5 V RMS at full with peaks inside +-5 V; default 80 %
