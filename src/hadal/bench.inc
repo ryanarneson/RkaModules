@@ -18,7 +18,7 @@ struct hadal {
 		float cvV[5][16];
 		Cv::Cursor cvCur[5];
 
-		// The module's defaults: Depth at noon, Rumble 0.5, Hiss 0.3,
+		// The module's defaults: Depth at noon, Rumble 0.8, Hiss 0.3,
 		// Crackle 0, Drift 0.25, attenuverters 0, nothing patched.
 		Instance() : engine(1u) {
 			for (int i = 0; i < 5; i++) {
@@ -31,7 +31,7 @@ struct hadal {
 			for (int p = 0; p < F::PARAMS_LEN; p++)
 				frame.params[p] = 0.f;
 			frame.params[F::DEPTH] = 0.5f;
-			frame.params[F::RUMBLE] = 0.5f;
+			frame.params[F::RUMBLE] = 0.8f;
 			frame.params[F::HISS] = 0.3f;
 			frame.params[F::DRIFT] = 0.25f;
 			for (int o = 0; o < F::OUTPUTS_LEN; o++)
@@ -81,14 +81,15 @@ struct hadal {
 	static BenchCase<Instance> benchCase(int k) {
 		// Budgets: about twice what an Apple M-series Mac measured, rounded
 		// up to the next 0.05 (idle 0.028: nothing patched, nothing computed;
-		// outputs 0.172 and busy 0.185 with the crackle shaper, flat from 1 to 16 instances).
+		// outputs 0.201 and busy 0.214 with the crackle shaper and Rumble's
+		// soft clip, flat from 1 to 16 instances).
 		// Elsewhere: three times as much, provisional (not yet measured on
 		// x86-64).
 		const BenchCase<Instance> cases[BENCH_CASES] = {
 			// name     inputs   Apple arm64  elsewhere
 			{"idle", idle, 0.1, 0.3},
-			{"outputs", outputs, 0.3, 0.9},
-			{"busy", busy, 0.35, 1.05},
+			{"outputs", outputs, 0.45, 1.35},
+			{"busy", busy, 0.45, 1.35},
 		};
 		return cases[k];
 	}

@@ -81,7 +81,20 @@ void full_levels() {
 		Rig g;
 		g.levels(1.f, 0.f, 0.f);
 		Out o = run(g, 10.f);
-		CHECK(std::fabs(db(rms(o.rumble) / 1.6)) <= 1.0, "Rumble at full: %.3f V RMS (want 1.6 +- 1 dB)", rms(o.rumble));
+		CHECK(std::fabs(db(rms(o.rumble) / 2.5)) <= 1.0, "Rumble at full: %.3f V RMS (want 2.5 +- 1 dB)", rms(o.rumble));
+	}
+	// Rumble's soft clip holds its peaks at the +-5 V audio standard (Drift 0).
+	for (float d : {0.f, 0.5f, 1.f}) {
+		Rig g;
+		g.levels(1.f, 0.f, 0.f);
+		g.f.params[F::DEPTH] = d;
+		g.f.params[F::DRIFT] = 0.f;
+		Out o = run(g, 30.f);
+		float pk = 0;
+		for (float v : o.rumble)
+			pk = std::max(pk, std::fabs(v));
+		std::printf("  Rumble at full, depth %.1f: %.3f V RMS, peak %.2f V\n", d, rms(o.rumble), pk);
+		CHECK(pk <= 5.0f, "Rumble at full, depth %.1f, peaks at %.2f V (want <= 5)", d, pk);
 	}
 	{
 		Rig g;
@@ -387,7 +400,7 @@ void headroom() {
 		CHECK(pk <= 10.f, "all layers at full, depth %.1f: mix peaks at %.2f V (want <= 10)", d, pk);
 	}
 	Rig g;   // the defaults
-	g.levels(0.5f, 0.3f, 0.f);
+	g.levels(0.8f, 0.3f, 0.f);
 	g.f.params[F::DRIFT] = 0.25f;
 	g.f.patched[0] = g.f.patched[1] = g.f.patched[2] = false;
 	const long before = g.e.limited();

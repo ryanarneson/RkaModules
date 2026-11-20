@@ -125,7 +125,7 @@ each within its own range:
 
 | Layer | Shallow (0 km) | Deep (11 km) |
 |---|---|---|
-| Rumble | a low roar, with energy up to about 120 Hz | a near-subsonic pressure, mostly 20–40 Hz |
+| Rumble | a low roar, with energy up to about 160 Hz (120 Hz until 2.0.19) | a deep growl, mostly 20–70 Hz with overtones above (20–40 Hz until 2.0.19) |
 | Hiss | bright air, up to about 12 kHz | a dull, muffled roar, up to about 1.5 kHz |
 | Crackle | sharp ticks, bright and short | soft, distant thuds, darker and longer |
 
@@ -157,6 +157,13 @@ each within its own range:
 - **Full level:** at full, Rumble's and Hiss's outputs have an RMS of
   about 1.6 V, so peaks sit near the ±5 V audio standard (noise has a
   high crest factor).
+  - *Changed in 2.0.19:* Rumble's full level is 2.5 V RMS, because at
+    Hiss's voltage it was too faint to the ear. Rumble is soft-clipped in
+    its layer (tanh, drive 0.66 at 0 km to 2.0 at 11 km on a log scale,
+    then scaled back to the same RMS), so its peaks stay inside ±5 V at
+    Drift 0 and the deep settings carry overtones a speaker without a sub
+    can play. Its low-pass corner runs 160 Hz to 70 Hz (was 120 to 40):
+    on small monitors the lower half of Depth was inaudible.
 - **Crackle's level** (*designer's call*) is set by energy, not peak,
   because a bed is heard by its energy:
   - At full, Crackle's long-term RMS, at Drift 0 and the nominal density
@@ -178,7 +185,8 @@ each within its own range:
   - Tick sizes come from a bounded, skewed distribution (mostly small,
     occasionally large), and no tick ever peaks above ±5 V at full.
 - **Defaults** (*designer's call*, so a freshly placed Hadal makes a
-  usable bed at once): Rumble 0.5, Hiss 0.3, Crackle 0, Drift 0.25.
+  usable bed at once): Rumble 0.8 (0.5 until 2.0.19: too faint), Hiss 0.3, Crackle 0,
+  Drift 0.25.
 
 ### Crackle: what it is
 
@@ -313,7 +321,8 @@ with each test shown to fail against a deliberate mutation:
 - **No loop or rhythm.** No significant autocorrelation peak in any
   layer, or in crackle's tick times, between 50 ms and 60 s.
 - **Levels.**
-  - At full, Rumble's and Hiss's RMS is about 1.6 V, and Crackle's
+  - At full, Hiss's RMS is about 1.6 V, Rumble's about 2.5 V (1.6 V until
+    2.0.19), and Crackle's
     long-term RMS is its stated value (stated tolerances).
   - No crackle tick peaks above ±5 V at full.
   - Each knob scales its layer by the audio taper.

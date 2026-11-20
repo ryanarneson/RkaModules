@@ -47,7 +47,7 @@ struct Hadal : Module {
 	Hadal() : engine(random::u32()) {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
 		configParam(DEPTH_PARAM, 0.f, 1.f, 0.5f, "Depth", " km", 0.f, 11.f);
-		configParam(RUMBLE_PARAM, 0.f, 1.f, 0.5f, "Rumble", "%", 0.f, 100.f);
+		configParam(RUMBLE_PARAM, 0.f, 1.f, 0.8f, "Rumble", "%", 0.f, 100.f);
 		configParam(HISS_PARAM, 0.f, 1.f, 0.3f, "Hiss", "%", 0.f, 100.f);
 		configParam(CRACKLE_PARAM, 0.f, 1.f, 0.f, "Crackle", "%", 0.f, 100.f);
 		configParam(DRIFT_PARAM, 0.f, 1.f, 0.25f, "Drift", "%", 0.f, 100.f);
