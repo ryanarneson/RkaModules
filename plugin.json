@@ -126,6 +126,17 @@
         "Clock modulator"
       ],
       "keywords": "delay echo tape analog bbd digital ping pong freeze diffuse stereo ambient"
+    },
+    {
+      "slug": "Narrows",
+      "name": "Narrows",
+      "description": "Polyphonic stereo filter: low-pass, band-pass and high-pass on a smooth Mode sweep, a ladder and a state-variable core on a switch, drive, resonance to self-oscillation in tune, a comb tuned to the cutoff, a Ping input and Spread",
+      "tags": [
+        "Filter",
+        "Polyphonic",
+        "Stereo"
+      ],
+      "keywords": "filter vcf ladder moog state variable svf lowpass bandpass highpass comb ping resonator stereo polyphonic"
     }
   ]
 }
