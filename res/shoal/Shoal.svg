@@ -380,6 +380,12 @@
      stroke="#c9a46a"
      stroke-width="0.45"
      id="rect47" />
+  <path
+     d="M24.8 20L24.8 23.4 M45.6 20L45.6 23.4 M66.4 20L66.4 23.4"
+     fill="none"
+     stroke="#8a8474"
+     stroke-width="0.2"
+     id="path47" />
   <rect
      x="3.775"
      y="25.275"

@@ -368,6 +368,8 @@ PANELS = {
         screens=[("STRIP", 4.0, 19.2, 83.2, 5.0),
                  ("SCOPE", 4.0, 25.5, 83.2, 41.6),
                  ("EDITOR", 4.0, 71.0, 83.2, 41.6)],
+        # The strip's four readouts, one cell each.
+        dividers={"STRIP": 4},
         rulers={"SCOPE": dict(px=0.65, sides="lb"),
                 "EDITOR": dict(px=0.65, sides="lb", numerals=True)},
         label_at={"PARAM_ENC_L_PUSH": "below", "PARAM_ENC_R_PUSH": "below", "PARAM_UP": "right",
@@ -684,6 +686,8 @@ def check_screens(name, spec):
 #                     mm, drawn as glass in a brass bezel outside it
 #   rulers            screen name -> dict(px=mm per pixel, sides="lb",
 #                     numerals=True): pixel rulers outside a screen
+#   dividers          screen name -> n: thin lines on the glass splitting
+#                     its width into n equal cells
 #   screws            [(x, y)]: centres of the rack screws the module places
 #                     (rka::Screw, from the layout header's SCREWS); usually
 #                     screws_at(hp, "tr", ...). Not drawn on the panel; kept clear
@@ -727,6 +731,7 @@ INSTRUMENT_WIDGET_COLOURS = (("GROUND", "ground"), ("BRASS", "brass"), ("IVORY",
 
 FOOT_MARK = "R K A · INSTRUMENTS"
 SCREEN_BEZEL = 0.45      # mm of brass round a screen, outside its rectangle
+SCREEN_DIVIDER_INSET = 0.8   # mm a screen's cell divider stops short of its top and bottom
 RULER_GAP, RULER_MINOR, RULER_MAJOR = 0.4, 0.6, 1.3   # a screen's pixel ruler: off the bezel, tick lengths
 RULER_NUMERAL = 2.0      # mm: as the dim labels; smaller did not read at 100 % in Rack
 ROPE_WIDTH = 0.4         # mm; counted in a rope's clearances
@@ -1172,7 +1177,7 @@ def instrument_texts(name, spec):
 
 INSTRUMENT_KEYS = {"dir", "hp", "title", "subtitle", "nameplate", "mark", "components", "sizes",
                    "origins", "circles", "radii", "limbs", "faces", "tiles", "traces", "ropes", "screens",
-                   "rulers", "label_at", "label_colour", "label_size", "label_gap", "label_dx", "label_dy", "notes",
+                   "rulers", "dividers", "label_at", "label_colour", "label_size", "label_gap", "label_dx", "label_dy", "notes",
                    "preview", "screws"}
 FACE_KEYS = {"r", "ticks", "major", "sweep", "numerals", "tick_r", "minor_len", "major_len", "numeral_r",
              "numeral_size", "words", "words_r", "words_size"}
@@ -1211,6 +1216,9 @@ def check_references(name, spec):
         if ref not in screens:
             sys.exit(f"{name}: `rulers` names {ref}, which is not a screen")
         check_keys(name, f"the ruler of SCREEN_{ref}", ruler, RULER_KEYS, ("px",))
+    for ref in spec.get("dividers", {}):
+        if ref not in screens:
+            sys.exit(f"{name}: `dividers` names {ref}, which is not a screen")
     for tile in spec.get("tiles", []):
         check_keys(name, f"the tile of {tile.get('port', '?')}", tile, TILE_KEYS, ("port",))
         for key in ("port", "light"):
@@ -1570,13 +1578,18 @@ def face_svg(face, c, pal):
     return out
 
 
-def screen_svg(sname, x, y, w, h, ruler, pal):
+def screen_svg(sname, x, y, w, h, ruler, pal, cells=0):
     """A window of dark glass in a brass bezel; the bezel lies outside the
     rectangle the module draws in. With a ruler: a tick every 8 pixels,
-    longer every 32, outside the bezel on the left and/or under it."""
+    longer every 32, outside the bezel on the left and/or under it. With
+    cells: thin dividers on the glass, splitting its width into that many
+    equal cells."""
     b = SCREEN_BEZEL
     out = [f'<rect x="{num(x - b / 2)}" y="{num(y - b / 2)}" width="{num(w + b)}" height="{num(h + b)}" '
            f'rx="0.8" fill="{pal["glass"]}" stroke="{pal["brass"]}" stroke-width="{num(b)}"/>']
+    if cells > 1:
+        out.append(stroke_path([(x + w * k / cells, y + SCREEN_DIVIDER_INSET, x + w * k / cells,
+                                 y + h - SCREEN_DIVIDER_INSET) for k in range(1, cells)], pal["dim"], 0.2))
     if ruler:
         px, off = ruler["px"], b + RULER_GAP
         for major, length, width in ((False, RULER_MINOR, 0.15), (True, RULER_MAJOR, 0.25)):
@@ -1632,7 +1645,8 @@ def panel_svg(name, spec, pal):
         if not on_face_or_tile(spec, by, c):
             out.append(f'<circle cx="{num(c.x)}" cy="{num(c.y)}" r="{num(c.r + CLEARANCE)}" fill="{pal["ground"]}"/>')
     for sname, sx, sy, sw, sh in spec.get("screens", []):
-        out += screen_svg(sname, sx, sy, sw, sh, spec.get("rulers", {}).get(sname), pal)
+        out += screen_svg(sname, sx, sy, sw, sh, spec.get("rulers", {}).get(sname), pal,
+                          spec.get("dividers", {}).get(sname, 0))
     for fid, face in spec.get("faces", {}).items():
         out += face_svg(face, by[fid], pal)
     for tile in spec.get("tiles", []):
