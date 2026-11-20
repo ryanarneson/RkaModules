@@ -457,31 +457,35 @@ struct PixelScreen : widget::Widget {
 	}
 
 	void drawLayer(const DrawArgs& args, int layer) override {
-		if (layer == 1 && source && source(frame)) {
-			const float px = box.size.x / W, py = box.size.y / H;
-			// No anti-aliasing: pixel edges fall between device pixels, and
-			// AA would show seams between adjacent rows of lit pixels.
-			nvgSave(args.vg);
-			nvgShapeAntiAlias(args.vg, false);
-			nvgBeginPath(args.vg);
-			for (int y = 0; y < H; y++) {
-				for (int x = 0; x < W;) {
-					if (!lit(x, y)) {
-						x++;
-						continue;
-					}
-					int end = x + 1;
-					while (end < W && lit(end, y))
-						end++;
-					nvgRect(args.vg, x * px, y * py, (end - x) * px, py);
-					x = end;
-				}
-			}
-			nvgFillColor(args.vg, colour);
-			nvgFill(args.vg);
-			nvgRestore(args.vg);
-		}
+		if (layer == 1 && source && source(frame))
+			drawFrame(args);
 		Widget::drawLayer(args, layer);
+	}
+
+	// The lit pixels of `frame`.
+	void drawFrame(const DrawArgs& args) {
+		const float px = box.size.x / W, py = box.size.y / H;
+		// No anti-aliasing: pixel edges fall between device pixels, and
+		// AA would show seams between adjacent rows of lit pixels.
+		nvgSave(args.vg);
+		nvgShapeAntiAlias(args.vg, false);
+		nvgBeginPath(args.vg);
+		for (int y = 0; y < H; y++) {
+			for (int x = 0; x < W;) {
+				if (!lit(x, y)) {
+					x++;
+					continue;
+				}
+				int end = x + 1;
+				while (end < W && lit(end, y))
+					end++;
+				nvgRect(args.vg, x * px, y * py, (end - x) * px, py);
+				x = end;
+			}
+		}
+		nvgFillColor(args.vg, colour);
+		nvgFill(args.vg);
+		nvgRestore(args.vg);
 	}
 };
 

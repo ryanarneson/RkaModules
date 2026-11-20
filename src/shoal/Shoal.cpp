@@ -252,11 +252,11 @@ struct ShoalWidget : ModuleWidget {
 			h->frames(other, frame);
 			return true;
 		};
-		scopeScreen->viewSource = [=](shoal::ScopeView& view, shoal::ScopeHistory& history) {
+		scopeScreen->screenSource = [=](uint8_t* frame, shoal::ScopeView& view, shoal::ScopeHistory& history) {
 			shoal::Host* h = host();
 			if (!h)
 				return false;
-			h->scope(view, history);
+			h->screen(frame, view, history);
 			return true;
 		};
 		addChild(scopeScreen);

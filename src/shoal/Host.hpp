@@ -153,6 +153,16 @@ public:
 		view = view_;
 		history = history_;
 	}
+	// The upper screen in one call: the scope frame (kFrameBytes), the view
+	// and the history of one publish. Read separately (frames, then scope),
+	// a publish could fall between and give one app's view over the next
+	// app's frame.
+	void screen(uint8_t* scopeFrame, ScopeView& view, ScopeHistory& history) {
+		std::lock_guard<std::mutex> lock(frameMutex_);
+		std::memcpy(scopeFrame, scope_, kFrameBytes);
+		view = view_;
+		history = history_;
+	}
 	// The latest saved image (kStateBytes) and its input range. Also deletes
 	// a Core the engine has retired.
 	void snapshot(uint8_t* state, InputRange* range) {

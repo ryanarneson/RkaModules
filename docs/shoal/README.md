@@ -345,9 +345,10 @@ smooth chord changes driven by gates.
     and 4; B, C, D into three voices and A, the root, into Fathom's V/OCT
     as a pedal bass. The chords drift through related keys over a bass
     that holds.
-  - *A progression from one clock.* "Trigger type" Eucl, a clock into any
-    TRIG input, and the "EuFill" rows raised from 0 (at 0 a move never
-    happens): the patterns decide which move comes when.
+  - *A progression from one clock.* "Trigger type" Eucl, a clock into
+    TRIG 2, 3 or 4 (not TRIG 1, which resets the chord every time), and
+    the "EuFill" rows raised from 0 (at 0 a move never happens): the
+    patterns decide which move comes when.
   - *Harmony by the weather.* Squall's Gate into TRIG 2, Weather near
     Fair: the chord turns major or minor at random moments.
 

@@ -994,6 +994,28 @@ void testHistoryClearedOnChange() {
 	}
 }
 
+// The upper screen's three parts in one call, under one lock: the same
+// frame, view and history the separate calls give. (That no publish can
+// fall between them is by construction; the separate calls could return
+// one app's view with the next app's frame.)
+void testScreenIsOnePublish() {
+	Host h(1);
+	h.setSampleRate(kRate);
+	CHECK(h.post(selectApp(5)), "select Quadraturia");
+	run(h, 0.5);
+	Frames f;
+	uint8_t both[shoal::kFrameBytes];
+	std::unique_ptr<Scoped> a(new Scoped), b(new Scoped);
+	h.frames(f.menu, f.scope);
+	h.scope(a->view, a->hist);
+	std::memset(both, 0xAA, sizeof both);
+	std::memset(b.get(), 0xAA, sizeof(Scoped));
+	h.screen(both, b->view, b->hist);
+	CHECK(std::memcmp(f.scope, both, shoal::kFrameBytes) == 0, "screen()'s frame is not the scope frame");
+	CHECK(std::memcmp(&a->view, &b->view, sizeof a->view) == 0, "screen()'s view differs from scope()'s");
+	CHECK(a->hist.columns > 20 && std::memcmp(&a->hist, &b->hist, sizeof a->hist) == 0, "screen()'s history differs from scope()'s");
+}
+
 // Another thread reading as fast as it can gets whole histories.
 void testHistoryNotTorn() {
 	Host h(1);
@@ -1048,5 +1070,6 @@ int main() {
 	testSpikeShows();
 	testHistoryClearedOnChange();
 	testHistoryNotTorn();
+	testScreenIsOnePublish();
 	return rkatest::finish("test_host");
 }

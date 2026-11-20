@@ -17,8 +17,10 @@
 namespace shoal {
 
 struct ScopeScreen : rka::PixelScreen {
-	// Fills the view and the history; false: draw the frame only.
-	std::function<bool(ScopeView&, ScopeHistory&)> viewSource;
+	// Fills the frame (PixelScreen::BYTES), the view and the history, all
+	// of one publish; false: nothing to draw. In hardware mode the frame
+	// comes from PixelScreen's `source` alone.
+	std::function<bool(uint8_t* frame, ScopeView&, ScopeHistory&)> screenSource;
 	bool friendly = true;
 
 	ScopeView view = ScopeView();
@@ -43,14 +45,21 @@ struct ScopeScreen : rka::PixelScreen {
 			Widget::drawLayer(args, layer);
 			return;
 		}
-		const bool have = friendly && viewSource && viewSource(view, *history);
-		if (!have || view.kind == ViewKind::Pixels)
+		if (!friendly || !screenSource) {
 			rka::PixelScreen::drawLayer(args, layer);
-		if (!have)
 			return;
+		}
+		// Frame, view and history of one publish, so the lanes and letters
+		// are always those of the app whose pixels are shown.
+		if (!screenSource(frame, view, *history)) {
+			Widget::drawLayer(args, layer);
+			return;
+		}
+		if (view.kind == ViewKind::Pixels)
+			drawFrame(args);
 		const float w = box.size.x, h = box.size.y;
 		nvgSave(args.vg);
-		nvgScissor(args.vg, 0.f, 0.f, w, h);
+		nvgIntersectScissor(args.vg, 0.f, 0.f, w, h);
 		const scope::Lanes4 l = scope::lanes(view, w, h);
 		switch (view.kind) {
 			case ViewKind::Traces: drawTraces(args, l); break;
@@ -61,8 +70,7 @@ struct ScopeScreen : rka::PixelScreen {
 		}
 		drawLanes(args, l, h);
 		nvgRestore(args.vg);
-		if (view.kind != ViewKind::Pixels)
-			Widget::drawLayer(args, layer);
+		Widget::drawLayer(args, layer);
 	}
 
 	std::shared_ptr<rack::window::Font> font() {
