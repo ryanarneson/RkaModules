@@ -1,7 +1,7 @@
 # Suggested order for the future modules
 
 Status: a suggestion, 2026-11-15. The designer's ordering of the
-thirty-seven ideas in this directory; the user has not ruled on it.
+thirty-eight ideas in this directory; the user has not ruled on it.
 
 The order serves one goal: dark, space and horror ambient, made in VCV
 Rack. It asks of each module, in turn:
@@ -26,6 +26,10 @@ and DC blocker already keep the output safe; it moves to the utilities that
 wait for a patch to call for them. Lull, a standalone slew, is a low
 priority. The numbers below are the original order.
 
+**Changes since (the user, 2026-11-20):** Narrows, a stereo filter, was
+added, to be built soon: it follows Wake. It has no number in the original
+order.
+
 ## 1. A whole patch from RKA alone
 
 With Sway, Fathom and Shoal these six make a complete dark ambient patch:
@@ -49,6 +53,7 @@ is the one to build first and reuse.
 |---|--------|--------|----------|
 | 7 | [Rigging](rigging.md) (built) | M | Six tuned strings. Hadal's noise through Rigging is a tuned drone: a second voice from two modules already built; struck by Squall, it also covers some of Ping's and Buoy's ground. |
 | 8 | [Wake](wake.md) | L | The full delay. Its Freeze, feedback Send and Return, and four tap outputs make it a hub for a patch. |
+| new | [Narrows](narrows.md) | M | Stereo filter: low-pass, band-pass or high-pass by a Mode control, with a comb and a ping input. The collection has no filter outside Fathom's voice, and every texture module here wants one after it. Two cores on a switch: Fathom's ladder, reused, and a state-variable filter; the comb reuses Rigging's delay line. |
 | 9 | [Eddy](eddy.md) | M | Tape loop. Reuses Wake's buffer code; gives layered, decaying loops. |
 | 10 | [Spindrift](spindrift.md) | L | Grain cloud. The first module with a window to draw; the user singled it out. |
 | 11 | [Doldrums](doldrums.md) | L | Spectral freeze and stretch. The highest reward and the highest risk here, so it follows Spindrift, which settles how a window is drawn. |
