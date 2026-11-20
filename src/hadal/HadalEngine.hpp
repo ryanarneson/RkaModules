@@ -7,7 +7,8 @@
 //   smoothed (30 ms one-poles): Depth, the three level gains (knob^2), Drift
 //   every 32 samples: Depth and Drift's colour and density into the layers
 //   the layers that are needed: a layer's output is patched, or L or R is
-//   layer outputs: the layer's left side x 1.6 V (Rumble: x 3.2 V; Crackle: soft-clipped by
+//   layer outputs: the layer's left side x 1.6 V (Rumble, soft-clipped
+//     in its layer: x 2.5 V; Crackle: soft-clipped by
 //     Crackle::shape, then x 5 V) x
 //     its level gain x Drift's level wander for that side
 //   the mix: each layer x MIX_GAIN x its mix weight (fading to 0 over 10 ms
@@ -73,7 +74,7 @@ struct HadalResult {
 class HadalEngine {
 public:
 	static constexpr float FULL_V = 1.6f;                            // Hiss RMS at full
-	static constexpr float RUMBLE_V = 3.2f;                          // Rumble RMS at full: a +-5 V sine's loudness, peaks into the soft limit
+	static constexpr float RUMBLE_V = 2.5f;                          // Rumble RMS at full: its soft clip keeps peaks under 5 V
 	static constexpr float CRACKLE_GAIN = 5.f;                       // V per shaped unit
 	static constexpr float CRACKLE_FULL_RMS = 0.138f;                // the jack (mono sum), measured at noon Depth, 10/s
 	static constexpr float MIX_GAIN = 0.5f;

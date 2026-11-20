@@ -3,8 +3,10 @@
 //
 // - Rumble: white noise, high-passed at 20 Hz (4th order) so nothing below
 //   about 15 Hz eats headroom, low-passed (4th order) at a corner Depth moves
-//   from 120 Hz (0 km) to 40 Hz (11 km). Stereo but nearly mono: both sides
-//   share 90 % of their noise power, so L/R correlation is 0.9.
+//   from 160 Hz (0 km) to 70 Hz (11 km), then soft-clipped, harder with
+//   Depth, so the deep end stays audible on speakers without a sub. Stereo
+//   but nearly mono: both sides share 90 % of their noise power, so L/R
+//   correlation is about 0.9.
 // - Hiss: independent white noise per side, high-passed at 250 Hz (2nd
 //   order), low-passed (4th order) at a corner Depth moves from 12 kHz to
 //   1.5 kHz.
@@ -211,8 +213,35 @@ struct ShapedNoise {
 };
 
 struct Rumble {
+	// The soft clip: tanh(drive x) on the unit-RMS filtered noise, then
+	// scaled back to RMS 1.0. The drive rises with Depth on a log scale, so
+	// a deep rumble grows overtones a small speaker can play. Peaks never
+	// pass peak() (1 / the clipped RMS): 2.0 at the shallow drive, less deeper.
+	static constexpr float DRIVE_SHALLOW = 0.66f, DRIVE_DEEP = 2.f;
+	static const int DRIVE_TABLE = 33;
+
 	Random rng;
-	ShapedNoise n{LayerShape{20.0, 4, 120.f, 40.f}};
+	ShapedNoise n{LayerShape{20.0, 4, 160.f, 70.f}};
+	float driveTable[DRIVE_TABLE], normTable[DRIVE_TABLE];
+	float drive = DRIVE_SHALLOW, norm = 2.f;
+
+	Rumble() {
+		for (int i = 0; i < DRIVE_TABLE; i++) {
+			const double d = (double) i / (DRIVE_TABLE - 1);
+			const double a = DRIVE_SHALLOW * std::pow((double) DRIVE_DEEP / DRIVE_SHALLOW, d);
+			// E[tanh^2(a g)] for a unit Gaussian g: the filtered noise is
+			// Gaussian to well within the level tolerance.
+			double sum = 0, weight = 0;
+			for (int k = 0; k <= 2000; k++) {
+				const double g = -8.0 + 16.0 * k / 2000.0, w = std::exp(-0.5 * g * g), t = std::tanh(a * g);
+				sum += w * t * t;
+				weight += w;
+			}
+			driveTable[i] = (float) a;
+			normTable[i] = (float) (1.0 / std::sqrt(sum / weight));
+		}
+		updateDrive();
+	}
 
 	void setRate(float fs) {
 		n.setRate(fs);
@@ -222,22 +251,39 @@ struct Rumble {
 	}
 	void setDepth(float d01) {
 		n.setDepth(d01);
+		updateDrive();
 	}
 	void setColour(float octaves) {
 		n.setColour(octaves);
 	}
 	void setDepthColour(float d01, float octaves) {
 		n.setDepthColour(d01, octaves);
+		updateDrive();
 	}
 	void clear() {
 		n.clear();
+	}
+	// The largest sample process() can give, in units of its RMS.
+	float peak() const {
+		return norm;
 	}
 	// 90 % of each side's noise power is shared: correlation 0.9.
 	void process(float& l, float& r) {
 		const float c = rng.uniform(), a = rng.uniform(), b = rng.uniform();
 		const float shared = 0.9486833f, own = 0.31622777f;
-		l = n.filter(0, shared * c + own * a);
-		r = n.filter(1, shared * c + own * b);
+		l = fastTanh(drive * n.filter(0, shared * c + own * a)) * norm;
+		r = fastTanh(drive * n.filter(1, shared * c + own * b)) * norm;
+	}
+
+private:
+	// Table lookup only (control rate, on the audio thread).
+	void updateDrive() {
+		float pos = n.depth * (DRIVE_TABLE - 1);
+		pos = pos <= DRIVE_TABLE - 1.001f ? pos : DRIVE_TABLE - 1.001f;
+		const int i = (int) pos;
+		const float t = pos - i;
+		drive = driveTable[i] + t * (driveTable[i + 1] - driveTable[i]);
+		norm = normTable[i] + t * (normTable[i + 1] - normTable[i]);
 	}
 };
 

@@ -89,6 +89,41 @@ void layer_level_flat_across_depth() {
 	levelFlat<rka::hadal::Hiss>("hiss");
 }
 
+// Small speakers play little below 60 Hz: the deepest Rumble must still
+// reach them (the corner stops at 70 Hz, and the soft clip adds overtones).
+void rumble_audible_when_deep() {
+	rka::hadal::Rumble layer;
+	std::vector<float> l, r;
+	render(layer, FS, 1.f, 30.f, l, r);
+	const int nfft = nfftFor(FS, 0.5);
+	const std::vector<double> p = psd(l, nfft);
+	const double over60 = bandShare(p, nfft, FS, 60.0, 24000.0), over100 = bandShare(p, nfft, FS, 100.0, 24000.0);
+	std::printf("  rumble at depth 1: %.1f %% of its energy above 60 Hz, %.2f %% above 100 Hz\n", 100 * over60,
+	            100 * over100);
+	CHECK(over60 >= 0.25, "rumble at depth 1 has %.1f %% of its energy above 60 Hz (want >= 25 %%)", 100 * over60);
+	CHECK(over100 >= 0.03, "rumble at depth 1 has %.2f %% of its energy above 100 Hz (want >= 3 %%)", 100 * over100);
+	CHECK(over100 <= 0.20, "rumble at depth 1 has %.1f %% of its energy above 100 Hz (want <= 20 %%: still a rumble)",
+	      100 * over100);
+}
+
+// The soft clip holds every sample under the layer's stated peak, which is
+// 2.0 x its RMS at most (5 V at the engine's 2.5 V RMS).
+void rumble_peaks_bounded() {
+	for (float d : DEPTHS) {
+		rka::hadal::Rumble layer;
+		std::vector<float> l, r;
+		render(layer, FS, d, 30.f, l, r);
+		float pk = 0;
+		for (size_t i = 0; i < l.size(); i++)
+			pk = std::max(pk, std::max(std::fabs(l[i]), std::fabs(r[i])));
+		std::printf("  rumble depth %.2f: peak %.3f x RMS (stated %.3f)\n", d, pk, layer.peak());
+		CHECK(pk <= layer.peak() && layer.peak() <= 2.0f, "rumble peaks at %.3f at depth %.2f (stated %.3f, want <= 2.0)", pk,
+		      d, layer.peak());
+		CHECK(pk >= 0.9f * layer.peak(), "rumble's stated peak %.3f at depth %.2f is never approached (%.3f)", layer.peak(),
+		      d, pk);
+	}
+}
+
 void rumble_little_below_15hz() {
 	rka::hadal::Rumble layer;
 	std::vector<float> l, r;
@@ -105,7 +140,7 @@ void noDc(const char* name) {
 		L layer;
 		std::vector<float> l, r;
 		render(layer, FS, d, 10.f, l, r);
-		// 5e-3 of the layer's RMS (-46 dB): a 20-40 Hz band of noise averaged
+		// 5e-3 of the layer's RMS (-46 dB): a 20-70 Hz band of noise averaged
 		// over 10 s wanders by about 1e-3 with no DC at all, so a tighter
 		// bound would fail on chance; a real offset is far larger.
 		CHECK(std::fabs(mean(l)) < 5e-3 && std::fabs(mean(r)) < 5e-3, "%s DC at depth %.0f: %g / %g", name, d, mean(l),
@@ -414,6 +449,8 @@ int main() {
 	hiss_centroid_falls_with_depth();
 	layer_level_flat_across_depth();
 	rumble_little_below_15hz();
+	rumble_audible_when_deep();
+	rumble_peaks_bounded();
 	no_dc();
 	rumble_correlated_hiss_not();
 	no_pitch();

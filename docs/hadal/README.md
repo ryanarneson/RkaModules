@@ -29,7 +29,7 @@ default. Going deeper darkens every layer at once, each within its own range:
 
 | Layer | 0 km | 11 km |
 |---|---|---|
-| Rumble | a low roar, energy up to about 120 Hz | near-subsonic pressure, mostly 20 to 40 Hz |
+| Rumble | a low roar, energy up to about 160 Hz | a deep growl, mostly 20 to 70 Hz with overtones above |
 | Hiss | bright air, up to about 12 kHz | a dull, muffled roar, up to about 1.5 kHz |
 | Crackle | sharp, bright, very short ticks | soft, darker, longer thuds |
 
@@ -40,6 +40,11 @@ noon level (slightly quieter at 0 km, slightly louder at 11 km). Rumble is
 high-passed at 20 Hz, with little energy below 15 Hz, and Hiss at about
 250 Hz.
 
+**Rumble is soft-clipped, harder as Depth goes down.** The clip adds
+overtones above the rumble's own band, so the deep settings stay audible on
+speakers that play little below 60 Hz; with a sub, the low band is all
+still there. At 11 km about a third of Rumble's energy is above 60 Hz.
+
 ### Rumble, Hiss, Crackle: levels
 
 Each knob is its layer's level, from silent (fully left) to full. The law is
@@ -49,17 +54,18 @@ the L/R mix alike.
 
 - **Hiss at full:** about 1.6 V RMS at its own output. Noise has high
   peaks, so it reaches around the ±5 V audio standard.
-- **Rumble at full:** about 3.2 V RMS at its own output, twice Hiss's
-  voltage and about as loud as a ±5 V sine. The ear is weak below 100 Hz,
-  so Rumble needs the extra to be heard beside Hiss. Its peaks run into the
-  output's soft limit (8 V knee, 10 V ceiling), which rounds them.
+- **Rumble at full:** about 2.5 V RMS at its own output, 4 dB over Hiss:
+  the ear is weak below 100 Hz, so Rumble needs the extra to be heard
+  beside it. Its soft clip keeps the peaks inside ±5 V at Drift 0 (about
+  5 V at 0 km, 3 V at 11 km); Drift's level wander can lift them by up to
+  4 dB.
 - **Crackle at full:** about 0.14 V RMS long-term on its own output, at
   Drift 0 and noon Depth. It is sparse, so its average is low while its
   ticks are loud. Each tick is soft-clipped, which brings the small and mid
   ticks up and rounds the biggest; at Drift 0 no tick peaks above ±5 V.
   Drift's level wander (up to +4 dB) can push the odd tick past that, to
   about 5.3 V at the default Drift and 7.6 V at full.
-- **Defaults:** Rumble 70 % (about 1.6 V RMS at its own output, half that
+- **Defaults:** Rumble 80 % (about 1.6 V RMS at its own output, half that
   in each side of the mix), Hiss 30 %, Crackle 0 %, so a freshly placed Hadal gives a usable bed at once.
 
 ### Crackle: what it is
@@ -121,9 +127,7 @@ zipper noise or clicks.
 - **Headroom:** every output has a soft limit that starts at 8 V and never
   passes 10 V. At default settings it never acts. With Hiss at full it
   catches only occasional noise peaks, a few more when Drift pushes the
-  level up. With Rumble at full, its own output's peaks are rounded
-  steadily (about 1 sample in 100); in the mix, at half the level, only the
-  odd peak is.
+  level up.
 - With nothing patched, Hadal does no work. A layer that isn't patched
   and isn't needed for the mix isn't computed.
 
