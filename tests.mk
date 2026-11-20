@@ -68,6 +68,11 @@ build/test/wake/test_hostile: src/wake/test_hostile.cpp src/testing.hpp $(wildca
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/wake $< -o $@
 
+# Narrows' hostile-input test: the sanitizers, and the counting operator new.
+build/test/narrows/test_hostile: src/narrows/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/narrows/*.hpp src/fathom/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/narrows $< -o $@
+
 # Fog's hostile-input test: the sanitizers, and the counting operator new.
 build/test/fog/test_hostile: src/fog/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/fog/*.hpp)
 	@mkdir -p $(@D)

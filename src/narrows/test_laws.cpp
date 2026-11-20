@@ -39,6 +39,10 @@ static void clamp_law() {
 	CHECK(clampHz(NAN, 48000.f) == 8.f, "NaN");
 	CHECK(clampHz(INFINITY, 48000.f) == 20000.f && clampHz(-INFINITY, 48000.f) == 8.f, "infinities");
 	CHECK(clampHz(440.f, 48000.f) == 440.f, "inside");
+	// A rate so low that the floor is above its ceiling: the ceiling wins,
+	// so the filter is never asked for a cutoff past 0.45 fs.
+	CHECK(clampHz(100.f, 10.f) == 4.5f && clampHz(1.f, 10.f) == 4.5f && clampHz(NAN, 10.f) == 4.5f, "at 10 Hz: %g, %g",
+	      clampHz(100.f, 10.f), clampHz(1.f, 10.f));
 }
 
 static void amounts() {

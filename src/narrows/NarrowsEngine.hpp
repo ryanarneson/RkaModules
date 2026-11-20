@@ -192,7 +192,7 @@ struct NarrowsEngine {
 			l = l * (1.f / narrows::VOLTS) + knock;
 			r = r * (1.f / narrows::VOLTS) + knock;
 
-			const float centre = narrows::hzFromOctaves(clampf(narrows::CUTOFF_OCTAVES * cutoff_ + cv(in.voct, v) + cv(in.fm, v) * fm_, -8.f, 16.f));
+			const float centre = narrows::hzFromOctaves(narrows::CUTOFF_OCTAVES * cutoff_ + cv(in.voct, v) + cv(in.fm, v) * fm_);
 			const float hzL = narrows::clampHz(centre * spreadDown_, fs_), hzR = narrows::clampHz(centre * spreadUp_, fs_);
 			hz[2 * v] = hzL;
 			hz[2 * v + 1] = hzR;
@@ -236,54 +236,60 @@ struct NarrowsEngine {
 			white[n][1] = white[n - 1][1];
 		}
 
-		// --- per pass: four sides through the core at twice the rate ---
+		// --- four sides at a time through the core, at twice the rate ---
+		// Stage by stage across the passes, not pass by pass: each pass's
+		// arithmetic is one long chain (every step waits on the last), and
+		// the passes are independent, so side by side the processor can run
+		// several chains at once.
 		const float outGain = makeup_ * narrows::VOLTS;
+		Lane lane[PASSES];
 		for (int p = 0; p < passes; p++) {
 			const int a = 2 * p, b = a + 1;   // the two voices of this pass
+			Lane& q = lane[p];
 			const Float4 in4 = {x[2 * a], x[2 * a + 1], x[2 * b], x[2 * b + 1]};
 			const Float4 hz4 = {hz[2 * a], hz[2 * a + 1], hz[2 * b], hz[2 * b + 1]};
-			const Float4 k4 = {k[a], k[a], k[b], k[b]};
-			const Float4 res4 = {res[a], res[a], res[b], res[b]};
+			q.k = Float4{k[a], k[a], k[b], k[b]};
+			q.res = Float4{res[a], res[a], res[b], res[b]};
 			const narrows::ModeWeights wa = narrows::modeWeights(mode[a]), wb = narrows::modeWeights(mode[b]);
-			const Float4 lp4 = {wa.lp, wa.lp, wb.lp, wb.lp}, bp4 = {wa.bp, wa.bp, wb.bp, wb.bp}, hp4 = {wa.hp, wa.hp, wb.hp, wb.hp};
-			const Float4 g = tan34(hz4 * gScale_);
-
-			// The ladder's mix: the Xpander rows blended by Mode, on the
-			// loop input and the four poles. LP24 (0,0,0,0,1), BP
-			// (0,0,4,-8,4), HP (1,-4,6,-4,1).
-			const Float4 w0 = hp4, w1 = -4.f * hp4, w2 = 4.f * bp4 + 6.f * hp4, w3 = -8.f * bp4 - 4.f * hp4,
-			             w4 = lp4 + 4.f * bp4 + hp4;
-			const Float4 comp = 1.f + k4 * lp4;
+			q.lp = Float4{wa.lp, wa.lp, wb.lp, wb.lp};
+			q.bp = Float4{wa.bp, wa.bp, wb.bp, wb.bp};
+			q.hp = Float4{wa.hp, wa.hp, wb.hp, wb.hp};
+			q.g = tan34(hz4 * gScale_);
+			q.comp = 1.f + q.k * q.lp;
 			// The ladder's pitch falls as its oscillation grows, by an amount
 			// set by the feedback above 4 (and a little less at high
 			// cutoffs): raise its cutoff by as much.
-			const Float4 excess = vmax(k4 - narrows::RES_K_ONSET, splat4(0.f));
+			const Float4 excess = vmax(q.k - narrows::RES_K_ONSET, splat4(0.f));
 			const Float4 shift = (narrows::PITCH_FIX_A + narrows::PITCH_FIX_B * excess) * excess
-			                     * vmax(1.f - narrows::PITCH_FIX_G * g, splat4(0.f));
-			const Float4 gLadder = g * (1.f + shift * (1.f + 0.5f * shift));
-
-			Float4 os[2];
-			up_[p].process(in4, os);
-			for (int s = 0; s < 2; s++) {
-				const Float4 w = {white[a][s], white[a][s], white[b][s], white[b][s]};
-				Float4 fromLadder = splat4(0.f), fromState = splat4(0.f);
-				if (ladderOn_ && !(kicking && kickLadder_)) {
-					const LadderNodes<Float4> nodes = ladder_[p].step(os[s], gLadder, k4, comp, w);
-					fromLadder = ladderLimit(w0 * nodes.u + w1 * nodes.y0 + w2 * nodes.y1 + w3 * nodes.y2 + w4 * nodes.y3);
+			                     * vmax(1.f - narrows::PITCH_FIX_G * q.g, splat4(0.f));
+			q.gLadder = q.g * (1.f + shift * (1.f + 0.5f * shift));
+			q.white[0] = Float4{white[a][0], white[a][0], white[b][0], white[b][0]};
+			q.white[1] = Float4{white[a][1], white[a][1], white[b][1], white[b][1]};
+			up_[p].process(in4, q.os);
+		}
+		const bool kickToLadder = kicking && kickLadder_, kickToState = kicking && !kickLadder_;
+		for (int s = 0; s < 2; s++) {
+			if (ladderOn_ && !kickToLadder)
+				for (int p = 0; p < passes; p++)
+					lane[p].fromLadder = ladderStep(p, lane[p], lane[p].os[s], s);
+			if (stateOn_)
+				for (int p = 0; p < passes; p++) {
+					Lane& q = lane[p];
+					const Float4 feed = kickToState ? q.os[s] + q.fromLadder : q.os[s];
+					const narrows::StateOut<Float4> o = state_[p].step(feed, q.g, q.res, q.white[s]);
+					q.fromState = ladderLimit(q.lp * o.lp + q.bp * o.bp + q.hp * o.hp);
 				}
-				if (stateOn_) {
-					const Float4 feed = kicking && !kickLadder_ ? os[s] + fromLadder : os[s];
-					const narrows::StateOut<Float4> o = state_[p].step(feed, g, res4, w);
-					fromState = ladderLimit(lp4 * o.lp + bp4 * o.bp + hp4 * o.hp);
-				}
-				if (ladderOn_ && kicking && kickLadder_) {
-					const LadderNodes<Float4> nodes = ladder_[p].step(os[s] + fromState, gLadder, k4, comp, w);
-					fromLadder = ladderLimit(w0 * nodes.u + w1 * nodes.y0 + w2 * nodes.y1 + w3 * nodes.y2 + w4 * nodes.y3);
-				}
-				os[s] = fromState + fade_ * (fromLadder - fromState);
+			if (ladderOn_ && kickToLadder)
+				for (int p = 0; p < passes; p++)
+					lane[p].fromLadder = ladderStep(p, lane[p], lane[p].os[s] + lane[p].fromState, s);
+			for (int p = 0; p < passes; p++) {
+				Lane& q = lane[p];
+				q.os[s] = !stateOn_ ? q.fromLadder : !ladderOn_ ? q.fromState : q.fromState + fade_ * (q.fromLadder - q.fromState);
 			}
-			const Float4 y = down_[p].process(os) * outGain;
-
+		}
+		for (int p = 0; p < passes; p++) {
+			const int a = 2 * p, b = a + 1;
+			const Float4 y = down_[p].process(lane[p].os) * outGain;
 			// A NaN that got in (it cannot from the ports) does not stay.
 			if (!(y[0] + y[1] + y[2] + y[3] == y[0] + y[1] + y[2] + y[3])) {
 				ladder_[p].reset();
@@ -299,6 +305,23 @@ struct NarrowsEngine {
 	}
 
 private:
+	// One pass's settings and signals for this sample.
+	struct Lane {
+		Float4 g, gLadder, k, comp, res, lp, bp, hp;
+		Float4 white[2];
+		Float4 os[2];
+		Float4 fromLadder, fromState;
+	};
+
+	// One oversampled-rate sample of pass p's ladder, mixed by Mode: the
+	// Xpander rows on the loop input and the four poles, LP24 (0,0,0,0,1),
+	// BP (0,0,4,-8,4), HP (1,-4,6,-4,1), blended.
+	__attribute__((always_inline)) Float4 ladderStep(int p, const Lane& q, Float4 x, int s) {
+		const LadderNodes<Float4> nodes = ladder_[p].step(x, q.gLadder, q.k, q.comp, q.white[s]);
+		return ladderLimit(q.hp * nodes.u - 4.f * q.hp * nodes.y0 + (4.f * q.bp + 6.f * q.hp) * nodes.y1
+		                   - (8.f * q.bp + 4.f * q.hp) * nodes.y2 + (q.lp + 4.f * q.bp + q.hp) * nodes.y3);
+	}
+
 	void setRates(float fs) {
 		fs_ = fs;
 		gScale_ = float(M_PI) / (2.f * fs_);

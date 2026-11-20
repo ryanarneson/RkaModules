@@ -682,6 +682,52 @@ static void normalling() {
 	CHECK(worst < 1e-5, "L alone is the average: off by %g V", worst);
 }
 
+// NaN and infinities at any jack read as 0 V, and what goes into the filter
+// is held to +/-24 V.
+static void bad_volts_read_zero() {
+	const float bad[3] = {NAN, INFINITY, -INFINITY};
+	for (int port = 0; port < 8; port++) {
+		Rig a, b;
+		for (Rig* g : {&a, &b}) {
+			g->f.params[F::RES] = 0.6f;
+			g->f.params[F::COMB] = 0.4f;
+			g->f.params[F::FM] = 0.5f;
+			g->f.inL.channels = g->f.inR.channels = 1;
+			g->e.reset();
+		}
+		NarrowsPort* pa[8] = {&a.f.inL, &a.f.inR, &a.f.voct, &a.f.fm, &a.f.res, &a.f.comb, &a.f.mode, &a.f.ping};
+		NarrowsPort* pb[8] = {&b.f.inL, &b.f.inR, &b.f.voct, &b.f.fm, &b.f.res, &b.f.comb, &b.f.mode, &b.f.ping};
+		pa[port]->channels = pb[port]->channels = 1;
+		Lcg rng(60 + port);
+		long different = 0;
+		for (int i = 0; i < 6000; i++) {
+			a.f.inL.v[0] = b.f.inL.v[0] = 3.f * rng.next();
+			a.f.inR.v[0] = b.f.inR.v[0] = 3.f * rng.next();
+			pa[port]->v[0] = bad[(i / 1000) % 3];
+			pb[port]->v[0] = 0.f;
+			a.step();
+			b.step();
+			if (!(a.r.l[0] == b.r.l[0] && a.r.r[0] == b.r.r[0]))
+				different++;
+		}
+		CHECK(different == 0, "port %d: NaN and infinities against 0 V: %ld samples differ", port, different);
+	}
+	Rig a, b;
+	a.e.reset();
+	b.e.reset();
+	long different = 0;
+	for (int i = 0; i < 6000; i++) {
+		const float sign = (i / 50) % 2 ? 1.f : -1.f;
+		a.mono(sign * 1000.f);
+		b.mono(sign * 24.f);
+		a.step();
+		b.step();
+		if (!(a.r.l[0] == b.r.l[0]))
+			different++;
+	}
+	CHECK(different == 0, "1000 V in against 24 V: %ld samples differ", different);
+}
+
 // --- bounds -------------------------------------------------------------------------
 
 static void bounded_everything_up() {
@@ -793,6 +839,7 @@ int main() {
 	cables_and_voices();
 	voice_count_change_unbroken();
 	normalling();
+	bad_volts_read_zero();
 	bounded_everything_up();
 	output_limit();
 	reset_and_rate_change_rest();

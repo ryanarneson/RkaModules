@@ -37,10 +37,12 @@ inline float hzFromOctaves(float oct) {
 
 // The cutoff the filter is given: CUTOFF_MIN_HZ up to the lower of
 // CUTOFF_MAX_HZ and CUTOFF_MAX_FS of the sample rate. NaN gives the floor.
+// At a rate so low that the floor is past the ceiling, the ceiling.
 inline float clampHz(float hz, float fs) {
 	const float top = CUTOFF_MAX_FS * fs < CUTOFF_MAX_HZ ? CUTOFF_MAX_FS * fs : CUTOFF_MAX_HZ;
-	if (!(hz > CUTOFF_MIN_HZ))
-		return CUTOFF_MIN_HZ;
+	const float floor = CUTOFF_MIN_HZ < top ? CUTOFF_MIN_HZ : top;
+	if (!(hz > floor))
+		return floor;
 	return hz < top ? hz : top;
 }
 

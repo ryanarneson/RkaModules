@@ -186,6 +186,7 @@ static void comb_range() {
 			if (!(y == y))
 				break;
 		}
+	CHECK(c.period() >= 2.f && c.period() < FS / 8.f + 4096.f, "the period stays inside the line: %g", c.period());
 	// The floor is 2 samples: with period 0 asked for, the comb's first
 	// peak is at fs / 2.
 	Comb f = makeComb();
