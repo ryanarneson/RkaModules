@@ -50,7 +50,7 @@ struct ScopeView {
 // `points` entries are valid (fewer than the arrays hold until they fill).
 constexpr int kScopeChannels = 4;
 constexpr int kTraceColumns = 256, kTraceColumnTicks = 260;   // 4 s of traces
-constexpr int kXyPoints = 512, kXyPointTicks = 32;            // 1 s of X/Y
+constexpr int kXyPoints = 512, kXyPointTicks = 130;           // 4 s of X/Y
 struct ScopeHistory {
 	// Traces: each column is the lowest and highest output over its ticks,
 	// so an event shorter than a column still shows.

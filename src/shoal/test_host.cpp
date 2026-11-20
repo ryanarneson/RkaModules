@@ -831,7 +831,7 @@ void testHistoryMatchesOutputs() {
 	h.setSampleRate(shoal::kTickHz);
 	// Viznutcracker sweet: outputs that jump both ways within a column.
 	CHECK(h.post(selectApp(10)), "select Viznutcracker sweet");
-	// 6 s: longer than either ring, so both have wrapped.
+	// 6 s: longer than either ring (4 s each), so both have wrapped.
 	const long n = (long) (6.0 * shoal::kTickHz);
 	std::vector<float> rec[shoal::kNumChannels];
 	for (long i = 0; i < n; i++) {
@@ -878,12 +878,13 @@ void testHistoryMatchesOutputs() {
 	CHECK(moved, "the outputs did not move: the test proves nothing");
 	CHECK(fits == 1, "the last %d columns fit the recorded outputs at %d alignments, want 1", cols, fits);
 	const int pts = 500;
+	CHECK(n > (long) shoal::kXyPointTicks * (pts + 4), "the run is shorter than the X/Y ring");
 	int fitsXy = 0;
 	for (long end = n - 1; end > n - 1 - 400; end--) {
 		bool ok = true;
 		for (int k = 0; k < pts && ok; k++)
 			for (int ch = 0; ch < shoal::kNumChannels && ok; ch++)
-				ok = s->hist.xy[ch][s->hist.points - 1 - k] == rec[ch][end - 32L * k];
+				ok = s->hist.xy[ch][s->hist.points - 1 - k] == rec[ch][end - (long) shoal::kXyPointTicks * k];
 		fitsXy += ok ? 1 : 0;
 	}
 	CHECK(fitsXy == 1, "the last %d X/Y points fit the recorded outputs at %d alignments, want 1", pts, fitsXy);
@@ -903,8 +904,8 @@ void testHistoryFillsThenScrolls() {
 		lastCols = s->hist.columns;
 		lastPts = s->hist.points;
 		if (step == 4)
-			CHECK(lastCols >= 28 && lastCols <= 33 && lastPts >= 240 && lastPts <= 262, "after 0.5 s: %d columns, %d points",
-			      lastCols, lastPts);
+			CHECK(lastCols >= 28 && lastCols <= 33 && lastPts >= 8333 / shoal::kXyPointTicks - 3 && lastPts <= 8333 / shoal::kXyPointTicks + 1,
+			      "after 0.5 s: %d columns, %d points", lastCols, lastPts);
 	}
 	CHECK(grows, "the history shrank while running");
 	CHECK(lastCols == shoal::kTraceColumns && lastPts == shoal::kXyPoints, "after 6 s: %d columns, %d points", lastCols, lastPts);
@@ -966,7 +967,7 @@ void testHistoryClearedOnChange() {
 		const auto s = scoped(h);
 		if (s->view.app == 7) {
 			seen = true;
-			CHECK(s->hist.columns <= 1 && s->hist.points <= 9, "the first Piqued view has %d columns, %d points", s->hist.columns,
+			CHECK(s->hist.columns <= 1 && s->hist.points <= 278 / shoal::kXyPointTicks + 1, "the first Piqued view has %d columns, %d points", s->hist.columns,
 			      s->hist.points);
 		}
 		else {
@@ -988,7 +989,7 @@ void testHistoryClearedOnChange() {
 		}
 		run(h, 0.05, shoal::kTickHz);   // 833 ticks: three frames
 		const auto s = scoped(h);
-		CHECK(s->hist.columns <= 4 && s->hist.points <= 27, "%s: %d columns, %d points left", mode ? "reset" : "restore", s->hist.columns,
+		CHECK(s->hist.columns <= 4 && s->hist.points <= 834 / shoal::kXyPointTicks + 1, "%s: %d columns, %d points left", mode ? "reset" : "restore", s->hist.columns,
 		      s->hist.points);
 	}
 }

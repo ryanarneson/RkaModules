@@ -76,8 +76,13 @@ inline Lanes4 lanes(const ScopeView& v, float w, float h) {
 			break;
 	}
 	l.dividers = l.count ? l.count - 1 : 0;
-	for (int i = 0; i < l.count; i++)
-		l.label[i].at = Point{l.lane[i].x + pixel(h) * 1.5f, l.lane[i].y + pixel(h)};
+	// Letters at each lane's top left; References prints its values there
+	// (rows 0 to 8 and 22 to 30), so its letters go at the foot of its
+	// columns, in the clear rows above the text.
+	for (int i = 0; i < l.count; i++) {
+		const float y = v.lanes == Lanes::Columns4Top ? l.lane[i].bottom() - labelSize(h) - pixel(h) : l.lane[i].y + pixel(h);
+		l.label[i].at = Point{l.lane[i].x + pixel(h) * 1.5f, y};
+	}
 	return l;
 }
 

@@ -130,10 +130,10 @@ show in both modes.
   fits.
 - Higher voltage is to the right and up (my call: the firmware's plot runs
   right to left, so against a unit the picture is mirrored).
-- The curve is the last **1 s** of output, newest brightest, fading to
-  about 15 % at the oldest end. It needs finer time resolution than the
-  trace ring: `Host` keeps a second ring of **512 points** per pair, one
-  every 32 ticks (1.9 ms), plain samples.
+- The curve is the last **4 s** of output (first built as 1 s: at
+  Low-rents' default speed that was a stub of a line), newest brightest,
+  fading to about 15 % at the oldest end. `Host` keeps a second ring of
+  **512 points** per output, one every 130 ticks (7.8 ms), plain samples.
 
 ### Grid and circle (Automatonnetz)
 

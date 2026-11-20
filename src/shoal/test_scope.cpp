@@ -78,6 +78,10 @@ void lanes_tile_the_screen() {
 				CHECK(std::strcmp(l.label[i].text, k.labels[i]) == 0, "%s: lane %d is labelled \"%s\"", k.name, i, l.label[i].text);
 				CHECK(within(l.label[i].at, l.lane[i]) && l.label[i].at.x + labelSize(h) <= l.lane[i].right() &&
 				      l.label[i].at.y + labelSize(h) <= l.lane[i].bottom(), "%s: label %d is outside its lane", k.name, i);
+				// References prints its values along the top of its columns:
+				// its letters go at the foot of each, clear of them.
+				CHECK((l.label[i].at.y > l.lane[i].y + l.lane[i].h * 0.6f) == (k.v.lanes == Lanes::Columns4Top),
+				      "%s: label %d is at the %s of its lane", k.name, i, l.label[i].at.y > l.lane[i].y + l.lane[i].h * 0.6f ? "foot" : "top");
 				// In order: left to right, or top to bottom.
 				if (i > 0)
 					CHECK(k.rows ? near(l.lane[i].y, l.lane[i - 1].bottom()) && near(l.lane[i].x, l.lane[i - 1].x)
