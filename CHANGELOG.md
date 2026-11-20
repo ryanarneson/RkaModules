@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.18 (2026-11-20): Hadal: Rumble louder (3.2 V RMS at full, twice the old level; default 70 %)
 - 2.0.17 (2026-11-19): Rigging: final review fixes (the pitch glide ends; DC cannot pile up in a string or thump through a level knob; Ring changes ramp; a slewed note is one strike; Initialize cancels a rake; typed values in the tooltips)
 - 2.0.16 (2026-11-19): Rigging: first build for listening (six tuned strings: drone from any sound, struck by STRUM or a new note at V/OCT)
 - 2.0.15 (2026-11-19): Shoal: final review fixes (lanes always match the pixels shown, overlay clipped to the rack view, Harrington patch in the manual)
