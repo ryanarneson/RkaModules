@@ -84,11 +84,12 @@ Anti-goals:
 
 The reference for a string of this kind is Mutable Instruments' Rings
 (`~/ws/plugins/eurorack/rings/dsp`, MIT; `string.cc`, `string.h`,
-`plucker.h`, `strummer.h`): read for its method, not copied. Its `stmlib`
-is a submodule that is not checked out there, so its delay line and
-filters are not readable locally. What its string does that bears on this
-design (read 2026-11-19; the Rings code has not changed in substance since
-2020):
+`plucker.h`, `strummer.h`, with `stmlib/dsp/delay_line.h` and
+`filter.h` from its `stmlib` submodule): read for its method, not copied.
+The checkout is upstream's `master` (f4cfa76, October 2026) with its
+submodules. What its string does that bears on this design (read
+2026-11-19; the Rings code has not changed in substance since 2020, nor
+stmlib's DSP since 2023):
 
 - **Decay and brightness are separate.** A gain per trip round the loop,
   worked out from the wanted decay time and the string's period, sets how
@@ -103,8 +104,13 @@ design (read 2026-11-19; the Rings code has not changed in substance since
 - **The filters' own delay is taken off the string's length** (one sample
   for its three-tap filter, a table for its second filter): the tuning
   compensation this design asks for.
-- **A Hermite read** of the delay, as `src/DelayLine.hpp` has, and no DC
-  blocker in the plain string's loop.
+- **A Hermite read** of the delay (stmlib's is the same four-point
+  interpolation as `src/DelayLine.hpp`), and no DC blocker in the plain
+  string's loop.
+- **Rings can strum itself**: with nothing in its trigger input it
+  strikes when the note at V/OCT changes, or when it hears an onset in
+  the audio. Rigging does not (a strike needs STRUM); it would be a small
+  addition if wanted.
 - **A pluck is noise for one period of the string**, low-passed, not a
   fixed few milliseconds: the burst's length follows the pitch.
 - It also has stiffness (an all-pass in the loop that stretches the

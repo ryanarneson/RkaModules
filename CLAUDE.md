@@ -79,5 +79,5 @@ layout.
   AudibleInstruments (official, Mutable ports), SanguineMonsters (large
   plugin, CI pattern copied from it), forsitan-modulare (header-only DSP +
   offline test harness, the pattern used here), eurorack
-  (pichenettes/eurorack: Mutable Instruments firmware DSP, with Beads;
-  its `stmlib` submodule is not checked out).
+  (pichenettes/eurorack with its submodules: Mutable Instruments
+  firmware DSP, with Beads; shared DSP in `stmlib/dsp`).
