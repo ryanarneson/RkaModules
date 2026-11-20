@@ -43,6 +43,8 @@ constexpr float INPUT_HIGHPASS_HZ = 3.f;
 // share, which keeps the drone's loudness steady across Ring), and the
 // strings' sum on its way to the soft limit.
 constexpr float INPUT_GAIN = 1.f;
+// The strings hear the input only up to this many volts either way.
+constexpr float INPUT_MAX = 24.f;
 constexpr float OUTPUT_GAIN = 1.f;
 
 // Where the six strings sit, -1 (left) to +1 (right): the lowest in the

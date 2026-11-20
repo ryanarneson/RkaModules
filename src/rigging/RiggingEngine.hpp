@@ -129,13 +129,18 @@ public:
 		// The input: either jack alone is both sides.
 		const float rawL = f.inLPatched ? finite(f.inL) : f.inRPatched ? finite(f.inR) : 0.f;
 		const float rawR = f.inRPatched ? finite(f.inR) : rawL;
-		inL_ += inputHp_ * (rawL - inL_);
-		inR_ += inputHp_ * (rawR - inR_);
+		// What the strings hear is kept to +-INPUT_MAX volts: a wild input
+		// (1e30 V) would otherwise sit in the high-pass for seconds after
+		// it had gone. The dry path passes the input as it is.
+		const float heardL = rawL > INPUT_MAX ? INPUT_MAX : rawL < -INPUT_MAX ? -INPUT_MAX : rawL;
+		const float heardR = rawR > INPUT_MAX ? INPUT_MAX : rawR < -INPUT_MAX ? -INPUT_MAX : rawR;
+		inL_ += inputHp_ * (heardL - inL_);
+		inR_ += inputHp_ * (heardR - inR_);
 		if (inL_ < 1e-20f && inL_ > -1e-20f)
 			inL_ = 0.f;
 		if (inR_ < 1e-20f && inR_ > -1e-20f)
 			inR_ = 0.f;
-		const float feed[2] = {(rawL - inL_) * INPUT_GAIN, (rawR - inR_) * INPUT_GAIN};
+		const float feed[2] = {(heardL - inL_) * INPUT_GAIN, (heardR - inR_) * INPUT_GAIN};
 
 		float wetL = 0.f, wetR = 0.f;
 		for (int k = 0; k < kStrings; k++) {
