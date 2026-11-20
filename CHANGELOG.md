@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.16 (2026-11-19): Rigging: first build for listening (six tuned strings: drone from any sound, struck by STRUM or a new note at V/OCT)
 - 2.0.15 (2026-11-19): Shoal: final review fixes (lanes always match the pixels shown, overlay clipped to the rack view, Harrington patch in the manual)
 - 2.0.14 (2026-11-19): Shoal: upper screen lanes and smooth views (traces, X/Y, note circle, grid); strip dividers; patches to try in the manual
 - 2.0.13 (2026-11-18): Squall: final review fixes (Gust in average-gap time: no burst on a clock switch, no rate change under Weather CV; inf on Clock/Freeze reads 0 V)
