@@ -1,7 +1,13 @@
 # Wake: a comprehensive stereo tap delay
 
-Status: idea, 2026-11-15. Not designed. The user asked for "a
-comprehensive delay. stereo/tap. good functionality."
+Status: built (2026-11-20, 14 HP). Design: `docs/specs/2026-11-20-wake-design.md`;
+manual: `docs/wake/README.md`. As built it is a stereo echo for struck sounds, much
+smaller than this sketch: three styles (Tape, Analog, Digital), a Ratio between the
+sides, ping pong, Freeze, Diffuse, Drift and a clock input. The four taps and their
+outputs, the Send and Return, tap tempo, Reverse and Drive were left out. The text
+below is the original idea.
+
+The user asked for "a comprehensive delay. stereo/tap. good functionality."
 
 ![mockup](wake-mockup.svg)
 

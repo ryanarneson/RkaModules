@@ -1,7 +1,7 @@
 {
   "slug": "rka",
   "name": "RKA",
-  "version": "2.0.19",
+  "version": "2.0.21",
   "license": "GPL-3.0-or-later",
   "brand": "RKA",
   "author": "Ryan Arneson",
@@ -116,6 +116,16 @@
         "Drone"
       ],
       "keywords": "strings resonator karplus strong pluck strum drone chord comb ambient"
+    },
+    {
+      "slug": "Wake",
+      "name": "Wake",
+      "description": "Stereo echo, 10 ms to 10 s: Tape, Analog and Digital styles, a Ratio between the sides, ping pong, Freeze, Diffuse, Drift, a clock input, CV on Time, Feedback and Mix",
+      "tags": [
+        "Delay",
+        "Clock modulator"
+      ],
+      "keywords": "delay echo tape analog bbd digital ping pong freeze diffuse stereo ambient"
     }
   ]
 }
