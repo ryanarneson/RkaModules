@@ -7,6 +7,7 @@
 #include "hadal/Random.hpp"
 
 #include <cmath>
+#include <cstdlib>
 #include <complex>
 #include <initializer_list>
 #include <vector>

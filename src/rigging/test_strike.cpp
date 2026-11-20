@@ -4,6 +4,7 @@
 #include "rigging/Strike.hpp"
 
 #include <cmath>
+#include <cstdlib>
 #include <vector>
 
 using rka::rigging::Strike;
