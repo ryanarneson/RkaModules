@@ -272,8 +272,12 @@ void rate_change() {
 	CHECK(peakOver(g, 4800) == 0.f, "silent until a set at the new rate arrives");
 	TapeSet* old = g.sine(0.5, 100.0, 2.f);   // made at 48 kHz
 	CHECK(g.e.offer(old), "a set at the old rate is offered");
-	g.run(10);
-	CHECK(g.collected.count(old) == 1 && g.e.live() == nullptr, "and comes straight back");
+	bool neverLive = true;
+	for (int i = 0; i < 10; i++) {
+		g.step();
+		neverLive = neverLive && g.e.live() != old;
+	}
+	CHECK(neverLive && g.collected.count(old) == 1 && g.e.live() == nullptr, "and comes straight back, never taken");
 	TapeSet* b = g.make(44100.f);
 	for (size_t k = 0; k < 22050; k++)
 		b->tape.ch[0][k] = b->tape.ch[1][k] = b->original.ch[0][k] = b->original.ch[1][k] =

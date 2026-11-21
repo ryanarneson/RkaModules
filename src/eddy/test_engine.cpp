@@ -525,34 +525,40 @@ void wear_zero() {
 }
 
 void wear_window() {
-	for (float start : {0.3f, 0.8f}) {
-		Rig g;
-		TapeSet* set = g.noise(0.2, 3.f, 21, 480);
-		g.use(set);
-		const Snapshot before(set->tape);
-		const double n = 9600;
-		g.f.params[F::START] = start;
-		g.f.params[F::LENGTH] = lengthKnob(0.4 * n, n, g.fs);
-		g.f.params[F::WEAR] = 1.f;
-		const Window w = rka::eddy::window(start, 0.f, g.f.params[F::LENGTH], 0.f, n, 0.0, g.fs);
-		g.press(&F::playPress);
-		g.run(50 * (long) w.length);
-		long changedOut = 0, changedIn = 0, in = 0;
-		for (size_t k = 0; k < (size_t) n + 480; k++) {
-			const double rel = ahead(w.start, (double) k, n);
-			const bool inside = k < (size_t) n && rel < w.length;
-			const bool near = k < (size_t) n && (rel < w.length + 2.0 || rel > n - 2.0);
-			const bool changed = set->tape.ch[0][k] != before.ch[0][k] || set->tape.ch[1][k] != before.ch[1][k];
-			if (inside) {
-				in++;
-				changedIn += changed;
+	// Both directions: going backwards the last move of a turn ends a frame
+	// below Start, and only the window's clip keeps the write off it.
+	for (float knob : {1.f, -1.f})
+		for (float start : {0.3f, 0.8f}) {
+			Rig g;
+			TapeSet* set = g.noise(0.2, 3.f, 21, 480);
+			const double n = 9600;
+			g.f.params[F::SPEED] = knob;
+			g.f.params[F::START] = start;
+			g.f.params[F::LENGTH] = lengthKnob(0.4 * n, n, g.fs);
+			g.f.params[F::WEAR] = 1.f;
+			g.use(set);
+			const Snapshot before(set->tape);
+			const Window w = rka::eddy::window(start, 0.f, g.f.params[F::LENGTH], 0.f, n, 0.0, g.fs);
+			g.press(&F::playPress);
+			g.run(50 * (long) w.length);
+			// The window's frames: from floor(Start) to ceil(Start + Length), round the tape.
+			const double first = std::floor(w.start), span = std::ceil(w.start + w.length) - first;
+			long changedOut = 0, changedIn = 0, in = 0;
+			for (size_t k = 0; k < (size_t) n + 480; k++) {
+				const bool inside = k < (size_t) n && ahead(first, (double) k, n) < span;
+				const bool changed = set->tape.ch[0][k] != before.ch[0][k] || set->tape.ch[1][k] != before.ch[1][k];
+				if (inside) {
+					in++;
+					changedIn += changed;
+				}
+				else
+					changedOut += changed;
 			}
-			else if (!near)
-				changedOut += changed;
+			CHECK(changedOut == 0, "Wear 1, Speed %+.0f, Start %.1f: %ld frames outside the window (or in the tail) changed", knob,
+			      start, changedOut);
+			CHECK(changedIn > in * 9 / 10, "Wear 1, Speed %+.0f, Start %.1f: %ld of %ld frames in the window worn", knob, start,
+			      changedIn, in);
 		}
-		CHECK(changedOut == 0, "Wear 1, Start %.1f: %ld frames outside the window (or in the tail) changed", start, changedOut);
-		CHECK(changedIn > in * 9 / 10, "Wear 1, Start %.1f: %ld of %ld frames in the window worn", start, changedIn, in);
-	}
 	// Dropouts take both sides together, through the engine's own write path.
 	{
 		Rig g;
