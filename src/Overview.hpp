@@ -25,7 +25,11 @@
 // frames (not a running max, which could never fall), into a scratch pair that
 // is published only when the column is complete, so the window never shows a
 // half-scanned column. A column touched again, in frames already scanned,
-// while it is being rescanned starts over.
+// while it is being rescanned is queued for another pass after this one's
+// publish, never restarted, so a head that dubs on in a column does not
+// starve it: a touch shows in the published peaks within two passes, a pass
+// being the column's frames over `budget` samples (plus the passes of other
+// touched columns waiting their turn).
 #include <atomic>
 #include <cfloat>
 #include <cstddef>
@@ -93,13 +97,12 @@ struct Overview {
 			c1 = COLS - 1;
 		for (long long c = c0; c <= c1; c++) {
 			if (c == cur_) {
-				// Restart only if frames already scanned changed; frames
-				// still to come will be read anyway.
-				if (a < pos_ && b > start((int) c, frames_)) {
-					pos_ = start((int) c, frames_);
-					slo_ = FLT_MAX;
-					shi_ = -FLT_MAX;
-				}
+				// Frames already scanned changed: this pass will publish them
+				// as they were, so queue another pass behind it. (Restarting
+				// would starve the column while a head keeps dubbing in it.)
+				// Frames still to come will be read by this pass anyway.
+				if (a < pos_ && b > start((int) c, frames_))
+					mark((int) c);
 			}
 			else
 				mark((int) c);

@@ -221,6 +221,36 @@ void grows_with_recording() {
 	CHECK(o.hi[edge + 2].load() == 0.f && o.lo[COLS - 1].load() == 0.f, "right empty");
 }
 
+// A head that dubs on inside one column (a 10 ms window on a long tape loops
+// in a column): one frame touched per sample, the rescan at budget 8. The
+// column has 512 frames, so a pass is 64 samples; a touch is in the published
+// peaks within two passes (128 samples) when this is the only column touched.
+// The test allows 200 and requires the peak to follow a rising dub.
+void dub_in_one_column() {
+	const size_t n = 262144;   // 512 columns of 512 frames
+	rka::Tape t;
+	t.allocate(n, 0);
+	t.length = n;
+	rka::Overview o;
+	o.build(t);
+	const int col = 300;
+	const size_t a = colStart(col, n);
+	const int LAG = 200;
+	for (int i = 0; i < 3000; i++) {
+		const size_t f = a + 100 + (size_t) (i % 100);   // the loop: 100 frames
+		const float v = 1.f + (float) i * 0.001f;
+		t.ch[0][f] = v;
+		o.touch(f, f + 1, n);
+		o.service(t, 8);
+		if (i >= LAG) {
+			const float need = 1.f + (float) (i - LAG) * 0.001f;
+			CHECK(o.hi[col].load() >= need, "sample %d: hi %g, dub had reached %g %d samples ago", i, o.hi[col].load(), need, LAG);
+			if (o.hi[col].load() < need)
+				break;
+		}
+	}
+}
+
 void short_tape() {
 	for (size_t n = 1; n <= 7; n += 3) {
 		rka::Tape t;
@@ -255,6 +285,7 @@ int main() {
 	shrinks();
 	budget();
 	grows_with_recording();
+	dub_in_one_column();
 	short_tape();
 	return rkatest::finish("eddy test_overview");
 }
