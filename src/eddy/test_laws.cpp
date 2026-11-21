@@ -143,7 +143,8 @@ void turn_smear() {
 		const Window w = window(0.f, 0.f, k, 1.f, TEN_S, 0.0, 48000.f);
 		CHECK(w.overlap == w.length / 2 && w.turn == w.length / 2, "Smear 1, no tail: overlap %g, turn %g, length %g", w.overlap, w.turn, w.length);
 		const Window t = window(0.f, 0.f, k, 1.f, TEN_S, 1e9, 48000.f);
-		CHECK(t.overlap == t.length / 2 && t.turn == t.length / 2 + t.minFade, "Smear 1 with tail: turn %g (want %g)", t.turn, t.length / 2 + t.minFade);
+		// L - (o - m) and L/2 + m may round apart when L is not whole (x86-64).
+		CHECK(t.overlap == t.length / 2 && std::fabs(t.turn - (t.length / 2 + t.minFade)) <= 1e-9 * t.length, "Smear 1 with tail: turn %g (want %g)", t.turn, t.length / 2 + t.minFade);
 	}
 	// Half Smear on a long window: o = L/4 when that is over m.
 	const Window h = window(0.f, 0.f, 1.f, 0.5f, TEN_S, 0.0, 48000.f);
