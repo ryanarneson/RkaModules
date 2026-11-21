@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.24 (2026-11-21): Narrows: final review fixes (the core switch keeps the level with sound passing; a comb opened by CV from noon starts at pitch); manual
 - 2.0.23 (2026-11-20): Narrows: the comb is louder (it keeps noise at its level, so its peaks and a pinged comb stand out)
 - 2.0.22 (2026-11-20): Narrows: first build for listening (polyphonic stereo filter: ladder and state cores, Mode sweep LP/BP/HP, drive, self-oscillation, comb, Ping, Spread)
 - 2.0.21 (2026-11-20): Wake: final review fixes (crossfades add no level, so a clocked or modulated Digital echo decays as it should; Freeze holds exactly the echo that was playing; no clicks on re-freeze or on Time changes with Drift on; a paused clock keeps its tempo)
