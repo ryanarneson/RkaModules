@@ -39,5 +39,25 @@ constexpr float WEAR_DROPOUT_EDGE_S = 0.002f;
 // The write path's DC blocker.
 constexpr float WRITE_DC_HZ = 5.f;
 
+// The engine (EddyEngine.hpp). The tape: 5 minutes, at most 2^24 frames,
+// and a tail of 10 ms (the join's longest fade, F) after it.
+constexpr double TAPE_MAX_S = 300.0;
+constexpr double TAPE_MAX_FRAMES = 16777216.0;
+constexpr double TAIL_S = 0.01;
+// A recording shorter than this is thrown away. Its first part is kept in
+// the engine's own buffer, sized for this long at REC_BUFFER_FS (above that
+// rate the shortest recording is shorter), and copied onto the tape
+// PRE_COPY_FRAMES a sample once the recording stands.
+constexpr double REC_MIN_S = 0.05;
+constexpr float REC_BUFFER_FS = 768000.f;
+constexpr int PRE_COPY_FRAMES = 64;
+// EOC's width; the fade that cuts the oldest voice when all are in use.
+constexpr double EOC_S = 0.001;
+constexpr double CUT_S = 0.001;
+// Controls are read every CONTROL_SAMPLES; the overview rescans at most
+// OVERVIEW_BUDGET frames a sample.
+constexpr int CONTROL_SAMPLES = 16;
+constexpr int OVERVIEW_BUDGET = 32;
+
 } // namespace eddy
 } // namespace rka
