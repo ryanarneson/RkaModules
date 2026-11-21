@@ -2,6 +2,13 @@
 // Float4.hpp): Fathom's Ladder must be bit-identical to the frozen copy in
 // testdata/ref/ (which is the pre-template code, namespace rkaref), and the
 // four-wide core must match four one-wide cores. Run with `make test`.
+//
+// Built with strict floating point (not the plugin's
+// -funsafe-math-optimizations): there the two are the same arithmetic and
+// every compiler must give the same bits. Under the plugin's flags a
+// compiler may order the sums of the two sources differently (GCC 15
+// does; the last bit moves in over half the samples), so that build is
+// test_ladder_fast.cpp, which holds the two to rounding.
 #include "Float4.hpp"
 #include "Ladder.hpp"
 #include "LadderCore.hpp"

@@ -50,7 +50,8 @@
     soft-limited outputs.
   - Drawn as a strait.
 - Fathom: its ladder filter and oversampler are now shared code with
-  Narrows; Fathom's output is unchanged, sample for sample.
+  Narrows; Fathom's output is unchanged (to the bit in the Mac and Linux
+  builds; within rounding on any compiler).
 - New module: **Wake**, a 14 HP stereo echo:
   - Echoes from 10 ms to 10 s behind a struck sound, in three styles:
     Tape (pitch bends when Time moves; repeats soften), Analog (darker and

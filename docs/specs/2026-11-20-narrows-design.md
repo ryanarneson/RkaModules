@@ -18,6 +18,12 @@ manual, `docs/narrows/README.md`, has the numbers as built.
   after listening: "let it go louder"), not "no more than about 6 dB".
 - **Core parameter.** 1 is Ladder (the toggle up, the default), 0 is
   State.
+- **Fathom's bit-identity.** It holds on every compiler under strict
+  floating point (`test_ladder_shared`), and in the Mac and Linux
+  plugin builds. Under the plugin's `-funsafe-math-optimizations` a
+  compiler may order the template's sums differently from the old
+  code's (GCC 15 does, in the last bit), so there the two are held to
+  rounding (`test_ladder_fast`).
 
 ## Intent
 
