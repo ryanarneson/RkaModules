@@ -31,6 +31,13 @@ added, to be built soon: it follows Wake, which was built the same day
 as a smaller module than its sketch (a stereo echo, 14 HP). Narrows has no
 number in the original order. It was built on 2026-11-21, polyphonic.
 
+**Changes since (the user, 2026-11-21):** Eddy was designed as a tape
+loop that also loads and saves WAV files, with a waveform window, so it
+and not Spindrift pays for the first window. Fetch, a player for long
+field recordings (the user's are 100 to 300 MB), was added to follow it;
+it has no number in the original order. Eddy's Wear covers much of
+Rust's ground.
+
 ## 1. A whole patch from RKA alone
 
 With Sway, Fathom and Shoal these six make a complete dark ambient patch:
@@ -55,7 +62,8 @@ is the one to build first and reuse.
 | 7 | [Rigging](rigging.md) (built) | M | Six tuned strings. Hadal's noise through Rigging is a tuned drone: a second voice from two modules already built; struck by Squall, it also covers some of Ping's and Buoy's ground. |
 | 8 | [Wake](wake.md) (built) | L | The delay. Built as a stereo echo for struck sounds, with three styles, Ratio, ping pong and Freeze; the taps and the Send and Return of the first sketch were left out. Its moving read point (`src/DelayTap.hpp`) is the code Eddy and Spindrift reuse. |
 | new | [Narrows](narrows.md) (built) | M | Polyphonic stereo filter: low-pass, band-pass or high-pass on a Mode sweep, with a comb and a ping input. The collection had no filter outside Fathom's voice, and every texture module here wants one after it. Two cores on a switch: Fathom's ladder, now shared code (`src/fathom/LadderCore.hpp`), and a state-variable filter. Its four-wide float type (`src/Float4.hpp`) is there for the next polyphonic module. |
-| 9 | [Eddy](eddy.md) | M | Tape loop. Reuses Wake's buffer code; gives layered, decaying loops. |
+| 9 | [Eddy](eddy.md) (designed) | L | Tape loop that also loads and saves files, up to 5 minutes, with a waveform window, wear in the loop and a Restore to the original. Larger than first guessed: its tape and write head are new code (Wake's read point does not carry over), and it pays for the first drawn window. |
+| new | [Fetch](fetch.md) | M | A player for long field recordings, read from disk. Follows Eddy, whose window, file reader and play head it reuses. |
 | 10 | [Spindrift](spindrift.md) | L | Grain cloud. The first module with a window to draw; the user singled it out. |
 | 11 | [Doldrums](doldrums.md) | L | Spectral freeze and stretch. The highest reward and the highest risk here, so it follows Spindrift, which settles how a window is drawn. |
 

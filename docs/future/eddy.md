@@ -1,6 +1,8 @@
 # Eddy: a tape loop
 
-Status: idea, 2026-11-15. Not designed. 10 HP in the sketch.
+Status: designed, 2026-11-21, not built: `docs/specs/2026-11-21-eddy-design.md`
+(a tape loop that also loads and saves files, 16 HP, with a waveform
+window). The text below is the original idea.
 
 ![mockup](eddy-mockup.svg)
 

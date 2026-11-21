@@ -1,0 +1,62 @@
+diff --git a/tools/gen_panels.py b/tools/gen_panels.py
+index 94b63c9..c165128 100755
+--- a/tools/gen_panels.py
++++ b/tools/gen_panels.py
+@@ -228,6 +228,7 @@ _SQ_COLS = ["GUST", "WEATHER", "MEMORY"]
+ 
+ _WK_X = [7.8, 21.7, 35.56, 49.4, 63.3]
+ _NR_X = _WK_X   # Narrows lines up with Wake
++_ED_X = [7.8, 24.22, 40.64, 57.06, 73.48]   # Eddy: 16 HP, the outer columns as Wake's
+ 
+ 
+ def _hadal_on(x):
+@@ -727,6 +728,49 @@ PANELS = {
+                  "PARAM_CORE": dict(frame=1), "PARAM_MODE": dict(turn=-90)},
+         screws=screws_at(14, "tr", "bl"),
+     ),
++    # MOCKUP: Eddy, a tape loop that also plays files
++    # (docs/specs/2026-11-21-eddy-design.md). The tape's window across the
++    # top over a ruler in tenths; Speed, the hero, between the Rec and Dub
++    # caps and the Play and Loop caps. Five columns, the first and last as
++    # far from the edges as Wake's: Start, Length, Wear and Smear; their
++    # CVs, V/OCT, Dub Level and Mix; then the ins and gates, Play over
++    # EOC, Restore over its trigger, and the outs.
++    "Eddy": dict(
++        dir="eddy",
++        hp=16,
++        title="EDDY",
++        subtitle="TAPE LOOP & SAMPLER",
++        components=[("param", "SPEED", _ED_X[2], 54.0, "SPEED"),
++                    ("param", "REC", _ED_X[0], 47.5, "REC"), ("param", "DUB", _ED_X[0], 60.5, "DUB"),
++                    ("param", "PLAY", _ED_X[4], 47.5, "PLAY"), ("param", "LOOP", _ED_X[4], 60.5, "LOOP"),
++                    ("param", "START", _ED_X[0], 76.0, "START"), ("param", "LENGTH", _ED_X[1], 76.0, "LENGTH"),
++                    ("param", "SPEED_ATT", _ED_X[2], 78.0, None),
++                    ("param", "WEAR", _ED_X[3], 76.0, "WEAR"), ("param", "SMEAR", _ED_X[4], 76.0, "SMEAR"),
++                    ("input", "START_CV", _ED_X[0], 90.0, None), ("input", "VOCT", _ED_X[1], 90.0, "V/OCT"),
++                    ("input", "SPEED_CV", _ED_X[2], 90.0, None),
++                    ("param", "DUB_LEVEL", _ED_X[3], 90.0, "DUB LEVEL"), ("param", "MIX", _ED_X[4], 90.0, "MIX"),
++                    ("input", "L", _ED_X[0], 102.0, "IN L"), ("input", "R", _ED_X[0], 116.0, "IN R"),
++                    ("input", "REC", _ED_X[1], 102.0, "REC"), ("input", "DUB", _ED_X[1], 116.0, "DUB"),
++                    ("input", "PLAY", _ED_X[2], 102.0, "PLAY"), ("output", "EOC", _ED_X[2], 116.0, "EOC"),
++                    ("param", "RESTORE", _ED_X[3], 102.0, "RESTORE"), ("input", "RESTORE", _ED_X[3], 116.0, "TRIG"),
++                    ("output", "L", _ED_X[4], 102.0, "L"), ("output", "R", _ED_X[4], 116.0, "R")],
++        sizes={"PARAM_SPEED": "hero", "PARAM_REC": "cap", "PARAM_DUB": "cap", "PARAM_PLAY": "cap",
++               "PARAM_LOOP": "cap", "PARAM_RESTORE": "cap", "PARAM_DUB_LEVEL": "atten", "PARAM_MIX": "atten"},
++        faces={"PARAM_SPEED": dict(r=16.0, ticks=40, major=5, words_size=1.7,
++                                   words=[(-135, "-2"), (-67.5, "-1"), (0, "0"), (67.5, "+1"), (135, "+2")])},
++        tiles=[dict(port="OUTPUT_L"), dict(port="OUTPUT_R"), dict(port="OUTPUT_EOC")],
++        traces=[["INPUT_START_CV", "PARAM_START"], ["INPUT_SPEED_CV", "PARAM_SPEED_ATT", "PARAM_SPEED"]],
++        # The module draws the tape in exactly this rectangle. The ruler's
++        # px is a 320th of its width: a tick every fortieth, longer every tenth.
++        screens=[("TAPE", 5.0, 19.5, 71.28, 14.0)],
++        rulers={"TAPE": dict(px=71.28 / 320, sides="b")},
++        label_at={"PARAM_SPEED": "face"},
++        # As it opens with a tape on: Speed +1, playing, looped.
++        preview={"PARAM_SPEED": dict(turn=67.5), "PARAM_START": dict(turn=-60), "PARAM_LENGTH": dict(turn=20),
++                 "PARAM_WEAR": dict(turn=-100), "PARAM_SMEAR": dict(turn=-135), "PARAM_DUB_LEVEL": dict(turn=0),
++                 "PARAM_MIX": dict(turn=135), "PARAM_PLAY": dict(lit=True), "PARAM_LOOP": dict(lit=True)},
++        screws=screws_at(16, "tr", "bl"),
++    ),
+ }
+ 
+ def layout_hpp(name, spec):

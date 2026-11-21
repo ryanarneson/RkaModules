@@ -78,6 +78,7 @@ are Doldrums, Rigging, Hadal and Sluice.
 | [Rust](rust.md) | Decay and wear | Rust | 8 HP |
 | [Helm](helm.md) | Scene morph: eight scenes, six outputs | A ship's wheel | 12 HP |
 | [Lee](lee.md) | Ducker and envelope follower | The sheltered side | 8 HP |
+| [Fetch](fetch.md) | Player for long field recordings, read from disk (added 2026-11-21) | The fetch: open water the wind has crossed | not drawn |
 
 Eddy, in the first table, was reworked into a tape loop as part of this.
 
