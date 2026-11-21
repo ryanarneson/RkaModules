@@ -555,14 +555,24 @@ void clear_orders() {
 		g.e.setSampleRate(48000.f);
 		g.run(10);
 		CHECK(g.e.live() == nullptr, "no live set again");
-		TapeSet* c = g.sine(0.5, 100.0, 2.f, 0.0, 480);
+		TapeSet* c = g.make(44100.f);   // at the wrong rate
+		c->tape.length = c->original.length = 22050;
+		TapeSet* e = g.sine(0.5, 100.0, 2.f, 0.0, 480);
 		TapeSet* d = g.sine(0.5, 100.0, 2.f, 0.0, 480);
 		g.e.clear();   // remembered: no set
 		g.run(100);
-		g.e.setSampleRate(44100.f);   // a set at 48 kHz offered now waits out a rate
-		g.e.offer(c);
+		// A later offer() supersedes the waiting clear, even one the engine
+		// refuses for its rate: that set comes back, and the next set taken
+		// is not emptied.
+		CHECK(g.e.offer(c), "a set at the wrong rate offered after the clear");
 		g.run(10);
-		CHECK(g.collected.count(c) == 1, "a set at the wrong rate comes back, the clear still waits");
+		CHECK(g.collected.count(c) == 1 && c->tape.length == 22050, "it comes back, untouched");
+		CHECK(g.e.offer(e), "offered");
+		g.run(100);
+		CHECK(g.e.live() == e && e->tape.length == 24000, "the clear was superseded: the next set is taken intact (%zu frames)",
+		      e->tape.length);
+		g.e.setSampleRate(44100.f);
+		g.run(10);
 		g.e.setSampleRate(48000.f);
 		g.step();
 		// Offered before a second clear(): that clear applies to it.
@@ -570,6 +580,122 @@ void clear_orders() {
 		g.e.clear();
 		g.run(2000);
 		CHECK(g.e.live() == d && d->tape.length == 0, "a clear() after the offer() empties the set taken (%zu frames)", d->tape.length);
+	}
+}
+
+// clear() while a rate change retires the set: a clear() with no usable set
+// is remembered for the next set taken, unless a later offer() supersedes
+// it. Both orders; every set offered comes back exactly once; no crash.
+void clear_during_rate_change() {
+	for (int order = 0; order < 3; order++) {
+		Rig g;
+		std::vector<TapeSet*> offered(g.made);
+		TapeSet* a = g.sine(0.5, 100.0, 2.f, 0.0, 480);
+		offered.push_back(a);
+		g.use(a);
+		g.press(&F::playPress);
+		g.run(4800);
+		TapeSet* b = g.make(44100.f);
+		for (size_t k = 0; k < 22050; k++)
+			b->tape.ch[0][k] = b->tape.ch[1][k] = b->original.ch[0][k] = b->original.ch[1][k] =
+			    (float) (2.0 * std::sin(2 * PI * 100.0 * k / 44100.0));
+		b->tape.length = b->original.length = 22050;
+		offered.push_back(b);
+		g.e.setSampleRate(44100.f);
+		if (order == 0) {
+			// The clear first, before the same sample as the rate change (no
+			// usable set: the live one is at the old rate and on its way
+			// out); samples pass; then the offer: it wins and the set plays.
+			g.e.clear();
+			g.run(1000);
+			CHECK(g.e.offer(b), "offered");
+			g.run(4800);
+			CHECK(g.e.live() == b && b->tape.length == 22050 && g.r.playing && peakOver(g, 4410) > 1.5f,
+			      "clear() then offer() during a rate change: the set plays (%zu frames)", b->tape.length);
+		}
+		else if (order == 1) {
+			// The offer first, then the clear: the set is taken emptied.
+			CHECK(g.e.offer(b), "offered");
+			g.e.clear();
+			g.run(4800);
+			CHECK(g.e.live() == b && b->tape.length == 0 && g.r.empty,
+			      "offer() then clear() during a rate change: the set is taken emptied (%zu frames)", b->tape.length);
+		}
+		else {
+			// A clear under way on the live set when the rate changes (its
+			// voices still fading): it stops there, the old set comes back
+			// as it was, and a set offered next plays.
+			const Snapshot before(a->tape);
+			g.e.setSampleRate(48000.f);   // undo the change above before the engine sees it
+			g.e.clear();
+			g.run(100);
+			g.e.setSampleRate(44100.f);
+			g.run(1000);
+			CHECK(g.collected.count(a) == 1 && before.equals(a->tape), "the old set came back, not emptied");
+			CHECK(g.e.offer(b), "offered");
+			g.press(&F::playPress);
+			g.run(4800);
+			CHECK(g.e.live() == b && b->tape.length == 22050 && g.r.playing && peakOver(g, 4410) > 1.5f,
+			      "a clear under way when the rate changed: the next set plays (%zu frames)", b->tape.length);
+		}
+		CHECK(g.collected.count(a) == 1, "the old set came back");
+		g.e.setSampleRate(96000.f);
+		g.run(1000);
+		bool once = g.collected.size() == offered.size();
+		for (TapeSet* s : offered)
+			once = once && g.collected.count(s) == 1;
+		CHECK(once, "order %d: every set offered came back exactly once (%zu offered, %zu collected)", order, offered.size(),
+		      g.collected.size());
+	}
+}
+
+// A Restore copy in flight, a rate change (the old set waits for the copy),
+// then clear() while that set is still live: the clear waits for the next
+// set taken. A set offered after it plays; one offered before it is emptied.
+void clear_with_copy_in_flight_then_rate_change() {
+	for (int order = 0; order < 2; order++) {
+		Rig g;
+		g.copySamples = 2000;
+		std::vector<TapeSet*> offered(g.made);
+		TapeSet* a = g.sine(0.5, 100.0, 2.f, 0.0, 480);
+		offered.push_back(a);
+		g.use(a);
+		g.press(&F::playPress);
+		g.run(4800);
+		g.press(&F::restorePress);
+		while (g.copying == EddyEngine::NONE)
+			g.step();
+		g.e.setSampleRate(44100.f);
+		g.run(100);
+		CHECK(g.e.live() == a, "the old set waits for its copy");
+		TapeSet* b = g.make(44100.f);
+		b->tape.length = b->original.length = 22050;
+		offered.push_back(b);
+		if (order == 0) {
+			// The reviewer's probe: nothing offered until the old set has
+			// gone back (its copy done), so for a while there is no set.
+			g.e.clear();
+			g.run(4000);
+			CHECK(g.e.live() == nullptr && g.collected.count(a) == 1, "the old set came back after its copy, none live");
+			CHECK(g.e.offer(b), "offered after the clear");
+		}
+		else {
+			CHECK(g.e.offer(b), "offered before the clear");
+			g.e.clear();
+		}
+		g.run(4000);
+		CHECK(g.collected.count(a) == 1 && g.e.live() == b, "the old set came back after its copy; the new one is live");
+		CHECK(order == 0 ? b->tape.length == 22050 : b->tape.length == 0,
+		      order == 0 ? "clear() then offer(): the set is taken intact (%zu frames)"
+		                 : "offer() then clear(): the set is taken emptied (%zu frames)",
+		      b->tape.length);
+		g.e.setSampleRate(96000.f);
+		g.run(1000);
+		bool once = g.collected.size() == offered.size();
+		for (TapeSet* s : offered)
+			once = once && g.collected.count(s) == 1;
+		CHECK(once, "order %d: every set offered came back exactly once (%zu offered, %zu collected)", order, offered.size(),
+		      g.collected.size());
 	}
 }
 
@@ -588,6 +714,8 @@ int main() {
 	rate_change();
 	rate_change_during_rec();
 	clear_orders();
+	clear_during_rate_change();
+	clear_with_copy_in_flight_then_rate_change();
 	handoff();
 	storm();
 	counters();

@@ -397,7 +397,7 @@ private:
 		dubOn_ = false;
 		queued_ = NONE;
 		tapeStale_ = false;
-		clearing_ = false;
+		unclear();
 		oneShotTail_ = false;
 		if (usableSet())
 			computeWindow();
@@ -453,6 +453,7 @@ private:
 		if (old_ && !voices_.owns(old_) && retire(old_))
 			old_ = nullptr;
 		if (live_ && live_->fs != fs_ && inFlight_ == NONE && !voices_.owns(live_) && retire(live_)) {
+			unclear();
 			live_ = nullptr;
 			livePub_.store(nullptr, std::memory_order_release);
 		}
@@ -500,9 +501,10 @@ private:
 		return (int32_t) (a - b) > 0;
 	}
 
-	// A clear() not yet applied: to the live set now, unless a set waits to
-	// be taken (then the later of the two requests wins); with no set at
-	// all it waits for the next one taken.
+	// A clear() not yet applied: to the live set now if it is usable, unless
+	// a set waits to be taken (then the later of the two requests wins);
+	// with no usable set (none, or one at the wrong rate on its way out) it
+	// waits for the next set taken.
 	void clearRequests() {
 		const uint32_t cg = clearGen_.load(std::memory_order_acquire);
 		if (cg == clearDone_)
@@ -512,10 +514,18 @@ private:
 				clearDone_ = cg;   // a later offer supersedes it
 			return;                // else it waits, and empties that set once taken
 		}
-		if (live_) {
+		if (usableSet()) {
 			clearDone_ = cg;
 			beginClear();
 		}
+	}
+
+	// A clear under way on a set that stops being usable (a rate change) or
+	// goes: it stops there. (It need not wait for the next set: any set taken
+	// after it was offered after it, which supersedes it; one offered before
+	// it would have been waiting, and the clear with it.)
+	void unclear() {
+		clearing_ = false;
 	}
 
 	void beginClear() {
@@ -532,7 +542,7 @@ private:
 		voices_.fadeOutAll(fadeRate_);
 	}
 	void finishClear() {
-		if (!clearing_ || inFlight_ != NONE || voices_.owns(live_) || holdGain_ > 0.f)
+		if (!clearing_ || !usableSet() || inFlight_ != NONE || voices_.owns(live_) || holdGain_ > 0.f)
 			return;
 		clearing_ = false;
 		tapeStale_ = false;
