@@ -13,6 +13,7 @@ VCV Rack 2 modules.
 | [**Squall**](docs/squall/README.md) | 8 | Random gates and CV: Weather (one event in 10 min to 8 a second), Gust bursts, Memory loops, Step, Swell and a gate that follows the weather, free or clocked, Freeze |
 | [**Rigging**](docs/rigging/README.md) | 14 | Six tuned strings: a drone from any sound, or struck by a trigger or a new note; seven chords, a level per string, Ring to 60 s, Damp, Spread, CV on Chord, Ring and Damp |
 | [**Wake**](docs/wake/README.md) | 14 | Stereo echo, 10 ms to 10 s: Tape, Analog and Digital styles, a Ratio between the sides, ping pong, Freeze, Diffuse, Drift, a clock input, CV on Time, Feedback and Mix |
+| [**Narrows**](docs/narrows/README.md) | 14 | Polyphonic stereo filter: a ladder and a state-variable core on a switch, Mode sweeps low-pass, band-pass, high-pass, Drive, Res to a playable sine, a comb tuned to the cutoff, Spread, Ping, CV on FM, Res, Comb and Mode |
 | [**Hadal**](docs/hadal/README.md) | 10 | Rumble and noise bed: Rumble, Hiss and Crackle darkened together by Depth (0 to 11 km), slow Drift, CV on all five, a layer out each and an L/R mix |
 | [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware, with a mouse-driven settings list |
 
@@ -65,6 +66,11 @@ src/rigging/             the Rigging strings: Rigging.cpp, RiggingEngine.hpp and
 src/wake/                the Wake echo: Wake.cpp, WakeEngine.hpp and the headers it is
                          built from (Timing.hpp, Colour.hpp, Smear.hpp, WakeTuning.hpp;
                          the shared src/DelayTap.hpp), test_*.cpp, bench.inc, WakeLayout.hpp
+src/narrows/             the Narrows filter: Narrows.cpp, NarrowsEngine.hpp and the
+                         headers it is built from (Laws.hpp, StateCore.hpp, Comb.hpp,
+                         Ping.hpp, NarrowsTuning.hpp; Fathom's ladder, shared as
+                         src/fathom/LadderCore.hpp, and src/Float4.hpp), test_*.cpp,
+                         bench.inc, NarrowsLayout.hpp
 src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   Shoal.cpp              module and widget, mapped onto shoal::Host
   FriendlyList.hpp       the friendly-mode list widget on the lower screen

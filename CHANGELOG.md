@@ -28,6 +28,28 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Narrows**, a 14 HP polyphonic stereo filter:
+  - Two filters on a switch: Fathom's four-pole ladder (24 dB per octave)
+    and a state-variable filter (12 dB), matched in pitch, in where they
+    start to sing and in level; the switch crossfades without a click.
+  - Mode sweeps smoothly from low-pass through band-pass to high-pass, by
+    hand or by CV.
+  - Cutoff from 16 Hz to 16.4 kHz with V/OCT and an FM attenuverter, both
+    at audio rate.
+  - Res up to self-oscillation from 95 %: a sine of 4 to 5 V that follows
+    V/OCT within 1 cent as it starts and 7 cents at full.
+  - Drive into the core's saturation, levelled; a comb before the filter,
+    tuned to the cutoff, with its peaks on the harmonics (right) or
+    between them (left); Spread sets the two sides' cutoffs apart, up to
+    half an octave each way.
+  - PING knocks the filter with a short pulse: a tuned ping with Res up, a
+    pluck with Comb up.
+  - A filter pair for every channel of a polyphonic cable, up to 16; a
+    one-channel cable feeds every voice. CV on FM, Res, Comb and Mode;
+    soft-limited outputs.
+  - Drawn as a strait.
+- Fathom: its ladder filter and oversampler are now shared code with
+  Narrows; Fathom's output is unchanged, sample for sample.
 - New module: **Wake**, a 14 HP stereo echo:
   - Echoes from 10 ms to 10 s behind a struck sound, in three styles:
     Tape (pitch bends when Time moves; repeats soften), Analog (darker and

@@ -4,6 +4,21 @@ Status: design, 2026-11-20. Panel: `docs/future/narrows-mockup.png`
 (approved by the user as a sketch; its generator entry is in "Panel"
 below). Grows from the idea in `docs/future/narrows.md`.
 
+*As built (2026-11-21):* four things differ from the text below; the
+manual, `docs/narrows/README.md`, has the numbers as built.
+
+- **Scale.** Inside, 28 V is 1.0, not 10 V. At the 10 V scale Fathom's
+  ladder self-oscillates at under 1 V.
+- **Res.** Fathom's square law up to feedback 4 at 95 % of the knob, then
+  a straight line to 4.6 at the top (not 4.1 r², onset near 99 %). The
+  sine is 4 to 5 V at full, not 4 to 9 V. The engine corrects the
+  ladder's pitch above the onset.
+- **Comb level.** The comb's input gain is sqrt(1 − f²), so noise keeps
+  its level and the peaks stand up to about 16 dB over dry (the user,
+  after listening: "let it go louder"), not "no more than about 6 dB".
+- **Core parameter.** 1 is Ladder (the toggle up, the default), 0 is
+  State.
+
 ## Intent
 
 The user asked for a filter: "use Instruō I-ō47 as perhaps a starting

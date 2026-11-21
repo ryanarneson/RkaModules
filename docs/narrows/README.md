@@ -103,6 +103,11 @@ The comb is tuned to the cutoff, so the Cutoff dial, V/OCT and FM move
 both together and they stay in tune. Low-pass keeps the comb's lower
 peaks; band-pass picks out the ones near the cutoff.
 
+Noise keeps its loudness as Comb is turned up; the peaks rise out of it,
+to about 16 dB above the dry sound at full. A steady note that sits on a
+peak gets that much louder and can reach the output's soft limit: turn
+the source down, or Comb back.
+
 The **CV** adds to the knob: 5 V is the full travel either way.
 
 ### Spread
@@ -175,6 +180,6 @@ channels: either input alone goes to both.
 - What goes into the filter is limited to ±24 V.
 - A change of sample rate, and Initialize, bring every voice to rest.
 - Saved with the patch: the knobs and the core switch.
-- CPU at 48 kHz: about 0.35 % of a core for one or two voices with the
-  ladder (0.25 % with the state core), and about 2.5 % for 16 voices with
-  everything engaged.
+- CPU at 48 kHz on an Apple M-series Mac: about 0.35 % of a core for one
+  or two voices with the ladder (0.25 % with the state core), and about
+  2.5 % for 16 voices with everything engaged.

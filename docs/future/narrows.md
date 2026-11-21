@@ -1,6 +1,15 @@
 # Narrows: a stereo filter
 
-Status: idea, 2026-11-20. Not designed. The user asked for a filter, soon:
+Status: built (2026-11-21, 14 HP). Design: `docs/specs/2026-11-20-narrows-design.md`;
+manual: `docs/narrows/README.md`. As built it is polyphonic (a filter pair per
+channel, up to 16), Mode sweeps smoothly through low-pass, band-pass and
+high-pass, the core switch is on the panel, each core keeps its own slope,
+the comb sits before the filter and is tuned to the cutoff, and Ping and
+Spread stayed; there is no fine control. The name was checked against the
+VCV Library's manifests on 2026-11-21: no module there is called Narrows.
+The text below is the original idea.
+
+The user asked for a filter, soon:
 "use Instruō I-ō47 as perhaps a starting point. It should do LP/HP and
 band-pass with an optional comb if it can fit in. Stereo if possible", and
 added "I do like Moog filters as well, the filter in the Fathom is pretty
