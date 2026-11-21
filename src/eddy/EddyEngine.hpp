@@ -352,8 +352,9 @@ private:
 	static float finite(float x) {
 		return (x - x == 0.f) ? x : 0.f;
 	}
+	// The output's soft limit; under 1e-20 V is 0, so no subnormal leaves.
 	static float limit(float x) {
-		return eddy::detail::softBound(finite(x));
+		return eddy::detail::softBound(eddy::detail::flushTiny(finite(x)));
 	}
 	// A straight ramp toward the target, arriving exactly.
 	static float ramp(float x, float target, float step) {
@@ -1057,7 +1058,9 @@ private:
 			const float w = wear.process(c, old, 1.f);
 			const float pre = w + dub * ((keep * w + add * v) - w);
 			const float y = guard.process(c, pre);
-			return old + gain * (y - old);
+			// Under 1e-20 V (-400 dB) is silence: a dub over silence would
+			// otherwise take the tape down into subnormals and leave it there.
+			return eddy::detail::flushTiny(old + gain * (y - old));
 		});
 		const double lo = p0 < p1 ? p0 : p1, hi = p0 < p1 ? p1 : p0;
 		const double a = std::floor(lo) - 1.0, b = std::floor(hi) + 2.0;

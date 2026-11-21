@@ -74,6 +74,19 @@ build/test/eddy/test_files: src/eddy/test_files.cpp src/testing.hpp $(wildcard s
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/eddy $< -o $@
 
+# Eddy's hostile-input test: the sanitizers (and the tapes fenced with ASan's
+# poisoning), and counting allocators.
+build/test/eddy/test_hostile: src/eddy/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/eddy/*.hpp src/hadal/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/eddy $< -o $@
+
+# Eddy's thread test: ThreadSanitizer, which cannot be combined with ASan.
+# Fails, saying why, where the compiler cannot build with it.
+build/test/eddy/test_threads: src/eddy/test_threads.cpp src/testing.hpp $(wildcard src/*.hpp src/eddy/*.hpp src/hadal/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=thread -Isrc -Isrc/eddy $< -o $@ || \
+		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Eddy's thread test needs it" >&2; exit 1; }
+
 # Narrows' hostile-input test: the sanitizers, and the counting operator new.
 build/test/narrows/test_hostile: src/narrows/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/narrows/*.hpp src/fathom/*.hpp)
 	@mkdir -p $(@D)
