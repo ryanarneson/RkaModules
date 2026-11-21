@@ -154,12 +154,14 @@ struct NarrowsEngine {
 		else if (fade_ > coreWant)
 			fade_ = fade_ - fadeStep_ > 0.f ? fade_ - fadeStep_ : 0.f;
 		const bool needLadder = fade_ > 0.f, needState = fade_ < 1.f;
-		// A core coming in from idle starts from rest, and for the length of
-		// the fade is fed the other core's output on top of its input, so a
-		// self-oscillating voice is handed over and not left to grow again
-		// from its noise. Both cores already running (the switch flipped
-		// back mid-fade): no kick, so the two can never feed each other in
-		// turn.
+		// A core coming in from idle starts from rest, and through the fade
+		// a voice that is ringing or self-oscillating (Res near the onset or
+		// above) is fed the other core's output on top of its input, by the
+		// other core's share of the fade, so the tone is handed over and not
+		// left to grow again from its noise. Lower Res gets no kick: the
+		// input alone carries it, and a kick would double the level. Both
+		// cores already running (the switch flipped back mid-fade): no kick,
+		// so the two can never feed each other in turn.
 		if (needLadder && !ladderOn_) {
 			for (int p = 0; p < PASSES; p++)
 				ladder_[p].reset();
@@ -198,14 +200,10 @@ struct NarrowsEngine {
 			hz[2 * v + 1] = hzR;
 
 			const float feedback = narrows::combFeedback(combKnob_ + cv(in.comb, v) * 0.2f);
-			if (feedback != 0.f) {
-				l = comb_[2 * v].process(l, fs_ / hzL, feedback);
-				r = comb_[2 * v + 1].process(r, fs_ / hzR, feedback);
-			}
-			else {
-				l = comb_[2 * v].process(l, 0.f, 0.f);
-				r = comb_[2 * v + 1].process(r, 0.f, 0.f);
-			}
+			// At noon too the comb is given its period, so that opened by a
+			// CV it starts at pitch.
+			l = comb_[2 * v].process(l, fs_ / hzL, feedback);
+			r = comb_[2 * v + 1].process(r, fs_ / hzR, feedback);
 			x[2 * v] = l * driveGain_;
 			x[2 * v + 1] = r * driveGain_;
 
@@ -268,6 +266,11 @@ struct NarrowsEngine {
 			up_[p].process(in4, q.os);
 		}
 		const bool kickToLadder = kicking && kickLadder_, kickToState = kicking && !kickLadder_;
+		if (kicking) {
+			const float share = kickLadder_ ? 1.f - fade_ : fade_;   // the outgoing core's
+			for (int p = 0; p < passes; p++)
+				lane[p].kick = share * vmin(vmax((lane[p].res - narrows::KICK_RES_FROM) * (1.f / (narrows::RES_ONSET - narrows::KICK_RES_FROM)), splat4(0.f)), splat4(1.f));
+		}
 		for (int s = 0; s < 2; s++) {
 			if (ladderOn_ && !kickToLadder)
 				for (int p = 0; p < passes; p++)
@@ -275,13 +278,13 @@ struct NarrowsEngine {
 			if (stateOn_)
 				for (int p = 0; p < passes; p++) {
 					Lane& q = lane[p];
-					const Float4 feed = kickToState ? q.os[s] + q.fromLadder : q.os[s];
+					const Float4 feed = kickToState ? q.os[s] + q.kick * q.fromLadder : q.os[s];
 					const narrows::StateOut<Float4> o = state_[p].step(feed, q.g, q.res, q.white[s]);
 					q.fromState = ladderLimit(q.lp * o.lp + q.bp * o.bp + q.hp * o.hp);
 				}
 			if (ladderOn_ && kickToLadder)
 				for (int p = 0; p < passes; p++)
-					lane[p].fromLadder = ladderStep(p, lane[p], lane[p].os[s] + lane[p].fromState, s);
+					lane[p].fromLadder = ladderStep(p, lane[p], lane[p].os[s] + lane[p].kick * lane[p].fromState, s);
 			for (int p = 0; p < passes; p++) {
 				Lane& q = lane[p];
 				q.os[s] = !stateOn_ ? q.fromLadder : !ladderOn_ ? q.fromState : q.fromState + fade_ * (q.fromLadder - q.fromState);
@@ -310,7 +313,7 @@ private:
 		Float4 g, gLadder, k, comp, res, lp, bp, hp;
 		Float4 white[2];
 		Float4 os[2];
-		Float4 fromLadder, fromState;
+		Float4 fromLadder, fromState, kick;
 	};
 
 	// One oversampled-rate sample of pass p's ladder, mixed by Mode: the

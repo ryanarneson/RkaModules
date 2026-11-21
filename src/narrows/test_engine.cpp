@@ -364,6 +364,60 @@ static void core_switch_no_click_no_gap() {
 
 // --- drive --------------------------------------------------------------------------
 
+// With sound passing, the switch keeps the level: no swell while the two
+// cores cross, and no drop after.
+static void core_switch_holds_level() {
+	for (int from = 0; from < 2; from++)
+		for (int dc = 0; dc < 2; dc++) {
+			Rig g;
+			g.f.params[F::CORE] = float(from);
+			g.e.reset();
+			double before = 0.0, during = 0.0, after = 0.0;
+			for (int i = 0; i < 36000; i++) {
+				g.mono(dc ? 5.f : 5.f * std::sin(2.f * float(M_PI) * 100.f * i / FS));
+				if (i == 12000)
+					g.f.params[F::CORE] = float(1 - from);
+				g.step();
+				const double a = std::fabs(double(g.r.l[0]));
+				if (i >= 6000 && i < 12000)
+					before = std::fmax(before, a);
+				else if (i >= 12000 && i < 14400)
+					during = std::fmax(during, a);
+				else if (i >= 30000)
+					after = std::fmax(after, a);
+			}
+			const double steady = std::fmax(before, after);
+			CHECK(during < 1.12 * steady, "from core %d, %s: %g V in the fade, %g V before, %g V after", from, dc ? "DC" : "sine",
+			      during, before, after);
+		}
+}
+
+// A comb opened from noon by its CV starts at the cutoff's pitch, the same
+// as one that was open all along.
+static void comb_opens_at_pitch() {
+	Rig a, b;
+	Rig* rigs[2] = {&a, &b};
+	for (Rig* g : rigs) {
+		g->f.params[F::CUTOFF] = cutoffKnob(440.f);
+		g->f.comb.channels = 1;
+		g->f.ping.channels = 1;
+		g->e.reset();
+	}
+	b.f.comb.v[0] = 4.5f;   // open all along
+	a.run(4800);
+	b.run(4800);
+	a.f.comb.v[0] = 4.5f;   // a gate opens the comb and strikes it
+	a.f.ping.v[0] = b.f.ping.v[0] = 10.f;
+	double worst = 0.0, peak = 0.0;
+	for (int i = 0; i < 4800; i++) {
+		a.step();
+		b.step();
+		worst = std::fmax(worst, std::fabs(double(a.r.l[0]) - b.r.l[0]));
+		peak = std::fmax(peak, std::fabs(double(b.r.l[0])));
+	}
+	CHECK(peak > 0.1 && worst < 1e-3 * peak, "opened from noon against open all along: %g V apart, peak %g V", worst, peak);
+}
+
 static void drive() {
 	for (int core = 0; core < 2; core++) {
 		double base = 0.0, lastThd = 0.0;
@@ -832,6 +886,8 @@ int main() {
 	voct_at_audio_rate();
 	spread();
 	core_switch_no_click_no_gap();
+	core_switch_holds_level();
+	comb_opens_at_pitch();
 	drive();
 	ping_rings();
 	comb_in_the_engine();

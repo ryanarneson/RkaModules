@@ -34,6 +34,9 @@ static const float SPREAD_OCTAVES = 1.f;
 // self-oscillating sine gets (the ladder's level grows with the excess
 // over 4, and its pitch falls with it: PITCH_FIX in the engine).
 static const float RES_ONSET = 0.95f;
+// The core switch hands a ringing voice over (the kick) from this Res up,
+// in full from RES_ONSET.
+static const float KICK_RES_FROM = 0.85f;
 static const float RES_K_ONSET = 4.f;
 static const float RES_K_MAX = 4.6f;
 
