@@ -227,6 +227,7 @@ _SQ_COLS = ["GUST", "WEATHER", "MEMORY"]
 
 
 _WK_X = [7.8, 21.7, 35.56, 49.4, 63.3]
+_NR_X = _WK_X   # Narrows lines up with Wake
 
 
 def _hadal_on(x):
@@ -676,6 +677,54 @@ PANELS = {
         preview={"PARAM_TIME": dict(turn=-2), "PARAM_FEEDBACK": dict(turn=-36.8), "PARAM_TONE": dict(turn=0),
                  "PARAM_TIME_ATT": dict(turn=0), "PARAM_RATIO": dict(turn=0), "PARAM_MIX": dict(turn=-40.5),
                  "PARAM_DIFFUSE": dict(turn=-135), "PARAM_DRIFT": dict(turn=-94.5), "LIGHT_TAPE": dict(lit=True)},
+        screws=screws_at(14, "tr", "bl"),
+    ),
+    # Narrows, a polyphonic stereo filter. Five columns, as Wake: Drive and
+    # the inputs | FM | Res | Comb | Spread, Ping and the outputs. The core
+    # switch (up: Fathom's ladder; down: a state-variable filter) sits by
+    # the dial; Mode sweeps LP, BP, HP on the bottom rows.
+    "Narrows": dict(
+        dir="narrows",
+        hp=14,
+        title="NARROWS",
+        subtitle="STEREO FILTER",
+        components=[("param", "CUTOFF", 35.56, 37.0, "CUTOFF"),
+                    ("param", "DRIVE", _NR_X[0], 64.0, "DRIVE"),
+                    ("param", "FM", _NR_X[1], 64.0, "FM"),
+                    ("param", "RES", _NR_X[2], 64.0, "RES"),
+                    ("param", "COMB", _NR_X[3], 64.0, "COMB"),
+                    ("param", "SPREAD", _NR_X[4], 64.0, "SPREAD"),
+                    ("input", "VOCT", _NR_X[0], 83.0, "V/OCT"),
+                    ("input", "FM_CV", _NR_X[1], 83.0, None),
+                    ("input", "RES_CV", _NR_X[2], 83.0, None),
+                    ("input", "COMB_CV", _NR_X[3], 83.0, None),
+                    ("input", "PING", _NR_X[4], 83.0, "PING"),
+                    ("param", "CORE", 62.5, 37.0, None),
+                    ("input", "L", _NR_X[0], 102.0, "IN L"),
+                    ("input", "R", _NR_X[0], 116.0, "IN R"),
+                    ("param", "MODE", 42.5, 108.0, "MODE"),
+                    ("input", "MODE_CV", _NR_X[1], 108.0, None),
+                    ("output", "L", _NR_X[4], 102.0, "L"),
+                    ("output", "R", _NR_X[4], 116.0, "R")],
+        sizes={"PARAM_CUTOFF": "hero", "PARAM_CORE": "toggle", "PARAM_MODE": "face"},
+        circles=[(35.56, 37.0, r) for r in (26, 42, 58)],
+        faces={"PARAM_CUTOFF": dict(r=17.0, ticks=30, major=3, words_size=1.7,
+                                    words=[(-135, "16"), (-81, "64"), (-27, "250"), (27, "1K"), (81, "4K"),
+                                           (135, "16K")]),
+               "PARAM_MODE": dict(r=8.8, ticks=2, major=1, sweep=180, major_len=0.9, words_r=7.25, words_size=1.45,
+                                  words=[(-90, "LP"), (0, "BP"), (90, "HP")])},
+        tiles=[dict(port="OUTPUT_L"), dict(port="OUTPUT_R")],
+        traces=[[f"INPUT_{n}_CV", f"PARAM_{n}"] for n in ("FM", "RES", "COMB", "MODE")],
+        label_at={"PARAM_CUTOFF": "face", "PARAM_MODE": "face", "INPUT_VOCT": "below", "INPUT_PING": "below"},
+        notes=[(x, 89.0, "CV", 1.6, "dim") for x in _NR_X[1:4]] + [(35.56, 48.0, "HZ", 1.3, "ink"),
+                                                                    (62.5, 31.9, "LADDER", 1.4, "dim"),
+                                                                    (62.5, 44.6, "STATE", 1.4, "dim"),
+                                                                    (_NR_X[1], 114.0, "CV", 1.6, "dim")],
+        # As it opens: Cutoff 1 kHz, Res shown a quarter up, Comb at noon,
+        # Spread and Drive at 0, the ladder, low-pass.
+        preview={"PARAM_CUTOFF": dict(turn=27), "PARAM_DRIVE": dict(turn=-135), "PARAM_FM": dict(turn=0),
+                 "PARAM_RES": dict(turn=-67.5), "PARAM_COMB": dict(turn=0), "PARAM_SPREAD": dict(turn=-135),
+                 "PARAM_CORE": dict(frame=1), "PARAM_MODE": dict(turn=-90)},
         screws=screws_at(14, "tr", "bl"),
     ),
 }

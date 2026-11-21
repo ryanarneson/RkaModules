@@ -1,0 +1,453 @@
+#pragma once
+// Narrows: a polyphonic stereo filter. Rack-free: a frame of knob positions
+// and per-channel port voltages in, per-voice left and right out.
+//
+// Per voice and side, in order: the input (and the Ping pulse) -> the comb
+// -> Drive -> up to twice the rate -> the core (Fathom's ladder or the
+// state-variable core), its outputs mixed by Mode -> the ladder's soft
+// limit -> down again -> make-up -> the output limit.
+//
+// Voices go through the cores four sides at a time (rka::Float4): pass p
+// holds voices 2p and 2p + 1 as lanes (L, R, L, R). Only the passes that
+// hold a voice are run. Lanes never mix, so a voice's output does not
+// depend on its neighbours.
+//
+// Only setSampleRate() allocates (the combs' delay lines).
+#include "../FastMath.hpp"
+#include "../Float4.hpp"
+#include "../fathom/Halfband.hpp"
+#include "../fathom/LadderCore.hpp"
+#include "Comb.hpp"
+#include "Laws.hpp"
+#include "NarrowsTuning.hpp"
+#include "Ping.hpp"
+#include "StateCore.hpp"
+
+#include <cmath>
+#include <cstdint>
+
+namespace rka {
+
+// One port: how many channels its cable carries (0: nothing patched) and
+// their voltages.
+struct NarrowsPort {
+	int channels = 0;
+	float v[16] = {};
+};
+
+struct NarrowsFrame {
+	static const int MAX_VOICES = 16;
+	// COMB is -1 .. 1; FM is -1 .. 1; CORE is 1 for the ladder (the switch
+	// up), 0 for the state core; the rest are 0 .. 1.
+	enum Param { CUTOFF, DRIVE, FM, RES, COMB, SPREAD, CORE, MODE, PARAMS_LEN };
+
+	float params[PARAMS_LEN] = {};
+	NarrowsPort inL, inR, voct, fm, res, comb, mode, ping;
+	// Whether a cable is plugged into the R output: without one, L carries
+	// the average of the two sides.
+	bool outRConnected = false;
+};
+
+struct NarrowsResult {
+	int channels = 1;
+	float l[NarrowsFrame::MAX_VOICES] = {};
+	float r[NarrowsFrame::MAX_VOICES] = {};
+};
+
+struct NarrowsEngine {
+	typedef NarrowsFrame F;
+	static const int MAX_VOICES = F::MAX_VOICES;
+	static const int PASSES = MAX_VOICES / 2;
+
+	NarrowsEngine() {
+		setRates(48000.f);
+		reset();
+	}
+
+	// Allocates the combs' lines: never from process().
+	void setSampleRate(float fs) {
+		if (!(fs > 0.f))
+			return;
+		setRates(fs);
+		for (int i = 0; i < 2 * MAX_VOICES; i++)
+			comb_[i].allocate(fs_, (uint32_t) i);
+		reset();
+	}
+
+	// Every voice to rest. The next frame's knob positions are taken at
+	// once, not slid to.
+	void reset() {
+		for (int p = 0; p < PASSES; p++) {
+			ladder_[p].reset();
+			state_[p].reset();
+			up_[p].reset();
+			down_[p].reset();
+		}
+		for (int i = 0; i < 2 * MAX_VOICES; i++)
+			comb_[i].reset();
+		for (int v = 0; v < MAX_VOICES; v++) {
+			ping_[v].reset();
+			noise_[v] = 0x9e3779b9u * (uint32_t) (v + 1);
+			modeFresh_[v] = true;
+		}
+		voices_ = 0;
+		fresh_ = true;
+		ladderOn_ = stateOn_ = false;
+		kick_ = 0;
+	}
+
+	int voices() const {
+		return voices_;
+	}
+
+	void process(const F& in, NarrowsResult& out) {
+		// --- voices ---
+		int n = in.inL.channels;
+		n = in.inR.channels > n ? in.inR.channels : n;
+		n = in.voct.channels > n ? in.voct.channels : n;
+		n = in.ping.channels > n ? in.ping.channels : n;
+		n = n < 1 ? 1 : n > MAX_VOICES ? MAX_VOICES : n;
+		for (int v = voices_; v < n; v++)
+			restVoice(v);
+		voices_ = n;
+		const int passes = (n + 1) / 2;
+
+		// --- knobs, smoothed ---
+		const float coreWant = param(in, F::CORE) >= 0.5f ? 1.f : 0.f;
+		if (fresh_) {
+			cutoff_ = param(in, F::CUTOFF);
+			drive_ = param(in, F::DRIVE);
+			fm_ = param(in, F::FM);
+			res_ = param(in, F::RES);
+			combKnob_ = param(in, F::COMB);
+			spread_ = param(in, F::SPREAD);
+			fade_ = coreWant;
+			mono_ = in.outRConnected ? 0.f : 1.f;
+			lastDrive_ = lastSpread_ = -1.f;
+			fresh_ = false;
+		}
+		else {
+			slide(cutoff_, param(in, F::CUTOFF));
+			slide(drive_, param(in, F::DRIVE));
+			slide(fm_, param(in, F::FM));
+			slide(res_, param(in, F::RES));
+			slide(combKnob_, param(in, F::COMB));
+			slide(spread_, param(in, F::SPREAD));
+			slide(mono_, in.outRConnected ? 0.f : 1.f);
+		}
+		if (drive_ != lastDrive_) {
+			lastDrive_ = drive_;
+			driveGain_ = narrows::driveGain(drive_);
+			makeup_ = fastExp2(-narrows::DRIVE_MAKEUP * narrows::DRIVE_OCTAVES * drive_);
+		}
+		if (spread_ != lastSpread_) {
+			lastSpread_ = spread_;
+			// Exactly 1 at Spread 0, so the two sides are the same to the bit.
+			const float half = 0.5f * narrows::SPREAD_OCTAVES * spread_;
+			spreadDown_ = spread_ > 0.f ? fastExp2(-half) : 1.f;
+			spreadUp_ = spread_ > 0.f ? fastExp2(half) : 1.f;
+		}
+
+		// --- the core switch ---
+		if (fade_ < coreWant)
+			fade_ = fade_ + fadeStep_ < 1.f ? fade_ + fadeStep_ : 1.f;
+		else if (fade_ > coreWant)
+			fade_ = fade_ - fadeStep_ > 0.f ? fade_ - fadeStep_ : 0.f;
+		const bool needLadder = fade_ > 0.f, needState = fade_ < 1.f;
+		// A core coming in from idle starts from rest, and through the fade
+		// a voice that is ringing or self-oscillating (Res near the onset or
+		// above) is fed the other core's output on top of its input, by the
+		// other core's share of the fade, so the tone is handed over and not
+		// left to grow again from its noise. Lower Res gets no kick: the
+		// input alone carries it, and a kick would double the level. Both
+		// cores already running (the switch flipped back mid-fade): no kick,
+		// so the two can never feed each other in turn.
+		if (needLadder && !ladderOn_) {
+			for (int p = 0; p < PASSES; p++)
+				ladder_[p].reset();
+			kick_ = stateOn_ ? fadeLength_ : 0;
+			kickLadder_ = true;
+		}
+		if (needState && !stateOn_) {
+			for (int p = 0; p < PASSES; p++)
+				state_[p].reset();
+			kick_ = ladderOn_ ? fadeLength_ : 0;
+			kickLadder_ = false;
+		}
+		ladderOn_ = needLadder;
+		stateOn_ = needState;
+		const bool kicking = kick_ > 0 && ladderOn_ && stateOn_;
+		if (kick_ > 0)
+			kick_--;
+
+		// --- per voice: inputs, ping, comb, drive; the settings per lane ---
+		float x[2 * MAX_VOICES], hz[2 * MAX_VOICES], k[MAX_VOICES], res[MAX_VOICES], mode[MAX_VOICES];
+		float white[MAX_VOICES][2];
+		const bool hasL = in.inL.channels > 0, hasR = in.inR.channels > 0;
+		const float pingGain = narrows::PING_V / narrows::VOLTS;
+		const float modeKnob = param(in, F::MODE);
+		for (int v = 0; v < n; v++) {
+			// Either input alone feeds both sides.
+			float l = hasL ? audio(in.inL, v) : hasR ? audio(in.inR, v) : 0.f;
+			float r = hasR ? audio(in.inR, v) : l;
+			const float knock = pingGain * ping_[v].process(cv(in.ping, v));
+			l = l * (1.f / narrows::VOLTS) + knock;
+			r = r * (1.f / narrows::VOLTS) + knock;
+
+			const float centre = narrows::hzFromOctaves(narrows::CUTOFF_OCTAVES * cutoff_ + cv(in.voct, v) + cv(in.fm, v) * fm_);
+			const float hzL = narrows::clampHz(centre * spreadDown_, fs_), hzR = narrows::clampHz(centre * spreadUp_, fs_);
+			hz[2 * v] = hzL;
+			hz[2 * v + 1] = hzR;
+
+			const float feedback = narrows::combFeedback(combKnob_ + cv(in.comb, v) * 0.2f);
+			// At noon too the comb is given its period, so that opened by a
+			// CV it starts at pitch.
+			l = comb_[2 * v].process(l, fs_ / hzL, feedback);
+			r = comb_[2 * v + 1].process(r, fs_ / hzR, feedback);
+			x[2 * v] = l * driveGain_;
+			x[2 * v + 1] = r * driveGain_;
+
+			res[v] = clampf(res_ + cv(in.res, v) * 0.1f, 0.f, 1.f);
+			k[v] = narrows::ladderFeedback(res[v]);
+			// Mode is smoothed per voice, knob and CV together, so a stepped
+			// CV does not click.
+			const float modeWant = clampf(modeKnob + cv(in.mode, v) * 0.1f, 0.f, 1.f);
+			if (modeFresh_[v]) {
+				mode_[v] = modeWant;
+				modeFresh_[v] = false;
+			}
+			else
+				slide(mode_[v], modeWant);
+			mode[v] = mode_[v];
+			// One noise stream per voice, shared by its two sides.
+			white[v][0] = noise(v);
+			white[v][1] = noise(v);
+		}
+		if (n & 1) {
+			// The odd voice's partner lanes: silence through an open, quiet
+			// filter, with its neighbour's noise so nothing goes subnormal.
+			x[2 * n] = x[2 * n + 1] = 0.f;
+			hz[2 * n] = hz[2 * n + 1] = hz[2 * n - 1];
+			res[n] = k[n] = 0.f;
+			mode[n] = 0.f;
+			white[n][0] = white[n - 1][0];
+			white[n][1] = white[n - 1][1];
+		}
+
+		// --- four sides at a time through the core, at twice the rate ---
+		// Stage by stage across the passes, not pass by pass: each pass's
+		// arithmetic is one long chain (every step waits on the last), and
+		// the passes are independent, so side by side the processor can run
+		// several chains at once.
+		const float outGain = makeup_ * narrows::VOLTS;
+		Lane lane[PASSES];
+		for (int p = 0; p < passes; p++) {
+			const int a = 2 * p, b = a + 1;   // the two voices of this pass
+			Lane& q = lane[p];
+			const Float4 in4 = {x[2 * a], x[2 * a + 1], x[2 * b], x[2 * b + 1]};
+			const Float4 hz4 = {hz[2 * a], hz[2 * a + 1], hz[2 * b], hz[2 * b + 1]};
+			q.k = Float4{k[a], k[a], k[b], k[b]};
+			q.res = Float4{res[a], res[a], res[b], res[b]};
+			const narrows::ModeWeights wa = narrows::modeWeights(mode[a]), wb = narrows::modeWeights(mode[b]);
+			q.lp = Float4{wa.lp, wa.lp, wb.lp, wb.lp};
+			q.bp = Float4{wa.bp, wa.bp, wb.bp, wb.bp};
+			q.hp = Float4{wa.hp, wa.hp, wb.hp, wb.hp};
+			q.g = tan34(hz4 * gScale_);
+			q.comp = 1.f + q.k * q.lp;
+			// The ladder's pitch falls as its oscillation grows, by an amount
+			// set by the feedback above 4 (and a little less at high
+			// cutoffs): raise its cutoff by as much.
+			const Float4 excess = vmax(q.k - narrows::RES_K_ONSET, splat4(0.f));
+			const Float4 shift = (narrows::PITCH_FIX_A + narrows::PITCH_FIX_B * excess) * excess
+			                     * vmax(1.f - narrows::PITCH_FIX_G * q.g, splat4(0.f));
+			q.gLadder = q.g * (1.f + shift * (1.f + 0.5f * shift));
+			q.white[0] = Float4{white[a][0], white[a][0], white[b][0], white[b][0]};
+			q.white[1] = Float4{white[a][1], white[a][1], white[b][1], white[b][1]};
+			up_[p].process(in4, q.os);
+		}
+		const bool kickToLadder = kicking && kickLadder_, kickToState = kicking && !kickLadder_;
+		if (kicking) {
+			const float share = kickLadder_ ? 1.f - fade_ : fade_;   // the outgoing core's
+			for (int p = 0; p < passes; p++)
+				lane[p].kick = share * vmin(vmax((lane[p].res - narrows::KICK_RES_FROM) * (1.f / (narrows::RES_ONSET - narrows::KICK_RES_FROM)), splat4(0.f)), splat4(1.f));
+		}
+		for (int s = 0; s < 2; s++) {
+			if (ladderOn_ && !kickToLadder)
+				for (int p = 0; p < passes; p++)
+					lane[p].fromLadder = ladderStep(p, lane[p], lane[p].os[s], s);
+			if (stateOn_)
+				for (int p = 0; p < passes; p++) {
+					Lane& q = lane[p];
+					const Float4 feed = kickToState ? q.os[s] + q.kick * q.fromLadder : q.os[s];
+					const narrows::StateOut<Float4> o = state_[p].step(feed, q.g, q.res, q.white[s]);
+					q.fromState = ladderLimit(q.lp * o.lp + q.bp * o.bp + q.hp * o.hp);
+				}
+			if (ladderOn_ && kickToLadder)
+				for (int p = 0; p < passes; p++)
+					lane[p].fromLadder = ladderStep(p, lane[p], lane[p].os[s] + lane[p].kick * lane[p].fromState, s);
+			for (int p = 0; p < passes; p++) {
+				Lane& q = lane[p];
+				q.os[s] = !stateOn_ ? q.fromLadder : !ladderOn_ ? q.fromState : q.fromState + fade_ * (q.fromLadder - q.fromState);
+			}
+		}
+		for (int p = 0; p < passes; p++) {
+			const int a = 2 * p, b = a + 1;
+			const Float4 y = down_[p].process(lane[p].os) * outGain;
+			// A NaN that got in (it cannot from the ports) does not stay.
+			if (!(y[0] + y[1] + y[2] + y[3] == y[0] + y[1] + y[2] + y[3])) {
+				ladder_[p].reset();
+				state_[p].reset();
+				up_[p].reset();
+				down_[p].reset();
+			}
+			give(out, a, y[0], y[1]);
+			if (b < n)
+				give(out, b, y[2], y[3]);
+		}
+		out.channels = n;
+	}
+
+private:
+	// One pass's settings and signals for this sample.
+	struct Lane {
+		Float4 g, gLadder, k, comp, res, lp, bp, hp;
+		Float4 white[2];
+		Float4 os[2];
+		Float4 fromLadder, fromState, kick;
+	};
+
+	// One oversampled-rate sample of pass p's ladder, mixed by Mode: the
+	// Xpander rows on the loop input and the four poles, LP24 (0,0,0,0,1),
+	// BP (0,0,4,-8,4), HP (1,-4,6,-4,1), blended.
+	__attribute__((always_inline)) Float4 ladderStep(int p, const Lane& q, Float4 x, int s) {
+		const LadderNodes<Float4> nodes = ladder_[p].step(x, q.gLadder, q.k, q.comp, q.white[s]);
+		return ladderLimit(q.hp * nodes.u - 4.f * q.hp * nodes.y0 + (4.f * q.bp + 6.f * q.hp) * nodes.y1
+		                   - (8.f * q.bp + 4.f * q.hp) * nodes.y2 + (q.lp + 4.f * q.bp + q.hp) * nodes.y3);
+	}
+
+	void setRates(float fs) {
+		fs_ = fs;
+		gScale_ = float(M_PI) / (2.f * fs_);
+		smooth_ = 1.f - std::exp(-1.f / (narrows::SMOOTH_S * fs_));
+		const float fade = narrows::CORE_FADE_S * fs_;
+		fadeLength_ = fade > 1.f ? (int) fade : 1;
+		fadeStep_ = 1.f / (float) fadeLength_;
+		for (int i = 0; i < 2 * MAX_VOICES; i++)
+			comb_[i].setSampleRate(fs_);
+		for (int v = 0; v < MAX_VOICES; v++)
+			ping_[v].setSampleRate(fs_);
+	}
+
+	static float clampf(float x, float lo, float hi) {
+		if (!(x > lo))
+			return lo;   // NaN too
+		return x < hi ? x : hi;
+	}
+
+	// A knob position: NaN and infinities read 0.
+	static float param(const F& in, int i) {
+		const float x = in.params[i];
+		return x > -100.f && x < 100.f ? x : 0.f;
+	}
+
+	// Channel v of a cable: a one-channel cable feeds every voice; past a
+	// polyphonic cable's last channel there is 0 V. NaN and infinities
+	// read 0.
+	static float cv(const NarrowsPort& p, int v) {
+		const float x = p.channels == 1 ? p.v[0] : v < p.channels ? p.v[v] : 0.f;
+		return x > -1e6f && x < 1e6f ? x : 0.f;
+	}
+
+	static float audio(const NarrowsPort& p, int v) {
+		return clampf(cv(p, v), -narrows::INPUT_LIMIT_V, narrows::INPUT_LIMIT_V);
+	}
+
+	// Toward the target with a time constant of SMOOTH_S, landing exactly.
+	void slide(float& value, float target) const {
+		const float gap = target - value;
+		if (gap > -1e-5f && gap < 1e-5f)
+			value = target;
+		else
+			value += smooth_ * gap;
+	}
+
+	// Uniform in [-1, 1).
+	float noise(int v) {
+		noise_[v] = noise_[v] * 1664525u + 1013904223u;
+		return (float) (int32_t) noise_[v] * (1.f / 2147483648.f);
+	}
+
+	static void zero(Float4& x, int lane) {
+		x[lane] = 0.f;
+		x[lane + 1] = 0.f;
+	}
+
+	// A voice that joins starts from rest: its two lanes of every state, its
+	// combs (at no cost: see Comb::reset) and its ping.
+	void restVoice(int v) {
+		const int p = v / 2, lane = 2 * (v & 1);
+		for (int i = 0; i < 4; i++) {
+			zero(ladder_[p].s[i], lane);
+			zero(ladder_[p].yPrev[i], lane);
+		}
+		zero(ladder_[p].uPrev, lane);
+		zero(state_[p].s1, lane);
+		zero(state_[p].s2, lane);
+		zero(state_[p].bpPrev, lane);
+		for (int i = 0; i < 3; i++) {
+			zero(up_[p].stateA[i], lane);
+			zero(up_[p].stateB[i], lane);
+			zero(down_[p].stateA[i], lane);
+			zero(down_[p].stateB[i], lane);
+		}
+		comb_[2 * v].reset();
+		comb_[2 * v + 1].reset();
+		ping_[v].reset();
+		modeFresh_[v] = true;
+	}
+
+	// The output's soft limit: straight to the knee, never past the ceiling.
+	static float limit(float x) {
+		const float a = x < 0.f ? -x : x;
+		if (a <= narrows::OUT_KNEE_V)
+			return x;
+		const float room = narrows::OUT_CEIL_V - narrows::OUT_KNEE_V;
+		const float y = narrows::OUT_KNEE_V + room * fastTanh((a - narrows::OUT_KNEE_V) / room);
+		return x < 0.f ? -y : y;
+	}
+
+	void give(NarrowsResult& out, int v, float l, float r) const {
+		// With nothing in the R output, L carries the average of the sides.
+		out.l[v] = limit(l + mono_ * (0.5f * (l + r) - l));
+		out.r[v] = limit(r);
+	}
+
+	float fs_ = 48000.f, gScale_ = 0.f, smooth_ = 1.f, fadeStep_ = 1.f;
+	int fadeLength_ = 1;
+
+	LadderCore<Float4> ladder_[PASSES];
+	narrows::StateCore<Float4> state_[PASSES];
+	Upsampler2xT<Float4> up_[PASSES];
+	Downsampler2xT<Float4> down_[PASSES];
+	narrows::Comb comb_[2 * MAX_VOICES];
+	narrows::PingPulse ping_[MAX_VOICES];
+	uint32_t noise_[MAX_VOICES];
+
+	int voices_ = 0;
+	bool fresh_ = true;
+	// The knobs, smoothed.
+	float cutoff_ = 0.f, drive_ = 0.f, fm_ = 0.f, res_ = 0.f, combKnob_ = 0.f, spread_ = 0.f, mono_ = 0.f;
+	// Mode per voice (knob and CV), smoothed; fresh: take the next value at once.
+	float mode_[MAX_VOICES] = {};
+	bool modeFresh_[MAX_VOICES] = {};
+	float lastDrive_ = -1.f, driveGain_ = 1.f, makeup_ = 1.f;
+	float lastSpread_ = -1.f, spreadDown_ = 1.f, spreadUp_ = 1.f;
+	// The core switch: 1 is all ladder, 0 all state.
+	float fade_ = 1.f;
+	bool ladderOn_ = false, stateOn_ = false;
+	// Samples of kick left, and which core is receiving it.
+	int kick_ = 0;
+	bool kickLadder_ = false;
+};
+
+} // namespace rka

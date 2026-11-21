@@ -2,6 +2,9 @@
 
 ## Test builds
 
+- 2.0.24 (2026-11-21): Narrows: final review fixes (the core switch keeps the level with sound passing; a comb opened by CV from noon starts at pitch); manual
+- 2.0.23 (2026-11-20): Narrows: the comb is louder (it keeps noise at its level, so its peaks and a pinged comb stand out)
+- 2.0.22 (2026-11-20): Narrows: first build for listening (polyphonic stereo filter: ladder and state cores, Mode sweep LP/BP/HP, drive, self-oscillation, comb, Ping, Spread)
 - 2.0.21 (2026-11-20): Wake: final review fixes (crossfades add no level, so a clocked or modulated Digital echo decays as it should; Freeze holds exactly the echo that was playing; no clicks on re-freeze or on Time changes with Drift on; a paused clock keeps its tempo)
 - 2.0.20 (2026-11-20): Wake: first build for listening (stereo echo: Tape, Analog and Digital styles, Ratio, ping pong, Freeze, Diffuse, Drift, clock)
 - 2.0.19 (2026-11-20): Hadal: Rumble audible at depth (band 160-70 Hz, overtones from a soft clip that deepens with Depth); 2.5 V RMS at full with peaks inside +-5 V; default 80 %
@@ -26,6 +29,29 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Narrows**, a 14 HP polyphonic stereo filter:
+  - Two filters on a switch: Fathom's four-pole ladder (24 dB per octave)
+    and a state-variable filter (12 dB), matched in pitch, in where they
+    start to sing and in level; the switch crossfades without a click.
+  - Mode sweeps smoothly from low-pass through band-pass to high-pass, by
+    hand or by CV.
+  - Cutoff from 16 Hz to 16.4 kHz with V/OCT and an FM attenuverter, both
+    at audio rate.
+  - Res up to self-oscillation from 95 %: a sine of 4 to 5 V that follows
+    V/OCT within 1 cent as it starts and 7 cents at full.
+  - Drive into the core's saturation, levelled; a comb before the filter,
+    tuned to the cutoff, with its peaks on the harmonics (right) or
+    between them (left); Spread sets the two sides' cutoffs apart, up to
+    half an octave each way.
+  - PING knocks the filter with a short pulse: a tuned ping with Res up, a
+    pluck with Comb up.
+  - A filter pair for every channel of a polyphonic cable, up to 16; a
+    one-channel cable feeds every voice. CV on FM, Res, Comb and Mode;
+    soft-limited outputs.
+  - Drawn as a strait.
+- Fathom: its ladder filter and oversampler are now shared code with
+  Narrows; Fathom's output is unchanged (to the bit in the Mac and Linux
+  builds; within rounding on any compiler).
 - New module: **Wake**, a 14 HP stereo echo:
   - Echoes from 10 ms to 10 s behind a struck sound, in three styles:
     Tape (pitch bends when Time moves; repeats soften), Analog (darker and
