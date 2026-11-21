@@ -458,9 +458,6 @@ private:
 		}
 		if (!incoming_.load(std::memory_order_relaxed) || inFlight_ != NONE || old_ || !freeSlot())
 			return;
-		// The offer's number, read while the set still waits (offer() writes
-		// it only when none does).
-		const uint32_t og = offerGen_.load(std::memory_order_acquire);
 		TapeSet* s = incoming_.exchange(nullptr, std::memory_order_acq_rel);
 		if (!s)
 			return;
@@ -485,12 +482,6 @@ private:
 		head_ = winValid_ ? origin(dir_) : 0.0;
 		tapeChanges_.fetch_add(1, std::memory_order_relaxed);
 		originalChanges_.fetch_add(1, std::memory_order_relaxed);
-		// A clear() made after this set was offered applies to it.
-		const uint32_t cg = clearGen_.load(std::memory_order_acquire);
-		if (cg != clearDone_ && later(cg, og)) {
-			clearDone_ = cg;
-			beginClear();
-		}
 	}
 
 	void applyTransport(int t) {
@@ -519,7 +510,7 @@ private:
 		if (incoming_.load(std::memory_order_acquire)) {
 			if (later(offerGen_.load(std::memory_order_acquire), cg))
 				clearDone_ = cg;   // a later offer supersedes it
-			return;                // else handoff applies it to that set
+			return;                // else it waits, and empties that set once taken
 		}
 		if (live_) {
 			clearDone_ = cg;
