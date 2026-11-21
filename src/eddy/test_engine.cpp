@@ -484,8 +484,8 @@ void dub_bounded() {
 				dc = sum / 4800.0;
 			};
 			g.press(&F::dubPress);
-			float peak1000, peak;
-			double dc1000, dc;
+			float peak1000 = 0.f, peak = 0.f;
+			double dc1000 = 0.0, dc = 0.0;
 			const int passes = d == 1.f ? 1000 : 2000;
 			for (int pass = 0; pass < passes; pass++) {
 				for (long i = 0; i < T; i++)
