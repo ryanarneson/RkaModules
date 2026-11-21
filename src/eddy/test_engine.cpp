@@ -459,8 +459,9 @@ void dub_bounded() {
 	// 1000 passes of +-10 V noise (the same loop of it each pass, with an
 	// offset or without), dubbed at full level: the tape stays under its
 	// bound and no DC builds. At noon the bound holds too, and the DC is what
-	// one pass's saturation of this loop leaves (the soft bound is after the
-	// DC blocker), the same after 1000 passes as after 100: under 10 mV.
+	// this loop leaves (its saturation after the DC blocker, and the join's
+	// fade frames, which converge slowly at their own weight): settled by
+	// 1000 passes (the same at 2000) and under 20 mV.
 	for (float d : {1.f, 0.5f})
 		for (float offset : {0.f, 1.f}) {
 			Rig g;
@@ -483,22 +484,23 @@ void dub_bounded() {
 				dc = sum / 4800.0;
 			};
 			g.press(&F::dubPress);
-			float peak100, peak;
-			double dc100, dc;
-			for (int pass = 0; pass < 1000; pass++) {
+			float peak1000, peak;
+			double dc1000, dc;
+			const int passes = d == 1.f ? 1000 : 2000;
+			for (int pass = 0; pass < passes; pass++) {
 				for (long i = 0; i < T; i++)
 					g.step(n0[(size_t) i] + offset, n1[(size_t) i] + offset);
-				if (pass == 99)
-					measure(peak100, dc100);
+				if (pass == 999)
+					measure(peak1000, dc1000);
 			}
 			measure(peak, dc);
-			CHECK(peak <= 10.f && peak100 <= 10.f, "Dub Level %.1f, offset %.0f V: the tape peaks at %.4f V (bound 10)", d, offset, peak);
+			CHECK(peak <= 10.f && peak1000 <= 10.f, "Dub Level %.1f, offset %.0f V: the tape peaks at %.4f V (bound 10)", d, offset, peak);
 			if (d == 1.f)
 				CHECK(std::fabs(dc) < 1e-3, "full-level dubs, offset %.0f V: DC on the tape %.3f mV (want under 1)", offset, dc * 1e3);
-			else
-				CHECK(std::fabs(dc) < 1e-2 && std::fabs(dc - dc100) < 1e-4,
-				      "Dub Level %.1f, offset %.0f V: DC on the tape %.3f mV after 1000 passes, %.3f after 100 (want under 10, not building)",
-				      d, offset, dc * 1e3, dc100 * 1e3);
+			else   // The spec: "Repeated full-level dubs ... no DC builds"; noon is held to not building.
+				CHECK(std::fabs(dc) < 2e-2 && std::fabs(dc - dc1000) < 5e-4,
+				      "Dub Level %.1f, offset %.0f V: DC on the tape %.3f mV after 2000 passes, %.3f after 1000 (want under 20, not building)",
+				      d, offset, dc * 1e3, dc1000 * 1e3);
 		}
 }
 
@@ -541,11 +543,19 @@ void wear_window() {
 			const Window w = rka::eddy::window(start, 0.f, g.f.params[F::LENGTH], 0.f, n, 0.0, g.fs);
 			g.press(&F::playPress);
 			g.run(50 * (long) w.length);
-			// The window's frames: from floor(Start) to ceil(Start + Length), round the tape.
-			const double first = std::floor(w.start), span = std::ceil(w.start + w.length) - first;
+			// What the voices pass: the window and the join's read-on, m past
+			// its end (the tape there or the tail) going forwards, m below
+			// Start (and the frame Start - 1) going backwards; round the tape
+			// if the window wraps. Beyond both nothing changes.
+			const bool wraps = w.start + w.length > n;
+			const double beyond = wraps ? n - w.length : n + 480 - (w.start + w.length), below = wraps ? n - w.length : w.start - 1;
+			const double t = std::min(w.minFade, beyond), tb = std::min(w.minFade, below);
+			const double first = knob > 0 ? std::floor(w.start) : std::floor(w.start - 1.0 - tb);
+			const double last = knob > 0 ? std::ceil(w.start + w.length + t) : std::ceil(w.start + w.length);
 			long changedOut = 0, changedIn = 0, in = 0;
 			for (size_t k = 0; k < (size_t) n + 480; k++) {
-				const bool inside = k < (size_t) n && ahead(first, (double) k, n) < span;
+				const double kk = (double) k;
+				const bool inside = wraps ? k < (size_t) n && ahead(first, kk, n) < last - first : kk >= first && kk < last;
 				const bool changed = set->tape.ch[0][k] != before.ch[0][k] || set->tape.ch[1][k] != before.ch[1][k];
 				if (inside) {
 					in++;
@@ -554,7 +564,7 @@ void wear_window() {
 				else
 					changedOut += changed;
 			}
-			CHECK(changedOut == 0, "Wear 1, Speed %+.0f, Start %.1f: %ld frames outside the window (or in the tail) changed", knob,
+			CHECK(changedOut == 0, "Wear 1, Speed %+.0f, Start %.1f: %ld frames beyond the window and its read-on changed", knob,
 			      start, changedOut);
 			CHECK(changedIn > in * 9 / 10, "Wear 1, Speed %+.0f, Start %.1f: %ld of %ld frames in the window worn", knob, start,
 			      changedIn, in);
@@ -944,6 +954,108 @@ void no_clicks() {
 	CHECK(g.r.empty && g.r.l == 0.f, "cleared: empty and silent");
 }
 
+// The join after a dub or wear has crossed it (Smear 0 and 1, forwards and
+// backwards, a whole tape with its tail and a short window inside a longer
+// tape): no step at the output over the bound, and none on the tape across
+// the window's end and the join's read-on.
+void no_clicks_join() {
+	const double w = 2 * PI * 100.0 / 48000.0;
+	const float bound = 1.5f * 5.f * (float) w;
+	for (int shortWindow = 0; shortWindow < 2; shortWindow++)
+		for (float smearK : {0.f, 1.f})
+			for (float knob : {1.f, -1.f}) {
+				Rig g;
+				const double n = 24000;
+				g.f.params[F::SPEED] = knob;
+				g.f.params[F::SMEAR] = smearK;
+				if (shortWindow) {
+					g.f.params[F::START] = 0.25f;
+					g.f.params[F::LENGTH] = lengthKnob(14400, n, g.fs);
+				}
+				TapeSet* set = g.sine(0.5, 100.0, 5.f, 0.0, 480);
+				g.use(set);
+				const Window win = rka::eddy::window(g.f.params[F::START], 0.f, g.f.params[F::LENGTH], smearK, n, 0.0, g.fs);
+				// The turn: the tape beyond the window's end holds the whole of m
+				// (the tail, or tape), and so does the tape before Start going
+				// backwards, except from frame 0 of the whole tape.
+				const double tf = win.minFade, tb = shortWindow ? win.minFade : 0.0;
+				const long T = std::lround(win.length - (win.overlap - (knob > 0 ? tf : tb)));
+				long t = 0;
+				float worst = 0, prev = 0, input = 0.f;
+				const char* where = "";
+				const char* worstAt = "";
+				auto tick = [&](long k, const char* what) {
+					where = what;
+					for (long i = 0; i < k; i++) {
+						g.step(input * (float) std::sin(w * (double) t + PI / 2));
+						t++;
+						const float d = std::fabs(g.r.l - prev);
+						if (t > 1000 && d > worst) {
+							worst = d;
+							worstAt = where;
+						}
+						prev = g.r.l;
+					}
+				};
+				g.press(&F::playPress);
+				tick(T * 7 / 10, "playing");
+				input = 1.f;
+				g.press(&F::dubPress);   // a dub across the join
+				tick(T * 6 / 10, "dubbing across the join");
+				g.press(&F::dubPress);
+				tick(960, "dub out");
+				input = 0.f;
+				tick(T * 12 / 10, "the dub through the join");
+				const float dubbed = tapeStep(set->tape);
+				g.f.params[F::WEAR] = 1.f;
+				tick(30 * T, "Wear 1, 30 passes");
+				const float worn = tapeStep(set->tape);
+				const char* name = shortWindow ? "a short window" : "a whole tape";
+				CHECK(worst <= bound, "%s, Smear %.0f, Speed %+.0f: the largest step at the output is %.4f V, at %s (bound %.4f)", name,
+				      smearK, knob, worst, worstAt, bound);
+				CHECK(dubbed <= bound && worn <= bound,
+				      "%s, Smear %.0f, Speed %+.0f: the largest step on the tape is %.4f V after the dub, %.4f worn (bound %.4f)", name,
+				      smearK, knob, dubbed, worn, bound);
+			}
+}
+
+// A dub made across the join is heard at its own level through the join on
+// the next turn.
+void dub_through_join() {
+	for (float smearK : {0.f, 1.f}) {
+		Rig g;
+		g.f.params[F::SMEAR] = smearK;
+		g.f.params[F::DUB_LEVEL] = 1.f;
+		TapeSet* set = g.loaded(24000, 480, [](size_t, float& l, float& r) { l = r = 0.f; });
+		g.use(set);
+		const Window win = rka::eddy::window(0.f, 0.f, 1.f, smearK, 24000, 480.0, g.fs);
+		const long T = std::lround(win.turn);
+		g.press(&F::playPress);
+		// After the first join: the first turn's head came in by F, not by a
+		// join's fade, so it wrote its frames at full weight.
+		g.run(T + T / 2);
+		g.press(&F::dubPress);
+		for (long i = 0; i < T; i++)
+			g.step(2.f * (float) std::sin(2 * PI * 1000.0 * (double) i / 48000.0));
+		g.press(&F::dubPress);
+		double lo = 1e9, hi = -1e9;
+		std::vector<float> blk(48);
+		for (long b = 0; b < T / 48; b++) {
+			for (int i = 0; i < 48; i++) {
+				g.step();
+				blk[(size_t) i] = g.r.l;
+			}
+			if (b * 48 < 1000 || b * 48 > T - 1000)
+				continue;   // the dub's own fades in and out
+			const double level = db(rms(blk.data(), 48) / std::sqrt(2.0));
+			lo = std::min(lo, level);
+			hi = std::max(hi, level);
+		}
+		CHECK(lo > -0.5 && hi < 0.5, "Smear %.0f: a dub across the join is heard next turn at %+.2f to %+.2f dB of its own level", smearK,
+		      lo, hi);
+	}
+}
+
 } // namespace
 
 int main() {
@@ -966,5 +1078,7 @@ int main() {
 	mix_law();
 	limit();
 	no_clicks();
+	no_clicks_join();
+	dub_through_join();
 	return rkatest::finish("eddy test_engine");
 }

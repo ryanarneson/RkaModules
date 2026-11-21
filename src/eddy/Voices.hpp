@@ -9,11 +9,18 @@
 // moves by `perSample` each sample and by `perFrame` for each frame of tape
 // the voice travels (the join's overlap is a stretch of tape, whatever the
 // speed). At 1 the envelope is exactly 1 and the gain exactly 1.
+//
+// Each voice also carries a write head (TapeWriter) and a wear state, so it
+// writes what it passes for as long as it sounds, at the strength of its own
+// gain (the engine does the writing): a frame heard at gain g was written at
+// weight g. A voice starts with a fresh writer, wear state and no moves
+// waiting.
 #include <cmath>
 #include <cstdint>
 
 #include "FastMath.hpp"
 #include "Tape.hpp"
+#include "eddy/Wear.hpp"
 
 namespace rka {
 namespace eddy {
@@ -27,6 +34,22 @@ struct Voice {
 	uint32_t born = 0;
 	bool wrap = false;             // reads round the tape's end (a window that wraps)
 	bool active = false;
+
+	// The write head: last sample's move, written this sample (EddyEngine).
+	TapeWriter writer;
+	Wear wear{0u};
+	struct Run {
+		double a, b;
+	};
+	Run runs[2];
+	int nRuns = 0;
+	void queue(double a, double b) {
+		if (nRuns < 2) {
+			runs[nRuns].a = a;
+			runs[nRuns].b = b;
+			nRuns++;
+		}
+	}
 
 	float read(int c) const {
 		return wrap ? src->readWrapped(c, pos) : src->read(c, pos);
@@ -100,9 +123,10 @@ struct Voices {
 	}
 
 	// A new voice at p, fading in at the given rates while the newest fades
-	// out at the same rates; or straight in at full (both rates 0). False,
-	// and nothing changes, if all four are in use.
-	bool start(const Tape* src, const void* owner, double p, bool wrap, double perSample, double perFrame) {
+	// out at the same rates; or straight in at full (both rates 0). Its
+	// writer is fresh and no moves wait; its wear state is the caller's to
+	// set. Null, and nothing changes, if all four are in use.
+	Voice* start(const Tape* src, const void* owner, double p, bool wrap, double perSample, double perFrame) {
 		int slot = -1;
 		for (int i = 0; i < N; i++)
 			if (!v[i].active) {
@@ -110,7 +134,7 @@ struct Voices {
 				break;
 			}
 		if (slot < 0)
-			return false;
+			return nullptr;
 		if (newest >= 0) {
 			Voice& o = v[newest];
 			if (perSample == 0.0 && perFrame == 0.0)
@@ -121,7 +145,6 @@ struct Voices {
 			}
 		}
 		Voice& n = v[slot];
-		n = Voice();
 		n.src = src;
 		n.owner = owner;
 		n.wrap = wrap;
@@ -131,8 +154,10 @@ struct Voices {
 		n.env = (perSample == 0.0 && perFrame == 0.0) ? 1.0 : 0.0;
 		n.active = true;
 		n.born = ++clock;
+		n.writer.reset();
+		n.nRuns = 0;
 		newest = slot;
-		return true;
+		return &n;
 	}
 
 	// All four in use: the oldest that is not the newest fades out at

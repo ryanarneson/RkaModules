@@ -21,15 +21,28 @@
 //   the voices read and are summed (Voices.hpp), then move by the speed; the
 //   newest one crossing the window's turn starts a new one at the window's
 //   start (the join) and gives EOC, or with Loop off fades and stops;
-//   the write head follows the newest voice (TapeWriter): wear, then
-//   keep x old + add x input, then the WriteGuard, faded on the tape;
+//   every voice writes what it passed last sample (its own TapeWriter and
+//   wear state): wear, then keep x old + add x input, then the WriteGuard,
+//   at the strength of that voice's own gain (and the Dub, Stopped, Play
+//   and hold fades), linear on the tape;
 //   the overview is touched where the tape was written and serviced;
 //   Mix, and the soft limit.
 //
 // Decisions the spec leaves to the builder:
-// - Dub and Wear write only inside the window: the write head's moves are
-//   clipped to it, so they never reach the tail or tape outside the window
-//   (the join's fade reads on into them, as recorded).
+// - Each voice writes what it plays, for as long as it sounds, at the
+//   strength of its own fade gain g (the controller's ruling, replacing "the
+//   write head follows the newest voice"): at g = 1 as written above; as g
+//   falls the write fades to "tape unchanged". So a frame heard at gain g
+//   was written at weight g, the join's read-on frames past the window's
+//   end (the tail, or tape beyond a short window) and the whole overlap
+//   included, and a dub laid down by two crossfading voices is heard once at
+//   unity next turn (g_old^2 + g_new^2 = 1). Dub and Wear reach the window
+//   and its read-on, nothing beyond. A new voice has a fresh writer and wear
+//   state (its dropouts are its own); one DC blocker serves every voice. In
+//   the first turn after a voice comes in by a time fade (Play, a retrigger,
+//   a window move) it writes at full weight frames that later turns read
+//   through the join's fade, so a dub made in that turn is heard through the
+//   next join within about 2 dB of its level, then exactly.
 // - Recording: the first REC_MIN_S goes into the engine's own buffer, so a
 //   recording thrown away has touched nothing; once it stands it goes into
 //   the original from frame 0 and the buffer is copied in behind it,
@@ -72,6 +85,15 @@ struct TapeSet {
 	Tape tape, original;
 	Overview overview;
 	float fs = 0.f;   // the rate it was made for: the engine plays only a set at its own
+	// True: the tape is out of date and must be copied from the original
+	// before the set is used or converted (the original is the newer). The
+	// engine sets it on a set it retires in the middle of a recording (a
+	// rate change: the recording ends as a recording, the original is it)
+	// or before the copy that follows a recording; the worker copies the
+	// original to the tape and clears it. A set offered with it set is
+	// copied by the engine's own path (read from the original, then
+	// ORIGINAL_TO_TAPE), which clears it.
+	bool tapeStale = false;
 
 	// Capacity min(300 s, 2^24 frames) and a tail of 10 ms at rate fs, both
 	// tapes empty. False, with nothing held, if the rate is unusable or the
@@ -90,6 +112,7 @@ struct TapeSet {
 		}
 		overview.clear();
 		fs = rate;
+		tapeStale = false;
 		return true;
 	}
 	void release() {
@@ -125,7 +148,7 @@ public:
 	enum Copy { NONE, ORIGINAL_TO_TAPE, TAPE_TO_ORIGINAL };
 
 	explicit EddyEngine(uint32_t seed)
-	    : wear_(seed), pre_(new float[2 * (size_t) preMax()]) {
+	    : seed_(seed), pre_(new float[2 * (size_t) preMax()]) {
 		for (int i = 0; i < RETIRE_SLOTS; i++)
 			retired_[i].store(nullptr, std::memory_order_relaxed);
 		applyRate(48000.f);
@@ -145,14 +168,24 @@ public:
 	}
 	// Initialize, and the menu's Clear: the tape and the original emptied,
 	// Rec, Dub and Play off.
+	//
+	// clear() and offer() are ordered: the last request wins. A clear()
+	// made after an offer() applies to that set when the engine takes it
+	// (it becomes the live set, emptied). An offer() made after a clear()
+	// wins: the set is taken as it is. A clear() with no live set is
+	// remembered and applied to the next set taken, unless a later offer()
+	// supersedes it.
 	void clear() {
-		clearReq_.store(true, std::memory_order_release);
+		clearGen_.store(gen_.fetch_add(1, std::memory_order_relaxed) + 1, std::memory_order_release);
 	}
 	// A set to use: an empty one to record into, or a loaded tape (tape and
 	// original equal, overview built). False if one is still waiting.
 	bool offer(TapeSet* set) {
-		if (!set)
+		if (!set || incoming_.load(std::memory_order_acquire))
 			return false;
+		// Only the audio thread empties `incoming_`, so it stays empty until
+		// this offer fills it: the number is this set's.
+		offerGen_.store(gen_.fetch_add(1, std::memory_order_relaxed) + 1, std::memory_order_release);
 		TapeSet* none = nullptr;
 		return incoming_.compare_exchange_strong(none, set, std::memory_order_acq_rel);
 	}
@@ -204,8 +237,7 @@ public:
 			copyDone_.store(false, std::memory_order_relaxed);
 			finishCopy();
 		}
-		if (clearReq_.load(std::memory_order_relaxed) && clearReq_.exchange(false, std::memory_order_acq_rel))
-			beginClear();
+		clearRequests();
 		if (userCopy_.load(std::memory_order_relaxed) != NONE) {
 			const int c = userCopy_.exchange(NONE, std::memory_order_acq_rel);
 			if (c != NONE)
@@ -279,7 +311,7 @@ public:
 		holdGain_ = ramp(holdGain_, holdWanted() ? 0.f : 1.f, fadeStep_);
 		const bool dubEffective = dubOn_ && dubLevel_ > 0.f && rec_ == REC_IDLE && !wantOriginal() && inFlight_ == NONE;
 		dubGain_ = ramp(dubGain_, dubEffective ? 1.f : 0.f, fadeStep_);
-		wearGain_ = ramp(wearGain_, wear_.active() ? 1.f : 0.f, fadeStep_);
+		wearGain_ = ramp(wearGain_, wearOn_ ? 1.f : 0.f, fadeStep_);
 
 		if (usable && (rec_ == REC_ON || wantOriginal() || inFlight_ == ORIGINAL_TO_TAPE))
 			live_->overview.service(live_->original, OVERVIEW_BUDGET);
@@ -336,6 +368,8 @@ private:
 
 	void applyRate(float fs) {
 		using namespace eddy;
+		if (live_ && live_->fs == fs_ && live_->fs != fs)
+			endForRate();
 		fs_ = fs;
 		const double rate = (fs > 0.f && fs < 1e8f) ? (double) fs : 48000.0;
 		fadeFrames_ = rate * FADE_S;
@@ -353,7 +387,7 @@ private:
 		pre = pre < 1.0 ? 1.0 : pre > (double) preMax() ? (double) preMax() : pre;
 		preN_ = (size_t) pre;
 		guard_.setSampleRate((float) rate);
-		wear_.setSampleRate((float) rate);
+		rate_ = (float) rate;
 		// A set at another rate is silent at once and retired when no copy
 		// is under way on it (handoff).
 		voices_.killAll();
@@ -365,14 +399,37 @@ private:
 		tapeStale_ = false;
 		clearing_ = false;
 		oneShotTail_ = false;
-		stopWriter();
-		writer_.reset();
 		if (usableSet())
 			computeWindow();
 	}
 
 	bool usableSet() const {
 		return live_ && live_->fs == fs_;
+	}
+
+	// The set is about to be retired by a rate change. A recording that
+	// stands ends as a recording (what was recorded is the original, at its
+	// length; the tail so far); the set is flagged so the worker copies the
+	// original to the tape before it is used or converted. One still under
+	// REC_MIN_S is thrown away (the set unchanged). The rest of the start
+	// buffer is copied in at once: at most REC_MIN_S of frames, once.
+	void endForRate() {
+		Tape& o = live_->original;
+		if (rec_ == REC_ON || rec_ == REC_TAIL) {
+			const float* pre0 = pre_.get();
+			const float* pre1 = pre_.get() + preMax();
+			for (size_t i = preCopied_; i < preN_ && i < o.capacity(); i++) {
+				o.ch[0][i] = pre0[i];
+				o.ch[1][i] = pre1[i];
+			}
+			preCopied_ = preN_;
+			o.length = recN_;
+			o.tail = rec_ == REC_TAIL ? tailK_ : 0;
+			live_->tapeStale = true;
+			originalChanges_.fetch_add(1, std::memory_order_relaxed);
+		}
+		else if (tapeStale_)
+			live_->tapeStale = true;   // a recording ended, its copy not yet done
 	}
 
 	// ---- Sets.
@@ -401,6 +458,9 @@ private:
 		}
 		if (!incoming_.load(std::memory_order_relaxed) || inFlight_ != NONE || old_ || !freeSlot())
 			return;
+		// The offer's number, read while the set still waits (offer() writes
+		// it only when none does).
+		const uint32_t og = offerGen_.load(std::memory_order_acquire);
 		TapeSet* s = incoming_.exchange(nullptr, std::memory_order_acq_rel);
 		if (!s)
 			return;
@@ -419,14 +479,18 @@ private:
 		recWant_ = false;
 		dubOn_ = false;
 		queued_ = NONE;
-		tapeStale_ = false;
+		tapeStale_ = s->tapeStale;
 		clearing_ = false;
-		stopWriter();
-		writer_.reset();
 		computeWindow();
 		head_ = winValid_ ? origin(dir_) : 0.0;
 		tapeChanges_.fetch_add(1, std::memory_order_relaxed);
 		originalChanges_.fetch_add(1, std::memory_order_relaxed);
+		// A clear() made after this set was offered applies to it.
+		const uint32_t cg = clearGen_.load(std::memory_order_acquire);
+		if (cg != clearDone_ && later(cg, og)) {
+			clearDone_ = cg;
+			beginClear();
+		}
 	}
 
 	void applyTransport(int t) {
@@ -439,6 +503,29 @@ private:
 	}
 
 	// ---- Clear.
+
+	// a after b, for numbers that may wrap.
+	static bool later(uint32_t a, uint32_t b) {
+		return (int32_t) (a - b) > 0;
+	}
+
+	// A clear() not yet applied: to the live set now, unless a set waits to
+	// be taken (then the later of the two requests wins); with no set at
+	// all it waits for the next one taken.
+	void clearRequests() {
+		const uint32_t cg = clearGen_.load(std::memory_order_acquire);
+		if (cg == clearDone_)
+			return;
+		if (incoming_.load(std::memory_order_acquire)) {
+			if (later(offerGen_.load(std::memory_order_acquire), cg))
+				clearDone_ = cg;   // a later offer supersedes it
+			return;                // else handoff applies it to that set
+		}
+		if (live_) {
+			clearDone_ = cg;
+			beginClear();
+		}
+	}
 
 	void beginClear() {
 		if (!live_)
@@ -516,7 +603,10 @@ private:
 		}
 		else
 			queued_ = NONE;
-		stopWriter();
+		for (int i = 0; i < Voices::N; i++) {
+			voices_.v[i].writer.reset();
+			voices_.v[i].nRuns = 0;
+		}
 		inFlight_ = next;
 		copyDone_.store(false, std::memory_order_relaxed);
 		published_.store(next, std::memory_order_release);
@@ -527,6 +617,7 @@ private:
 			// The two are now equal: reading goes back to the tape at once.
 			voices_.retarget(&live_->original, &live_->tape);
 			tapeStale_ = false;
+			live_->tapeStale = false;
 			live_->overview.touch(0, live_->tape.length, live_->tape.length);
 			tapeChanges_.fetch_add(1, std::memory_order_relaxed);
 		}
@@ -772,6 +863,18 @@ private:
 
 	// ---- Voices.
 
+	// A new voice (Voices::start) with a fresh wear state of its own, seeded
+	// from the engine's seed and the voice's number.
+	Voice* startVoice(double p, double perSample, double perFrame) {
+		Voice* n = voices_.start(source(), live_, p, wrap_, perSample, perFrame);
+		if (n) {
+			n->wear = eddy::Wear(seed_ * 2654435761u + n->born);
+			n->wear.setSampleRate(rate_);
+			n->wear.set(wearK_);
+		}
+		return n;
+	}
+
 	// The head goes to p: a new voice there, fading in as the last fades out.
 	// Silent (stopped), the voices simply go and the head waits at p.
 	void jumpTo(double p, double perSample, double perFrame) {
@@ -781,7 +884,7 @@ private:
 			head_ = p;
 			return;
 		}
-		if (!voices_.start(source(), live_, p, wrap_, perSample, perFrame)) {
+		if (!startVoice(p, perSample, perFrame)) {
 			voices_.cutOldest(cutRate_);
 			pend_.active = true;
 			pend_.pos = p;
@@ -796,7 +899,7 @@ private:
 			pend_.active = false;
 			return;
 		}
-		if (voices_.start(source(), live_, pend_.pos, wrap_, pend_.perSample, pend_.perFrame))
+		if (startVoice(pend_.pos, pend_.perSample, pend_.perFrame))
 			pend_.active = false;
 		else
 			voices_.cutOldest(cutRate_);
@@ -831,76 +934,66 @@ private:
 			p = Voice::reduce(p, len_);
 		if (!inside(p, dir_))
 			p = origin(dir_);
-		voices_.start(source(), live_, p, wrap_, fadeRate_, 0.0);
+		startVoice(p, fadeRate_, 0.0);
 	}
 
 	void moveVoices(double mv, const float in[2]) {
-		// Last sample's move is written now, with this sample's input: the
-		// writer lays the input down where a move ends, and the head read
-		// this sample where last sample's move ended, so a dub played back
-		// at the speed it was made at is heard as it was played.
-		for (int i = 0; i < nRuns_; i++)
-			writeRun(runs_[i].a, runs_[i].b, in);
-		nRuns_ = 0;
-		const double travel = mv < 0.0 ? -mv : mv;
-		Voice* h = voices_.head();
-		double p0 = 0.0;
-		bool headOurs = false;
-		if (h) {
-			p0 = h->pos;
-			headOurs = h->owner == live_ && usableSet() && winValid_;
-		}
+		// Each voice's last move is written now, with this sample's input:
+		// the writer lays the input down where a move ends, and the voice
+		// read this sample where its last move ended, so a dub played back at
+		// the speed it was made at is heard as it was played.
 		for (int i = 0; i < Voices::N; i++) {
 			Voice& x = voices_.v[i];
 			if (!x.active)
 				continue;
+			for (int k = 0; k < x.nRuns; k++)
+				writeRun(x, x.runs[k].a, x.runs[k].b, in);
+			x.nRuns = 0;
+		}
+		const double travel = mv < 0.0 ? -mv : mv;
+		Voice* h = voices_.head();
+		const bool headOurs = h && h->owner == live_ && usableSet() && winValid_;
+		// Every voice moves, fades, and has its move (unwrapped) written next
+		// sample: a voice writes what it passes, for as long as it sounds.
+		for (int i = 0; i < Voices::N; i++) {
+			Voice& x = voices_.v[i];
+			if (!x.active)
+				continue;
+			const double q0 = x.pos;
 			x.move(mv);
 			// Fades by travel cannot finish without it: those go by time.
 			if (travel == 0.0 && i != voices_.newest && x.perFrame != 0.0)
 				x.fadeOut(fadeRate_);
 			x.fade(travel);
+			if (x.active && travel > 0.0)
+				x.queue(q0, q0 + mv);
 		}
 		if (!h || !h->active) {
 			if (h && !h->active)
 				voices_.newest = -1;
-			stopWriter();
 			return;
 		}
 		head_ = h->pos;
-		if (!headOurs || travel == 0.0) {
-			if (headOurs && travel == 0.0)
-				return;   // stopped: the writer keeps its place
-			stopWriter();
+		if (!headOurs || travel == 0.0 || pend_.active)
 			return;
-		}
 
 		const int d = mv > 0.0 ? 1 : -1;
-		const double p1u = p0 + mv;   // unwrapped
-		if (pend_.active) {
-			queueRun(p0, p1u);
-			return;
-		}
 		const double r1 = rel(h->pos, d);
 		const double tn = turn(d);
 		if (!(r1 >= tn)) {
-			if (r1 < 0.0 || !(h->pos >= 0.0 && h->pos < len_ + 1.0)) {
-				stopWriter();
+			if (r1 < 0.0 || !(h->pos >= 0.0 && h->pos < len_ + 1.0))
 				jumpTo(origin(d), fadeRate_, 0.0);
-				return;
-			}
-			queueRun(p0, p1u);
 			return;
 		}
 		double over = r1 - tn;
 		if (!(over <= travel + 1e-9)) {
 			// Not crossed by this move (the window or the direction changed):
 			// a window move.
-			stopWriter();
 			jumpTo(origin(d), fadeRate_, 0.0);
 			return;
 		}
-		// The join.
-		queueRun(p0, p1u - d * over);
+		// The join: the head reads on through the overlap, fading, and a new
+		// one starts at the window's start.
 		if (over >= tn && tn > 0.0)
 			over -= tn * std::floor(over / tn);
 		eocLeft_ = eocN_ + 1;
@@ -908,9 +1001,9 @@ private:
 		const double at = origin(d) + d * over;
 		if (loop_) {
 			jumpTo(at, 0.0, perFrame);
-			const Voice* n = voices_.head();
+			Voice* n = voices_.head();
 			if (n && n != h)
-				queueRun(origin(d), at);
+				n->queue(origin(d), at);
 		}
 		else {
 			// One shot: the head fades out through the join and Play goes off.
@@ -925,85 +1018,43 @@ private:
 
 	// ---- The write head.
 
-	void stopWriter() {
-		nRuns_ = 0;
-		if (writerOn_) {
-			writerOn_ = false;
-			writer_.reset();
-		}
-	}
-	void queueRun(double a, double b) {
-		if (nRuns_ < 2) {
-			runs_[nRuns_].a = a;
-			runs_[nRuns_].b = b;
-			nRuns_++;
-		}
-	}
-
-	// The newest voice moved from a to b (b unwrapped: it may pass the
-	// tape's end by a sample's move in a wrapping window).
-	void writeRun(double a, double b, const float in[2]) {
+	// Voice x moved from a to b (b unwrapped: a wrapping voice may pass the
+	// tape's end by a sample's move). It writes at the strength of its own
+	// gain, times the hold, the Stopped law, Play's fade and the larger of
+	// the Dub and Wear fades: at 0 the tape is unchanged.
+	void writeRun(Voice& x, double a, double b, const float in[2]) {
 		using namespace eddy;
-		const float g = holdGain_ * writeGain(speedNow_) * playGain_;
 		const float amount = wearGain_ > dubGain_ ? wearGain_ : dubGain_;
-		const Voice* h = voices_.head();
-		if (!(g * amount > 0.f) || !h || h->src != &live_->tape || rec_ != REC_IDLE) {
-			stopWriter();
+		const float g = x.gain() * holdGain_ * writeGain(speedNow_) * playGain_ * amount;
+		if (!(g > 0.f) || !usableSet() || x.owner != live_ || x.src != &live_->tape || rec_ != REC_IDLE) {
+			x.writer.reset();
 			return;
 		}
-		writerOn_ = true;
 		wroteTick_ = true;
-		if (wrap_ && b >= len_) {
-			writeClip(a, len_, in, g * amount);
-			writeClip(0.0, b - len_, in, g * amount);
+		const double len = x.length();
+		if (x.wrap && b >= len) {
+			writeStraight(x, a, len, in, g);
+			writeStraight(x, 0.0, b - len, in, g);
 		}
-		else if (wrap_ && b < 0.0) {
-			writeClip(a, 0.0, in, g * amount);
-			writeClip(len_, len_ + b, in, g * amount);
+		else if (x.wrap && b < 0.0) {
+			writeStraight(x, a, 0.0, in, g);
+			writeStraight(x, len, len + b, in, g);
 		}
 		else
-			writeClip(a, b, in, g * amount);
+			writeStraight(x, a, b, in, g);
 	}
 
-	// A straight move from a to b, clipped to the window's frames.
-	void writeClip(double a, double b, const float in[2], float gain) {
-		if (a == b)
+	// Written frames are held to the tape and its tail by the writer.
+	void writeStraight(Voice& x, double p0, double p1, const float in[2], float gain) {
+		if (p0 == p1)
 			return;
-		const bool fwd = b > a;
-		const double lo = fwd ? a : b, hi = fwd ? b : a;
-		double r0[2], r1[2];
-		int n;
-		if (wrap_) {
-			// In order of position: the beginning's piece, then the end's.
-			r0[0] = 0.0;
-			r1[0] = S_ + L_ - len_;
-			r0[1] = S_;
-			r1[1] = len_;
-			n = 2;
-		}
-		else {
-			r0[0] = S_;
-			r1[0] = S_ + L_;
-			n = 1;
-		}
-		for (int k = 0; k < n; k++) {
-			const int j = fwd ? k : n - 1 - k;
-			const double x0 = lo > r0[j] ? lo : r0[j];
-			const double x1 = hi < r1[j] ? hi : r1[j];
-			if (!(x0 < x1))
-				continue;
-			writeStraight(fwd ? x0 : x1, fwd ? x1 : x0, in, gain);
-		}
-	}
-
-	void writeStraight(double p0, double p1, const float in[2], float gain) {
 		Tape& t = live_->tape;
 		const float keep = keep_, add = add_, dub = dubGain_;
-		eddy::Wear& wear = wear_;
+		eddy::Wear& wear = x.wear;
 		eddy::WriteGuard& guard = guard_;
-		writer_.write(t, p0, p1, in, [&](int c, float old, float x) -> float {
+		x.writer.write(t, p0, p1, in, [&](int c, float old, float v) -> float {
 			const float w = wear.process(c, old, 1.f);
-			const float pre = w + dub * ((keep * w + add * x) - w);
+			const float pre = w + dub * ((keep * w + add * v) - w);
 			const float y = guard.process(c, pre);
 			return old + gain * (y - old);
 		});
@@ -1028,7 +1079,11 @@ private:
 		lengthK_ = f.params[EddyFrame::LENGTH];
 		smearK_ = f.params[EddyFrame::SMEAR];
 		loop_ = f.loop;
-		wear_.set(f.params[EddyFrame::WEAR]);
+		wearK_ = f.params[EddyFrame::WEAR];
+		wearOn_ = wearK_ > 0.f;   // NaN: off
+		for (int i = 0; i < Voices::N; i++)
+			if (voices_.v[i].active)
+				voices_.v[i].wear.set(wearK_);
 		const float dl = f.params[EddyFrame::DUB_LEVEL];
 		dubGains(dl, add_, keep_);
 		dubLevel_ = add_;
@@ -1055,10 +1110,8 @@ private:
 				if (wrap_)
 					h->pos = Voice::reduce(h->pos, len_);
 			}
-			if (!inside(h->pos, dir_)) {
-				stopWriter();
+			if (!inside(h->pos, dir_))
 				jumpTo(origin(dir_), fadeRate_, 0.0);
-			}
 		}
 		if (snap_) {
 			glide_ = speedTarget_;
@@ -1121,7 +1174,8 @@ private:
 	std::atomic<int> published_{NONE};
 	std::atomic<bool> copyDone_{false};
 	std::atomic<int> userCopy_{NONE};
-	std::atomic<bool> clearReq_{false};
+	std::atomic<uint32_t> gen_{0}, offerGen_{0}, clearGen_{0};   // the order of offer() and clear()
+	uint32_t clearDone_ = 0;   // the last clear() applied (audio thread)
 	std::atomic<int> transportReq_{-1};
 	std::atomic<uint32_t> tapeChanges_{0}, originalChanges_{0};
 	int inFlight_ = NONE;    // the copy published, until it is done
@@ -1154,15 +1208,11 @@ private:
 	Pending pend_;
 	double head_ = 0.0;
 	float playGain_ = 0.f, holdGain_ = 1.f, dubGain_ = 0.f, wearGain_ = 0.f;
-	TapeWriter writer_;
-	struct Run {
-		double a, b;
-	};
-	Run runs_[2];   // the newest voice's move, written next sample
-	int nRuns_ = 0;
-	bool writerOn_ = false, wroteTick_ = false;
-	eddy::Wear wear_;
-	eddy::WriteGuard guard_;
+	bool wroteTick_ = false;
+	uint32_t seed_;
+	float rate_ = 48000.f, wearK_ = 0.f;
+	bool wearOn_ = false;
+	eddy::WriteGuard guard_;   // one DC blocker for every voice's writes
 	std::unique_ptr<float[]> pre_;
 };
 
