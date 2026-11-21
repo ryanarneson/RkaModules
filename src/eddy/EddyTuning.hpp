@@ -36,5 +36,8 @@ constexpr float WEAR_DROPOUT_MIN_S = 0.005f, WEAR_DROPOUT_MAX_S = 0.04f;
 constexpr float WEAR_DROPOUT_GAIN_MIN = 0.3f, WEAR_DROPOUT_GAIN_MAX = 0.8f;
 constexpr float WEAR_DROPOUT_EDGE_S = 0.002f;
 
+// The write path's DC blocker.
+constexpr float WRITE_DC_HZ = 5.f;
+
 } // namespace eddy
 } // namespace rka
