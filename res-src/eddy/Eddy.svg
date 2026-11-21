@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="81.28mm" height="128.5mm" viewBox="0 0 81.28 128.5">
+<rect width="81.28" height="128.5" fill="#15171c"/>
+<path d="M7.8 86L7.8 80.3" fill="none" stroke="#8a8474" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M40.64 86L40.64 78L40.64 70.35" fill="none" stroke="#8a8474" stroke-width="0.25" stroke-linejoin="round"/>
+<circle cx="40.64" cy="78" r="3.1" fill="#15171c"/>
+<circle cx="7.8" cy="76" r="4.6" fill="#15171c"/>
+<circle cx="24.22" cy="76" r="4.6" fill="#15171c"/>
+<circle cx="57.06" cy="76" r="4.6" fill="#15171c"/>
+<circle cx="73.48" cy="76" r="4.6" fill="#15171c"/>
+<circle cx="57.06" cy="90" r="3.1" fill="#15171c"/>
+<circle cx="73.48" cy="90" r="3.1" fill="#15171c"/>
+<circle cx="7.8" cy="47.5" r="3.5" fill="#15171c"/>
+<circle cx="7.8" cy="60.5" r="3.5" fill="#15171c"/>
+<circle cx="73.48" cy="47.5" r="3.5" fill="#15171c"/>
+<circle cx="73.48" cy="60.5" r="3.5" fill="#15171c"/>
+<circle cx="57.06" cy="102" r="3.5" fill="#15171c"/>
+<circle cx="7.8" cy="90" r="4.3" fill="#15171c"/>
+<circle cx="24.22" cy="90" r="4.3" fill="#15171c"/>
+<circle cx="40.64" cy="90" r="4.3" fill="#15171c"/>
+<circle cx="7.8" cy="102" r="4.3" fill="#15171c"/>
+<circle cx="7.8" cy="116" r="4.3" fill="#15171c"/>
+<circle cx="24.22" cy="102" r="4.3" fill="#15171c"/>
+<circle cx="24.22" cy="116" r="4.3" fill="#15171c"/>
+<circle cx="40.64" cy="102" r="4.3" fill="#15171c"/>
+<circle cx="57.06" cy="116" r="4.3" fill="#15171c"/>
+<rect x="4.775" y="19.275" width="71.73" height="14.45" rx="0.8" fill="#05080c" stroke="#c9a46a" stroke-width="0.45"/>
+<path d="M6.782 34.35L6.782 34.95 M8.564 34.35L8.564 34.95 M10.346 34.35L10.346 34.95 M13.91 34.35L13.91 34.95 M15.692 34.35L15.692 34.95 M17.474 34.35L17.474 34.95 M21.038 34.35L21.038 34.95 M22.82 34.35L22.82 34.95 M24.602 34.35L24.602 34.95 M28.166 34.35L28.166 34.95 M29.948 34.35L29.948 34.95 M31.73 34.35L31.73 34.95 M35.294 34.35L35.294 34.95 M37.076 34.35L37.076 34.95 M38.858 34.35L38.858 34.95 M42.422 34.35L42.422 34.95 M44.204 34.35L44.204 34.95 M45.986 34.35L45.986 34.95 M49.55 34.35L49.55 34.95 M51.332 34.35L51.332 34.95 M53.114 34.35L53.114 34.95 M56.678 34.35L56.678 34.95 M58.46 34.35L58.46 34.95 M60.242 34.35L60.242 34.95 M63.806 34.35L63.806 34.95 M65.588 34.35L65.588 34.95 M67.37 34.35L67.37 34.95 M70.934 34.35L70.934 34.95 M72.716 34.35L72.716 34.95 M74.498 34.35L74.498 34.95" fill="none" stroke="#c9a46a" stroke-width="0.15"/>
+<path d="M5 34.35L5 35.65 M12.128 34.35L12.128 35.65 M19.256 34.35L19.256 35.65 M26.384 34.35L26.384 35.65 M33.512 34.35L33.512 35.65 M40.64 34.35L40.64 35.65 M47.768 34.35L47.768 35.65 M54.896 34.35L54.896 35.65 M62.024 34.35L62.024 35.65 M69.152 34.35L69.152 35.65 M76.28 34.35L76.28 35.65" fill="none" stroke="#c9a46a" stroke-width="0.25"/>
+<circle cx="40.64" cy="54" r="16" fill="#efe6d2" stroke="#c9a46a" stroke-width="0.7"/>
+<path d="M32.865 60.129L32.159 60.686 M32.199 59.173L31.431 59.643 M31.649 58.145L30.832 58.522 M31.225 57.059L30.369 57.337 M30.771 54.777L29.873 54.847 M30.748 53.611L29.848 53.576 M30.862 52.451L29.973 52.311 M31.112 51.313L30.245 51.068 M32.002 49.163L31.217 48.723 M32.631 48.181L31.903 47.652 M33.37 47.28L32.709 46.669 M34.21 46.472L33.626 45.788 M36.145 45.179L35.737 44.377 M37.213 44.712L36.902 43.868 M38.329 44.374L38.119 43.498 M39.476 44.169L39.371 43.275 M41.804 44.169L41.909 43.275 M42.951 44.374L43.161 43.498 M44.067 44.712L44.378 43.868 M45.135 45.179L45.543 44.377 M47.07 46.472L47.654 45.788 M47.91 47.28L48.571 46.669 M48.649 48.181L49.377 47.652 M49.278 49.163L50.063 48.723 M50.168 51.313L51.035 51.068 M50.418 52.451L51.307 52.311 M50.532 53.611L51.432 53.576 M50.509 54.777L51.407 54.847 M50.055 57.059L50.911 57.337 M49.631 58.145L50.448 58.522 M49.081 59.173L49.849 59.643 M48.415 60.129L49.121 60.686" fill="none" stroke="#1c1a16" stroke-width="0.16"/>
+<path d="M33.64 61L32.438 62.202 M30.93 55.931L29.263 56.263 M31.494 50.211L29.923 49.561 M35.14 45.768L34.195 44.355 M40.64 44.1L40.64 42.4 M46.14 45.768L47.085 44.355 M49.786 50.211L51.357 49.561 M50.35 55.931L52.017 56.263 M47.64 61L48.842 62.202" fill="none" stroke="#1c1a16" stroke-width="0.28"/>
+<rect x="69.08" y="94.8" width="8.8" height="11.8" rx="0.7" fill="#efe6d2"/>
+<rect x="69.08" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#efe6d2"/>
+<rect x="36.24" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#efe6d2"/>
+<text x="5.00" y="10.00" font-family="D-DIN Condensed" font-size="5.2" font-weight="normal" letter-spacing="1.4" text-anchor="start" fill="#efe6d2">EDDY</text>
+<text x="5.00" y="13.80" font-family="D-DIN Condensed" font-size="1.7" font-weight="normal" letter-spacing="0.45" text-anchor="start" fill="#8a8474">TAPE LOOP &amp; SAMPLER</text>
+<text x="31.99" y="62.78" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(-135 31.86 62.78)">-2</text>
+<text x="29.30" y="49.25" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(-67.5 29.17 49.25)">-1</text>
+<text x="40.77" y="41.59" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">0</text>
+<text x="52.23" y="49.25" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(67.5 52.11 49.25)">+1</text>
+<text x="49.54" y="62.78" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(135 49.42 62.78)">+2</text>
+<text x="40.94" y="68.00" font-family="D-DIN Condensed" font-size="2.3" font-weight="bold" letter-spacing="0.6" text-anchor="middle" fill="#1c1a16">SPEED</text>
+<text x="7.92" y="70.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">START</text>
+<text x="24.34" y="70.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">LENGTH</text>
+<text x="57.19" y="70.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">WEAR</text>
+<text x="73.61" y="70.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">SMEAR</text>
+<text x="57.19" y="86.00" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">DUB LEVEL</text>
+<text x="73.61" y="86.00" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">MIX</text>
+<text x="7.92" y="43.10" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">REC</text>
+<text x="7.92" y="56.10" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">DUB</text>
+<text x="73.61" y="43.10" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">PLAY</text>
+<text x="73.61" y="56.10" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">LOOP</text>
+<text x="57.19" y="97.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">RESTORE</text>
+<text x="24.34" y="84.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">V/OCT</text>
+<text x="7.92" y="96.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">IN L</text>
+<text x="7.92" y="110.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">IN R</text>
+<text x="24.34" y="96.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">REC</text>
+<text x="24.34" y="110.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">DUB</text>
+<text x="40.77" y="96.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">PLAY</text>
+<text x="57.19" y="110.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">TRIG</text>
+<text x="40.77" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">EOC</text>
+<text x="73.61" y="97.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">L</text>
+<text x="73.61" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">R</text>
+<text x="40.89" y="125.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.5" text-anchor="middle" fill="#8a8474">R K A · INSTRUMENTS</text>
+<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
+<circle id="param-SPEED" cx="40.64" cy="54.0" r="1" fill="#ff0000"/>
+<circle id="param-SPEED_ATT" cx="40.64" cy="78.0" r="1" fill="#ff0000"/>
+<circle id="param-START" cx="7.8" cy="76.0" r="1" fill="#ff0000"/>
+<circle id="param-LENGTH" cx="24.22" cy="76.0" r="1" fill="#ff0000"/>
+<circle id="param-WEAR" cx="57.06" cy="76.0" r="1" fill="#ff0000"/>
+<circle id="param-SMEAR" cx="73.48" cy="76.0" r="1" fill="#ff0000"/>
+<circle id="param-DUB_LEVEL" cx="57.06" cy="90.0" r="1" fill="#ff0000"/>
+<circle id="param-MIX" cx="73.48" cy="90.0" r="1" fill="#ff0000"/>
+<circle id="param-REC" cx="7.8" cy="47.5" r="1" fill="#ff0000"/>
+<circle id="param-DUB" cx="7.8" cy="60.5" r="1" fill="#ff0000"/>
+<circle id="param-PLAY" cx="73.48" cy="47.5" r="1" fill="#ff0000"/>
+<circle id="param-LOOP" cx="73.48" cy="60.5" r="1" fill="#ff0000"/>
+<circle id="param-RESTORE" cx="57.06" cy="102.0" r="1" fill="#ff0000"/>
+<circle id="input-START_CV" cx="7.8" cy="90.0" r="1" fill="#00ff00"/>
+<circle id="input-VOCT" cx="24.22" cy="90.0" r="1" fill="#00ff00"/>
+<circle id="input-SPEED_CV" cx="40.64" cy="90.0" r="1" fill="#00ff00"/>
+<circle id="input-L" cx="7.8" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-R" cx="7.8" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="input-REC" cx="24.22" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-DUB" cx="24.22" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="input-PLAY" cx="40.64" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-RESTORE" cx="57.06" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="output-EOC" cx="40.64" cy="116.0" r="1" fill="#0000ff"/>
+<circle id="output-L" cx="73.48" cy="102.0" r="1" fill="#0000ff"/>
+<circle id="output-R" cx="73.48" cy="116.0" r="1" fill="#0000ff"/>
+</g>
+</svg>
