@@ -298,3 +298,7 @@ Antivirus can slow the build badly; exclude the source folder.
 ## License
 
 GPL-3.0-or-later. See `LICENSE-GPLv3.txt`.
+
+`src/dep/dr_wav.h` is dr_wav 0.13.16 by David Reid (public domain or MIT No
+Attribution), copied unedited from the Fundamental plugin; Eddy uses it to
+read and write WAV files.

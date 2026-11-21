@@ -68,6 +68,12 @@ build/test/wake/test_hostile: src/wake/test_hostile.cpp src/testing.hpp $(wildca
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/wake $< -o $@
 
+# Eddy's file test: the sanitizers, and counting allocators (operator new and
+# dr_wav's malloc). WavFile.hpp is compiled into it (RKA_WAV_IMPLEMENTATION).
+build/test/eddy/test_files: src/eddy/test_files.cpp src/testing.hpp $(wildcard src/*.hpp src/eddy/*.hpp src/dep/*.h)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/eddy $< -o $@
+
 # Narrows' hostile-input test: the sanitizers, and the counting operator new.
 build/test/narrows/test_hostile: src/narrows/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/narrows/*.hpp src/fathom/*.hpp)
 	@mkdir -p $(@D)
