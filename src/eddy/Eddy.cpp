@@ -366,6 +366,14 @@ struct Eddy : Module {
 		const std::string dir = getPatchStorageDirectory();
 		std::lock_guard<std::mutex> view(viewLock_);
 		TapeSet* s = engine.live();
+		// storeLoading_ first: the worker (and the audio thread) store what
+		// the load came to (failed; the baseline) before clearing it, so a
+		// save that sees it cleared sees what came of the load too, and one
+		// that sees it set leaves the folder alone. Read the other way round
+		// a save between the two stores saw neither and could remove the
+		// folder of a stored tape that failed to load (the final re-review's
+		// N5).
+		const bool loading = storeLoading_.load();
 		// A stored load that went live whole: the files hold it. Cut short by
 		// the capacity: they hold more, and stay while the tape is unchanged.
 		// Failed: they stay while the tape is empty.
@@ -379,7 +387,7 @@ struct Eddy : Module {
 			rka::eddy::loadFailed(record_);
 		rka::eddy::SaveFacts f;
 		f.keepTape = keepTape;
-		f.loading = storeLoading_.load();
+		f.loading = loading;
 		f.haveSet = s != nullptr;
 		if (s) {
 			TapeSet* snapSet;
@@ -799,12 +807,13 @@ struct Eddy : Module {
 			if (s)
 				keep(s);
 			const WorkerBook::Finished d = book_.finished(r, fs, fs_.load(), s, whole, cut, clearSeq(), usableLive(), from);
-			if (d.storeOff)
-				storeLoading_.store(false);
+			// What the load came to before the flag that it is over (N5).
 			if (d.storeFailed) {
 				storeFailedEpoch_.store(r.epoch);
 				storeFailed_.store(true);
 			}
+			if (d.storeOff)
+				storeLoading_.store(false);
 			if (d.limbo)
 				limbo_.push_back((TapeSet*) d.limbo);
 			if (d.setFile) {
