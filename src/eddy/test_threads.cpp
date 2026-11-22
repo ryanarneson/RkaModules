@@ -74,6 +74,7 @@ struct Worker {
 	std::vector<TapeSet*> spare;   // sets the engine does not hold
 	float fs = 48000.f;
 	long offered = 0, collected = 0, copies = 0, clears = 0, rateChanges = 0, stale = 0;
+	std::atomic<long> iterations{0};
 	rka::hadal::Random rnd;
 
 	Worker(EddyEngine& engine, std::vector<TapeSet*>& m) : e(engine), made(m) {
@@ -131,9 +132,21 @@ struct Worker {
 		}
 	}
 
-	// rateNow: the audio thread asks for a rate change (while it records).
+	void rateChange() {
+		fs = fs == 48000.f ? 44100.f : 48000.f;
+		e.setSampleRate(fs);
+		rateChanges++;
+	}
+
+	// rateNow: the audio thread asks for a rate change now (while it
+	// records), and waits until it is made.
 	void run(const std::atomic<bool>& stop, std::atomic<bool>& rateNow) {
 		for (long it = 0; !stop.load(std::memory_order_acquire); it++) {
+			iterations.store(it, std::memory_order_relaxed);
+			if (rateNow.load(std::memory_order_acquire)) {
+				rateChange();
+				rateNow.store(false, std::memory_order_release);
+			}
 			service();
 			if (it % 150 == 0) {
 				TapeSet* s = spareSet();
@@ -152,11 +165,8 @@ struct Worker {
 				e.clear();
 				clears++;
 			}
-			if (it % 300 == 299 || rateNow.exchange(false, std::memory_order_relaxed)) {
-				fs = fs == 48000.f ? 44100.f : 48000.f;
-				e.setSampleRate(fs);
-				rateChanges++;
-			}
+			if (it % 300 == 299)
+				rateChange();
 			std::this_thread::sleep_for(std::chrono::microseconds(100));
 		}
 	}
@@ -188,17 +198,21 @@ void threads() {
 		}
 	});
 
-	// The audio thread: the storm, for 20 s of audio.
+	// The audio thread: the storm, for 20 s of audio, and on until the worker
+	// has been round its loop MIN_ITS times (the two threads' speeds differ
+	// from machine to machine; this keeps what the worker does comparable).
 	F f;
 	EddyResult r;
 	f.inRPatched = true;
 	f.playPress = true;
 	int most = 0;
 	long bad = 0, playing = 0, recording = 0;
-	const long n = 20 * 48000;
+	const long n = 20 * 48000, MIN_ITS = 6000;
+	long ran = 0;
 	auto square = [](long i, int phase) { return ((i * 10 + phase) / 48) % 2 == 1; };
 	bool last[6] = {};
-	for (long i = 0; i < n; i++) {
+	for (long i = 0; i < n || (w.iterations.load(std::memory_order_relaxed) < MIN_ITS && i < 50 * n); i++) {
+		ran = i + 1;
 		bool sq[6];
 		for (int k = 0; k < 6; k++)
 			sq[k] = square(i, 7 * k);
@@ -217,8 +231,11 @@ void threads() {
 		// ends, leaving the set stale), then to nothing (the recording ends,
 		// its tail, its copy).
 		const long phase = (i / 20000) % 3;
-		if (phase == 1 && i % 20000 == 10000)
-			rateNow.store(true, std::memory_order_relaxed);
+		if (phase == 1 && i % 20000 == 10000) {
+			rateNow.store(true, std::memory_order_release);
+			while (rateNow.load(std::memory_order_acquire))
+				std::this_thread::yield();
+		}
 		if (phase != 0) {
 			f.recGate = phase == 1 ? 10.f : 0.f;
 			f.dubGate = f.playTrig = f.restoreTrig = 0.f;
@@ -243,7 +260,7 @@ void threads() {
 	      "the worker offered %ld sets, collected %ld (%ld stale), made %ld copies, %ld clears and %ld rate changes", w.offered,
 	      w.collected, w.stale, w.copies, w.clears, w.rateChanges);
 	CHECK(reads > 100 && notFinite == 0, "the window read %ld overviews, %ld columns not finite", reads, notFinite);
-	CHECK(playing > n / 10 && recording > n / 20, "the storm played (%ld samples) and recorded (%ld)", playing, recording);
+	CHECK(playing > ran / 10 && recording > ran / 20, "the storm played (%ld samples) and recorded (%ld)", playing, recording);
 
 	// One thread now, the main one as both: back at 48 kHz, a last set
 	// taken, then the last edges: everything low, a Restore, a PLAY trigger.

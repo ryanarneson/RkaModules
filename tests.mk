@@ -8,9 +8,30 @@
 MODULES ?= $(patsubst src/%/,%,$(sort $(dir $(wildcard src/*/test_*.cpp))))
 
 TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_*.cpp)))
+# The ThreadSanitizer tests (Eddy's test_threads) run after the rest. Where
+# the sanitizer cannot start (GCC's runtime on a Linux kernel whose address
+# randomisation is wider than it handles, vm.mmap_rnd_bits over 28, or under
+# emulation) it stops before main with "unexpected memory mapping": then the
+# test runs again with randomisation off (setarch -R), and only if that is not
+# allowed either is it skipped, saying why. Any other failure fails.
+TSAN_TESTS = $(filter %/test_threads,$(TEST_BINS))
+TSAN_START_FAILED = ThreadSanitizer: unexpected memory mapping
 .PHONY: test
 test: shoal-globals bench-modules engine-globals libm-calls panels-test $(TEST_BINS)
-	@for t in $(TEST_BINS); do ./$$t || exit 1; done
+	@for t in $(filter-out $(TSAN_TESTS),$(TEST_BINS)); do ./$$t || exit 1; done
+	@for t in $(TSAN_TESTS); do \
+		./$$t > $$t.log 2>&1; rc=$$?; \
+		if [ $$rc != 0 ] && grep -q "$(TSAN_START_FAILED)" $$t.log; then \
+			setarch "$$(uname -m)" -R ./$$t > $$t.log 2>&1; rc=$$?; \
+			if [ $$rc != 0 ] && grep -q -e "$(TSAN_START_FAILED)" -e setarch $$t.log; then \
+				cat $$t.log; \
+				echo "$$t: skipped (ThreadSanitizer cannot start here, and setarch -R is not allowed:" \
+					"lower vm.mmap_rnd_bits to 28, or allow personality(2) in the container)"; \
+				continue; \
+			fi; \
+		fi; \
+		cat $$t.log; [ $$rc = 0 ] || exit 1; \
+	done
 
 # The panel generator's geometry and layout checks, and that the committed
 # panels, layout headers, colours and components are what it generates.
