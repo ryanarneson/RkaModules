@@ -77,6 +77,19 @@ inline float writeGain(float speed) {
 	return g < 1.f ? g : 1.f;
 }
 
+// The LENGTH law: knob k (0..1, already held there) as a length,
+// lmin x (tape / lmin)^k, held to [lmin, tape]; lmin is the shortest length
+// (10 ms, or the tape if that is shorter), in the same unit as tape. The
+// window (below) and the window's mouse (Select.hpp) both use it.
+inline double lengthLaw(double k, double tape, double lmin) {
+	if (k <= 0.0)
+		return lmin;
+	if (k >= 1.0)
+		return tape;
+	const double L = lmin * fastExp2D(k * (double) fastLog2((float) (tape / lmin)));
+	return L < lmin ? lmin : (L > tape ? tape : L);
+}
+
 // The loop window, all in frames. start: where it begins; length: L;
 // minFade: m = min(F, L/4); overlap: o; turn: how long a turn of the loop is
 // (L - (o - t), t = the part of m the tape holds past the window's end).
@@ -104,16 +117,7 @@ inline Window window(float startKnob, float startCvVolts, float lengthKnob, floa
 	if (start > tapeFrames - 1.0)
 		start = tapeFrames - 1.0;
 
-	const double k = detail::unit(lengthKnob);
-	double L;
-	if (k <= 0.0)
-		L = lmin;
-	else if (k >= 1.0)
-		L = tapeFrames;
-	else {
-		L = lmin * fastExp2D(k * (double) fastLog2((float) (tapeFrames / lmin)));
-		L = L < lmin ? lmin : (L > tapeFrames ? tapeFrames : L);
-	}
+	const double L = lengthLaw(detail::unit(lengthKnob), tapeFrames, lmin);
 
 	const double m = F < L / 4.0 ? F : L / 4.0;
 	const double s = detail::unit(smear);
