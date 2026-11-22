@@ -66,6 +66,13 @@ static void freeHook(const volatile void* p) {
 		gHeapOps++;
 }
 
+// GCC's ASan on Linux keeps a fake stack for every frame by default
+// (use-after-return detection); for this engine's many small frames it made
+// the test minutes long on arm64 Linux. The engine returns no stack addresses.
+extern "C" const char* __asan_default_options() {
+	return "detect_stack_use_after_return=0";
+}
+
 namespace {
 
 using rka::EddyEngine;
