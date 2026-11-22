@@ -795,6 +795,87 @@ void save_plan() {
 	CHECK(!p.tape && !p.original && !p.remove, "a whole load is written again");
 }
 
+// M6 and M3: what the folder holds beyond the record of current files. A
+// stored tape that failed to load is left while the tape is empty (and
+// replaced once there is a tape to store); a stored tape loaded cut short by
+// the capacity is left while the tape is unchanged at that rate. Either is
+// forgotten by the next write or removal.
+void save_plan_held_keep() {
+	using rka::eddy::SavePlan;
+	using rka::eddy::StoreRecord;
+	StoreRecord r;
+	rka::eddy::loadFailed(r);
+	rka::eddy::SaveFacts empty = facts(3, 3, 48000.f);
+	empty.tapeLength = empty.originalLength = 0;
+	SavePlan p = rka::eddy::planSave(empty, r);
+	CHECK(!p.remove && !p.tape && !p.original, "a stored tape that failed to load: an empty tape leaves the folder alone");
+	rka::eddy::SaveFacts off = empty;
+	off.keepTape = false;
+	CHECK(rka::eddy::planSave(off, r).remove, "Keep off still removes it");
+	const rka::eddy::SaveFacts made = facts(4, 4, 48000.f);
+	p = rka::eddy::planSave(made, r);
+	CHECK(p.tape && p.original && !p.remove, "a tape made since is stored over it");
+	rka::eddy::savedAs(r, made, p, true);
+	CHECK(!r.held, "the write forgets it");
+	CHECK(rka::eddy::planSave(empty, r).remove, "after that an empty tape removes the folder");
+	// Cut: unchanged at its rate, nothing; changed, or at another rate, or
+	// to become the original, both written.
+	StoreRecord c;
+	rka::eddy::loadedCut(c, 9, 3, 96000.f);
+	CHECK(!c.tapeCurrent && !c.originalCurrent && c.keep, "a cut load is not current but kept");
+	p = rka::eddy::planSave(facts(9, 3, 96000.f), c);
+	CHECK(!p.remove && !p.tape && !p.original, "a cut load, unchanged: the longer stored tape is left");
+	p = rka::eddy::planSave(facts(10, 3, 96000.f), c);
+	CHECK(p.tape && p.original, "a cut load dubbed: both written");
+	p = rka::eddy::planSave(facts(9, 3, 48000.f), c);
+	CHECK(p.tape && p.original, "a cut load at another rate: both written");
+	rka::eddy::SaveFacts behind = facts(9, 3, 96000.f);
+	behind.readsOriginal = true;
+	p = rka::eddy::planSave(behind, c);
+	CHECK(p.tape && p.original, "a cut load to become the original (a recording): both written");
+	rka::eddy::savedAs(c, facts(10, 3, 96000.f), rka::eddy::planSave(facts(10, 3, 96000.f), c), true);
+	CHECK(!c.keep, "the write forgets it");
+	// loadedWhole after a held record: the folder is current, not held.
+	StoreRecord w;
+	rka::eddy::loadFailed(w);
+	rka::eddy::loadedWhole(w, 1, 1, 48000.f);
+	CHECK(!w.held && w.tapeCurrent, "a whole load replaces a held record");
+}
+
+// M3: a tape held short by the capacity is reported as cut, by the
+// conversion and by reading a file; one that fits is not.
+void cut_reported() {
+	Tape from, to;
+	from.allocate(1000, 10);
+	to.allocate(1500, 10);
+	fill(from, 1000, 10, [](size_t k, int) { return (float) std::sin(0.01 * (double) k); });
+	bool cut = false;
+	rka::eddy::jobs::convertTape(to, from, 1.4, &cut);
+	CHECK(!cut && to.length == 1400, "1000 frames x 1.4 into 1500: not cut (%zu)", to.length);
+	rka::eddy::jobs::convertTape(to, from, 2.0, &cut);
+	CHECK(cut && to.length == 1500, "1000 frames x 2 into 1500: cut to the capacity (%zu)", to.length);
+	TempDir t;
+	std::vector<float> x(1000, 0.1f);
+	const std::string path = t.file("cut.wav");
+	writeBytes(path, wavBytes(3, 2, 8000, 32, floatData(x, x)));
+	rka::WavInfo info;
+	std::string why;
+	CHECK(rka::probeWav(path, info, why), "%s", why.c_str());
+	Tape small;
+	small.allocate(800, 10);
+	cut = false;
+	CHECK(rka::eddy::jobs::readInto(small, path, info, 0, 8000.f, why, &cut), "%s", why.c_str());
+	CHECK(cut && small.length == 800, "1000 frames read into 800: cut (%zu)", small.length);
+	Tape big;
+	big.allocate(4000, 10);
+	cut = false;
+	CHECK(rka::eddy::jobs::readInto(big, path, info, 0, 16000.f, why, &cut), "%s", why.c_str());
+	CHECK(!cut && big.length == 2000, "1000 frames at 8 kHz read at 16 kHz into 4000: not cut (%zu)", big.length);
+	small.length = 0;
+	CHECK(rka::eddy::jobs::readInto(small, path, info, 0, 16000.f, why, &cut), "%s", why.c_str());
+	CHECK(cut && small.length == 800, "the same into 800 at 16 kHz: cut (%zu)", small.length);
+}
+
 // I2: stored at one rate, loaded at another, the tape dubbed, saved, loaded
 // again: the tape and the original still differ and each is right.
 void stored_other_rate() {
@@ -878,6 +959,8 @@ int main() {
 	stored_partial();
 	convert_keeps_both();
 	save_plan();
+	save_plan_held_keep();
+	cut_reported();
 	stored_other_rate();
 	stored_recording_copy();
 	return rkatest::finish("eddy test_jobs");

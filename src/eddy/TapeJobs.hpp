@@ -77,16 +77,20 @@ inline void copyTape(Tape& to, const Tape& from) {
 // `from` converted by ratio (to's rate / from's) into `to`, held to to's
 // capacity and tail capacity: the tape at its converted length, then as much
 // of what followed it (its tail, or tape beyond the capacity) as the tail
-// holds. Equal rates are a copy, to the bit.
-inline void convertTape(Tape& to, const Tape& from, double ratio) {
+// holds. Equal rates are a copy, to the bit. `cut`, if given, is set when
+// the tape is held short by the capacity (a long tape at a high rate).
+inline void convertTape(Tape& to, const Tape& from, double ratio, bool* cut = nullptr) {
 	if (ratio == 1.0 && from.length <= to.capacity() && from.tail <= to.tailCapacity()) {
 		copyTape(to, from);
 		return;
 	}
 	const size_t in = from.length + from.tail;
 	size_t len = (size_t) resampledFrames(from.length, ratio);
-	if (len > to.capacity())
+	if (len > to.capacity()) {
 		len = to.capacity();
+		if (cut)
+			*cut = true;
+	}
 	const size_t total = (size_t) resampledFrames(in, ratio);
 	size_t tail = total > len ? total - len : 0;
 	if (tail > to.tailCapacity())
@@ -116,11 +120,15 @@ inline bool sameRate(uint32_t fileRate, float fs) {
 // file's rate differs. Reading at another rate takes a temporary tape of the
 // frames the conversion needs, never the whole of a long file. False, with
 // `into` part written, only on a read error part way (the caller's set is
-// new, and is freed).
-inline bool readInto(Tape& into, const std::string& path, const WavInfo& info, uint64_t tail, float fs, std::string& why) {
+// new, and is freed). `cut`, if given, is set when the file's tape is longer
+// than the capacity holds at fs.
+inline bool readInto(Tape& into, const std::string& path, const WavInfo& info, uint64_t tail, float fs, std::string& why,
+                     bool* cut = nullptr) {
 	if (tail >= info.frames)
 		tail = 0;
 	uint64_t length = info.frames - tail;
+	if (cut && (double) length * ((double) fs / (double) info.sampleRate) > (double) into.capacity() + 0.5)
+		*cut = true;
 	if (sameRate(info.sampleRate, fs)) {
 		if (tail > into.tailCapacity())
 			tail = into.tailCapacity();
@@ -186,7 +194,8 @@ inline void readTails(const std::string& dir, uint64_t& tape, uint64_t& original
 // A new set at rate fs from a WAV file: read (the first capacity's worth),
 // converted if the file's rate differs, x 5, the original equal to the tape,
 // the overview built. No tail.
-inline bool loadFile(const std::string& path, float fs, TapeSet*& out, std::string& why) {
+// `cut`: as readInto.
+inline bool loadFile(const std::string& path, float fs, TapeSet*& out, std::string& why, bool* cut = nullptr) {
 	WavInfo info;
 	std::string w;
 	if (!probeWav(path, info, w)) {
@@ -196,7 +205,7 @@ inline bool loadFile(const std::string& path, float fs, TapeSet*& out, std::stri
 	TapeSet* s = jobs::newSet(fs, why);
 	if (!s)
 		return false;
-	if (!jobs::readInto(s->tape, path, info, 0, fs, w)) {
+	if (!jobs::readInto(s->tape, path, info, 0, fs, w, cut)) {
 		delete s;
 		why = "refused: " + w;
 		return false;
@@ -225,8 +234,10 @@ inline bool loadFile(const std::string& path, float fs, TapeSet*& out, std::stri
 //
 // `whole` (the five-argument form): true when the set is exactly what the
 // files hold, both read as they are at this rate, with no note; only then
-// may the module take the files as holding its tape (StoreRecord).
-inline bool loadStored(const std::string& dir, float fs, TapeSet*& out, std::string& why, bool& whole) {
+// may the module take the files as holding its tape (StoreRecord). `cut`:
+// the tape or the original is held short by the capacity at fs (the files
+// hold more than the set: StoreRecord's `keep`).
+inline bool loadStored(const std::string& dir, float fs, TapeSet*& out, std::string& why, bool& whole, bool* cut = nullptr) {
 	const std::string tapePath = jobs::join(dir, STORED_TAPE), origPath = jobs::join(dir, STORED_ORIGINAL);
 	WavInfo ti, oi;
 	std::string tw, ow;
@@ -248,12 +259,13 @@ inline bool loadStored(const std::string& dir, float fs, TapeSet*& out, std::str
 		&& ti.frames - tapeTail == oi.frames - origTail;
 	bool tapeRead = false, origRead = false;
 	std::string w;
+	bool held = false;
 	if (haveTape)
-		tapeRead = jobs::readInto(s->tape, tapePath, ti, tapeTail, fs, w);
+		tapeRead = jobs::readInto(s->tape, tapePath, ti, tapeTail, fs, w, &held);
 	if (haveTape && !tapeRead)
 		note += std::string(note.empty() ? "" : "; ") + STORED_TAPE + ": " + w;
 	if (match && tapeRead) {
-		origRead = jobs::readInto(s->original, origPath, oi, origTail, fs, w);
+		origRead = jobs::readInto(s->original, origPath, oi, origTail, fs, w, &held);
 		if (origRead && note.empty() && jobs::sameRate(ti.sampleRate, fs))
 			isWhole = true;
 		if (!origRead) {
@@ -269,7 +281,7 @@ inline bool loadStored(const std::string& dir, float fs, TapeSet*& out, std::str
 		jobs::copyTape(s->original, s->tape);
 	}
 	else if (haveOrig) {
-		origRead = jobs::readInto(s->original, origPath, oi, origTail, fs, w);
+		origRead = jobs::readInto(s->original, origPath, oi, origTail, fs, w, &held);
 		if (!origRead) {
 			delete s;
 			why = std::string("the stored tape cannot be read (") + STORED_ORIGINAL + ": " + w + ")";
@@ -287,7 +299,9 @@ inline bool loadStored(const std::string& dir, float fs, TapeSet*& out, std::str
 	jobs::finiteOnly(s->original);
 	s->overview.build(s->tape);
 	why = note;
-	whole = isWhole;
+	whole = isWhole && !held;
+	if (cut)
+		*cut = held;
 	out = s;
 	return true;
 }
@@ -351,10 +365,20 @@ inline bool storeTape(const std::string& dir, const TapeSet& set, float fs, bool
 // wrote it so, or because it loaded the set whole from it (loadStored's
 // `whole`). Anything else (a converted or partial load, a removal, a failed
 // write) leaves the files not current, and the next save writes both.
+//
+// Two more facts, each cleared by the next write or removal:
+// - held: the folder holds a stored tape that failed to load (a passing
+//   failure, such as memory, should not cost it): while the tape is empty
+//   the save leaves the folder alone (the final review's M6).
+// - keep: the stored tape loaded held short by the tape's capacity (a long
+//   tape opened at a high rate): the folder holds more than the live set, so
+//   while the tape is unchanged since (the counters recorded, at the rate
+//   recorded) the save leaves the folder alone (M3).
 struct StoreRecord {
 	bool tapeCurrent = false, originalCurrent = false;
 	uint32_t tapeChanges = 0, originalChanges = 0;
 	float fs = 0.f;
+	bool held = false, keep = false;
 };
 
 // What the save knows at the moment it is made.
@@ -377,10 +401,12 @@ struct SavePlan {
 
 // The save's decision. Nothing while the stored tape loads or with no live
 // set (what is stored stays); the folder removed with "Keep the tape" off or
-// an empty tape; otherwise each file written unless the record says it
-// already holds this, at this rate. While the tape is to become the
-// original, tape.wav is written from the original (so a new recording is
-// never stored beside the old tape).
+// an empty tape (left alone if the record holds a tape that failed to load);
+// nothing while the record keeps a longer stored tape and the tape is
+// unchanged; otherwise each file written unless the record says it already
+// holds this, at this rate. While the tape is to become the original,
+// tape.wav is written from the original (so a new recording is never
+// stored beside the old tape).
 inline SavePlan planSave(const SaveFacts& f, const StoreRecord& r) {
 	SavePlan p;
 	if (!f.keepTape) {
@@ -391,10 +417,12 @@ inline SavePlan planSave(const SaveFacts& f, const StoreRecord& r) {
 		return p;
 	const size_t tapeLength = f.readsOriginal ? f.originalLength : f.tapeLength;
 	if (tapeLength == 0 || f.originalLength == 0) {
-		p.remove = true;
+		p.remove = !r.held;
 		return p;
 	}
 	const bool sameRate = r.fs == f.fs;
+	if (r.keep && f.known && sameRate && !f.readsOriginal && r.tapeChanges == f.tapeChanges && r.originalChanges == f.originalChanges)
+		return p;
 	p.tapeFromOriginal = f.readsOriginal;
 	p.tape = f.readsOriginal || !f.known || !(r.tapeCurrent && sameRate && r.tapeChanges == f.tapeChanges);
 	p.original = !f.known || !(r.originalCurrent && sameRate && r.originalChanges == f.originalChanges);
@@ -411,6 +439,7 @@ inline void savedAs(StoreRecord& r, const SaveFacts& f, const SavePlan& p, bool 
 		return;
 	if (r.fs != f.fs || !f.known)
 		r = StoreRecord();
+	r.held = r.keep = false;
 	r.fs = f.fs;
 	if (p.tape) {
 		// From the original: the tape is not yet the original, so its file
@@ -427,10 +456,28 @@ inline void savedAs(StoreRecord& r, const SaveFacts& f, const SavePlan& p, bool 
 // The record after the set loaded whole from the files went live, with the
 // counters at that moment, at rate fs.
 inline void loadedWhole(StoreRecord& r, uint32_t tapeChanges, uint32_t originalChanges, float fs) {
+	r = StoreRecord();
 	r.tapeCurrent = r.originalCurrent = true;
 	r.tapeChanges = tapeChanges;
 	r.originalChanges = originalChanges;
 	r.fs = fs;
+}
+
+// The record after the set loaded from the files held short by the capacity
+// went live, with the counters then: the files are not current (they hold
+// more), and are kept while the tape is unchanged.
+inline void loadedCut(StoreRecord& r, uint32_t tapeChanges, uint32_t originalChanges, float fs) {
+	r = StoreRecord();
+	r.keep = true;
+	r.tapeChanges = tapeChanges;
+	r.originalChanges = originalChanges;
+	r.fs = fs;
+}
+
+// The record after the stored tape failed to load from the folder as it is.
+inline void loadFailed(StoreRecord& r) {
+	r = StoreRecord();
+	r.held = true;
 }
 
 // Carries out a plan's writes (not its removal: the module removes the
@@ -456,7 +503,8 @@ inline bool exportTape(const std::string& path, const TapeSet& set, float fs, st
 // A new set at toFs from `from` (at fromFs): the tape and the original each
 // converted from their own (so they stay different), lengths and tails with
 // them, the overview built. A stale set's tape is made from its original.
-inline bool convert(const TapeSet& from, float fromFs, float toFs, TapeSet*& out, std::string& why) {
+// `cut`: either is held short by the capacity at toFs.
+inline bool convert(const TapeSet& from, float fromFs, float toFs, TapeSet*& out, std::string& why, bool* cut = nullptr) {
 	if (!(fromFs >= 1.f && fromFs <= 4e6f)) {
 		why = "unusable sample rate";
 		return false;
@@ -465,8 +513,8 @@ inline bool convert(const TapeSet& from, float fromFs, float toFs, TapeSet*& out
 	if (!s)
 		return false;
 	const double ratio = (double) toFs / (double) fromFs;
-	jobs::convertTape(s->tape, from.tapeStale ? from.original : from.tape, ratio);
-	jobs::convertTape(s->original, from.original, ratio);
+	jobs::convertTape(s->tape, from.tapeStale ? from.original : from.tape, ratio, cut);
+	jobs::convertTape(s->original, from.original, ratio, cut);
 	s->overview.build(s->tape);
 	out = s;
 	return true;

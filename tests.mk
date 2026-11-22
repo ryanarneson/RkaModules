@@ -110,6 +110,11 @@ build/test/eddy/test_jobs: src/eddy/test_jobs.cpp src/testing.hpp $(wildcard src
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/eddy $< -o $@
 
+# Eddy's worker bookkeeping (WorkerBook.hpp): the sanitizers.
+build/test/eddy/test_book: src/eddy/test_book.cpp src/testing.hpp src/eddy/WorkerBook.hpp
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/eddy $< -o $@
+
 # Eddy's hostile-input test: the sanitizers (and the tapes fenced with ASan's
 # poisoning), and counting allocators.
 build/test/eddy/test_hostile: src/eddy/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/eddy/*.hpp src/hadal/*.hpp)

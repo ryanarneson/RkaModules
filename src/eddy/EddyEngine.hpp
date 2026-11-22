@@ -125,6 +125,10 @@ struct TapeSet {
 	// copied by the engine's own path (read from the original, then
 	// ORIGINAL_TO_TAPE), which clears it.
 	bool tapeStale = false;
+	// Set by the engine when it takes the set live (read by the worker once
+	// the set is handed back): a set that never went live is still exactly
+	// what it was made from.
+	bool used = false;
 
 	// Capacity min(300 s, 2^24 frames) and a tail of 10 ms at rate fs, both
 	// tapes empty. False, with nothing held, if the rate is unusable or the
@@ -144,6 +148,7 @@ struct TapeSet {
 		overview.clear();
 		fs = rate;
 		tapeStale = false;
+		used = false;
 		return true;
 	}
 	void release() {
@@ -176,6 +181,7 @@ struct EddyResult {
 	// seconds is the time recorded so far.
 	float head = 0, winStart = 0, winLength = 1, overlap = 0;
 	float seconds = 0;
+	uint32_t takes = 0;   // recordings that have stood (the tape is no longer a file loaded)
 };
 
 class EddyEngine {
@@ -381,6 +387,7 @@ public:
 			eocLeft_--;
 		out.eoc = eocLeft_ > 0;
 		out.recording = recWant_ || rec_ == REC_PRE || rec_ == REC_ON;
+		out.takes = takes_;
 		out.dubbing = dubOn_;
 		out.playing = playOn_;
 		view(out);
@@ -530,6 +537,7 @@ private:
 			old_ = live_;
 		}
 		pend_.active = false;
+		s->used = true;
 		live_ = s;
 		livePub_.store(s, std::memory_order_release);
 		rec_ = REC_IDLE;
@@ -879,6 +887,7 @@ private:
 	// window shows it (the old tape's picture gone) over the span.
 	void stand() {
 		Tape& o = live_->original;
+		takes_++;
 		rec_ = REC_ON;
 		preCopied_ = 0;
 		o.tail = 0;
@@ -1315,6 +1324,7 @@ private:
 	bool recByButton_ = false;    // the button started or ended the recording in hand
 	size_t recN_ = 0, preCopied_ = 0, tailN_ = 0, tailK_ = 0;
 	size_t span_ = 1;   // while recording, the frames the window shows
+	uint32_t takes_ = 0;
 
 	// Controls.
 	int countdown_ = 0;

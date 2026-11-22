@@ -197,6 +197,33 @@ void double_tap_gate_and_mixed() {
 	}
 }
 
+// For the worker (WorkerBook): a set is marked used when the engine takes it
+// live, not when it refuses it for its rate; and a recording that stands is
+// counted (the tape is no longer a file loaded), one thrown away is not.
+void used_and_takes() {
+	Rig g(48000.f, 1, false);
+	TapeSet* wrong = g.make(44100.f);
+	TapeSet* right = g.make(48000.f);
+	CHECK(!wrong->used && !right->used, "new sets are not used");
+	while (!g.e.offer(wrong))
+		g.step();
+	g.run(8);
+	CHECK(g.collected.count(wrong) == 1 && !wrong->used, "a set refused for its rate comes back not used");
+	g.use(right);
+	CHECK(g.e.live() == right && right->used, "a set taken live is used");
+	const uint32_t t0 = g.r.takes;
+	g.press(&F::recPress);
+	g.run(4800);   // 0.1 s: under the button's minimum
+	g.press(&F::recPress);
+	g.run(100);
+	CHECK(g.r.takes == t0, "a recording thrown away is not counted (%u)", g.r.takes - t0);
+	g.press(&F::recPress);
+	g.run(20000);
+	g.press(&F::recPress);
+	g.run(1000);
+	CHECK(g.r.takes == t0 + 1, "a recording that stood is counted once (%u)", g.r.takes - t0);
+}
+
 // An empty tape stays empty under 0.3 s by the button.
 void double_tap_empty() {
 	for (double ms : {100.0, 299.0}) {
@@ -977,6 +1004,7 @@ int main() {
 	double_tap_button();
 	double_tap_gate_and_mixed();
 	double_tap_empty();
+	used_and_takes();
 	rate_change_in_buffer();
 	return rkatest::finish("eddy test_transport");
 }
