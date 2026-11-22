@@ -461,59 +461,66 @@ void dub_at_speed() {
 }
 
 void dub_bounded() {
-	// Passes of +-10 V noise (the same loop of it each pass, with an offset
-	// or without), dubbed: the tape stays under its bound and no DC builds.
-	// The input's DC is blocked as it comes in, so a 1 V offset makes no
-	// difference. At full level each pass replaces the tape: under 1 mV. At
-	// noon the bound clips all the time (the tape settles near 4 times the
-	// input) and the DC is what that clipping leaves: 11.8 mV, settled by
-	// 1000 passes (2026-11-22, after the I2 fix; 10.7 mV before it), held
-	// under 15 mV and to not building. At 5 % the tape is kept nearly whole
-	// each pass, clipped frames hold their sign, and only the tape's trim
-	// (WriteBound) keeps the share of them from leaving DC: under 5 mV.
-	for (float d : {1.f, 0.5f, 0.05f})
-		for (float offset : {0.f, 1.f}) {
+	// Passes of +-10 V noise (the same loop of it each pass, with a 1 V
+	// offset or without), dubbed into the bound. The loop's turn is the
+	// whole tape (a tail of m), so the tape's mean is the loop's DC. The
+	// input's DC is blocked as it comes in: the offset makes no difference
+	// (within 0.1 mV). Nothing in the loop filters the tape (the final
+	// re-review's N2), so what clipping in the bound leaves stays: at full
+	// level each pass replaces the tape and it is under 10 mV (measured 1.4
+	// to 5.9 mV over three noise loops); at lower levels the tape is driven
+	// to the ceiling and each clipped frame holds its sign, which leaves
+	// 55 to 120 mV of DC of either sign depending on the noise (measured
+	// 2026-11-22, Dub 2 % to 50 %, three noise loops, 3000 passes), settled
+	// by 1000 passes. Held under 150 mV and to not building (under 10 mV
+	// from 1000 to 2000 passes); the tape under its 10 V bound.
+	struct Case {
+		float d;
+		uint32_t seed;
+	};
+	for (const Case& c : {Case{1.f, 3}, Case{1.f, 5}, Case{1.f, 7}, Case{0.5f, 3}, Case{0.5f, 5}, Case{0.05f, 3}, Case{0.05f, 5}}) {
+		double dcs[2][2];
+		float peak = 0.f;
+		for (int o = 0; o < 2; o++) {
+			const float offset = (float) o;
 			Rig g;
-			TapeSet* set = g.loaded(2400, 0, [](size_t, float& l, float& r) { l = r = 0.f; });
+			TapeSet* set = g.loaded(2400, 480, [](size_t, float& l, float& r) { l = r = 0.f; });
 			g.use(set);
-			g.f.params[F::DUB_LEVEL] = d;
+			g.f.params[F::DUB_LEVEL] = c.d;
 			g.f.inRPatched = true;
 			g.press(&F::playPress);
-			const Window w = rka::eddy::window(0.f, 0.f, 1.f, 0.f, 2400, 0.0, g.fs);
+			const Window w = rka::eddy::window(0.f, 0.f, 1.f, 0.f, 2400, 480.0, g.fs);
 			const long T = std::lround(w.turn);
-			const std::vector<float> n0 = noiseVec((size_t) T, 10.f, 3), n1 = noiseVec((size_t) T, 10.f, 4);
-			auto measure = [&](float& peak, double& dc) {
-				peak = 0;
-				double sum = 0;
-				for (int c = 0; c < 2; c++)
-					for (size_t k = 0; k < 2400; k++) {
-						peak = std::max(peak, std::fabs(set->tape.ch[c][k]));
-						sum += set->tape.ch[c][k];
-					}
-				dc = sum / 4800.0;
-			};
+			const std::vector<float> n0 = noiseVec((size_t) T, 10.f, c.seed), n1 = noiseVec((size_t) T, 10.f, c.seed + 100);
 			g.press(&F::dubPress);
-			float peak1000 = 0.f, peak = 0.f;
-			double dc1000 = 0.0, dc = 0.0;
-			const int passes = d == 1.f ? 1000 : 2000;
-			for (int pass = 0; pass < passes; pass++) {
+			const int passes = c.d == 1.f ? 1000 : 2000;
+			for (int pass = 1; pass <= passes; pass++) {
 				for (long i = 0; i < T; i++)
 					g.step(n0[(size_t) i] + offset, n1[(size_t) i] + offset);
-				if (pass == 999)
-					measure(peak1000, dc1000);
+				if (pass == 1000 || pass == 2000) {
+					double sum = 0;
+					for (int ch = 0; ch < 2; ch++)
+						for (size_t k = 0; k < 2400; k++) {
+							peak = std::max(peak, std::fabs(set->tape.ch[ch][k]));
+							sum += set->tape.ch[ch][k];
+						}
+					dcs[o][pass == 1000 ? 0 : 1] = sum / 4800.0;
+				}
 			}
-			measure(peak, dc);
-			CHECK(peak <= 10.f && peak1000 <= 10.f, "Dub Level %.2f, offset %.0f V: the tape peaks at %.4f V (bound 10)", d, offset, peak);
-			if (d == 1.f)
-				CHECK(std::fabs(dc) < 1e-3, "full-level dubs, offset %.0f V: DC on the tape %.3f mV (want under 1)", offset, dc * 1e3);
-			else if (d == 0.5f)   // The spec: "Repeated full-level dubs ... no DC builds"; noon is held to not building.
-				CHECK(std::fabs(dc) < 1.5e-2 && std::fabs(dc - dc1000) < 5e-4,
-				      "Dub Level %.1f, offset %.0f V: DC on the tape %.3f mV after 2000 passes, %.3f after 1000 (want under 15, not building)",
-				      d, offset, dc * 1e3, dc1000 * 1e3);
-			else
-				CHECK(std::fabs(dc) < 5e-3, "Dub Level %.2f, offset %.0f V: DC on the tape %.3f mV after 2000 passes (want under 5)", d,
-				      offset, dc * 1e3);
+			if (passes == 1000)
+				dcs[o][1] = dcs[o][0];
 		}
+		const double dc = dcs[0][1];
+		CHECK(peak <= 10.f, "Dub Level %.2f, noise %u: the tape peaks at %.4f V (bound 10)", c.d, c.seed, peak);
+		CHECK(std::fabs(dcs[1][1] - dc) < 1e-4, "Dub Level %.2f, noise %u: a 1 V input offset moves the DC by %.3f mV", c.d, c.seed,
+		      (dcs[1][1] - dc) * 1e3);
+		if (c.d == 1.f)
+			CHECK(std::fabs(dc) < 1e-2, "full-level dubs, noise %u: DC on the tape %.3f mV (want under 10)", c.seed, dc * 1e3);
+		else
+			CHECK(std::fabs(dc) < 0.15 && std::fabs(dc - dcs[0][0]) < 1e-2,
+			      "Dub Level %.2f, noise %u: DC on the tape %.2f mV after 2000 passes, %.2f after 1000 (want under 150, not building)", c.d,
+			      c.seed, dc * 1e3, dcs[0][0] * 1e3);
+	}
 }
 
 // ---- What Wear and Dub do to the old tape, per frequency (the final
@@ -656,6 +663,110 @@ void dub_lows() {
 			CHECK(std::fabs(got - want) < 0.03, "Dub Level %.2f, 300 passes: %.0f Hz settles at %+.3f dB re add / (1 - keep) (want %+.3f)", d,
 			      LOWS_HZ[k], got, want);
 		}
+	}
+}
+
+// The tape's mean over [0, n) of side 0.
+double tapeMean(const Tape& t, size_t n) {
+	double m = 0;
+	for (size_t k = 0; k < n; k++)
+		m += t.ch[0][k];
+	return m / (double) n;
+}
+
+// A tape recorded with an offset (a recording keeps it) is not made worse by
+// Wear or Dub: its DC never grows past where it started and never crosses
+// zero by more than 10 mV (the final re-review's N2: a 0.01 Hz trim inside
+// the loop swung a 1 V offset to -0.66 V at Wear 2 %).
+void offset_kept() {
+	struct Case {
+		const char* what;
+		float wear, dub;
+		bool noise;
+		int passes;
+	};
+	for (const Case& c : {Case{"Wear 2 %", 0.02f, 0.f, false, 180}, Case{"Wear 25 %", 0.25f, 0.f, false, 180},
+	                      Case{"Wear 100 %", 1.f, 0.f, false, 60}, Case{"Dub 25 %, silence in", 0.f, 0.25f, false, 60},
+	                      Case{"Dub 50 %, noise in", 0.f, 0.5f, true, 120}, Case{"Dub 5 %, noise in", 0.f, 0.05f, true, 180}}) {
+		Rig g;
+		TapeSet* set = g.loaded(48000, 480, [](size_t k, float& l, float& r) {
+			l = r = 1.f + (float) std::sin(2 * PI * 200.0 * (double) k / 48000.0);
+		});
+		g.use(set);
+		const double start = tapeMean(set->tape, 48000);
+		g.f.params[F::WEAR] = c.wear;
+		g.f.params[F::DUB_LEVEL] = c.dub > 0.f ? c.dub : 0.5f;
+		g.press(&F::playPress);
+		if (c.dub > 0.f)
+			g.press(&F::dubPress);
+		rka::hadal::Random rnd;
+		rnd.seed(77);
+		double hi = start, lo = start;
+		for (int pass = 0; pass < c.passes; pass++) {
+			for (int i = 0; i < 48000; i++) {
+				const float x = c.noise ? 2.f * rnd.uniform() : 0.f;
+				g.step(x, x);
+			}
+			const double m = tapeMean(set->tape, 48000);
+			hi = std::max(hi, m);
+			lo = std::min(lo, m);
+		}
+		CHECK(hi <= start + 1e-3 && lo >= -0.01, "%s, %d passes from a %.3f V offset: the tape's mean ranged %.4f to %.4f V (want at most the start, above -10 mV)",
+		      c.what, c.passes, start, lo, hi);
+	}
+}
+
+// Nothing carries from one tape to the next: after a minute of wearing a tape
+// with 2 V of DC, a clean tape (loaded, restored, or recorded after a Clear)
+// worn on keeps its mean under 3 mV (N2: the trim's state put up to 1.5 V on
+// it).
+void tape_change_clean() {
+	for (int how = 0; how < 3; how++) {
+		Rig g;
+		const auto sine = [](size_t k, float& l, float& r) { l = r = (float) std::sin(2 * PI * 200.0 * (double) k / 48000.0); };
+		TapeSet* dirty = g.loaded(48000, 480, [&](size_t k, float& l, float& r) {
+			sine(k, l, r);
+			l += 2.f;
+			r += 2.f;
+		});
+		if (how == 1)   // Restore: the original is clean
+			for (size_t k = 0; k < 48480; k++)
+				for (int c = 0; c < 2; c++)
+					dirty->original.ch[c][k] -= 2.f;
+		g.use(dirty);
+		g.f.params[F::WEAR] = 0.1f;
+		g.press(&F::playPress);
+		g.run(60L * 48000);
+		TapeSet* now = dirty;
+		const char* name = "loaded";
+		if (how == 0) {
+			now = g.loaded(48000, 480, sine);
+			g.use(now);
+			g.press(&F::playPress);
+		}
+		else if (how == 1) {
+			name = "restored";
+			g.press(&F::restorePress);
+			g.run(4800);
+		}
+		else {
+			name = "recorded after a Clear";
+			g.e.clear();
+			g.run(4800);
+			long i = 0;
+			record(g, 48000, 480, [&](long, float& l, float& r) {
+				l = r = (float) std::sin(2 * PI * 200.0 * (double) (i++) / 48000.0);
+			});
+		}
+		if (!g.r.playing)
+			g.press(&F::playPress);
+		double worst = 0;
+		for (int pass = 0; pass < 5; pass++) {
+			g.run(48000);
+			worst = std::max(worst, std::fabs(tapeMean(now->tape, std::min<size_t>(now->tape.length, 48000))));
+		}
+		CHECK(now->tape.length > 40000 && worst < 3e-3, "a clean tape %s after a minute of DC: its mean reaches %.2f mV in 5 passes (want under 3)", name,
+		      worst * 1e3);
 	}
 }
 
@@ -1591,6 +1702,8 @@ int main() {
 	wear_lows();
 	dub_lows();
 	wear_dc();
+	offset_kept();
+	tape_change_clean();
 	wear_zero();
 	wear_window();
 	play_trigger();

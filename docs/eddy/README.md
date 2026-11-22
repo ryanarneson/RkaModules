@@ -239,10 +239,13 @@ kept at 1 - d² and the input is added at min(1, 2d):
 
 The input a dub adds passes a DC blocker (5 Hz), and what is written
 passes a soft bound (exact up to 8 V, never past 10 V), so layers settle
-rather than pile up, and no offset builds. The tape going round is not
-filtered: what it keeps each pass is exactly the table's share, at every
-frequency (a slow trim of its offset, at 0.01 Hz, costs it nothing you can
-hear). Dub in and out are faded on the tape.
+rather than pile up, and the input's offset never reaches the tape. The
+tape going round is not filtered: what it keeps each pass is exactly the
+table's share, at every frequency, and an offset already on the tape (a
+recording keeps one) only fades as the tape does. One limit: dubbing a
+loud signal into the bound for a long time at a low Dub Level (the tape
+held at its 10 V ceiling) can leave up to about 0.15 V of DC on it,
+settled within a few hundred passes. Dub in and out are faded on the tape.
 
 Dub does nothing on an empty tape or while recording, and turns off when a
 recording starts, a file loads or Restore is pressed. While dubbing, the

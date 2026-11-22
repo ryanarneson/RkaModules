@@ -347,46 +347,19 @@ void guard() {
 		prev = y;
 	}
 	CHECK(top <= 10.f && mono, "the bound tops at %g and is monotonic: %d", top, (int) mono);
-	WriteBound h;
-	h.setSampleRate(fs);
 	float hi = 0.f, lo = 0.f;
 	for (int i = 0; i < 4800; i++) {
-		hi = std::max(hi, h.process(0, 20.f));
-		lo = std::min(lo, h.process(1, -20.f));
+		hi = std::max(hi, writeBound(20.f));
+		lo = std::min(lo, writeBound(-20.f));
 	}
 	CHECK(hi <= 10.f && hi > 9.f, "20 V in gives %g V out", hi);
 	CHECK(lo >= -10.f && lo < -9.f, "-20 V in gives %g V out", lo);
-
-	// The tape's trim, far under the audio band: a 30 Hz sine through it
-	// changes by under 1e-4 dB (a pass of the tape, I2), yet 1 V of DC on
-	// the tape is under 1 mV after 2 minutes of writing (at 8 kHz, to be
-	// quick: it counts frames written, and the corner is per second).
-	{
-		WriteBound b;
-		b.setSampleRate(fs);
-		double ei = 0, eo = 0;
-		for (int i = 0; i < 4 * 48000; i++) {
-			const float x = 5.f * (float) std::sin(2 * PI * 30.0 * i / fs);
-			const float y = b.process(0, x);
-			if (i >= 48000) {
-				ei += (double) x * x;
-				eo += (double) y * y;
-			}
-		}
-		const double db = 10.0 * std::log10(eo / ei);
-		CHECK(std::fabs(db) < 1e-4, "the tape's trim: a 30 Hz sine at 5 V changes by %g dB a pass", db);
-		WriteBound d;
-		d.setSampleRate(8000.f);
-		float last = 1.f, at10 = 1.f, other = 0.f;
-		for (int i = 0; i < 120 * 8000; i++) {
-			last = d.process(0, 1.f);
-			if (i == 10 * 8000)
-				at10 = last;
-			other = std::max(other, std::fabs(d.process(1, 0.f)));
-		}
-		CHECK(std::fabs(last) < 1e-3f && at10 < 0.6f, "the tape's trim: 1 V of DC leaves %g V after 10 s, %g V after 120 s", at10, last);
-		CHECK(other == 0.f, "the tape's trim: side 1 is untouched by side 0 (%g)", other);
-	}
+	CHECK(writeBound(NAN_F) == 0.f && writeBound(INF_F) <= 10.f, "NaN writes 0 V, infinity at most 10 V");
+	// No state: the same in, the same out, whatever came before (N2).
+	const float first = writeBound(3.f);
+	for (int i = 0; i < 48000; i++)
+		writeBound(9.f);
+	CHECK(writeBound(3.f) == first && first == 3.f, "the bound has no state: 3 V writes 3 V before and after (%g)", writeBound(3.f));
 }
 
 // Wear's saturation, on asymmetric material, takes the DC of what it changes
@@ -419,29 +392,24 @@ void hostile() {
 		w.set(a);
 		InputDcBlock g;
 		g.setSampleRate(48000.f);
-		WriteBound b;
-		b.setSampleRate(48000.f);
 		bool fin = true;
 		for (float v : vals)
 			for (float f : fr)
 				for (int c = 0; c < 2; c++) {
 					fin = fin && std::isfinite(w.process(c, v, f));
 					fin = fin && std::isfinite(g.process(c, v)) && std::fabs(g.process(c, v)) <= 200.f;
-					fin = fin && std::isfinite(b.process(c, v)) && std::fabs(b.process(c, v)) <= 10.f;
+					fin = fin && std::isfinite(writeBound(v)) && std::fabs(writeBound(v)) <= 10.f;
 				}
 		CHECK(fin, "amount %g: every hostile call gives a finite result", a);
 		bool ok = true;
 		for (int i = 0; i < 1000; i++)
 			for (int c = 0; c < 2; c++)
-				ok = ok && std::isfinite(w.process(c, 1.f, 1.f)) && std::isfinite(g.process(c, 1.f)) && std::isfinite(b.process(c, 1.f));
+				ok = ok && std::isfinite(w.process(c, 1.f, 1.f)) && std::isfinite(g.process(c, 1.f)) && std::isfinite(writeBound(1.f));
 		CHECK(ok, "amount %g: normal calls are finite afterwards", a);
 	}
 	InputDcBlock g;
 	g.setSampleRate(NAN_F);
 	CHECK(std::isfinite(g.process(0, 1.f)), "a NaN rate leaves the input's block working");
-	WriteBound b;
-	b.setSampleRate(NAN_F);
-	CHECK(std::isfinite(b.process(0, 1.f)), "a NaN rate leaves the write bound working");
 	Wear w(1);
 	w.setSampleRate(0.f);
 	w.set(1.f);
