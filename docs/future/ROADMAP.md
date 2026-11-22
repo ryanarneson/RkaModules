@@ -71,9 +71,10 @@ sound, space, loudness under control, stereo, and a safe output.
 
 ## 2. Texture
 
-The sounds that define the genre, and the hardest DSP. Wake comes before
-Eddy and Spindrift because all three read and write a buffer, and Wake's
-is the one to build first and reuse.
+The sounds that define the genre, and the hardest DSP. Wake, Eddy and
+Spindrift all read and write a buffer; Wake came first, but its read point
+did not carry over: Eddy built its own tape, band-limited read and window,
+and Spindrift starts from those.
 
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
@@ -83,7 +84,7 @@ is the one to build first and reuse.
 | 9 | [Eddy](eddy.md) (built) | L | Tape loop that also loads and saves files, up to 5 minutes, with a waveform window (drag in it to set Start and Length), wear in the loop and a Restore to the original. Larger than first guessed: its tape and write head are new code (Wake's read point did not carry over), and it paid for the first drawn window. Built 2026-11-22, 16 HP. |
 | new | [Fetch](fetch.md) | M | A player for long field recordings, read from disk. Follows Eddy, whose window widget, WAV reader, rate conversion and band-limited read it reuses. |
 | 10 | [Spindrift](spindrift.md) | L | Grain cloud; the user singled it out. Its window starts from Eddy's, and its buffer from Eddy's tape and band-limited read. |
-| 11 | [Doldrums](doldrums.md) | L | Spectral freeze and stretch. The highest reward and the highest risk here, so it follows Spindrift, which settles how a window is drawn. |
+| 11 | [Doldrums](doldrums.md) | L | Spectral freeze and stretch. The highest reward and the highest risk here, so it comes last; how a window is drawn is settled already (Eddy's `TapeWindow`). |
 
 ## 3. Slow movement and long form
 

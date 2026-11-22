@@ -184,6 +184,18 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   tape itself when the engine's rate changes, are converted off the audio
   thread; until the new tape is ready the old one plays (or silence, for
   a rate change).
+  (As built, 2026-11-22, after the final review's I1 and I3: converted
+  once. A file or the stored tape that has not gone live when the rate
+  changes (on Rack's "Auto" rate this is ordinary at launch: the engine
+  runs at 44.1 kHz until the audio device's first callback) is read again
+  from its source at the new rate, and the patch's Play and Dub are
+  applied when it is offered; only a tape that went live is converted,
+  from itself, and again from that same tape if the rate moves before the
+  conversion plays. A set made for an older request never takes the
+  place of one made for a newer one. The worker's decisions are in
+  `src/eddy/WorkerBook.hpp`, tested in `test_book.cpp`. A tape held short
+  by 2^24 frames is logged, and a stored tape loaded so is left in the
+  folder until the tape changes.)
 - A new tape (a recording ending, a file arriving, Clear) takes over by a
   short fade, never a step.
 

@@ -54,6 +54,18 @@
   - A waveform window showing the tape, the part in play and the head;
     drag in it to set Start and Length.
   - The tape and the original are kept with the patch.
+  - Final review fixes: Wear and Dub cost the tape only what their laws
+    say (a DC blocker on the tape going round took its bass, 15 dB at
+    50 Hz in 300 passes of Wear at 2 %; now only what a dub adds is
+    DC-blocked); Restore no longer swells 3 dB; a tape loading when Rack's
+    rate changes (as at launch) is loaded again at the new rate, not
+    converted twice, and keeps its saved Dub; a stored tape is never lost
+    to a set made for an older request, nor kept from saving by a flag
+    left set; a Clear during a load wins; the stored files are kept when
+    they failed to load or loaded cut at a high rate; Save file asks
+    before replacing a file it adds .wav to; a stored tape that cannot be
+    removed no longer fails the patch's save; huge samples in a file are
+    held to 100 V.
 - `docs/DSP-ALIASING.md` and `TESTING.md` rule 16: how aliasing is kept
   out and measured; Eddy is the first module measured.
 - New module: **Narrows**, a 14 HP polyphonic stereo filter:

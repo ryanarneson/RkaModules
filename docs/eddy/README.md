@@ -31,12 +31,18 @@ From the top:
 Stereo, up to 5 minutes. Empty when the module is added. It is held at
 Rack's sample rate, and its length is also held to 2^24 frames, so above
 about 56 kHz it is shorter than 5 minutes: 3:10 at 88.2 kHz, 2:54 at
-96 kHz, 1:27 at 192 kHz.
+96 kHz, 1:27 at 192 kHz. A tape longer than that when the rate goes up
+there is cut to fit (the log says so), and stays cut if the rate comes
+down again. A patch whose stored tape is longer than the tape holds at the
+rate it is opened at loads it cut, but leaves the stored files as they
+were until the tape is changed and the patch saved.
 
 A file at another rate, and the tape itself when Rack's rate changes, are
-converted off the audio thread. A file plays the old tape until it is
-ready; after a rate change the module is silent until the converted tape
-is ready.
+converted off the audio thread, once: a file or stored tape that has not
+started playing when the rate changes (as at launch, while Rack finds its
+audio device) is read again at the new rate, not converted twice. A file
+plays the old tape until it is ready; after a rate change the module is
+silent until the converted tape is ready.
 
 A new tape (a recording ending, a file arriving, Clear) comes in by a short
 fade, never a step.
@@ -174,12 +180,17 @@ The tape is read through a band-limited reader at every speed but one.
 - **Slower than ×1** it interpolates between frames: the images it leaves
   are about 63 dB down for content up to 0.4 of the sample rate (above
   that they reach about -8 dB), and it adds no grit of its own.
-- Either way the very top of the band, from 0.8 to 1.0 of Nyquist (above
-  17.6 kHz at 44.1 kHz), rolls off a little.
-- **At exactly ×1 from a whole frame** you hear the tape's own samples,
-  untouched: the knob resting at +1 or -1 since Play or a retrigger, with
-  the window on whole frames (the whole tape is). Anywhere between frames,
-  as after a glide lands on ×1, the tape is interpolated as above.
+- Either way the band is flat (within 0.02 dB) up to 0.8 of Nyquist
+  (17.6 kHz at 44.1 kHz) and rolls off above it: faster than ×1 it is
+  6 dB down at 0.9 of the output's Nyquist (19.8 kHz at 44.1 kHz) and
+  gone from Nyquist up; at ×1 between frames and slower, 6 dB down at the
+  tape's Nyquist.
+- **At exactly ×1 on whole frames** you hear the tape's own samples,
+  untouched: the knob resting at +1 or -1 since Play or a retrigger, no
+  Speed CV or V/OCT moving it off ×1, the window on whole frames (the
+  whole tape is) and Smear at 0 (above 0 the overlap can start a turn
+  between frames). Anywhere between frames, as after a glide lands on ×1,
+  the tape is interpolated as above.
 
 ### Start and Length: the window
 
@@ -366,9 +377,11 @@ rate is converted as it opens.
 - **A worn bed.** Hadal into IN L and IN R, Mix at noon. Record 20 s, then
   Wear about 30 % and Length a few seconds. The bed comes round and
   slowly crumbles; Restore brings it back.
-- **Now and then, new.** EOC through a probability gate (a Bernoulli gate,
-  set to about 10 %) into **TRIG**. With Wear up, the loop decays for a
-  while and is occasionally restored whole at a join.
+- **Now and then, new.** EOC into Squall's **CLOCK**, Weather a little
+  right of noon (between 1 in 16 and 1 in 4 a tick: about one turn in
+  ten), Gust at 0, and Squall's **GATE** into **TRIG** (any probability
+  gate does the same). With Wear up, the loop decays for a while and is
+  occasionally restored whole at a join.
 - **Wow.** A very slow Sway into the Speed CV, the attenuverter barely
   open (a few percent). The loop wavers in pitch as a tired machine does.
 - **Jumps.** Squall's Step into the Start CV, Length short (about
@@ -392,7 +405,10 @@ unpatched); EOC is low.
 - **Randomize** does not touch Rec, Dub, Play or Loop.
 - The tape and the original are held in memory. Each Eddy sets aside
   room for a full pair, about 230 MB at 48 kHz; the system fills it as
-  the tape is filled.
+  the tape is filled. While a file or the stored tape loads, or the tape
+  is converted to a new rate, room for a second pair is set aside for a
+  moment (a third, briefly, if the rate changes again before the
+  converted tape plays).
 - Removing the module while a long file is loading holds Rack's audio
   until the load finishes.
 - The lettering in the window is D-DIN Condensed, shipped with the
