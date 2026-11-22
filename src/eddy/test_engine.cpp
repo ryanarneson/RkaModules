@@ -959,6 +959,64 @@ void wear_dc_tape_change() {
 	}
 }
 
+// Nor does it outlast Wear itself (the fourth re-review's F4-1). With Wear at
+// 0 the estimate is not updated, and carried across the joins as it stood it
+// would be written onto whatever the tape holds when Wear comes back: a hot
+// 25 % pulse worn at 1 for a pass (the estimate near -0.8 V), Wear to 0, a
+// 1 V sine dubbed over it at 100 % for 20 passes, Dub off, then Wear at 5 %.
+// The sine is never saturated, so Wear at 5 % must leave its mean alone: the
+// worst change of the tape's mean over the next 10 passes, and on the 1 s
+// loop the worst change of any 10 ms stretch's mean after one pass (the
+// thump). With the estimate kept through Wear 0 / bound / measured
+// 2026-11-22: 50 ms +315.9 / 3 / +0.05 mV; 200 ms +103.5 / 3 / +0.01 mV; 1 s
+// +20.9 / 3 / 0.00 mV, and the 10 ms stretch +483.6 / 5 / 0.0 mV.
+void wear_off_and_back() {
+	for (size_t n : {(size_t) 2400, (size_t) 9600, (size_t) 48000}) {
+		Rig g;
+		TapeSet* set = g.loaded(n, 480, [](size_t k, float& l, float& r) { l = r = (k % 96) < 24 ? 8.25f : -2.75f; });
+		g.use(set);
+		g.f.params[F::WEAR] = 1.f;
+		g.f.params[F::DUB_LEVEL] = 1.f;
+		g.press(&F::playPress);
+		g.run((long) n);
+		g.f.params[F::WEAR] = 0.f;
+		g.run(480);
+		g.press(&F::dubPress);
+		for (long i = 0; i < 20L * (long) n; i++) {
+			const float x = (float) std::sin(2 * PI * 200.0 * (double) i / 48000.0);
+			g.step(x, x);
+		}
+		g.press(&F::dubPress);
+		g.run(24000);
+		const double level = rms(set->tape.ch[0], n);
+		const double before = tapeMean(set->tape, n);
+		const std::vector<float> was(set->tape.ch[0], set->tape.ch[0] + n);
+		g.f.params[F::WEAR] = 0.05f;
+		double worst = 0, thump = 0;
+		for (int pass = 1; pass <= 10; pass++) {
+			g.run((long) n);
+			const double d = tapeMean(set->tape, n) - before;
+			if (std::fabs(d) > std::fabs(worst))
+				worst = d;
+			if (pass == 1)
+				for (size_t a = 0; a + 480 <= n; a += 480) {
+					double m = 0;
+					for (size_t k = a; k < a + 480; k++)
+						m += set->tape.ch[0][k] - was[k];
+					if (std::fabs(m / 480.0) > std::fabs(thump))
+						thump = m / 480.0;
+				}
+		}
+		CHECK(level > 0.6 && level < 0.9 && std::fabs(before) < 0.05, "%zu frames: the sine dubbed over the pulse is %.3f V RMS, mean %+.2f mV", n,
+		      level, before * 1e3);
+		CHECK(std::fabs(worst) < 3e-3, "%zu frames, Wear back at 5 %% after a stretch at 0: the tape's mean moves by %+.2f mV in 10 passes (want under 3)",
+		      n, worst * 1e3);
+		if (n == 48000)
+			CHECK(std::fabs(thump) < 5e-3, "%zu frames, Wear back at 5 %%: a 10 ms stretch's mean moves by %+.1f mV in the first pass (want under 5)", n,
+			      thump * 1e3);
+	}
+}
+
 // Dub at 5 %, the final review's own case: the old tape is kept nearly
 // whole (keep 0.9975), so any loss or phase a pass inside the loop compounds
 // over hundreds of passes. 3000 passes of five tones on a 0.3 s loop: each
@@ -1929,6 +1987,7 @@ int main() {
 	offset_kept();
 	tape_change_clean();
 	wear_dc_tape_change();
+	wear_off_and_back();
 	wear_zero();
 	wear_window();
 	play_trigger();

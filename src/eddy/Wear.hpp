@@ -144,6 +144,12 @@ struct Wear {
 		const float w = amount == amount ? clampKeepNan(amount, 0.f, 1.f) : 0.f;
 		const float w2 = w * w;
 		active_ = w > 0.f;
+		// At 0 the saturation's DC estimate is not kept: process() does not
+		// update it there, and carried as it stood (takeSatDc) it would be
+		// written onto whatever the tape holds when Wear comes back (the
+		// fourth re-review's F4-1: +311 mV on a 50 ms loop dubbed meanwhile).
+		if (!active_)
+			resetSatDc();
 		gain_ = fastDbToGain(WEAR_LEVEL_DB * w2);
 		highs_ = WEAR_HIGHS_AMOUNT * w2;
 		drive_ = WEAR_DRIVE_BASE + w;
@@ -160,8 +166,9 @@ struct Wear {
 	// pass builds on the tape through a dub (the third re-review's R3-1:
 	// about 1 V from a 1 V sine and 2nd harmonic at Dub 5 %, Wear 30 %, on a
 	// 50 ms loop). So a voice takes it from the voice it replaces on the
-	// same tape (Voices::start), and starts at 0 otherwise. Only this goes
-	// on: the hiss, the dropouts and the highs' state are each voice's own.
+	// same tape (Voices::start), and starts at 0 otherwise, and again when
+	// Wear has been at 0 (set()). Only this goes on: the hiss, the dropouts
+	// and the highs' state are each voice's own.
 	void resetSatDc() { satDc_[0] = satDc_[1] = 0.f; }
 	void takeSatDc(const Wear& from) {
 		satDc_[0] = from.satDc_[0];
