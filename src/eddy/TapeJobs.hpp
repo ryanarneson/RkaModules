@@ -192,8 +192,9 @@ inline void readTails(const std::string& dir, uint64_t& tape, uint64_t& original
 } // namespace jobs
 
 // A new set at rate fs from a WAV file: read (the first capacity's worth),
-// converted if the file's rate differs, x 5, the original equal to the tape,
-// the overview built. No tail.
+// converted if the file's rate differs, x 5 (not-a-number and infinite
+// samples as 0 V, every sample held to +-100 V, as the write path holds
+// them), the original equal to the tape, the overview built. No tail.
 // `cut`: as readInto.
 inline bool loadFile(const std::string& path, float fs, TapeSet*& out, std::string& why, bool* cut = nullptr) {
 	WavInfo info;
@@ -216,10 +217,14 @@ inline bool loadFile(const std::string& path, float fs, TapeSet*& out, std::stri
 		return false;
 	}
 	s->tape.tail = 0;
-	jobs::finiteOnly(s->tape);
+	// Held to +-100 V before the x 5, so a float file's 1e38 cannot overflow
+	// to infinity on the tape (the final review's M7).
+	const float most = 100.f / FILE_VOLTS;
 	for (int c = 0; c < 2; c++)
-		for (size_t i = 0; i < s->tape.length; i++)
-			s->tape.ch[c][i] *= FILE_VOLTS;
+		for (size_t i = 0; i < s->tape.length; i++) {
+			const float x = s->tape.ch[c][i];
+			s->tape.ch[c][i] = !(x - x == 0.f) ? 0.f : x > most ? 100.f : x < -most ? -100.f : x * FILE_VOLTS;
+		}
 	jobs::copyTape(s->original, s->tape);
 	s->overview.build(s->tape);
 	out = s;

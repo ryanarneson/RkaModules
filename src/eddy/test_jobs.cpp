@@ -876,6 +876,34 @@ void cut_reported() {
 	CHECK(cut && small.length == 800, "the same into 800 at 16 kHz: cut (%zu)", small.length);
 }
 
+// M7: a float file's samples that overflow at x 5 (1e38), and infinities
+// and NaN, load as finite volts held to +-100 V; ordinary ones as before.
+void load_huge() {
+	TempDir t;
+	std::vector<float> l = {1e38f, -1e38f, INFINITY, -INFINITY, NAN, 0.5f, 30.f, -0.25f};
+	std::vector<float> r = {0.5f, 1e38f, 1.f, -1.f, 0.f, -0.5f, 1e-3f, 3e38f};
+	const std::string path = t.file("huge.wav");
+	writeBytes(path, wavBytes(3, 2, 48000, 32, floatData(l, r)));
+	TapeSet* s = nullptr;
+	std::string why;
+	CHECK(rka::eddy::loadFile(path, 48000.f, s, why) && s, "%s", why.c_str());
+	if (!s)
+		return;
+	bool ok = s->tape.length == l.size();
+	for (size_t i = 0; i < s->tape.length; i++)
+		for (int c = 0; c < 2; c++) {
+			const float v = s->tape.ch[c][i];
+			ok = ok && std::isfinite(v) && std::fabs(v) <= 100.f;
+		}
+	CHECK(ok, "every sample is finite and within 100 V");
+	CHECK(s->tape.ch[0][0] == 100.f && s->tape.ch[0][1] == -100.f && s->tape.ch[1][1] == 100.f, "1e38 holds at +-100 V (%g, %g)",
+	      s->tape.ch[0][0], s->tape.ch[0][1]);
+	CHECK(s->tape.ch[0][4] == 0.f && s->tape.ch[0][2] == 0.f, "NaN and infinity read as 0 V");
+	CHECK(s->tape.ch[0][5] == 2.5f && s->tape.ch[1][5] == -2.5f && s->tape.ch[0][6] == 100.f, "ordinary samples x 5, 30 held to 100 V");
+	CHECK(sameTape(s->tape, s->original), "the original is the tape");
+	delete s;
+}
+
 // I2: stored at one rate, loaded at another, the tape dubbed, saved, loaded
 // again: the tape and the original still differ and each is right.
 void stored_other_rate() {
@@ -961,6 +989,7 @@ int main() {
 	save_plan();
 	save_plan_held_keep();
 	cut_reported();
+	load_huge();
 	stored_other_rate();
 	stored_recording_copy();
 	return rkatest::finish("eddy test_jobs");
