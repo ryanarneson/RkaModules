@@ -39,7 +39,9 @@
 //   included, and a dub laid down by two crossfading voices is heard once at
 //   unity next turn (g_old^2 + g_new^2 = 1). Dub and Wear reach the window
 //   and its read-on, nothing beyond. A new voice has a fresh writer and wear
-//   state (its dropouts are its own). In
+//   state (its dropouts are its own; only the saturation's DC estimate goes
+//   on from the voice it replaces on the same tape, as the bound's state
+//   does: Voices::start). In
 //   the first turn after a voice comes in by a time fade (Play, a retrigger,
 //   a window move) it writes at full weight frames that later turns read
 //   through the join's fade, so a dub made in that turn is heard through the
@@ -992,13 +994,16 @@ private:
 	// ---- Voices.
 
 	// A new voice (Voices::start) with a fresh wear state of its own, seeded
-	// from the engine's seed and the voice's number. `linear`: the fade is
-	// equal in gain, not in power (Voices.hpp), for a swap between two reads
-	// of the same audio.
+	// from the engine's seed and the voice's number; only the saturation DC
+	// estimate goes on from the voice it replaces on the same tape. `linear`:
+	// the fade is equal in gain, not in power (Voices.hpp), for a swap
+	// between two reads of the same audio.
 	Voice* startVoice(double p, double perSample, double perFrame, bool linear = false) {
 		Voice* n = voices_.start(source(), live_, p, wrap_, perSample, perFrame, linear);
 		if (n) {
-			n->wear = eddy::Wear(seed_ * 2654435761u + n->born);
+			eddy::Wear fresh(seed_ * 2654435761u + n->born);
+			fresh.takeSatDc(n->wear);   // the tape's, set by Voices::start
+			n->wear = fresh;
 			n->wear.setSampleRate(rate_);
 			n->bound.setSampleRate(rate_);
 			n->wear.set(wearK_);

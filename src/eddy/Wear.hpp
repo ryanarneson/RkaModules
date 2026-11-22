@@ -152,6 +152,20 @@ struct Wear {
 
 	bool active() const { return active_; }
 
+	// The saturation's DC estimate belongs to the tape, not to the voice: on
+	// a loop shorter than the estimate takes to settle (32 ms at 5 Hz) one
+	// that began at 0 with every voice never would, and what escapes each
+	// pass builds on the tape through a dub (the third re-review's R3-1:
+	// about 1 V from a 1 V sine and 2nd harmonic at Dub 5 %, Wear 30 %, on a
+	// 50 ms loop). So a voice takes it from the voice it replaces on the
+	// same tape (Voices::start), and starts at 0 otherwise. Only this goes
+	// on: the hiss, the dropouts and the highs' state are each voice's own.
+	void resetSatDc() { satDc_[0] = satDc_[1] = 0.f; }
+	void takeSatDc(const Wear& from) {
+		satDc_[0] = from.satDc_[0];
+		satDc_[1] = from.satDc_[1];
+	}
+
 	// One frame of side c as the head passes it: what goes back on the tape.
 	// `frames` is how much tape has passed since the last call (its size, in
 	// either direction; held to 64): the dropout clock counts it. Both sides

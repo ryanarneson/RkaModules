@@ -20,7 +20,8 @@
 // writes what it passes for as long as it sounds, at the strength of its own
 // gain (the engine does the writing): a frame heard at gain g was written at
 // weight g. A voice starts with a fresh writer, wear state and no moves
-// waiting.
+// waiting; the write bound's state and Wear's saturation DC estimate alone
+// go on from the voice it replaces on the same tape (start()).
 #include <cmath>
 #include <cstdint>
 
@@ -137,8 +138,8 @@ struct Voices {
 	// A new voice at p, fading in at the given rates while the newest fades
 	// out at the same rates; or straight in at full (both rates 0). `linear`:
 	// an equal-gain crossfade (see the top). Its writer is fresh and no moves
-	// wait; its wear state is the caller's to set. Null, and nothing changes,
-	// if all four are in use.
+	// wait; its wear state is the caller's to set, but for the saturation DC
+	// estimate, set here. Null, and nothing changes, if all four are in use.
 	Voice* start(const Tape* src, const void* owner, double p, bool wrap, double perSample, double perFrame, bool linear = false) {
 		int slot = -1;
 		for (int i = 0; i < N; i++)
@@ -155,6 +156,16 @@ struct Voices {
 		v[slot].bound.reset();
 		if (newest >= 0 && v[newest].src && v[newest].owner == owner)
 			v[slot].bound = v[newest].bound;
+		// So does Wear's saturation DC estimate (Wear::takeSatDc), where the
+		// two read the very same tape: a swap between a set's tape and its
+		// original (Restore) starts it fresh as well, the audio under the
+		// head being other audio. It is a copy: two voices writing through a
+		// crossfade each go on with their own, and the next voice takes the
+		// newest's alone. The caller that gives the voice a new Wear keeps it
+		// (EddyEngine::startVoice).
+		v[slot].wear.resetSatDc();
+		if (newest >= 0 && v[newest].src == src)
+			v[slot].wear.takeSatDc(v[newest].wear);
 		if (newest >= 0) {
 			Voice& o = v[newest];
 			if (perSample == 0.0 && perFrame == 0.0)

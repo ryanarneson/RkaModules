@@ -568,6 +568,84 @@ void dub_lopsided() {
 	}
 }
 
+// The same with Wear on (the third re-review's R3-1). Wear's saturation
+// shifts the mean of lopsided material and takes that shift off through a
+// 5 Hz estimate; while every voice began its own at 0, on a loop shorter
+// than the estimate settles in it never settled, and what got through each
+// pass built up through the dub (the tape stays under 8 V, so the bound's
+// gate never opens). The estimate now goes on from voice to voice on one
+// tape. The worst mean over the second half of the passes (Wear's dropouts
+// and hiss move it from pass to pass), in mV, each voice fresh / bound /
+// measured 2026-11-22 (943c0d0, the 5 Hz blocker on everything, beside it):
+//   50 ms  sine + 2nd 1 V, Dub 5 %, Wear 30 %    +983 / 120 /  -59   (-23)
+//   50 ms  25 % pulse 1 V, Dub 5 %, Wear 30 %    -295 / 120 /  -57   (-14)
+//   50 ms  25 % pulse 5 V, Dub 50 %, Wear 100 %  -701 / 250 / +120  (+122)
+//   200 ms sine + 2nd, as above                  +419 /  40 /  -16    (-5)
+//   200 ms pulse 5 V, as above                   -245 /  40 /  +14   (+15)
+//   1 s    sine + 2nd, as above                   +63 /  20 /   +2    (-2)
+//   1 s    pulse 5 V, as above                    -51 /  15 /   -3    (-2)
+// and with Smear at 0.5 on the 200 ms loop, where two voices write through
+// every join's crossfade, each with its own copy of the estimate (the next
+// voice takes the newest's alone; nothing is added up):
+//   sine + 2nd, as above                         +401 / 100 /  -51    (-2)
+//   pulse 5 V, as above                          -252 /  60 /  +25   (+25)
+// The input's period is 96 samples and every loop a multiple of it.
+void wear_dub_lopsided() {
+	struct Case {
+		const char* what;
+		bool pulse;
+		float volts, d, wear, smear;
+		size_t frames;
+		int passes;
+		double bound;
+	};
+	for (const Case& c : {Case{"50 ms, sine + 2nd 1 V, Dub 5 %, Wear 30 %", false, 1.f, 0.05f, 0.3f, 0.f, 2400, 1000, 0.12},
+	                      Case{"50 ms, 25 % pulse 1 V, Dub 5 %, Wear 30 %", true, 1.f, 0.05f, 0.3f, 0.f, 2400, 1000, 0.12},
+	                      Case{"50 ms, 25 % pulse 5 V, Dub 50 %, Wear 100 %", true, 5.f, 0.5f, 1.f, 0.f, 2400, 1000, 0.25},
+	                      Case{"200 ms, sine + 2nd 1 V, Dub 5 %, Wear 30 %", false, 1.f, 0.05f, 0.3f, 0.f, 9600, 1000, 0.04},
+	                      Case{"200 ms, 25 % pulse 5 V, Dub 50 %, Wear 100 %", true, 5.f, 0.5f, 1.f, 0.f, 9600, 200, 0.04},
+	                      Case{"1 s, sine + 2nd 1 V, Dub 5 %, Wear 30 %", false, 1.f, 0.05f, 0.3f, 0.f, 48000, 300, 0.02},
+	                      Case{"1 s, 25 % pulse 5 V, Dub 50 %, Wear 100 %", true, 5.f, 0.5f, 1.f, 0.f, 48000, 100, 0.015},
+	                      Case{"200 ms, Smear 0.5, sine + 2nd 1 V, Dub 5 %, Wear 30 %", false, 1.f, 0.05f, 0.3f, 0.5f, 9600, 1000, 0.1},
+	                      Case{"200 ms, Smear 0.5, 25 % pulse 5 V, Dub 50 %, Wear 100 %", true, 5.f, 0.5f, 1.f, 0.5f, 9600, 400, 0.06}}) {
+		Rig g;
+		TapeSet* set = g.loaded(c.frames, 480, [](size_t, float& l, float& r) { l = r = 0.f; });
+		g.use(set);
+		g.f.params[F::DUB_LEVEL] = c.d;
+		g.f.params[F::WEAR] = c.wear;
+		g.f.params[F::SMEAR] = c.smear;
+		g.press(&F::playPress);
+		g.press(&F::dubPress);
+		double worst = 0;
+		float peak = 0.f;
+		long i = 0, two = 0;
+		for (int pass = 1; pass <= c.passes; pass++) {
+			for (size_t j = 0; j < c.frames; j++, i++) {
+				const long k = i % 96;
+				const double th = 2 * PI * (double) k / 96.0;
+				const float x = c.pulse ? (k < 24 ? 0.75f * c.volts : -0.25f * c.volts)
+				                        : (float) (c.volts * (std::sin(th) + 0.5 * std::cos(2 * th)));
+				g.step(x, x);
+				two += g.e.activeVoices() >= 2 ? 1 : 0;
+			}
+			if (pass > c.passes / 2) {
+				const double m = tapeMean(set->tape, c.frames);
+				if (std::fabs(m) > std::fabs(worst))
+					worst = m;
+			}
+		}
+		for (int ch = 0; ch < 2; ch++)
+			for (size_t k = 0; k < c.frames; k++)
+				peak = std::max(peak, std::fabs(set->tape.ch[ch][k]));
+		// The tape must hold the dub (a case that wrote nothing would pass).
+		CHECK(std::fabs(worst) < c.bound && peak > 5.f && peak <= 10.f,
+		      "%s: DC on the tape reaches %+.1f mV in the last %d passes (want under %.0f), peak %.3f V (want 5 to 10)", c.what, worst * 1e3,
+		      c.passes - c.passes / 2, c.bound * 1e3, peak);
+		if (c.smear > 0.f)
+			CHECK(two > i / 4, "%s: two voices at once for %ld of %ld samples (want over a quarter)", c.what, two, i);
+	}
+}
+
 // ---- What Wear and Dub do to the old tape, per frequency (the final
 // review's I2: a DC blocker on the tape going round took 15 dB at 50 Hz in
 // 300 passes of Wear at 2 %). Through the engine's own write path.
@@ -814,6 +892,70 @@ void tape_change_clean() {
 		}
 		CHECK(now->tape.length > 40000 && worst < 3e-3, "a clean tape %s after a minute of DC: its mean reaches %.2f mV in 5 passes (want under 3)", name,
 		      worst * 1e3);
+	}
+}
+
+// Nor does Wear's saturation DC estimate, which goes on from voice to voice
+// on one tape (R3-1): after wearing a hot 25 % pulse at 1 (the estimate
+// stands near -0.8 V), a clean 1 V sine that follows it, on a new tape,
+// restored, recorded over it or recorded after a Clear, is never saturated,
+// so any mean it gains is the old tape's estimate written onto it. Under
+// 2 mV over 3 passes (measured 0.42 to 0.45 mV; with the estimate carried
+// across, 13 to 19 mV).
+void wear_dc_tape_change() {
+	for (int how = 0; how < 4; how++) {
+		Rig g;
+		const auto sine = [](size_t k, float& l, float& r) { l = r = (float) std::sin(2 * PI * 200.0 * (double) k / 48000.0); };
+		TapeSet* hot = g.loaded(48000, 480, [](size_t k, float& l, float& r) { l = r = (k % 96) < 24 ? 8.25f : -2.75f; });
+		if (how == 1)   // Restore: the original is the clean sine
+			for (size_t k = 0; k < 48480; k++)
+				sine(k, hot->original.ch[0][k], hot->original.ch[1][k]);
+		g.use(hot);
+		g.f.params[F::WEAR] = 1.f;
+		g.press(&F::playPress);
+		// Half a pass, with a retrigger 50 ms in: the estimate stands in two
+		// voices' slots, and the head is on tape not yet worn, still hot.
+		g.run(2400);
+		g.f.playTrig = 10.f;
+		g.run(100);
+		g.f.playTrig = 0.f;
+		g.run(21500);
+		TapeSet* now = hot;
+		const char* name = "loaded";
+		if (how == 0) {
+			now = g.loaded(48000, 480, sine);
+			g.use(now);
+			g.press(&F::playPress);
+		}
+		else if (how == 1) {
+			name = "restored";
+			g.press(&F::restorePress);
+		}
+		else {
+			name = how == 2 ? "recorded over it" : "recorded after a Clear";
+			if (how == 3) {
+				g.e.clear();
+				g.run(4800);
+			}
+			long i = 0;
+			record(g, 48000, 480, [&](long, float& l, float& r) {
+				l = r = (float) std::sin(2 * PI * 200.0 * (double) (i++) / 48000.0);
+			});
+		}
+		g.run(4800);
+		if (!g.r.playing)
+			g.press(&F::playPress);
+		double worst = 0;
+		for (int pass = 0; pass < 3; pass++) {
+			g.run(48000);
+			const double m = tapeMean(now->tape, std::min<size_t>(now->tape.length, 48000));
+			if (std::fabs(m) > std::fabs(worst))
+				worst = m;
+		}
+		const double level = rms(now->tape.ch[0], std::min<size_t>(now->tape.length, 48000));
+		CHECK(now->tape.length > 40000 && level > 0.3 && level < 0.75 && std::fabs(worst) < 2e-3,
+		      "a clean sine %s after a hot pulse worn at 1: its mean reaches %+.2f mV in 3 passes (want under 2), %.3f V RMS (the sine, worn)", name,
+		      worst * 1e3, level);
 	}
 }
 
@@ -1779,12 +1921,14 @@ int main() {
 	dub_at_speed();
 	dub_bounded();
 	dub_lopsided();
+	wear_dub_lopsided();
 	wear_lows();
 	dub_lows();
 	dub_lows_5();
 	wear_dc();
 	offset_kept();
 	tape_change_clean();
+	wear_dc_tape_change();
 	wear_zero();
 	wear_window();
 	play_trigger();
