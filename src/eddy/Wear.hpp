@@ -92,8 +92,10 @@ inline float writeBound(float x) {
 // the bound, in full from a 5 % share. Where nothing is clipped the share
 // and the gate are exactly 0 and the write is the bound itself: the tape
 // going round below 8 V is not filtered (an offset recorded on it stays).
-// One per voice, fresh with each voice (reset()), so nothing carries from
-// one tape to the next.
+// One per voice; its state goes on from the voice a new one replaces on the
+// same tape (Voices::start: on a short loop an estimate begun again at
+// every join would never settle) and is fresh (reset()) where none precedes
+// it, so nothing carries from one tape to the next.
 struct WriteBound {
 	void setSampleRate(float fs) {
 		fs = fs == fs ? clampKeepNan(fs, 1000.f, 4e6f) : 48000.f;

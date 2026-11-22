@@ -426,7 +426,24 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   passes, synced: a 5 V 25 % pulse at Dub 50 % -393 mV (943c0d0 -374), a
   1 V pulse at Dub 5 % -0.4 mV (-17), a sine with its 2nd harmonic at 1 V,
   Dub 5 % +6 mV (-4), at 5 V, Dub 50 % +1.05 V (+1.08); +-10 V noise 0.4 to
-  63 mV at Dub 2 % to 50 %. Each pass costs the tape exactly
+  63 mV at Dub 2 % to 50 %. With Wear on the tape stays under the bound
+  and the DC is Wear's own saturation's, which Wear takes off through a
+  5 Hz estimate; begun at 0 by every voice, on a short loop it never
+  settled and left up to about 1 V (the third re-review's R3-1), so it
+  too goes on from voice to voice on the same tape, and starts at 0 for
+  a new tape, a recording, a Clear and a Restore. Measured so, synced,
+  the worst pass of the second half of the run (before / 943c0d0 beside
+  it): a 50 ms loop, sine with its 2nd harmonic 1 V, Dub 5 %, Wear 30 %,
+  1000 passes -59 mV (+983 / -23); a 1 V pulse, the same, -57 mV (-295 /
+  -14); a 5 V pulse, Dub 50 %, Wear 100 %, between -22 and +120 mV, moved
+  from pass to pass by the dropouts (-701 to -405 / -52 to +122); the
+  first and third on a 200 ms loop -16 and +14 mV (+419, -245 / -5, +15),
+  on a 1 s loop +2 and -3 mV (+63, -51 / -2, -2). Reversed, what is left
+  does not settle: a 1 V pulse at Dub 5 % without Wear wanders between
+  -79 and +64 mV over 2000 passes (943c0d0: -5 mV, settled; the gate
+  hovering part open, the re-review's R3-3, not fixed); the 5 V pulse at
+  Dub 50 %, Wear 100 %, between -71 and +178 mV (943c0d0 -80 to +112).
+  Each pass costs the tape exactly
   what the Wear and Dub laws say, from 30 Hz up; at Wear 0.5 and 1, 50
   passes keep about 2.3 dB more at 50 Hz and 0.15 dB more at 1 kHz than
   build 2.0.27 did.)

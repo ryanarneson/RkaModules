@@ -23,9 +23,11 @@
 //   start (the join) and gives EOC, or with Loop off fades and stops;
 //   every voice writes what it passed last sample (its own TapeWriter and
 //   wear state): wear, then keep x old + add x input (the input DC-blocked
-//   once a sample), then the voice's WriteBound (the soft bound, less the
-//   DC of its own clipping, held to 10 V), at the strength of that voice's own gain (and the
-//   Dub, Stopped, Play and hold fades), linear on the tape;
+//   once a sample), then the voice's WriteBound (the soft bound, 10 V at
+//   most; while it clips, and by the share of frames it clips, the written
+//   signal's DC is taken off before it), at the strength of that voice's
+//   own gain (and the Dub, Stopped, Play and hold fades), linear on the
+//   tape;
 //   the overview is touched where the tape was written and serviced;
 //   Mix, and the soft limit.
 //

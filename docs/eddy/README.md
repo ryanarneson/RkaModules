@@ -251,8 +251,18 @@ after pass while it is held at the ceiling. What DC is left depends on the
 material: lopsided material repeated in time with the loop (a pulse wave,
 a strong second harmonic) keeps up to about 0.4 V for a 5 V pulse dubbed
 at 50 %, and about 1.5 V at the extreme of a 10 V pulse driven into the
-ceiling; ordinary material, a few to a few tens of millivolts. Dub in and
-out are faded on the tape.
+ceiling. The 5 V pulse not in time with the loop keeps under 20 mV, and
+noise dubbed in to the ceiling up to about 60 mV. With Wear up as well,
+its saturation can hold the tape under the bound, and Wear takes off the
+DC its own saturation makes: on a 50 ms loop, lopsided material in time
+with it then keeps about 60 mV (1 V in at Dub 5 %, Wear 30 %), and at
+Wear 100 % what is left moves from pass to pass with Wear's dropouts,
+between about -20 and +150 mV (a 5 V pulse dubbed at 50 %); longer loops
+keep less (under 20 mV at 200 ms, under 5 mV at 1 s, the same two cases).
+Played in reverse, what is left does not settle: it wanders from pass to
+pass within tens of millivolts (a 1 V pulse at Dub 5 %, no Wear: between
+-79 and +64 mV over 2000 passes), and with Wear at 100 % between about
+-70 and +180 mV. Dub in and out are faded on the tape.
 
 Dub does nothing on an empty tape or while recording, and turns off when a
 recording starts, a file loads or Restore is pressed. While dubbing, the
