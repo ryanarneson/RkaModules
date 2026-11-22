@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "BandLimitedRead.hpp"
 #include "FastMath.hpp"
 #include "Tape.hpp"
 #include "eddy/Wear.hpp"
@@ -51,8 +52,10 @@ struct Voice {
 		}
 	}
 
-	float read(int c) const {
-		return wrap ? src->readWrapped(c, pos) : src->read(c, pos);
+	// Both sides where the voice is, for a head moving `speed` frames a
+	// sample: the Hermite read at |speed| <= 1, band-limited above.
+	void read(const BandLimitedRead& reader, float speed, float out[2]) const {
+		reader.read(*src, pos, speed, wrap, out);
 	}
 	float gain() const {
 		return env >= 1.0 ? 1.f : fastSin2pi(0.25f * (float) env);

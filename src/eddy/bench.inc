@@ -106,7 +106,11 @@ struct eddy {
 		// Budgets: twice the most an Apple M-series Mac measured in three
 		// runs (idle 0.089, outputs 0.140, busy 0.845, at 1, 4 or 16
 		// instances), rounded up to the next 0.05; elsewhere three times as
-		// much, provisional (not measured on x86-64).
+		// much, provisional (not measured on x86-64). With the band-limited
+		// read above speed 1 (2026-11-22, three runs): idle 0.087 (one cold
+		// first run 0.125), outputs 0.141, busy 1.465 (1.26 to 1.28 alone,
+		// 1.45 to 1.47 at 16): busy reads two voices at speed 2, about 72
+		// taps a side each; its budget is unchanged.
 		const BenchCase<Instance> cases[BENCH_CASES] = {
 			// name     inputs   Apple arm64  elsewhere
 			{"idle", idle, 0.2, 0.6},

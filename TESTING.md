@@ -217,7 +217,7 @@ instance, Apple M-series Mac:
 | Narrows budget | 0.7 | 0.7 | 4.9 |
 | Narrows measured | 0.33 | 0.33 | 2.43 |
 | Eddy budget | 0.2 | 0.3 | 1.7 |
-| Eddy measured | 0.089 | 0.140 | 0.845 |
+| Eddy measured (was) | 0.087 (0.089) | 0.141 (0.140) | 1.47 (0.845) |
 
 Narrows' idle and outputs cases are one stereo voice through the ladder and
 its busy case is sixteen voices with everything engaged; it also has a state
@@ -227,7 +227,9 @@ Eddy's idle has no tape; outputs plays a 10 s tape at the defaults; busy
 is a full tape (5 minutes) at Speed 2 by a moving CV, Dub on, Wear and Smear
 at 1 and a window of about 1 s, so two voices read, write and wear at once
 all the time and the overview is always rescanning. Its measurements are
-the most of three runs at 1, 4 or 16 instances. Its libm cases are idle,
+the most of three runs at 1, 4 or 16 instances. Busy rose from 0.845 to
+1.47 with the band-limited read above speed 1 (2026-11-22; most of it is
+the two voices' kernels at speed 2), inside the budget it had. Its libm cases are idle,
 outputs and busy with the Speed CV still, all knobs-still.
 
 Sluice also has a mixDown case (as busy, but only D connected): budget 2.25,

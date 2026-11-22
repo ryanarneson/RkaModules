@@ -43,6 +43,11 @@
 //   a window move) it writes at full weight frames that later turns read
 //   through the join's fade, so a dub made in that turn is heard through the
 //   next join within about 2 dB of its level, then exactly.
+// - Faster than 1 the voices read band-limited to the output's Nyquist
+//   (BandLimitedRead.hpp), crossfading in from the Hermite read between 1
+//   and 1.25; at 1 and below they read as before, to the bit. Only the
+//   read is filtered: the writes rewrite frames in place from their own
+//   value and the input, so nothing filtered goes back on the tape.
 // - Recording: the first REC_MIN_S goes into the engine's own buffer, so a
 //   recording thrown away has touched nothing; once it stands it goes into
 //   the original from frame 0 and the buffer is copied in behind it,
@@ -309,15 +314,18 @@ public:
 		syncSources();
 		ensureHead();
 
-		// The voices, read and summed.
+		// The voices, read and summed: band-limited to the output's Nyquist
+		// above speed 1 (BandLimitedRead.hpp), the Hermite read at or below.
 		float tape[2] = {0.f, 0.f};
 		for (int i = 0; i < Voices::N; i++) {
 			const Voice& x = voices_.v[i];
 			if (!x.active)
 				continue;
 			const float g = x.gain();
-			tape[0] += g * x.read(0);
-			tape[1] += g * x.read(1);
+			float y[2];
+			x.read(reader_, v, y);
+			tape[0] += g * y[0];
+			tape[1] += g * y[1];
 		}
 
 		// The transport.
@@ -1260,6 +1268,7 @@ private:
 	float rate_ = 48000.f, wearK_ = 0.f;
 	bool wearOn_ = false;
 	eddy::WriteGuard guard_;   // one DC blocker for every voice's writes
+	BandLimitedRead reader_;   // its kernel table, shared by the voices
 	std::unique_ptr<float[]> pre_;
 };
 

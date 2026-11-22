@@ -74,6 +74,12 @@ knob holds exactly at -1, 0 and +1 over a short stretch either side.
 ±4. Around 0 the output fades out, so a stopped tape is silent. The tooltip
 shows the speed (×); you can type one in.
 
+Faster than ×1 the tape is filtered as it is read, so what would land above
+the top of the audio band is taken out instead of folding back as harsh
+inharmonic tones; the top of the band rolls off a little. It comes in
+gradually between ×1 and ×1.25. At ×1 and slower the tape is read as it
+always was.
+
 ### Start and Length: the window
 
 **START** sets where the window begins, as a share of the tape; **START
