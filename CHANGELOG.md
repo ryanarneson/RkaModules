@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.26 (2026-11-21): Eddy: the window fits the tape while recording; Mix has input and tape both at full at noon, and starts there
 - 2.0.25 (2026-11-21): Eddy: tape loop with WAV load and save, waveform window (first listening build)
 - 2.0.24 (2026-11-21): Narrows: final review fixes (the core switch keeps the level with sound passing; a comb opened by CV from noon starts at pitch); manual
 - 2.0.23 (2026-11-20): Narrows: the comb is louder (it keeps noise at its level, so its peaks and a pinged comb stand out)
