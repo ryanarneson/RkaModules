@@ -62,8 +62,15 @@
 // - setSampleRate retires the set only if its rate differs; clear() empties
 //   the set in place (both tape and original, so both change counters move).
 //
-// Threads: process() and activeVoices() are the audio thread's; the rest
-// may be called from any one other thread (the worker, or the UI).
+// Threads: process() and activeVoices() are the audio thread's. The
+// read-only calls, live(), copyWanted(), tapeChanges() and
+// originalChanges(), are atomic loads and safe from any thread. The rest
+// (offer, collect, copyDone, clear, requestCopy, setTransport,
+// setSampleRate) each from one thread at a time, or under the caller's own
+// ordering where two threads share one (Eddy.cpp says which calls which).
+// A set handed back by collect() may still be in another thread's hands if
+// that thread read it through live() a moment before: freeing it is the
+// caller's to order (Eddy.cpp).
 #include <atomic>
 #include <cmath>
 #include <cstddef>

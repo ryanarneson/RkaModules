@@ -32,24 +32,78 @@ arch=$(basename "$pkg" .vcvplugin | sed -E 's/.*-([a-z]+-[a-z0-9]+)$/\1/')
 mkdir -p "$user/plugins-$arch"
 cp "$pkg" "$user/plugins-$arch/"
 
-run=("$RACK_BIN" -u "$user" -t 2)
-# macOS has no `timeout` unless coreutils is installed (as gtimeout).
+# A WAV for Eddy (never committed: build/ is wiped by make clean and audio is
+# git-ignored): 20 s of a swelling chord at 48 kHz, so loading it into the
+# headless engine (44.1 kHz) also converts its rate. The screenshot's Eddy loads it (RKA_EDDY_PREVIEW_WAV);
+# the headless runs below load it into a running module.
+mkdir -p build/smoke
+wav="$(pwd)/build/smoke/eddy.wav"
+python3 - "$wav" <<'EOF'
+import array, math, sys, wave
+fs, n = 48000, 20 * 48000
+a = array.array("h")
+for i in range(n):
+    t = i / fs
+    env = 0.25 + 0.55 * math.sin(math.pi * t / 20.0) ** 2 * (0.75 + 0.25 * math.cos(2 * math.pi * t / 7.0))
+    x = env * (0.5 * math.sin(2 * math.pi * 110 * t) + 0.3 * math.sin(2 * math.pi * 165 * t) + 0.2 * math.sin(2 * math.pi * 220.5 * t))
+    a.append(int(32767 * x))
+    a.append(int(32767 * x * 0.9))
+if sys.byteorder == "big":
+    a.byteswap()
+with wave.open(sys.argv[1], "wb") as w:
+    w.setnchannels(2)
+    w.setsampwidth(2)
+    w.setframerate(fs)
+    w.writeframes(a.tobytes())
+EOF
+
+# Rack, under a time limit; macOS has no `timeout` unless coreutils is
+# installed (as gtimeout).
+limit=()
 for t in timeout gtimeout; do
-	command -v "$t" >/dev/null && run=("$t" 120 "${run[@]}") && break
+	command -v "$t" >/dev/null && limit=("$t" 120) && break
 done
+run=(${limit[@]+"${limit[@]}"} "$RACK_BIN" -u "$user" -t 2)
 if [ "$(uname -s)" = Linux ] && [ -z "${DISPLAY:-}" ]; then
 	run=(xvfb-run -a -s "-screen 0 1280x720x24" "${run[@]}")
 fi
 # The Linux build's RPATH is ".", so Rack must start from its own folder.
-(cd "$(dirname "$RACK_BIN")" && "${run[@]}" >/dev/null 2>&1) || true
+(cd "$(dirname "$RACK_BIN")" && RKA_EDDY_PREVIEW_WAV="$wav" "${run[@]}" >/dev/null 2>&1) || true
 
 log="$user/log.txt"
+cp "$log" build/smoke/log-screenshots.txt
 if ! grep -q "Loaded plugin $slug " "$log"; then
 	echo "FAIL: Rack did not load $slug"; grep -iE "warn|fatal|$slug" "$log" | tail -20; exit 1
 fi
 if grep -iE "\[(warn|fatal)" "$log" | grep -i "$slug"; then
 	echo "FAIL: warnings mentioning $slug"; exit 1
 fi
+
+# Eddy in a running (headless) Rack, a patch whose Eddy loads the WAV
+# (Review Focus 4): once quit at once, so the module is deleted while its
+# worker loads; once quit after a few seconds, with the tape playing. Rack
+# must not crash, and log no warning from Eddy. Logs: build/smoke/.
+ver=$(jq -r .version plugin.json)
+patch="$user/eddy-smoke.vcv"
+jq -n --arg wav "$wav" --arg ver "$ver" --arg slug "$slug" '{version: "2.6.6", modules: [{id: 1, plugin: $slug,
+	model: "Eddy", version: $ver, params: [{id: 10, value: 1}, {id: 11, value: 1}], data: {file: $wav, keepTape: false},
+	pos: [0, 0]}], cables: []}' > "$patch"
+for wait in 0 4; do
+	status=0
+	(cd "$(dirname "$RACK_BIN")" && (sleep "$wait"; echo) | ${limit[@]+"${limit[@]}"} "$RACK_BIN" -u "$user" -h "$patch" >/dev/null 2>&1) || status=$?
+	cp "$log" "build/smoke/log-headless-$wait.txt"
+	if [ "$status" != 0 ] || grep -iqE "fatal|crash" "$log"; then
+		echo "FAIL: headless Rack with Eddy (quit after ${wait} s) exited $status"; grep -iE "fatal|crash|eddy" "$log" | tail -20; exit 1
+	fi
+	if grep -iE "\[[0-9.]+ (warn|fatal)" "$log" | grep -i "eddy"; then
+		echo "FAIL: Eddy warned (quit after ${wait} s)"; exit 1
+	fi
+	grep -q "Loaded plugin $slug " "$log" || { echo "FAIL: headless Rack did not load $slug"; exit 1; }
+	if [ "$wait" != 0 ] && ! grep -q "Eddy: loaded $wav" "$log"; then
+		echo "FAIL: Eddy did not load the WAV in ${wait} s"; exit 1
+	fi
+	echo "ok: Eddy headless, quit after ${wait} s"
+done
 
 mkdir -p build/screenshots
 missing=0

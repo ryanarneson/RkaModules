@@ -20,3 +20,4 @@ extern Model* modelWake;
 extern Model* modelNarrows;
 extern Model* modelShoal;
 extern Model* modelSluice;
+extern Model* modelEddy;
