@@ -392,8 +392,17 @@ struct Eddy : Module {
 		}
 		const rka::eddy::SavePlan plan = rka::eddy::planSave(f, record_);
 		if (plan.remove) {
-			if (!dir.empty() && system::exists(dir))
-				system::removeRecursively(dir);
+			// Rack's filesystem calls throw on failure (a file held open
+			// elsewhere, on Windows): a failed removal must not fail the
+			// patch's save (the final review's M5). The record is reset
+			// either way, so the next save writes both files.
+			try {
+				if (!dir.empty() && system::exists(dir))
+					system::removeRecursively(dir);
+			}
+			catch (std::exception& ex) {
+				WARN("Eddy: cannot remove the stored tape in %s: %s", dir.c_str(), ex.what());
+			}
 			storeEpoch_.fetch_add(1);
 			rka::eddy::savedAs(record_, f, plan, true);
 			return;
