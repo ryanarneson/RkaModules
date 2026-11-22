@@ -274,6 +274,73 @@ void grabs() {
 	CHECK(!tapeDragged(40.f, NAN_F), "NaN is no drag");
 }
 
+// A gesture followed (TapeDrag): a click, a drag, the window stopping
+// being usable mid-drag (recording begins, the tape cleared or replaced),
+// and a release that never came.
+void gestures() {
+	int a = 0, b = 0;
+	const void* A = &a;
+	const void* B = &b;
+	{
+		TapeDrag d;
+		CHECK(!d.press(40.f, true, A, 10.f, 90.f) && d.grab == GRAB_NEW, "a press in the middle: a new selection");
+		CHECK(d.move(41.f, true, A) == TapeDrag::NOTHING && d.release() == false, "a click (1 px): nothing, and no end");
+	}
+	{
+		TapeDrag d;
+		d.press(12.f, true, A, 10.f, 90.f);
+		CHECK(d.grab == GRAB_START, "a press by the start line takes it");
+		CHECK(d.move(13.f, true, A) == TapeDrag::NOTHING && d.move(15.f, true, A) == TapeDrag::BEGIN && d.move(30.f, true, A) == TapeDrag::SELECT &&
+		          d.move(30.f, true, A) == TapeDrag::SELECT,
+		      "a drag: nothing under 2 px, then begin once, then select");
+		CHECK(d.release() && !d.release(), "its release ends it, once");
+	}
+	// Recording begins (or the tape is emptied) mid-drag: no more selects,
+	// not even when the window is usable again; the release still ends it.
+	{
+		TapeDrag d;
+		d.press(40.f, true, A, 10.f, 90.f);
+		d.move(50.f, true, A);
+		CHECK(d.move(60.f, false, A) == TapeDrag::NOTHING && d.stopped, "recording begins: the drag stops");
+		CHECK(d.move(70.f, true, A) == TapeDrag::NOTHING, "and does not resume when the window is usable again");
+		CHECK(d.release(), "its release still ends it (its undo step)");
+	}
+	// The tape replaced mid-drag: stops; the old tape back: still stopped.
+	{
+		TapeDrag d;
+		d.press(40.f, true, A, 10.f, 90.f);
+		d.move(50.f, true, A);
+		CHECK(d.move(60.f, true, B) == TapeDrag::NOTHING && d.move(60.f, true, A) == TapeDrag::NOTHING, "a new tape: the drag stops for good");
+		CHECK(d.release(), "and its release ends it");
+	}
+	// Unusable before it became a drag: nothing to end.
+	{
+		TapeDrag d;
+		d.press(40.f, true, A, 10.f, 90.f);
+		CHECK(d.move(41.f, false, A) == TapeDrag::NOTHING && d.move(60.f, true, A) == TapeDrag::NOTHING && !d.release(),
+		      "stopped before a drag: never begins, nothing to end");
+	}
+	// Pressed on an empty tape or while recording: nothing at all.
+	{
+		TapeDrag d;
+		CHECK(!d.press(40.f, false, A, 10.f, 90.f) && d.move(80.f, true, A) == TapeDrag::NOTHING && !d.release(), "an unusable press: nothing");
+	}
+	// The release lost: the next press reports the drag still open, once.
+	{
+		TapeDrag d;
+		d.press(40.f, true, A, 10.f, 90.f);
+		d.move(60.f, true, A);
+		CHECK(d.press(20.f, true, A, 10.f, 90.f), "a press after a lost release: end the open drag first");
+		CHECK(!d.dragging && d.move(30.f, true, A) == TapeDrag::BEGIN, "then the new press is followed as its own");
+		CHECK(d.release() && !d.press(50.f, true, A, 10.f, 90.f), "a press after a release: nothing open");
+		d.move(50.f, false, A);   // stopped mid-press, no drag
+		CHECK(!d.press(50.f, true, A, 10.f, 90.f), "a stopped click left nothing open");
+		d.move(60.f, true, A);
+		d.move(70.f, false, A);   // a drag, stopped
+		CHECK(d.press(50.f, true, A, 10.f, 90.f), "a stopped drag whose release was lost is ended at the next press");
+	}
+}
+
 } // namespace
 
 int main() {
@@ -286,5 +353,6 @@ int main() {
 	with_cv();
 	hostile();
 	grabs();
+	gestures();
 	return rkatest::finish("eddy test_select");
 }

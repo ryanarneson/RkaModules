@@ -456,6 +456,8 @@ struct TapeView {
 	const rka::Overview* overview = nullptr;
 	float head = 0, start = 0, length = 1, overlap = 0, seconds = 0;
 	bool empty = true, recording = false;
+	// Which tape this is (only compared: a drag stops if it changes).
+	const void* tape = nullptr;
 };
 
 // A window on a tape, drawn in vectors in the self-illuminating layer in
@@ -477,17 +479,17 @@ struct TapeView {
 // tape, and onSelectEnd at the release. A click that does not move changes
 // nothing; a double-click calls onWhole. With an empty tape, while
 // recording, or with no callbacks the press is still taken (the glass
-// never drags the module) and nothing else happens. The module turns these
+// never drags the module) and nothing else happens. A drag stops changing
+// anything the moment that becomes so, or the tape (TapeView::tape)
+// changes, and does not resume; its release still ends it. A press after a
+// drag whose release was lost ends that drag first. The module turns these
 // into its knobs; the window draws what the knobs then make.
 struct TapeWindow : widget::Widget {
 	std::function<bool(TapeView&)> source;
 	std::function<void()> onSelectBegin, onSelectEnd, onWhole;
 	std::function<void(TapeGrab grab, float press, float now)> onSelect;
-	// The press being followed (pressed), whether it has become a drag,
-	// where it was (the widget's units) and what it took.
-	bool pressed = false, dragging = false;
-	float pressX = 0.f;
-	TapeGrab grab = GRAB_NEW;
+	// The gesture being followed (TapeGesture.hpp).
+	TapeDrag drag;
 	// The volts at the glass's top and bottom edges: a +-5 V tape fills most
 	// of it; a hotter one is held to the edges.
 	static constexpr float RANGE_VOLTS = 6.f;
@@ -526,36 +528,32 @@ struct TapeWindow : widget::Widget {
 		e.consume(this);
 		if (e.action != GLFW_PRESS)
 			return;
-		pressed = dragging = false;
 		TapeView v;
-		if (!selectable(v))
-			return;
+		const bool usable = selectable(v);
 		const float s = math::clamp(v.start, 0.f, 1.f);
-		pressX = e.pos.x;
-		grab = tapeGrabAt(pressX, xAt(s), xAt(wrap(s + math::clamp(v.length, 0.f, 1.f))));
-		pressed = true;
+		// A drag whose release was lost (focus gone mid-drag) ends here.
+		if (drag.press(e.pos.x, usable, v.tape, xAt(s), xAt(wrap(s + math::clamp(v.length, 0.f, 1.f)))) && onSelectEnd)
+			onSelectEnd();
 	}
 
 	void onDragMove(const DragMoveEvent& e) override {
-		if (e.button != GLFW_MOUSE_BUTTON_LEFT || !pressed)
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT || !drag.pressed || drag.stopped)
 			return;
+		TapeView v;
+		const bool usable = selectable(v);
 		const float x = mouseX();
-		if (!dragging) {
-			if (!tapeDragged(pressX, x))
-				return;
-			dragging = true;
-			if (onSelectBegin)
-				onSelectBegin();
-		}
-		onSelect(grab, fractionAt(pressX), fractionAt(x));
+		const TapeDrag::Step step = drag.move(x, usable, v.tape);
+		if (step == TapeDrag::BEGIN && onSelectBegin)
+			onSelectBegin();
+		if (step != TapeDrag::NOTHING)
+			onSelect(drag.grab, fractionAt(drag.pressX), fractionAt(x));
 	}
 
 	void onDragEnd(const DragEndEvent& e) override {
 		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
 			return;
-		if (dragging && onSelectEnd)
+		if (drag.release() && onSelectEnd)
 			onSelectEnd();
-		pressed = dragging = false;
 	}
 
 	void onDoubleClick(const DoubleClickEvent& e) override {

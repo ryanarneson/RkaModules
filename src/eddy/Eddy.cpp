@@ -595,6 +595,7 @@ struct Eddy : Module {
 				into.hi[c].store(s ? s->overview.hi[c].load(std::memory_order_relaxed) : 0.f, std::memory_order_relaxed);
 			}
 			v.empty = !s || viewEmpty_.load(std::memory_order_relaxed);
+			v.tape = s;
 		}
 		v.overview = &into;
 		v.head = viewHead_.load(std::memory_order_relaxed);

@@ -111,7 +111,8 @@ whole tape. With **START CV** patched the window is where the knob and the
 CV put it, so a drag sets the knob to put the start under the mouse with
 the CV as it is at that moment (the knob stops at its ends, so a large CV
 can keep the start short of the mouse). Nothing happens while recording or
-with an empty tape.
+with an empty tape, and a drag stops where it is if a recording starts or
+the tape is cleared or replaced while you drag.
 
 ### Smear
 
