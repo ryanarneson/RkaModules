@@ -17,16 +17,18 @@ namespace {
 using namespace rig;
 using rka::eddy::Window;
 
-// Records n frames of in(i) from a Rec press, presses Rec again at frame n,
+// Records n frames of in(i) from the REC gate's rise, lowers it at frame n,
 // and feeds `after` more samples of in() (the tail is taken from these).
-// Returns the sample count at the press that ended it.
+// Returns the sample count at the edge that ended it. The gate, not the
+// button: a recording the button starts or ends is thrown away under 0.3 s,
+// and these are shorter.
 long record(Rig& g, long n, long after, const std::function<void(long, float&, float&)>& in) {
 	float l = 0, r = 0;
-	g.press(&F::recPress);
+	g.f.recGate = 10.f;
 	long end = 0;
 	for (long i = 0; i < n + after; i++) {
 		if (i == n) {
-			g.press(&F::recPress);
+			g.f.recGate = 0.f;
 			end = g.t;
 		}
 		in(i, l, r);
@@ -925,7 +927,7 @@ void record_over_a_tape() {
 	int stale = 0;
 	for (long i = 0; i < 48000; i++) {
 		g.step(x[(size_t) i], -x[(size_t) i]);
-		if (stood < 0 && g.e.live()->original.length > 0 && g.r.recording && i >= 2400)
+		if (stood < 0 && g.e.live()->original.length > 0 && g.r.recording && i >= std::lround(rka::eddy::REC_BUTTON_MIN_S * 48000))
 			stood = i;
 		// From the moment it stands, nothing louder than the recording (1 V)
 		// is shown: the sine's 4 V peaks are gone.

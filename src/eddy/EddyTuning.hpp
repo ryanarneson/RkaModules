@@ -44,11 +44,17 @@ constexpr float WRITE_DC_HZ = 5.f;
 constexpr double TAPE_MAX_S = 300.0;
 constexpr double TAPE_MAX_FRAMES = 16777216.0;
 constexpr double TAIL_S = 0.01;
-// A recording shorter than this is thrown away. Its first part is kept in
-// the engine's own buffer, sized for this long at REC_BUFFER_FS (above that
-// rate the shortest recording is shorter), and copied onto the tape
-// PRE_COPY_FRAMES a sample once the recording stands.
-constexpr double REC_MIN_S = 0.05;
+// A recording shorter than its minimum is thrown away, the tape before it
+// left as it was: REC_GATE_MIN_S for one the REC gate started and ended (a
+// patch can take a short slice), REC_BUTTON_MIN_S for one the button
+// started or ended (a quick double tap on the button is a slip, not a
+// recording; changed at the listening stop, 2026-11-22: it was 50 ms for
+// both). The first REC_BUTTON_MIN_S of every recording is kept in the
+// engine's own buffer, sized for this long at REC_BUFFER_FS (above that
+// rate the minimums are shorter), and copied onto the tape PRE_COPY_FRAMES
+// a sample once the recording stands.
+constexpr double REC_GATE_MIN_S = 0.05;
+constexpr double REC_BUTTON_MIN_S = 0.3;
 constexpr float REC_BUFFER_FS = 768000.f;
 constexpr int PRE_COPY_FRAMES = 64;
 // While recording the window shows a span this long at first, doubled each

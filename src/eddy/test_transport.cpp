@@ -32,6 +32,212 @@ std::vector<float> noiseVec(size_t n, float volts, uint32_t seed) {
 	return x;
 }
 
+// A quick double tap on REC: REC started and stopped `ms` apart, by the
+// button or the gate, over a tape playing a 2 V 100 Hz sine (or on an empty
+// tape), with a 1 V 50 Hz sine at the input. What is left: the tape, the
+// original, the overview's columns (after, and at every 16th sample on the
+// way), the change counters, Play, and the largest step at the output.
+enum TapBy { BUTTON_BUTTON, GATE_GATE, BUTTON_GATE, GATE_BUTTON };
+const char* const TAP_NAMES[4] = {"button", "gate", "button, then gate", "gate, then button"};
+
+struct Tap {
+	bool tapeSame = false, originalSame = false, overviewSame = false, overviewKeptOnTheWay = true, countersSame = false;
+	bool playing = false, recordingAfter = true, empty = false;
+	size_t tapeLength = 0;
+	bool tapeIsOriginal = false;
+	float overviewTop = 0.f;   // the highest column after
+	float topAtEnd = 0.f;      // the highest column as the second edge comes
+	float worstStep = 0.f;
+	long n = 0;                // samples between the two edges
+};
+
+const double TAP_W_TAPE = 2 * PI * 100.0 / 48000.0, TAP_W_IN = 2 * PI * 50.0 / 48000.0;
+// 1.5 x the largest step of the tape's sine and the input's together.
+const float TAP_STEP_BOUND = (float) (1.5 * (2.0 * TAP_W_TAPE + 1.0 * TAP_W_IN));
+
+Tap doubleTap(double ms, TapBy by, bool emptyTape = false) {
+	Rig g;
+	g.f.inRPatched = false;
+	TapeSet* set = nullptr;
+	if (emptyTape) {
+		g.run(10);
+		set = g.e.live();
+	}
+	else {
+		set = g.sine(1.0, 100.0, 2.f, 0.0, 480);
+		g.use(set);
+	}
+	g.press(&F::playPress);
+	long t = 0;
+	auto in = [&]() { return (float) std::sin(TAP_W_IN * (double) t); };
+	// 10.25 turns of the sine: the press lands on its 2 V peak, where a
+	// cut would be heard.
+	for (; t < 4920; t++)
+		g.step(in(), in());
+	const Snapshot tape(set->tape), original(set->original);
+	std::vector<float> lo, hi;
+	for (int c = 0; c < rka::Overview::COLS; c++) {
+		lo.push_back(set->overview.lo[c].load());
+		hi.push_back(set->overview.hi[c].load());
+	}
+	auto overviewIsOld = [&]() {
+		for (int c = 0; c < rka::Overview::COLS; c++)
+			if (set->overview.lo[c].load() != lo[(size_t) c] || set->overview.hi[c].load() != hi[(size_t) c])
+				return false;
+		return true;
+	};
+	const uint32_t tc = g.e.tapeChanges(), oc = g.e.originalChanges();
+	Tap r;
+	r.n = std::lround(ms * 48.0);
+	float prev = g.r.l;
+	auto tick = [&](long k) {
+		for (long i = 0; i < k; i++, t++) {
+			g.step(in(), in());
+			r.worstStep = std::max(r.worstStep, std::fabs(g.r.l - prev));
+			prev = g.r.l;
+			if (t % 16 == 0 && !overviewIsOld())
+				r.overviewKeptOnTheWay = false;
+		}
+	};
+	if (by == BUTTON_BUTTON || by == BUTTON_GATE)
+		g.press(&F::recPress);
+	else
+		g.f.recGate = 10.f;
+	if (by == BUTTON_GATE) {
+		// The gate rises with the button's recording under way and falls
+		// to end it.
+		tick(1);
+		g.f.recGate = 10.f;
+		tick(r.n - 1);
+	}
+	else
+		tick(r.n);
+	for (int c = 0; c < rka::Overview::COLS; c++)
+		r.topAtEnd = std::max(r.topAtEnd, set->overview.hi[c].load());
+	if (by == BUTTON_BUTTON || by == GATE_BUTTON)
+		g.press(&F::recPress);   // GATE_BUTTON: the gate stays up
+	else
+		g.f.recGate = 0.f;
+	tick(48000);
+	g.f.recGate = 0.f;
+	tick(4800);
+	TapeSet* s = g.e.live();
+	r.tapeSame = s == set && tape.equals(set->tape);
+	r.originalSame = s == set && original.equals(set->original);
+	r.overviewSame = s == set && overviewIsOld();
+	r.countersSame = g.e.tapeChanges() == tc && g.e.originalChanges() == oc;
+	r.playing = g.r.playing;
+	r.recordingAfter = g.r.recording;
+	r.empty = g.r.empty;
+	r.tapeLength = s->tape.length;
+	r.tapeIsOriginal = sameTape(s->tape, s->original);
+	for (int c = 0; c < rka::Overview::COLS; c++)
+		r.overviewTop = std::max(r.overviewTop, s->overview.hi[c].load());
+	return r;
+}
+
+// Everything as it was, still playing, and no click.
+bool leftAlone(const Tap& t) {
+	return t.tapeSame && t.originalSame && t.overviewSame && t.overviewKeptOnTheWay && t.countersSame && t.playing && !t.recordingAfter &&
+	       t.worstStep <= TAP_STEP_BOUND;
+}
+// The recording is the tape: its length, the original the same after the
+// copy, playing, and the window showing it (the 1 V input, not the 2 V
+// tape before it).
+bool stood(const Tap& t) {
+	return t.tapeLength == (size_t) t.n && t.tapeIsOriginal && t.playing && !t.recordingAfter && t.overviewTop > 0.9f &&
+	       t.overviewTop < 1.1f && t.worstStep <= TAP_STEP_BOUND;
+}
+
+void say(const char* by, double ms, const Tap& t) {
+	std::printf("  REC by %s, %3.0f ms: %s (tape %s %zu frames, original %s, overview %s%s, counters %s, %s, step %.4f V of %.4f)\n", by, ms,
+	            leftAlone(t) ? "left alone" : stood(t) ? "recorded" : "NEITHER", t.tapeSame ? "same," : "new,", t.tapeLength,
+	            t.originalSame ? "same" : "new", t.overviewSame ? "same" : "new", t.overviewKeptOnTheWay ? "" : " on the way",
+	            t.countersSame ? "still" : "moved", t.playing ? "playing" : "stopped", t.worstStep, TAP_STEP_BOUND);
+}
+
+// The button tapped twice N ms apart over a playing tape: under 0.3 s the
+// tape, the original, the overview (on the way too), the counters and Play
+// are as they were, with no click; from 0.3 s it is a recording.
+void double_tap_button() {
+	for (double ms : {20.0, 49.0, 51.0, 100.0, 200.0, 250.0, 299.0}) {
+		const Tap t = doubleTap(ms, BUTTON_BUTTON);
+		say("button", ms, t);
+		CHECK(leftAlone(t), "button, %.0f ms: the tape left alone", ms);
+	}
+	for (double ms : {300.0, 301.0, 350.0}) {
+		const Tap t = doubleTap(ms, BUTTON_BUTTON);
+		say("button", ms, t);
+		CHECK(stood(t), "button, %.0f ms: a recording (%zu frames)", ms, t.tapeLength);
+		// From 0.3 s, while it records, the window shows it and not the
+		// old tape (its 2 V peaks gone).
+		if (ms > 300.0)
+			CHECK(t.topAtEnd < 1.1f, "button, %.0f ms: the window shows the recording before it ends (top %.2f V)", ms, t.topAtEnd);
+	}
+}
+
+// The gate keeps 50 ms; a recording the button starts and the gate ends, or
+// the other way round, has the button's 0.3 s.
+void double_tap_gate_and_mixed() {
+	for (double ms : {40.0, 49.0}) {
+		const Tap t = doubleTap(ms, GATE_GATE);
+		CHECK(leftAlone(t), "gate, %.0f ms: thrown away", ms);
+	}
+	for (double ms : {51.0, 60.0, 200.0}) {
+		const Tap t = doubleTap(ms, GATE_GATE);
+		CHECK(stood(t), "gate, %.0f ms: a recording (%zu frames)", ms, t.tapeLength);
+	}
+	for (TapBy by : {BUTTON_GATE, GATE_BUTTON}) {
+		for (double ms : {60.0, 200.0, 299.0}) {
+			const Tap t = doubleTap(ms, by);
+			CHECK(leftAlone(t), "%s, %.0f ms: thrown away (the button's 0.3 s)", TAP_NAMES[by], ms);
+		}
+		const Tap t = doubleTap(301.0, by);
+		CHECK(stood(t), "%s, 301 ms: a recording", TAP_NAMES[by]);
+	}
+}
+
+// An empty tape stays empty under 0.3 s by the button.
+void double_tap_empty() {
+	for (double ms : {100.0, 299.0}) {
+		const Tap t = doubleTap(ms, BUTTON_BUTTON, true);
+		CHECK(t.empty && t.tapeLength == 0 && t.tapeSame && t.originalSame && t.countersSame && !t.recordingAfter,
+		      "an empty tape, button %.0f ms: still empty (%zu frames)", ms, t.tapeLength);
+	}
+	const Tap t = doubleTap(301.0, BUTTON_BUTTON, true);
+	CHECK(!t.empty && t.tapeLength == (size_t) t.n && t.tapeIsOriginal, "an empty tape, button 301 ms: a recording (%zu frames)", t.tapeLength);
+}
+
+// A rate change while a recording the gate started is past the gate's
+// 50 ms but still in the buffer (under 0.3 s): it ends as a recording, as
+// one past its minimum always has. One the button started is thrown away.
+void rate_change_in_buffer() {
+	for (int button = 0; button < 2; button++) {
+		Rig g;
+		TapeSet* set = g.sine(0.5, 100.0, 2.f, 0.0, 480);
+		g.use(set);
+		const Snapshot tape(set->tape), original(set->original);
+		const std::vector<float> x = noiseVec(4800, 3.f, 23);
+		if (button)
+			g.press(&F::recPress);
+		else
+			g.f.recGate = 10.f;
+		for (size_t i = 0; i < 4800; i++)
+			g.step(x[i], x[i]);
+		g.e.setSampleRate(44100.f);
+		g.run(10);
+		bool same = set->original.length == 4800;
+		for (size_t k = 0; k < 4800 && same; k++)
+			same = set->original.ch[0][k] == x[k];
+		if (button)
+			CHECK(!set->tapeStale && tape.equals(set->tape) && original.equals(set->original),
+			      "the button's 100 ms, a rate change: thrown away, the set unchanged");
+		else
+			CHECK(same && set->tapeStale && tape.equals(set->tape), "the gate's 100 ms, a rate change: the original is the recording (%zu frames)",
+			      set->original.length);
+	}
+}
+
 void rec_short() {
 	Rig g;
 	TapeSet* set = g.sine(0.5, 100.0, 2.f, 0.0, 480);
@@ -80,10 +286,11 @@ void rec_full() {
 void rec_tail() {
 	Rig g;
 	g.f.inRPatched = true;
-	const std::vector<float> x = noiseVec(8000, 4.f, 8), y = noiseVec(8000, 4.f, 9);
-	const long N = 4800;
+	// 0.4 s: a recording the button starts and ends stands from 0.3 s.
+	const std::vector<float> x = noiseVec(22000, 4.f, 8), y = noiseVec(22000, 4.f, 9);
+	const long N = 19200;
 	g.press(&F::recPress);
-	for (long i = 0; i < 7000; i++) {
+	for (long i = 0; i < 21000; i++) {
 		if (i == N)
 			g.press(&F::recPress);
 		g.step(x[(size_t) i], y[(size_t) i]);
@@ -103,16 +310,16 @@ void rec_mono() {
 	for (int patched = 0; patched < 2; patched++) {
 		Rig g;
 		g.f.inRPatched = patched != 0;
-		const std::vector<float> x = noiseVec(6000, 4.f, 10);
+		const std::vector<float> x = noiseVec(20400, 4.f, 10);
 		g.press(&F::recPress);
-		for (long i = 0; i < 6000; i++) {
-			if (i == 4800)
+		for (long i = 0; i < 20400; i++) {
+			if (i == 19200)
 				g.press(&F::recPress);
 			g.step(x[(size_t) i], 3.3f);
 		}
 		const Tape& t = g.e.live()->tape;
-		bool ok = t.length == 4800;
-		for (size_t k = 0; k < 4800 && ok; k++)
+		bool ok = t.length == 19200;
+		for (size_t k = 0; k < 19200 && ok; k++)
 			ok = t.ch[0][k] == x[k] && t.ch[1][k] == (patched ? 3.3f : x[k]);
 		CHECK(ok, patched ? "IN R patched: the sides are IN L and IN R" : "IN R unpatched: both sides are IN L");
 	}
@@ -134,17 +341,17 @@ void rec_then_play() {
 		Rig g;
 		g.f.loop = loop != 0;
 		CHECK(!g.r.playing, "Play off");
-		const std::vector<float> x = noiseVec(12000, 3.f, 12);
+		const std::vector<float> x = noiseVec(19200 + 480, 3.f, 12);
 		g.press(&F::recPress);
-		for (long i = 0; i < 9600 + 480; i++) {
-			if (i == 9600)
+		for (long i = 0; i < 19200 + 480; i++) {
+			if (i == 19200)
 				g.press(&F::recPress);
 			g.step(x[(size_t) i], x[(size_t) i]);
 		}
 		CHECK(g.r.playing, "Loop %s: Play comes on when the recording ends", loop ? "on" : "off");
 		long edges = 0;
 		bool was = g.r.eoc;
-		for (long i = 0; i < 4 * 9600; i++) {
+		for (long i = 0; i < 4 * 19200; i++) {
 			g.step();
 			edges += g.r.eoc && !was;
 			was = g.r.eoc;
@@ -452,7 +659,7 @@ void counters() {
 	CHECK(g.e.originalChanges() != oc, "a tape-to-original copy moves it");
 	oc = g.e.originalChanges();
 	g.press(&F::recPress);
-	g.run(4800);
+	g.run(19200);   // past the button's 0.3 s
 	CHECK(g.e.originalChanges() == oc, "not while recording");
 	g.press(&F::recPress);
 	g.run(4800);
@@ -473,7 +680,7 @@ void reads_original() {
 	CHECK(!g.e.readsOriginal(), "a loaded tape: reads the tape");
 	const uint32_t oc = g.e.originalChanges();
 	g.press(&F::recPress);
-	g.run(4800);
+	g.run(19200);   // past the button's 0.3 s
 	CHECK(!g.e.readsOriginal(), "while recording");
 	g.press(&F::recPress);
 	long first = -1, last = -1;
@@ -510,7 +717,7 @@ void reads_original() {
 // A rate change in the middle of a recording: the recording ends as one (the
 // original is what was recorded, at its length), the set is retired flagged
 // so the worker copies it to the tape, and the original's counter moves.
-// Under 50 ms it is thrown away as usual.
+// Under its minimum it is thrown away as usual.
 void rate_change_during_rec() {
 	{
 		Rig g;
@@ -518,18 +725,18 @@ void rate_change_during_rec() {
 		TapeSet* set = g.sine(0.5, 100.0, 2.f, 0.0, 480);
 		g.use(set);
 		const Snapshot tape(set->tape);
-		const std::vector<float> x = noiseVec(9600, 3.f, 21), y = noiseVec(9600, 3.f, 22);
+		const std::vector<float> x = noiseVec(19200, 3.f, 21), y = noiseVec(19200, 3.f, 22);
 		const uint32_t oc = g.e.originalChanges();
 		g.press(&F::recPress);
-		for (size_t i = 0; i < 9600; i++)
+		for (size_t i = 0; i < 19200; i++)
 			g.step(x[i], y[i]);
 		g.e.setSampleRate(44100.f);
 		g.run(10);
 		CHECK(g.collected.count(set) == 1, "the set is retired");
-		bool same = set->original.length == 9600;
-		for (size_t k = 0; k < 9600 && same; k++)
+		bool same = set->original.length == 19200;
+		for (size_t k = 0; k < 19200 && same; k++)
 			same = set->original.ch[0][k] == x[k] && set->original.ch[1][k] == y[k];
-		CHECK(same, "its original is the recording, %zu frames (want 9600)", set->original.length);
+		CHECK(same, "its original is the recording, %zu frames (want 19200)", set->original.length);
 		CHECK(set->tapeStale && tape.equals(set->tape), "flagged: the tape is the one before, to be copied from the original");
 		CHECK(g.e.originalChanges() != oc, "the original's counter moved");
 	}
@@ -545,7 +752,7 @@ void rate_change_during_rec() {
 		g.run(10);
 		CHECK(g.collected.count(set) == 1 && !set->tapeStale && tape.equals(set->tape) && original.equals(set->original) &&
 		          g.e.originalChanges() == oc,
-		      "under 50 ms: thrown away, the set unchanged and not flagged");
+		      "under its minimum: thrown away, the set unchanged and not flagged");
 	}
 }
 
@@ -767,5 +974,9 @@ int main() {
 	storm();
 	counters();
 	reads_original();
+	double_tap_button();
+	double_tap_gate_and_mixed();
+	double_tap_empty();
+	rate_change_in_buffer();
 	return rkatest::finish("eddy test_transport");
 }

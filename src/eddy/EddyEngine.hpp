@@ -49,12 +49,22 @@
 //   frame, to the bit), crossfaded between 1 and 1.02. Only the read is
 //   filtered: the writes rewrite frames in place from their own value and
 //   the input, so nothing filtered goes back on the tape.
-// - Recording: the first REC_MIN_S goes into the engine's own buffer, so a
-//   recording thrown away has touched nothing; once it stands it goes into
-//   the original from frame 0 and the buffer is copied in behind it,
-//   PRE_COPY_FRAMES a sample. At the end, m more of the input is taken as
-//   the tail, the tape plays from the original at once (from Start), and the
-//   engine asks for the original to be copied to the tape.
+// - Recording: the first REC_BUTTON_MIN_S goes into the engine's own
+//   buffer, so a recording thrown away has touched nothing. It stands once
+//   it reaches its minimum: REC_GATE_MIN_S if the REC gate started it and
+//   ends it, REC_BUTTON_MIN_S if the button started or ends it (a quick
+//   double tap leaves the tape alone). Since which ends it is not known
+//   until it ends, a recording stays in the buffer until REC_BUTTON_MIN_S,
+//   or until it ends having reached its minimum, and only then stands: it
+//   goes into the original from frame 0 and the buffer is copied in behind
+//   it, PRE_COPY_FRAMES a sample, and what is left of it at once when the
+//   recording ends (at most REC_BUTTON_MIN_S of frames, once a recording),
+//   so the tape plays from its start at once. The window's overview is
+//   taken over by the recording when it stands, not before: until then it
+//   shows the old tape, so one thrown away leaves the old picture exactly as
+//   it was. At the end, m more of the input is taken as the tail, the tape
+//   plays from the original at once (from Start), and the engine asks for
+//   the original to be copied to the tape.
 // - While recording, the overview is over a span (span_) rather than the
 //   tape's capacity, so the window fills: REC_SPAN_S at first, doubled each
 //   time the recording reaches its end (the overview's columns merged in
@@ -382,7 +392,7 @@ private:
 	};
 
 	static int preMax() {
-		return (int) std::ceil(eddy::REC_MIN_S * (double) eddy::REC_BUFFER_FS);
+		return (int) std::ceil(eddy::REC_BUTTON_MIN_S * (double) eddy::REC_BUFFER_FS);
 	}
 	static float finite(float x) {
 		return (x - x == 0.f) ? x : 0.f;
@@ -419,9 +429,12 @@ private:
 		kGlide_ = 1.f - fastExp2((float) (-1.4426950408889634 / (SPEED_GLIDE_S * rate)));
 		const double vs = VOCT_SMOOTH_S * rate;
 		voctFrames_ = (float) (vs > 1.0 ? vs : 1.0);
-		double pre = std::floor(REC_MIN_S * rate + 0.5);
+		double pre = std::floor(REC_BUTTON_MIN_S * rate + 0.5);
 		pre = pre < 1.0 ? 1.0 : pre > (double) preMax() ? (double) preMax() : pre;
 		preN_ = (size_t) pre;
+		double gate = std::floor(REC_GATE_MIN_S * rate + 0.5);
+		gate = gate < 1.0 ? 1.0 : gate > pre ? pre : gate;
+		gateN_ = (size_t) gate;
 		guard_.setSampleRate((float) rate);
 		rate_ = (float) rate;
 		// A set at another rate is silent at once and retired when no copy
@@ -447,18 +460,20 @@ private:
 	// stands ends as a recording (what was recorded is the original, at its
 	// length; the tail so far); the set is flagged so the worker copies the
 	// original to the tape before it is used or converted. One still under
-	// REC_MIN_S is thrown away (the set unchanged). The rest of the start
-	// buffer is copied in at once: at most REC_MIN_S of frames, once.
+	// its minimum is thrown away (the set unchanged). The rest of the start
+	// buffer is copied in at once: at most REC_BUTTON_MIN_S of frames, once.
 	void endForRate() {
 		Tape& o = live_->original;
+		if (rec_ == REC_PRE && recN_ >= recMin())
+			stand();
 		if (rec_ == REC_ON || rec_ == REC_TAIL) {
 			const float* pre0 = pre_.get();
 			const float* pre1 = pre_.get() + preMax();
-			for (size_t i = preCopied_; i < preN_ && i < o.capacity(); i++) {
+			for (size_t i = preCopied_; i < preHeld() && i < o.capacity(); i++) {
 				o.ch[0][i] = pre0[i];
 				o.ch[1][i] = pre1[i];
 			}
-			preCopied_ = preN_;
+			preCopied_ = preHeld();
 			o.length = recN_;
 			o.tail = rec_ == REC_TAIL ? tailK_ : 0;
 			live_->tapeStale = true;
@@ -683,22 +698,38 @@ private:
 	};
 
 	void edges(const EddyFrame& f) {
-		// Rec.
-		if (f.recPress)
+		// Rec. Which of the button and the gate last moved recWant_ decides
+		// the minimum of the recording it starts or ends.
+		if (f.recPress) {
 			recWant_ = !recWant_;
+			wantByButton_ = true;
+		}
 		const int re = recGate_.process(f.recGate);
-		if (re > 0)
+		if (re > 0) {
 			recWant_ = true;
-		else if (re < 0)
+			wantByButton_ = false;
+		}
+		else if (re < 0) {
 			recWant_ = false;
+			wantByButton_ = false;
+		}
 		if (!usableSet() || clearing_)
 			recWant_ = false;
 		if (recWant_) {
-			if (rec_ == REC_IDLE && inFlight_ == NONE && !tapeStale_)
+			if (rec_ == REC_IDLE && inFlight_ == NONE && !tapeStale_) {
+				recByButton_ = wantByButton_;
 				startRec();
+			}
 		}
-		else if (rec_ == REC_PRE)
-			rec_ = REC_IDLE;   // under REC_MIN_S: thrown away; the tape plays again
+		else if (rec_ == REC_PRE) {
+			recByButton_ = recByButton_ || wantByButton_;
+			if (recN_ >= recMin()) {
+				stand();
+				endRec();
+			}
+			else
+				rec_ = REC_IDLE;   // under its minimum: thrown away; the tape plays again
+		}
 		else if (rec_ == REC_ON)
 			endRec();
 
@@ -753,6 +784,10 @@ private:
 
 	void endRec() {
 		using namespace eddy;
+		// What is left of the start buffer goes on now, so the tape plays
+		// from its start at once (a recording that stood only as it ended
+		// has all of it left: at most REC_BUTTON_MIN_S of frames, once).
+		copyPre(preHeld());
 		Tape& o = live_->original;
 		o.length = recN_;
 		o.tail = 0;
@@ -794,15 +829,8 @@ private:
 			while (recN_ >= span_ && span_ < o.capacity())   // only at a very low rate
 				span_ = 2 * span_ < o.capacity() ? 2 * span_ : o.capacity();
 			if (recN_ >= preN_) {
-				// It stands: from here on it goes onto the original.
-				rec_ = REC_ON;
-				preCopied_ = 0;
-				o.tail = 0;
-				o.length = recN_;
-				queued_ = NONE;
-				// The window: the old tape gone, the recording over the span.
-				live_->overview.clear(span_);
-				live_->overview.touch(0, recN_, span_);
+				// Past both minimums: it stands.
+				stand();
 				if (recN_ >= o.capacity())
 					endRec();
 			}
@@ -830,6 +858,28 @@ private:
 		}
 	}
 
+	// The minimum of the recording in hand, in frames (see the top).
+	size_t recMin() const {
+		return recByButton_ ? preN_ : gateN_;
+	}
+	// The frames of it in the start buffer.
+	size_t preHeld() const {
+		return recN_ < preN_ ? recN_ : preN_;
+	}
+
+	// The recording stands: from here on it goes onto the original, and the
+	// window shows it (the old tape's picture gone) over the span.
+	void stand() {
+		Tape& o = live_->original;
+		rec_ = REC_ON;
+		preCopied_ = 0;
+		o.tail = 0;
+		o.length = recN_;
+		queued_ = NONE;
+		live_->overview.clear(span_);
+		live_->overview.touch(0, recN_, span_);
+	}
+
 	// The recording has reached the end of the span: it doubles (the
 	// overview merges its columns in pairs), or becomes the capacity if that
 	// is nearer (the overview is mapped anew and rescanned).
@@ -846,12 +896,13 @@ private:
 	}
 
 	// The buffer's frames go onto the original behind the recording.
-	void copyPre() {
-		if (preCopied_ >= preN_)
+	// At most `most` of them, from where the last call stopped.
+	void copyPre(size_t most = (size_t) eddy::PRE_COPY_FRAMES) {
+		if (preCopied_ >= preHeld())
 			return;
 		Tape& o = live_->original;
-		size_t n = preN_ - preCopied_;
-		n = n < (size_t) eddy::PRE_COPY_FRAMES ? n : (size_t) eddy::PRE_COPY_FRAMES;
+		size_t n = preHeld() - preCopied_;
+		n = n < most ? n : most;
 		const float* pre0 = pre_.get();
 		const float* pre1 = pre_.get() + preMax();
 		for (size_t i = preCopied_; i < preCopied_ + n; i++) {
@@ -988,7 +1039,7 @@ private:
 	void ensureHead() {
 		if (!playOn_ || voices_.newest >= 0 || pend_.active || !usableSet() || !winValid_ || clearing_)
 			return;
-		if (rec_ == REC_PRE || rec_ == REC_ON || (rec_ == REC_TAIL && preCopied_ < preN_))
+		if (rec_ == REC_PRE || rec_ == REC_ON || (rec_ == REC_TAIL && preCopied_ < preHeld()))
 			return;
 		double p = head_;
 		if (wrap_)
@@ -1218,7 +1269,7 @@ private:
 	float fadeStep_ = 1.f / 480.f;
 	int eocN_ = 48, eocLeft_ = 0;
 	float kGlide_ = 0.f, voctFrames_ = 96.f;
-	size_t preN_ = 2400;
+	size_t preN_ = 14400, gateN_ = 2400;   // the button's and the gate's minimums, frames
 
 	// Sets and copies.
 	TapeSet* live_ = nullptr;   // the set in use (audio thread)
@@ -1242,6 +1293,8 @@ private:
 	bool recWant_ = false, dubOn_ = false, playOn_ = false, oneShotTail_ = false, loop_ = true;
 	Schmitt recGate_, dubGate_, playTrig_, restoreTrig_;
 	Rec rec_ = REC_IDLE;
+	bool wantByButton_ = false;   // the button, not the gate, last moved recWant_
+	bool recByButton_ = false;    // the button started or ended the recording in hand
 	size_t recN_ = 0, preCopied_ = 0, tailN_ = 0, tailK_ = 0;
 	size_t span_ = 1;   // while recording, the frames the window shows
 

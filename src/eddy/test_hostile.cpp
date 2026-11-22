@@ -443,7 +443,7 @@ void rates_change() {
 		}
 		else if (state == 1) {   // recording, past its shortest
 			g.f.recPress = true;
-			for (long i = 0; i < (long) (0.08 * now) + 2; i++)
+			for (long i = 0; i < (long) (0.35 * now) + 2; i++)   // past the button's 0.3 s
 				g.stepNoise(4.f);
 			CHECK(g.r.recording, "state %d at %g Hz: recording", state, now);
 		}
@@ -460,7 +460,7 @@ void rates_change() {
 		}
 		else {   // a recording just ended, its copy not done
 			g.f.recPress = true;
-			for (long i = 0; i < (long) (0.08 * now) + 2; i++)
+			for (long i = 0; i < (long) (0.35 * now) + 2; i++)   // past the button's 0.3 s
 				g.stepNoise(4.f);
 			g.f.recPress = true;
 			g.step();
