@@ -540,17 +540,18 @@ TapeSet* tones(Rig& g, double volts) {
 	});
 }
 
-// Each tone's amplitude on side 0 over frames [2400, 45600) (0.9 s: away
-// from the join's fade at frame 0, and a whole number of cycles of each).
-void toneLevels(const Tape& t, double amp[5]) {
+// Each tone's amplitude on side 0 over frames [a, b) (by default 2400 to
+// 45600, 0.9 s: away from the join's fade at frame 0, and a whole number of
+// cycles of each).
+void toneLevels(const Tape& t, double amp[5], size_t a = 2400, size_t b = 45600) {
 	for (int k = 0; k < 5; k++) {
 		double sc = 0, ss = 0;
-		for (size_t i = 2400; i < 45600; i++) {
+		for (size_t i = a; i < b; i++) {
 			const double th = 2 * PI * LOWS_HZ[k] * (double) i / 48000.0;
 			sc += t.ch[0][i] * std::cos(th);
 			ss += t.ch[0][i] * std::sin(th);
 		}
-		amp[k] = 2.0 * std::hypot(sc, ss) / 43200.0;
+		amp[k] = 2.0 * std::hypot(sc, ss) / (double) (b - a);
 	}
 }
 
@@ -602,9 +603,10 @@ void wear_lows() {
 	}
 }
 
-// The dub's input block, a one-pole high-pass at WRITE_DC_HZ, at f.
+// The dub's input block, a one-pole high-pass at 5 Hz (the design's figure,
+// written here, not read from EddyTuning.hpp, so a change to it is seen), at f.
 double inputBlockDb(double f) {
-	const double a = 1.0 - std::exp(-2 * PI * rka::eddy::WRITE_DC_HZ / 48000.0);
+	const double a = 1.0 - std::exp(-2 * PI * 5.0 / 48000.0);
 	const std::complex<double> z = std::polar(1.0, -2 * PI * f / 48000.0);
 	return db(std::abs((1.0 - z) / (1.0 - (1.0 - a) * z)));
 }
@@ -767,6 +769,38 @@ void tape_change_clean() {
 		}
 		CHECK(now->tape.length > 40000 && worst < 3e-3, "a clean tape %s after a minute of DC: its mean reaches %.2f mV in 5 passes (want under 3)", name,
 		      worst * 1e3);
+	}
+}
+
+// Dub at 5 %, the final review's own case: the old tape is kept nearly
+// whole (keep 0.9975), so any loss or phase a pass inside the loop compounds
+// over hundreds of passes. 3000 passes of five tones on a 0.3 s loop: each
+// settles at add / (1 - keep) times the input, less the input's 5 Hz block
+// once, within 0.03 dB (a 0.05 Hz trim in the loop cost 1.7 dB at 30 Hz
+// here; the final re-review's N4).
+void dub_lows_5() {
+	Rig g;
+	float add, keep;
+	rka::eddy::dubGains(0.05f, add, keep);
+	const double A = 0.2 * (1.0 - keep) / add;
+	TapeSet* set = g.loaded(14400, 480, [](size_t, float& l, float& r) { l = r = 0.f; });
+	g.use(set);
+	g.f.params[F::DUB_LEVEL] = 0.05f;
+	g.press(&F::playPress);
+	g.run(480);
+	g.press(&F::dubPress);
+	for (long i = 0; i < 3000L * 14400; i++) {
+		double x = 0;
+		for (double f : LOWS_HZ)
+			x += A * std::sin(2 * PI * f * (double) i / 48000.0);
+		g.step((float) x, (float) x);
+	}
+	double amp[5];
+	toneLevels(set->tape, amp, 4800, 14400);   // 0.2 s: past the join, whole cycles of each
+	for (int k = 0; k < 5; k++) {
+		const double got = db(amp[k] / (A * add / (1.0 - keep))), want = inputBlockDb(LOWS_HZ[k]);
+		CHECK(std::fabs(got - want) < 0.03, "Dub Level 0.05, 3000 passes: %.0f Hz settles at %+.3f dB re add / (1 - keep) (want %+.3f)",
+		      LOWS_HZ[k], got, want);
 	}
 }
 
@@ -1701,6 +1735,7 @@ int main() {
 	dub_bounded();
 	wear_lows();
 	dub_lows();
+	dub_lows_5();
 	wear_dc();
 	offset_kept();
 	tape_change_clean();
