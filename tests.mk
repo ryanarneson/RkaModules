@@ -14,8 +14,11 @@ TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_
 # emulation) it stops before main with "unexpected memory mapping": then the
 # test runs again with randomisation off (setarch -R), and only if it cannot
 # start that way either is it skipped, saying why. Any other failure fails.
+# With TSAN_REQUIRED set (to anything but empty or 0; CI sets it) a test that
+# cannot start fails `make test` instead of being skipped.
 TSAN_TESTS = $(filter %/test_threads,$(TEST_BINS))
 TSAN_START_FAILED = ThreadSanitizer: unexpected memory mapping
+TSAN_REQUIRED ?=
 .PHONY: test
 test: shoal-globals bench-modules engine-globals libm-calls panels-test $(TEST_BINS)
 	@for t in $(filter-out $(TSAN_TESTS),$(TEST_BINS)); do ./$$t || exit 1; done
@@ -25,8 +28,14 @@ test: shoal-globals bench-modules engine-globals libm-calls panels-test $(TEST_B
 			setarch "$$(uname -m)" -R ./$$t > $$t.log 2>&1; rc=$$?; \
 			if [ $$rc != 0 ] && grep -q -e "$(TSAN_START_FAILED)" -e setarch $$t.log; then \
 				cat $$t.log; \
+				if [ -n "$(TSAN_REQUIRED)" ] && [ "$(TSAN_REQUIRED)" != 0 ]; then \
+					echo "$$t: FAILED: ThreadSanitizer cannot start here, nor under setarch -R, and TSAN_REQUIRED is set" \
+						"(it needs vm.mmap_rnd_bits of 28 or less or personality(2) allowed, and no emulation)"; \
+					exit 1; \
+				fi; \
 				echo "$$t: skipped (ThreadSanitizer cannot start here, nor under setarch -R:" \
-					"it needs vm.mmap_rnd_bits of 28 or less or personality(2) allowed, and no emulation)"; \
+					"it needs vm.mmap_rnd_bits of 28 or less or personality(2) allowed, and no emulation;" \
+					"set TSAN_REQUIRED=1 to make this a failure)"; \
 				continue; \
 			fi; \
 		fi; \

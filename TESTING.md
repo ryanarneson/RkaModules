@@ -10,7 +10,7 @@ last section lists where they fall short.
 | Command | What it does | Needs |
 |---|---|---|
 | `make test` | Builds and runs every `src/<module>/test_*.cpp`, the Shoal and engine globals checks, the libm check (Linux) and the bench declarations check | A C++17 compiler |
-| `make -f tests.mk test TEST_WERROR=-Werror CXX=g++` | The same, as CI runs it on Linux | No Rack SDK |
+| `make -f tests.mk test TEST_WERROR=-Werror CXX=g++ TSAN_REQUIRED=1` | The same, as CI runs it on Linux (`TSAN_REQUIRED=1`: fail, not skip, if the ThreadSanitizer test cannot start; rule 7) | No Rack SDK |
 | `make` | Builds the plugin | Rack SDK (`RACK_DIR`) |
 | `make smoke` | Loads the plugin in Rack with a temporary user folder and screenshots every module to `build/screenshots/` | Rack SDK, Rack |
 | `make shoal-globals` | Fails if the firmware object holds writable global state | |
@@ -145,7 +145,10 @@ randomisation is wider than it handles (`vm.mmap_rnd_bits` over 28, as in
 Colima's VM) or under Rosetta: `make test` then reruns it under
 `setarch -R`, and only if it cannot start that way either (Docker's default
 seccomp profile refuses `setarch -R`; Rosetta fails either way) skips it
-with the reason printed. One data race is accepted by design and is not in that test: the
+with the reason printed, and `make test` still passes. With
+`TSAN_REQUIRED=1` that skip is a failure instead: `make test` fails,
+naming the test. CI sets it (and narrows `vm.mmap_rnd_bits` to 28 first),
+so a green CI run means the thread test ran. One data race is accepted by design and is not in that test: the
 worker reading the live tape to save it while the engine may be writing it
 (Wear, Dub). A torn read costs one sample of wear either side of it; the save
 names it where it reads.
@@ -475,5 +478,5 @@ Other open items:
   by hand before a merge. ThreadSanitizer is part of `make test` for
   Eddy's `test_threads` only, and runs only where it can start (rule 7):
   on the Mac, and on Linux where address randomisation is narrow enough or
-  `setarch -R` is allowed. Elsewhere `make test` skips it and says why, so
-  a green CI run does not show that it ran.
+  `setarch -R` is allowed. Elsewhere `make test` skips it and says why,
+  unless `TSAN_REQUIRED=1` is set, when it fails instead. CI sets it.
