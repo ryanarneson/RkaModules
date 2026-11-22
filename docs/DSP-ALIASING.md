@@ -57,10 +57,12 @@ inharmonic whistles. It is cheapest to design out at the start.
 - `src/Tape.hpp`'s write head (`TapeWriter`): slower than 1 it box-filters
   the input over the head's travel; faster than 1 it interpolates linearly
   between input samples (which leaves images; Eddy measures them).
-- `src/BandLimitedRead.hpp`: reading a buffer faster than its rate. A
-  windowed sinc whose width scales with the speed, from a table, cutting at
-  the output's Nyquist; Hermite at speed 1 and below, crossfaded in between
-  1 and 1.25. Eddy uses it; it suits any tape, sampler or delay read.
+- `src/BandLimitedRead.hpp`: reading a buffer at a variable rate. Faster
+  than 1, a windowed sinc whose width scales with the speed, from a table,
+  cutting at the output's Nyquist; at 1 and slower the same window as an
+  interpolating kernel (whole frames read exactly, flat to 0.8 of Nyquist,
+  images 63 dB down); the two crossfaded between 1 and 1.02. Eddy uses it;
+  it suits any tape, sampler or delay read.
 
 ## At design time
 

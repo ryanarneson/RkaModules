@@ -53,7 +53,7 @@ struct Voice {
 	}
 
 	// Both sides where the voice is, for a head moving `speed` frames a
-	// sample: the Hermite read at |speed| <= 1, band-limited above.
+	// sample (BandLimitedRead.hpp).
 	void read(const BandLimitedRead& reader, float speed, float out[2]) const {
 		reader.read(*src, pos, speed, wrap, out);
 	}

@@ -495,14 +495,17 @@ defaults.
 - How the write head lays sound down at speeds other than 1, and the
   speed under which it stops writing, within the tests.
 - What is done about aliasing when the tape is read faster than normal.
-  (2026-11-22: the read is band-limited above speed 1, a windowed sinc
-  whose width scales with the speed (`src/BandLimitedRead.hpp`), cutting
-  at the output's Nyquist: anything landing above it comes out at least
-  57 dB down, the passband is flat within 0.02 dB to 0.8 of Nyquist. It
-  crossfades in from the Hermite read between 1 and 1.25; at 1 and below
-  the read is unchanged. The write is unaffected: the voices rewrite
-  frames in place, never what they read. Tests: `src/eddy/test_alias.cpp`,
-  `src/eddy/test_band_read.cpp`.)
+  (2026-11-22: every read goes through `src/BandLimitedRead.hpp`. Faster
+  than 1, a windowed sinc whose width scales with the speed, cutting at
+  the output's Nyquist: from x1.02 up anything landing above it comes out
+  at least 57 dB down, and the passband is flat within 0.02 dB to 0.8 of
+  Nyquist. At 1 and slower, the same window as an interpolating kernel: a
+  whole frame read at 1 is that frame, to the bit; between frames the band
+  is flat to 0.8 of Nyquist and the images are 63 dB down or more (the
+  Hermite read it replaced lost 0.9 dB of white noise's level and left
+  images at -11 dB). The two crossfade between 1 and 1.02. The write is
+  unaffected: the voices rewrite frames in place, never what they read.
+  Tests: `src/eddy/test_alias.cpp`, `src/eddy/test_band_read.cpp`.)
 - Where wear's parts sit and how each is made; the hiss and dropout
   generators (seeded, so tests repeat).
 - The fade times, the smoothing, and how often controls are read.

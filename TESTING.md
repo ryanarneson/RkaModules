@@ -217,7 +217,7 @@ instance, Apple M-series Mac:
 | Narrows budget | 0.7 | 0.7 | 4.9 |
 | Narrows measured | 0.33 | 0.33 | 2.43 |
 | Eddy budget | 0.2 | 0.3 | 1.7 |
-| Eddy measured (was) | 0.087 (0.089) | 0.141 (0.140) | 1.47 (0.845) |
+| Eddy measured (was) | 0.086 (0.089) | 0.130 (0.140) | 1.36 (0.845) |
 
 Narrows' idle and outputs cases are one stereo voice through the ladder and
 its busy case is sixteen voices with everything engaged; it also has a state
@@ -228,9 +228,17 @@ is a full tape (5 minutes) at Speed 2 by a moving CV, Dub on, Wear and Smear
 at 1 and a window of about 1 s, so two voices read, write and wear at once
 all the time and the overview is always rescanning. Its measurements are
 the most of three runs at 1, 4 or 16 instances. Busy rose from 0.845 to
-1.47 with the band-limited read above speed 1 (2026-11-22; most of it is
-the two voices' kernels at speed 2), inside the budget it had. Its libm cases are idle,
-outputs and busy with the Speed CV still, all knobs-still.
+1.36 with the band-limited read (2026-11-22; most of it is the two
+voices' kernels at speed 2), inside the budget it had. Two more cases:
+slow, the 10 s tape at half speed (the module's common case, through the
+interpolating kernel): budget 0.35, measured 0.162 (0.138 with the
+Hermite read before); and fast4, the heaviest steady patch (Speed 4 by
+the knob at 2 and V/OCT +1 V, Dub on, Wear and Smear at 1, a window of
+about 0.1 s, so two voices read at 4 and write all the time): budget
+3.85, measured 1.91. Four voices at 4 at once (retriggers and joins
+overlapping) are rarer and not a case: about 0.42 % of a core more per
+voice read at 4. Its libm cases are idle, outputs, busy with the Speed CV
+still and slow, all knobs-still.
 
 Sluice also has a mixDown case (as busy, but only D connected): budget 2.25,
 measured 1.11. Its budgets are about twice the measurement, rounded up to
@@ -437,7 +445,7 @@ Three habits behind most of them:
 | CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes (`make shoal-bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`, with Ballast) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) |
 | No libm call per sample, knobs still | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Not checked | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) |
 | No writable global state | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make shoal-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) |
-| Aliasing measured (rule 16) | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Yes (`test_alias`: the read at every speed, fast read band-limited to 50 dB at speeds 2 and 4; wear, the limits and dub pinned; `test_band_read`) |
+| Aliasing measured (rule 16) | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Yes (`test_alias`: the read at every speed, band-limited to 50 dB from x1.02 up, images 60 dB down below 1, level against speed, x1 to the bit; wear, the limits and dub pinned; `test_band_read`) |
 | Smoke screenshot | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes (with a tape: `make smoke` makes a WAV for it, and loads it into Eddy in two headless runs, one quit while it loads) |
 
 Fog also has `make fog-soak` (opt-in, minutes, not in `make test`): every

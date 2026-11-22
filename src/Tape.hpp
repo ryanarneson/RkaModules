@@ -6,8 +6,8 @@
 // `tail` frames of audio that ran on after it (a recording's tail, read by
 // the join). Reads are Hermite (the maths of src/DelayLine.hpp), at any
 // fractional frame, so a head may move at any speed in either direction.
-// A head faster than 1 aliases through these; src/BandLimitedRead.hpp
-// reads band-limited for it.
+// A head faster than 1 aliases through these, and between frames they
+// lose the top octave; Eddy reads through src/BandLimitedRead.hpp instead.
 //
 // TapeWriter: the write head, which travels with a read head at whatever
 // speed it moves and lays the input down at that speed (see its comment).
