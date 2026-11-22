@@ -90,6 +90,20 @@ time. A window past the tape's end wraps to its beginning (the window shows
 it in two pieces). Moving the window leaves the head alone unless it is now
 outside it.
 
+You can also set the window with the mouse, in the window itself (the
+knobs turn to match, and one Undo puts both back). Drag across the
+waveform to select the part to play, either way round. Take hold of either
+end line (within about 4 pixels of it) and drag it to move that end alone:
+moving the start keeps the end where it is. A selection is at least 10 ms
+and never wraps past the tape's end; dragging an end of a window that
+wraps keeps its other end and selects the stretch between it and the
+mouse. A click without a drag changes nothing; a double-click selects the
+whole tape. With **START CV** patched the window is where the knob and the
+CV put it, so a drag sets the knob to put the start under the mouse with
+the CV as it is at that moment (the knob stops at its ends, so a large CV
+can keep the start short of the mouse). Nothing happens while recording or
+with an empty tape.
+
 ### Smear
 
 The fade at the window's join. At 0, the shortest fade that does not

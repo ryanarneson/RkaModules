@@ -87,6 +87,9 @@ Non-goals:
 - Setting Start and Length by dragging in the window. The window shows;
   the knobs set. (The designer's call; it can be added once the window
   exists.)
+  (2026-11-22, after the listening build: dragging in the window now sets
+  Start and Length, through the two knobs: drag to select, drag an end
+  line to move that end, double-click for the whole tape; README.)
 - Zooming or scrolling the window: it always shows the whole tape.
 - A Send and Return inside the loop (Tabes has one). Worth having later;
   it needs four more jacks.
@@ -489,6 +492,9 @@ Speed change; the flat stretches on the Speed knob; whether the
 window reads well at Rack's usual zoom, and whether dragging in it to
 set Start is missed; whether an autosave can be felt with a long wearing tape; the
 defaults.
+
+(2026-11-22: dragging in the window was missed; it now sets Start and
+Length, as in Non-goals' note.)
 
 ## Left to the builder
 

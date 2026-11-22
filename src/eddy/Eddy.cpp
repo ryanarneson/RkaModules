@@ -35,6 +35,7 @@
 #include "plugin.hpp"
 #include "EddyEngine.hpp"
 #include "EddyLayout.hpp"
+#include "Select.hpp"
 #include "TapeJobs.hpp"
 #include "widgets.hpp"
 
@@ -871,6 +872,51 @@ struct EddyWidget : ModuleWidget {
 	// RKA_EDDY_PREVIEW_WAV names a WAV (make smoke makes one), else empty.
 	std::unique_ptr<rka::TapeSet> preview;
 	rka::Overview shown;   // the copy the window draws
+	// START and LENGTH as they were when the mouse began a drag in the window.
+	rka::eddy::WindowKnobs selectBefore;
+
+	// The mouse in the window sets START and LENGTH through their params, as
+	// the knobs do (eddy/Select.hpp); one undo step per gesture.
+	void selectBegin(Eddy* m) {
+		selectBefore.start = m->params[Eddy::START_PARAM].getValue();
+		selectBefore.length = m->params[Eddy::LENGTH_PARAM].getValue();
+	}
+	void select(Eddy* m, rka::TapeGrab grab, float press, float now) {
+		const float cv = m->inputs[Eddy::START_CV_INPUT].getVoltage() / rka::eddy::START_CV_VOLTS;
+		const double seconds = m->viewSeconds_.load(std::memory_order_relaxed);
+		const rka::eddy::WindowKnobs k = rka::eddy::dragWindow(grab, press, now, selectBefore, cv, seconds);
+		m->paramQuantities[Eddy::START_PARAM]->setValue(k.start);
+		m->paramQuantities[Eddy::LENGTH_PARAM]->setValue(k.length);
+	}
+	void selectEnd(Eddy* m) {
+		history::ComplexAction* h = new history::ComplexAction;
+		h->name = "set Eddy's window";
+		const int ids[2] = {Eddy::START_PARAM, Eddy::LENGTH_PARAM};
+		const float was[2] = {selectBefore.start, selectBefore.length};
+		for (int i = 0; i < 2; i++) {
+			const float now = m->params[ids[i]].getValue();
+			if (now == was[i])
+				continue;
+			history::ParamChange* c = new history::ParamChange;
+			c->name = h->name;
+			c->moduleId = m->id;
+			c->paramId = ids[i];
+			c->oldValue = was[i];
+			c->newValue = now;
+			h->push(c);
+		}
+		if (h->isEmpty())
+			delete h;
+		else
+			APP->history->push(h);
+	}
+	// Double-click: the whole tape.
+	void selectWhole(Eddy* m) {
+		selectBegin(m);
+		m->paramQuantities[Eddy::START_PARAM]->setValue(0.f);
+		m->paramQuantities[Eddy::LENGTH_PARAM]->setValue(1.f);
+		selectEnd(m);
+	}
 
 	EddyWidget(Eddy* module) {
 		using namespace EddyLayout;
@@ -916,6 +962,12 @@ struct EddyWidget : ModuleWidget {
 			v.seconds = (float) preview->tape.length / preview->fs;
 			return true;
 		};
+		if (module) {
+			window->onSelectBegin = [=]() { selectBegin(module); };
+			window->onSelect = [=](rka::TapeGrab grab, float press, float now) { select(module, grab, press, now); };
+			window->onSelectEnd = [=]() { selectEnd(module); };
+			window->onWhole = [=]() { selectWhole(module); };
+		}
 		addChild(window);
 
 		addParam(createParamCentered<rka::HeroKnob>(mm2px(PARAM_SPEED), module, Eddy::SPEED_PARAM));

@@ -3,6 +3,7 @@
 #include "Detents.hpp"
 #include "Overview.hpp"
 #include "RkaTheme.hpp"
+#include "TapeGesture.hpp"
 #include "plugin.hpp"
 
 // Components shared by every RKA module, so the plugin keeps one look,
@@ -468,8 +469,25 @@ struct TapeView {
 // the head as an ivory line; the tape's length, m:ss, in the top right
 // corner. Empty: a line along the middle. It knows nothing of the engine:
 // `source` fills a TapeView, or returns false to draw nothing.
+//
+// The mouse (TapeGesture.hpp): a left press near an end line takes that
+// end, elsewhere starts a new selection; once it has moved TAPE_CLICK_PX
+// sideways it is a drag: onSelectBegin once, then onSelect at every move
+// with what was taken and the press and the mouse as fractions of the
+// tape, and onSelectEnd at the release. A click that does not move changes
+// nothing; a double-click calls onWhole. With an empty tape, while
+// recording, or with no callbacks the press is still taken (the glass
+// never drags the module) and nothing else happens. The module turns these
+// into its knobs; the window draws what the knobs then make.
 struct TapeWindow : widget::Widget {
 	std::function<bool(TapeView&)> source;
+	std::function<void()> onSelectBegin, onSelectEnd, onWhole;
+	std::function<void(TapeGrab grab, float press, float now)> onSelect;
+	// The press being followed (pressed), whether it has become a drag,
+	// where it was (the widget's units) and what it took.
+	bool pressed = false, dragging = false;
+	float pressX = 0.f;
+	TapeGrab grab = GRAB_NEW;
 	// The volts at the glass's top and bottom edges: a +-5 V tape fills most
 	// of it; a hotter one is held to the edges.
 	static constexpr float RANGE_VOLTS = 6.f;
@@ -485,9 +503,66 @@ struct TapeWindow : widget::Widget {
 		Widget::drawLayer(args, layer);
 	}
 
-	// x in the window for a fraction of the tape.
+	// x in the window for a fraction of the tape, and back (held to 0..1).
 	float xAt(float f) const {
 		return pad() + f * (box.size.x - 2.f * pad());
+	}
+	float fractionAt(float x) const {
+		return math::clamp((x - pad()) / (box.size.x - 2.f * pad()), 0.f, 1.f);
+	}
+
+	// A tape the mouse may set the window on: shown, not empty, not recording.
+	bool selectable(TapeView& v) {
+		return onSelect && source && source(v) && !v.empty && v.overview && !v.recording;
+	}
+	// The mouse's x in the widget's units, from Rack's own record of it.
+	float mouseX() {
+		return APP->scene->rack->getMousePos().x - getRelativeOffset(Vec(), APP->scene->rack).x;
+	}
+
+	void onButton(const ButtonEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;   // the right button: the module's menu
+		e.consume(this);
+		if (e.action != GLFW_PRESS)
+			return;
+		pressed = dragging = false;
+		TapeView v;
+		if (!selectable(v))
+			return;
+		const float s = math::clamp(v.start, 0.f, 1.f);
+		pressX = e.pos.x;
+		grab = tapeGrabAt(pressX, xAt(s), xAt(wrap(s + math::clamp(v.length, 0.f, 1.f))));
+		pressed = true;
+	}
+
+	void onDragMove(const DragMoveEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT || !pressed)
+			return;
+		const float x = mouseX();
+		if (!dragging) {
+			if (!tapeDragged(pressX, x))
+				return;
+			dragging = true;
+			if (onSelectBegin)
+				onSelectBegin();
+		}
+		onSelect(grab, fractionAt(pressX), fractionAt(x));
+	}
+
+	void onDragEnd(const DragEndEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		if (dragging && onSelectEnd)
+			onSelectEnd();
+		pressed = dragging = false;
+	}
+
+	void onDoubleClick(const DoubleClickEvent& e) override {
+		TapeView v;
+		if (onWhole && selectable(v))
+			onWhole();
+		e.consume(this);
 	}
 	float pad() const {
 		return mm2px(0.6f);
