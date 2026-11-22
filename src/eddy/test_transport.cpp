@@ -460,6 +460,51 @@ void counters() {
 	CHECK(g.e.originalChanges() != oc, "an offer moves it");
 }
 
+// readsOriginal(): from a recording's end until its copy to the tape is
+// done (the original counter has moved and the tape is not yet it), and
+// while a Restore waits or is under way; not otherwise.
+void reads_original() {
+	Rig g;
+	g.copySamples = 2000;
+	g.use(g.sine(0.5, 100.0, 2.f));
+	g.run(100);
+	CHECK(!g.e.readsOriginal(), "a loaded tape: reads the tape");
+	const uint32_t oc = g.e.originalChanges();
+	g.press(&F::recPress);
+	g.run(4800);
+	CHECK(!g.e.readsOriginal(), "while recording");
+	g.press(&F::recPress);
+	long first = -1, last = -1;
+	bool movedFirst = false;
+	for (long i = 0; i < 20000; i++) {
+		g.step();
+		if (g.e.readsOriginal()) {
+			if (first < 0)
+				first = i;
+			last = i;
+		}
+		if (g.e.originalChanges() != oc && first < 0)
+			movedFirst = true;   // the counter moved while the tape was not marked behind
+	}
+	CHECK(first >= 0 && !movedFirst, "after the recording's end, from before its counter moves (first %ld)", first);
+	CHECK(last >= 0 && !g.e.readsOriginal() && g.copies > 0, "until the copy is done (last %ld, copies %ld)", last, g.copies);
+	g.e.requestCopy(EddyEngine::ORIGINAL_TO_TAPE);
+	g.run(1);
+	bool during = false;
+	for (int i = 0; i < 3000; i++) {
+		g.step();
+		during = during || g.e.readsOriginal();
+	}
+	CHECK(during && !g.e.readsOriginal(), "a Restore: while it waits or is under way, then not");
+	g.e.requestCopy(EddyEngine::TAPE_TO_ORIGINAL);
+	bool make = false;
+	for (int i = 0; i < 3000; i++) {
+		g.step();
+		make = make || g.e.readsOriginal();
+	}
+	CHECK(!make, "Make this the original: the tape is what is heard");
+}
+
 // A rate change in the middle of a recording: the recording ends as one (the
 // original is what was recorded, at its length), the set is retired flagged
 // so the worker copies it to the tape, and the original's counter moves.
@@ -719,5 +764,6 @@ int main() {
 	handoff();
 	storm();
 	counters();
+	reads_original();
 	return rkatest::finish("eddy test_transport");
 }

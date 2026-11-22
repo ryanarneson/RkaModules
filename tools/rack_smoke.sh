@@ -105,6 +105,38 @@ for wait in 0 4; do
 	echo "ok: Eddy headless, quit after ${wait} s"
 done
 
+# Eddy's stored tape, from the patch's storage (Review Focus 5): an autosave
+# folder whose Eddy keeps its tape, the three stored files made here at
+# 48 kHz (the tape and the original different), so the 44.1 kHz headless
+# engine loads them converted: loaded, and not taken as what is stored.
+auto="$user/autosave"
+rm -rf "$auto"
+mkdir -p "$auto/modules/1"
+jq -n --arg ver "$ver" --arg slug "$slug" '{version: "2.6.6", modules: [{id: 1, plugin: $slug, model: "Eddy",
+	version: $ver, params: [{id: 10, value: 1}, {id: 11, value: 1}], data: {file: "", keepTape: true}, pos: [0, 0]}],
+	cables: []}' > "$auto/patch.json"
+python3 - "$auto/modules/1" <<'EOF2'
+import math, struct, sys
+def wav(path, frames):
+    data = b"".join(struct.pack("<ff", l, r) for l, r in frames)
+    hdr = b"RIFF" + struct.pack("<I", 36 + len(data)) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 3, 2, 48000, 48000 * 8, 8, 32)
+    open(path, "wb").write(hdr + b"data" + struct.pack("<I", len(data)) + data)
+n = 48000
+wav(sys.argv[1] + "/tape.wav", [(3 * math.sin(i * 0.01), 3 * math.sin(i * 0.011)) for i in range(n + 480)])
+wav(sys.argv[1] + "/original.wav", [(2 * math.sin(i * 0.02), 2 * math.sin(i * 0.021)) for i in range(n + 480)])
+wav(sys.argv[1] + "/tails.wav", [(480.0, 480.0)])
+EOF2
+status=0
+(cd "$(dirname "$RACK_BIN")" && (sleep 2; echo) | ${limit[@]+"${limit[@]}"} "$RACK_BIN" -u "$user" -h >/dev/null 2>&1) || status=$?
+cp "$log" build/smoke/log-headless-stored.txt
+if [ "$status" != 0 ] || grep -iqE "fatal|crash" "$log" || grep -iE "\[[0-9.]+ (warn|fatal)" "$log" | grep -iq eddy; then
+	echo "FAIL: headless Rack with Eddy's stored tape (exit $status)"; grep -iE "fatal|crash|eddy" "$log" | tail -20; exit 1
+fi
+if ! grep -q "Eddy: loaded the stored tape (1.00 s); not as stored" "$log"; then
+	echo "FAIL: Eddy did not load its stored tape converted"; grep -i eddy "$log" | tail; exit 1
+fi
+echo "ok: Eddy headless, the stored tape loaded at another rate"
+
 mkdir -p build/screenshots
 missing=0
 for m in $(jq -r '.modules[].slug' plugin.json); do

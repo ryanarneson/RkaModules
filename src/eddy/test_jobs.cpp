@@ -696,6 +696,172 @@ void convert_keeps_both() {
 
 }
 
+namespace {
+
+// ---- The save's decision (StoreRecord, planSave, savedAs).
+
+rka::eddy::SaveFacts facts(uint32_t t, uint32_t o, float fs) {
+	rka::eddy::SaveFacts f;
+	f.haveSet = f.known = true;
+	f.tapeLength = f.originalLength = 1000;
+	f.tapeChanges = t;
+	f.originalChanges = o;
+	f.fs = fs;
+	return f;
+}
+
+void save_plan() {
+	using rka::eddy::SavePlan;
+	using rka::eddy::StoreRecord;
+	StoreRecord r;
+	// Nothing known about the files: both written.
+	rka::eddy::SaveFacts f = facts(5, 7, 48000.f);
+	SavePlan p = rka::eddy::planSave(f, r);
+	CHECK(!p.remove && p.tape && p.original && !p.tapeFromOriginal, "a first save writes both");
+	rka::eddy::savedAs(r, f, p, true);
+	p = rka::eddy::planSave(f, r);
+	CHECK(!p.remove && !p.tape && !p.original, "nothing changed: nothing written");
+	// The tape moves alone: the tape alone.
+	f.tapeChanges = 6;
+	p = rka::eddy::planSave(f, r);
+	CHECK(p.tape && !p.original, "the tape's counter moved: the tape alone");
+	// A failed write forgets: both next time.
+	rka::eddy::savedAs(r, f, p, false);
+	p = rka::eddy::planSave(f, r);
+	CHECK(p.tape && p.original, "after a failed write: both");
+	rka::eddy::savedAs(r, f, p, true);
+	// I1: while the stored tape loads, nothing (above all no removal), even
+	// with an empty tape live.
+	rka::eddy::SaveFacts loading = f;
+	loading.loading = true;
+	loading.tapeLength = loading.originalLength = 0;
+	p = rka::eddy::planSave(loading, r);
+	CHECK(!p.remove && !p.tape && !p.original, "a save while the stored tape loads touched the folder");
+	// No live set: nothing.
+	rka::eddy::SaveFacts none = f;
+	none.haveSet = false;
+	p = rka::eddy::planSave(none, r);
+	CHECK(!p.remove && !p.tape && !p.original, "no live set");
+	// An empty tape, or Keep off: the folder removed, the record forgotten.
+	rka::eddy::SaveFacts empty = f;
+	empty.tapeLength = empty.originalLength = 0;
+	p = rka::eddy::planSave(empty, r);
+	CHECK(p.remove, "an empty tape is not removed");
+	rka::eddy::SaveFacts off = f;
+	off.keepTape = false;
+	p = rka::eddy::planSave(off, r);
+	CHECK(p.remove, "Keep off is not removed");
+	rka::eddy::savedAs(r, off, p, true);
+	p = rka::eddy::planSave(f, r);
+	CHECK(p.tape && p.original, "after a removal: both");
+	rka::eddy::savedAs(r, f, p, true);
+	// I2: another rate (the record's files are at the old one): both.
+	rka::eddy::SaveFacts other = f;
+	other.fs = 44100.f;
+	p = rka::eddy::planSave(other, r);
+	CHECK(p.tape && p.original, "at another rate only one file was written");
+	// Counters not known to be the live set's: both.
+	rka::eddy::SaveFacts unknown = f;
+	unknown.known = false;
+	p = rka::eddy::planSave(unknown, r);
+	CHECK(p.tape && p.original, "unknown counters");
+	rka::eddy::savedAs(r, unknown, p, true);
+	p = rka::eddy::planSave(f, r);
+	CHECK(p.tape && p.original, "a save with unknown counters marked the files current");
+	rka::eddy::savedAs(r, f, p, true);
+	// M1: the tape is to become the original (a recording's copy pending):
+	// tape.wav from the original, and again once the copy has moved the
+	// tape's counter.
+	rka::eddy::SaveFacts behind = f;
+	behind.readsOriginal = true;
+	behind.originalChanges = f.originalChanges + 1;
+	behind.tapeLength = 0;   // a first recording: the tape itself is still empty
+	p = rka::eddy::planSave(behind, r);
+	CHECK(!p.remove && p.tape && p.tapeFromOriginal && p.original, "a recording's copy pending: tape from the original");
+	rka::eddy::savedAs(r, behind, p, true);
+	rka::eddy::SaveFacts copied = behind;
+	copied.readsOriginal = false;
+	copied.tapeLength = 1000;
+	p = rka::eddy::planSave(copied, r);
+	CHECK(p.tape && !p.original, "after the copy the tape is written again from itself, the original kept");
+	// The baseline of a whole load: nothing to write.
+	StoreRecord w;
+	rka::eddy::loadedWhole(w, 9, 3, 48000.f);
+	p = rka::eddy::planSave(facts(9, 3, 48000.f), w);
+	CHECK(!p.tape && !p.original && !p.remove, "a whole load is written again");
+}
+
+// I2: stored at one rate, loaded at another, the tape dubbed, saved, loaded
+// again: the tape and the original still differ and each is right.
+void stored_other_rate() {
+	TempDir t;
+	const std::string dir = t.sub("rates");
+	TapeSet* set = storedSet(8000.f, 4000, 80, 80);
+	std::string why;
+	CHECK(rka::eddy::storeTape(dir, *set, 8000.f, true, true, why), "%s", why.c_str());
+	bool whole = true;
+	TapeSet* a = nullptr;
+	CHECK(rka::eddy::loadStored(dir, 11025.f, a, why, whole) && a, "load at 11025: %s", why.c_str());
+	CHECK(!whole, "a load at another rate is called whole");
+	if (!a) {
+		delete set;
+		return;
+	}
+	// As the module: a whole load is the baseline; this one is not.
+	rka::eddy::StoreRecord r;
+	if (whole)
+		rka::eddy::loadedWhole(r, 1, 1, 11025.f);
+	// A dub: the tape changes, the original not.
+	for (size_t k = 0; k < a->tape.length; k++)
+		a->tape.ch[0][k] += 0.5f;
+	rka::eddy::SaveFacts f = facts(2, 1, 11025.f);
+	f.tapeLength = a->tape.length;
+	f.originalLength = a->original.length;
+	const rka::eddy::SavePlan p = rka::eddy::planSave(f, r);
+	CHECK(p.tape && p.original, "after a converted load the save writes the tape alone");
+	CHECK(rka::eddy::storePlanned(dir, *a, 11025.f, p, why), "%s", why.c_str());
+	TapeSet* b = nullptr;
+	whole = false;
+	CHECK(rka::eddy::loadStored(dir, 11025.f, b, why, whole) && b, "reload: %s", why.c_str());
+	if (b) {
+		CHECK(whole && why.empty(), "the reload is not whole: %s", why.c_str());
+		CHECK(sameTape(b->tape, a->tape), "the dubbed tape did not come back");
+		CHECK(sameTape(b->original, a->original), "the original did not come back (the tape replaced it?)");
+		CHECK(!sameBits(b->tape.ch[0], b->original.ch[0], b->tape.length), "tape and original are the same");
+		delete b;
+	}
+	// And the same-rate load is whole.
+	TapeSet* c = nullptr;
+	CHECK(rka::eddy::loadStored(dir, 11025.f, c, why, whole) && whole, "a same-rate whole store is not whole");
+	delete c;
+	delete a;
+	delete set;
+}
+
+// M1: a save between a recording's end and its copy to the tape stores the
+// new recording as both, so a reload keeps it.
+void stored_recording_copy() {
+	TempDir t;
+	const std::string dir = t.sub("rec");
+	TapeSet* set = storedSet(48000.f, 4800, 480, 480);   // tape: the old take, original: the new one
+	rka::eddy::StoreRecord r;
+	rka::eddy::loadedWhole(r, 4, 4, 48000.f);   // the files held the old take as both...
+	rka::eddy::SaveFacts f = facts(4, 5, 48000.f);   // ...the recording's end moved the original
+	f.readsOriginal = true;
+	f.tapeLength = set->tape.length;
+	f.originalLength = set->original.length;
+	const rka::eddy::SavePlan p = rka::eddy::planSave(f, r);
+	std::string why;
+	CHECK(rka::eddy::storePlanned(dir, *set, 48000.f, p, why), "%s", why.c_str());
+	TapeSet* back = nullptr;
+	CHECK(rka::eddy::loadStored(dir, 48000.f, back, why) && back && sameTape(back->tape, set->original)
+		&& sameTape(back->original, set->original), "the new recording was not stored as both: %s", why.c_str());
+	delete back;
+	delete set;
+}
+
+}
+
 int main() {
 	__sanitizer_install_malloc_and_free_hooks(mallocHook, freeHook);
 	load_levels();
@@ -707,5 +873,8 @@ int main() {
 	stored_unchanged_not_written();
 	stored_partial();
 	convert_keeps_both();
+	save_plan();
+	stored_other_rate();
+	stored_recording_copy();
 	return rkatest::finish("eddy test_jobs");
 }

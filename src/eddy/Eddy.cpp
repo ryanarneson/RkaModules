@@ -5,8 +5,9 @@
 // in TapeJobs.hpp).
 //
 // Threads, and which calls which of the engine's members:
-// - The audio thread: process(); live() and the change counters, to note
-//   when the patch's stored tape goes live (the save's baseline).
+// - The audio thread: process(); live(), the change counters and
+//   readsOriginal(), published together for the save (a seqlock), and the
+//   moment the patch's stored tape goes live (the save's baseline).
 // - The worker: offer(), setTransport() for a patch's tape, collect(),
 //   copyWanted() and copyDone() (the copies), live() (copies, export).
 // - The UI (menu, onSave, dataFromJson, onReset, the window): clear() and
@@ -119,25 +120,51 @@ struct Eddy : Module {
 	std::atomic<float> viewHead_{0.f}, viewStart_{0.f}, viewLength_{1.f}, viewOverlap_{0.f}, viewSeconds_{0.f};
 	std::atomic<bool> viewEmpty_{true}, viewRecording_{false};
 
-	// The save's baseline: the change counters when the stored files were
-	// last written (or the stored tape went live). savedValid_ false: write
-	// both at the next save.
-	std::atomic<uint32_t> savedTape_{0}, savedOriginal_{0};
-	std::atomic<bool> savedValid_{false};
-	std::atomic<TapeSet*> storedSet_{nullptr};   // the set loaded whole from the patch's storage
-	TapeSet* seenLive_ = nullptr;                // audio thread
+	// What the patch's storage folder holds (TapeJobs.hpp, StoreRecord): a
+	// fact the save keeps (UI thread), never an inference. Every write or
+	// removal moves storeEpoch_, so a baseline from a load posted before it
+	// is not taken.
+	rka::eddy::StoreRecord record_;
+	std::atomic<uint32_t> storeEpoch_{0};
+	// From onAdd's stored load until its set is live (or the load is given
+	// up): the save leaves the folder alone (Review Focus 5; the folder may
+	// be being read, and an empty tape is live meanwhile).
+	std::atomic<bool> storeLoading_{false};
+	// The set from the stored load (worker, at its offer), whether it is
+	// whole (exactly the files, at this rate), and the epoch it was asked at.
+	std::atomic<TapeSet*> storeSet_{nullptr};
+	std::atomic<bool> storeWhole_{false};
+	std::atomic<uint32_t> storeSetEpoch_{0};
+	// The baseline the audio thread posts when that set goes live, whole:
+	// the counters then; the save takes it.
+	std::atomic<bool> baseReady_{false};
+	std::atomic<uint32_t> baseTape_{0}, baseOriginal_{0}, baseEpoch_{0};
+	std::atomic<float> baseFs_{0.f};
+	TapeSet* seenLive_ = nullptr;   // audio thread
+	// The live set, the counters and readsOriginal() as of one sample, for
+	// the save: a seqlock the audio thread writes when they change.
+	std::atomic<uint32_t> snapSeq_{0};
+	std::atomic<TapeSet*> snapSet_{nullptr};
+	std::atomic<uint32_t> snapTape_{0}, snapOriginal_{0};
+	std::atomic<bool> snapBehind_{false};
+	TapeSet* pubSet_ = nullptr;   // audio thread: what was last published
+	uint32_t pubTape_ = 0, pubOriginal_ = 0;
+	bool pubBehind_ = false, pubAny_ = false;
 
 	// ---- The worker.
 	struct Job {
 		enum Kind { FRESH, LOAD, LOAD_STORED, EXPORT } kind = FRESH;
 		std::string path;
 		uint32_t gen = 0;
+		uint32_t epoch = 0;       // storeEpoch_ when asked (LOAD_STORED)
 		bool transport = false;   // apply the patch's Play and Dub once its tape is offered
 	};
 	struct Pending {
 		TapeSet* set = nullptr;
-		uint32_t gen = 0;
-		bool transport = false, stored = false;
+		uint32_t gen = 0, epoch = 0;
+		bool transport = false;
+		bool fromStore = false;   // the stored load's set (or its conversion)
+		bool whole = false;       // and exactly what the files hold, at this rate
 	};
 	std::thread worker_;
 	std::mutex queueLock_;
@@ -283,8 +310,10 @@ struct Eddy : Module {
 		post(Job::FRESH);
 		const std::string dir = getPatchStorageDirectory();
 		const std::string path = filePath();
-		if (keepTape && !dir.empty() && system::isDirectory(dir))
+		if (keepTape && !dir.empty() && system::isDirectory(dir)) {
+			storeLoading_.store(true);
 			post(Job::LOAD_STORED, dir, true);
+		}
 		else if (!keepTape && !path.empty())
 			post(Job::LOAD, path, true);
 		else
@@ -316,27 +345,41 @@ struct Eddy : Module {
 	}
 
 	// The stored tape is written here, synchronously: Rack archives the
-	// folder as soon as this returns. Each file only if its tape has
-	// changed since it was last written; nothing (the folder removed) for
-	// an empty tape or with "Keep the tape with the patch" off.
+	// folder as soon as this returns. What to write is planSave's
+	// (TapeJobs.hpp) from the facts now and the record of what the folder
+	// holds: nothing while the stored tape loads or with no live set; the
+	// folder removed with "Keep the tape with the patch" off or an empty
+	// tape; each file unless the record says it already holds this tape at
+	// this rate; tape.wav from the original while the tape is to become it.
 	void onSave(const SaveEvent& e) override {
 		const std::string dir = getPatchStorageDirectory();
-		if (!keepTape) {
-			removeStored(dir);
-			return;
-		}
 		std::lock_guard<std::mutex> view(viewLock_);
 		TapeSet* s = engine.live();
-		if (!s)
-			return;   // between rates (or none yet): what is stored stays
-		const uint32_t t = engine.tapeChanges(), o = engine.originalChanges();
-		if (s->tape.length == 0 || s->original.length == 0) {
-			removeStored(dir);
+		// A stored load that went live whole: the files hold it.
+		if (baseReady_.exchange(false) && baseEpoch_.load() == storeEpoch_.load())
+			rka::eddy::loadedWhole(record_, baseTape_.load(), baseOriginal_.load(), baseFs_.load());
+		rka::eddy::SaveFacts f;
+		f.keepTape = keepTape;
+		f.loading = storeLoading_.load();
+		f.haveSet = s != nullptr;
+		if (s) {
+			TapeSet* snapSet;
+			readSnapshot(snapSet, f.tapeChanges, f.originalChanges, f.readsOriginal);
+			f.known = snapSet == s;
+			// The accepted race (below) covers these lengths too.
+			f.tapeLength = s->tape.length;
+			f.originalLength = s->original.length;
+			f.fs = s->fs;
+		}
+		const rka::eddy::SavePlan plan = rka::eddy::planSave(f, record_);
+		if (plan.remove) {
+			if (!dir.empty() && system::exists(dir))
+				system::removeRecursively(dir);
+			storeEpoch_.fetch_add(1);
+			rka::eddy::savedAs(record_, f, plan, true);
 			return;
 		}
-		const bool valid = savedValid_.load();
-		const bool wantTape = !valid || t != savedTape_.load(), wantOriginal = !valid || o != savedOriginal_.load();
-		if (!wantTape && !wantOriginal)
+		if (!plan.tape && !plan.original)
 			return;
 		createPatchStorageDirectory();
 		// THE ACCEPTED RACE (TESTING.md, rule 7): the live tape is read here
@@ -345,17 +388,14 @@ struct Eddy : Module {
 		// side; the counters moved, so the next save writes it again.
 		std::string why;
 		const double t0 = system::getTime();
-		if (rka::eddy::storeTape(dir, *s, s->fs, wantTape, wantOriginal, why)) {
-			savedTape_.store(t);
-			savedOriginal_.store(o);
-			savedValid_.store(true);
-			INFO("Eddy: stored the tape (%s%s) in %.0f ms", wantTape ? "tape" : "", wantOriginal ? (wantTape ? ", original" : "original") : "",
-			     (system::getTime() - t0) * 1000.0);
-		}
-		else {
-			savedValid_.store(false);
+		const bool ok = rka::eddy::storePlanned(dir, *s, s->fs, plan, why);
+		storeEpoch_.fetch_add(1);
+		rka::eddy::savedAs(record_, f, plan, ok);
+		if (ok)
+			INFO("Eddy: stored the tape (%s%s%s) in %.0f ms", plan.tape ? "tape" : "", plan.tape && plan.original ? ", " : "",
+			     plan.original ? "original" : "", (system::getTime() - t0) * 1000.0);
+		else
 			WARN("Eddy: cannot store the tape in %s: %s", dir.c_str(), why.c_str());
-		}
 	}
 
 	json_t* dataToJson() override {
@@ -447,15 +487,41 @@ struct Eddy : Module {
 			viewRecording_.store(result.recording, std::memory_order_relaxed);
 		}
 
-		// The stored tape has just gone live: the files hold it, so the
-		// save's baseline is the counters now.
+		// For the save: the live set, the counters and readsOriginal() of
+		// this sample, published together (only when they change).
 		TapeSet* live = engine.live();
+		const uint32_t tc = engine.tapeChanges(), oc = engine.originalChanges();
+		const bool behind = engine.readsOriginal();
+		if (!pubAny_ || live != pubSet_ || tc != pubTape_ || oc != pubOriginal_ || behind != pubBehind_) {
+			pubAny_ = true;
+			pubSet_ = live;
+			pubTape_ = tc;
+			pubOriginal_ = oc;
+			pubBehind_ = behind;
+			const uint32_t q = snapSeq_.load(std::memory_order_relaxed);
+			snapSeq_.store(q + 1, std::memory_order_relaxed);
+			std::atomic_thread_fence(std::memory_order_release);
+			snapSet_.store(live, std::memory_order_relaxed);
+			snapTape_.store(tc, std::memory_order_relaxed);
+			snapOriginal_.store(oc, std::memory_order_relaxed);
+			snapBehind_.store(behind, std::memory_order_relaxed);
+			snapSeq_.store(q + 2, std::memory_order_release);
+		}
+		// The stored load's set has just gone live: the load is over, and
+		// if it was whole the files hold it as of these counters.
 		if (live != seenLive_) {
 			seenLive_ = live;
-			if (live && live == storedSet_.load(std::memory_order_acquire)) {
-				savedTape_.store(engine.tapeChanges());
-				savedOriginal_.store(engine.originalChanges());
-				savedValid_.store(true);
+			TapeSet* expected = live;
+			// Taken once (a later set at the same address is not it).
+			if (live && storeSet_.compare_exchange_strong(expected, nullptr, std::memory_order_acq_rel)) {
+				if (storeWhole_.load(std::memory_order_relaxed)) {
+					baseTape_.store(tc);
+					baseOriginal_.store(oc);
+					baseFs_.store(live->fs);
+					baseEpoch_.store(storeSetEpoch_.load());
+					baseReady_.store(true, std::memory_order_release);
+				}
+				storeLoading_.store(false, std::memory_order_release);
 			}
 		}
 	}
@@ -500,10 +566,20 @@ struct Eddy : Module {
 		engine.setTransport(transportPlay_.load(), transportDub_.load());
 	}
 
-	void removeStored(const std::string& dir) {
-		if (!dir.empty() && system::exists(dir))
-			system::removeRecursively(dir);
-		savedValid_.store(false);
+	// The audio thread's last snapshot (a seqlock read).
+	void readSnapshot(TapeSet*& set, uint32_t& tape, uint32_t& original, bool& behind) {
+		for (;;) {
+			const uint32_t q = snapSeq_.load(std::memory_order_acquire);
+			if (q & 1u)
+				continue;
+			set = snapSet_.load(std::memory_order_relaxed);
+			tape = snapTape_.load(std::memory_order_relaxed);
+			original = snapOriginal_.load(std::memory_order_relaxed);
+			behind = snapBehind_.load(std::memory_order_relaxed);
+			std::atomic_thread_fence(std::memory_order_acquire);
+			if (snapSeq_.load(std::memory_order_relaxed) == q)
+				return;
+		}
 	}
 
 	// For the window: the live set's overview copied into `into`, and the
@@ -538,6 +614,7 @@ struct Eddy : Module {
 			std::lock_guard<std::mutex> lk(orderLock_);
 			j.gen = gen_;
 		}
+		j.epoch = storeEpoch_.load();
 		{
 			std::lock_guard<std::mutex> lk(queueLock_);
 			queue_.push_back(j);
@@ -625,6 +702,10 @@ struct Eddy : Module {
 		}
 		if (s == lastOffered_) {
 			lastOffered_ = nullptr;
+			// The stored load's set, retired for its rate before it went
+			// live: its conversion takes its place (not whole: the files
+			// are at the old rate), and the load is over when that is live.
+			const bool fromStore = s == storeSet_.load();
 			const float fs = fs_.load();
 			TapeSet* n = nullptr;
 			std::string why;
@@ -637,7 +718,7 @@ struct Eddy : Module {
 					keep(n);
 			}
 			if (n)
-				setPending(n, lastGen_, false, false);
+				setPending(n, lastGen_, false, fromStore);
 		}
 		limbo_.push_back(s);
 	}
@@ -650,7 +731,7 @@ struct Eddy : Module {
 				TapeSet* s = rka::eddy::jobs::newSet(fs, why);
 				if (s) {
 					keep(s);
-					setPending(s, job.gen, job.transport, false);
+					setPending(s, job.gen, job.transport);
 				}
 				else
 					WARN("Eddy: no tape at %g Hz: %s", fs, why.c_str());
@@ -661,7 +742,7 @@ struct Eddy : Module {
 				if (rka::eddy::loadFile(job.path, fs, s, why)) {
 					INFO("Eddy: loaded %s (%.2f s)", job.path.c_str(), s->tape.length / fs);
 					keep(s);
-					setPending(s, job.gen, job.transport, false);
+					setPending(s, job.gen, job.transport);
 					std::lock_guard<std::mutex> lk(fileLock_);
 					file = job.path;
 				}
@@ -674,17 +755,20 @@ struct Eddy : Module {
 			}
 			case Job::LOAD_STORED: {
 				TapeSet* s = nullptr;
-				if (rka::eddy::loadStored(job.path, fs, s, why)) {
-					INFO("Eddy: loaded the stored tape (%.2f s)", s->tape.length / fs);
+				bool whole = false;
+				if (rka::eddy::loadStored(job.path, fs, s, why, whole)) {
+					INFO("Eddy: loaded the stored tape (%.2f s)%s", s->tape.length / fs,
+					     whole ? "" : "; not as stored (converted or partial): the next save writes both files");
 					keep(s);
-					// A partial store loads what it can; the next save
-					// writes it whole.
+					// A partial or converted store loads what it can; it is
+					// not "whole", so the next save writes both files.
 					if (!why.empty())
 						WARN("Eddy: the stored tape in %s: %s", job.path.c_str(), why.c_str());
-					setPending(s, job.gen, job.transport, why.empty());
+					setPending(s, job.gen, job.transport, true, whole, job.epoch);
 				}
 				else {
 					WARN("Eddy: the stored tape in %s: %s; the tape is empty", job.path.c_str(), why.c_str());
+					storeLoading_.store(false);
 					if (job.transport)
 						applyTransport();
 				}
@@ -707,16 +791,21 @@ struct Eddy : Module {
 		sets_.push_back(s);
 	}
 
-	// The next set to offer; one already waiting is superseded.
-	void setPending(TapeSet* s, uint32_t gen, bool transport, bool stored) {
+	// The next set to offer; one already waiting is superseded (a
+	// superseded stored load is given up).
+	void setPending(TapeSet* s, uint32_t gen, bool transport, bool fromStore = false, bool whole = false, uint32_t epoch = 0) {
 		if (pending_.set) {
 			transport = transport || pending_.transport;
+			if (pending_.fromStore && !fromStore)
+				storeLoading_.store(false);
 			limbo_.push_back(pending_.set);
 		}
 		pending_.set = s;
 		pending_.gen = gen;
+		pending_.epoch = epoch;
 		pending_.transport = transport;
-		pending_.stored = stored;
+		pending_.fromStore = fromStore;
+		pending_.whole = whole;
 		offerPending();
 	}
 
@@ -733,10 +822,14 @@ struct Eddy : Module {
 			s->tapeStale = false;
 			s->overview.clear();
 			pending_.gen = gen_;
-			pending_.stored = false;
+			pending_.whole = false;
 			pending_.transport = false;
 		}
-		storedSet_.store(pending_.stored ? pending_.set : nullptr, std::memory_order_release);
+		if (pending_.fromStore) {
+			storeWhole_.store(pending_.whole, std::memory_order_relaxed);
+			storeSetEpoch_.store(pending_.epoch, std::memory_order_relaxed);
+			storeSet_.store(pending_.set, std::memory_order_release);
+		}
 		if (!engine.offer(pending_.set))
 			return;   // one is still waiting: again next time
 		lastOffered_ = pending_.set;
@@ -762,6 +855,8 @@ struct Eddy : Module {
 			std::lock_guard<std::mutex> lk(viewLock_);
 		}
 		for (TapeSet* s : gone) {
+			TapeSet* expected = s;
+			storeSet_.compare_exchange_strong(expected, nullptr);
 			limbo_.erase(std::find(limbo_.begin(), limbo_.end(), s));
 			sets_.erase(std::find(sets_.begin(), sets_.end(), s));
 			delete s;

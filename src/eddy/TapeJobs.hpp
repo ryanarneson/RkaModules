@@ -222,7 +222,11 @@ inline bool loadFile(const std::string& path, float fs, TapeSet*& out, std::stri
 // serves as both. If the two differ in length (frames less tail) or rate, one is stale:
 // the tape wins, as both. Files at another rate are converted. On success
 // `why` is empty, or says what was made of a partial store (for the log).
-inline bool loadStored(const std::string& dir, float fs, TapeSet*& out, std::string& why) {
+//
+// `whole` (the five-argument form): true when the set is exactly what the
+// files hold, both read as they are at this rate, with no note; only then
+// may the module take the files as holding its tape (StoreRecord).
+inline bool loadStored(const std::string& dir, float fs, TapeSet*& out, std::string& why, bool& whole) {
 	const std::string tapePath = jobs::join(dir, STORED_TAPE), origPath = jobs::join(dir, STORED_ORIGINAL);
 	WavInfo ti, oi;
 	std::string tw, ow;
@@ -239,6 +243,7 @@ inline bool loadStored(const std::string& dir, float fs, TapeSet*& out, std::str
 		return false;
 
 	const bool pair = haveTape && haveOrig;
+	bool isWhole = false;
 	const bool match = pair && ti.sampleRate == oi.sampleRate && tapeTail < ti.frames && origTail < oi.frames
 		&& ti.frames - tapeTail == oi.frames - origTail;
 	bool tapeRead = false, origRead = false;
@@ -249,6 +254,8 @@ inline bool loadStored(const std::string& dir, float fs, TapeSet*& out, std::str
 		note += std::string(note.empty() ? "" : "; ") + STORED_TAPE + ": " + w;
 	if (match && tapeRead) {
 		origRead = jobs::readInto(s->original, origPath, oi, origTail, fs, w);
+		if (origRead && note.empty() && jobs::sameRate(ti.sampleRate, fs))
+			isWhole = true;
 		if (!origRead) {
 			note += std::string(note.empty() ? "" : "; ") + STORED_ORIGINAL + ": " + w + ": the tape serves as both";
 			jobs::copyTape(s->original, s->tape);
@@ -280,8 +287,13 @@ inline bool loadStored(const std::string& dir, float fs, TapeSet*& out, std::str
 	jobs::finiteOnly(s->original);
 	s->overview.build(s->tape);
 	why = note;
+	whole = isWhole;
 	out = s;
 	return true;
+}
+inline bool loadStored(const std::string& dir, float fs, TapeSet*& out, std::string& why) {
+	bool whole = false;
+	return loadStored(dir, fs, out, why, whole);
 }
 
 // Writes the set's tape (if `tape`) and original (if `original`) into the
@@ -291,10 +303,13 @@ inline bool loadStored(const std::string& dir, float fs, TapeSet*& out, std::str
 //
 // The set may be the engine's live set: its tape is read while the engine
 // may write it (see the module's save).
-inline bool storeTape(const std::string& dir, const TapeSet& set, float fs, bool tape, bool original, std::string& why) {
+namespace jobs {
+// storeTape with the tape's file made from `tapeSource` (the set's tape, or
+// its original when the tape is to become the original).
+inline bool storeFrom(const std::string& dir, const Tape& tapeSource, const TapeSet& set, float fs, bool tape, bool original, std::string& why) {
 	if (!tape && !original)
 		return true;
-	if ((tape && set.tape.length == 0) || (original && set.original.length == 0)) {
+	if ((tape && tapeSource.length == 0) || (original && set.original.length == 0)) {
 		why = "the tape is empty";
 		return false;
 	}
@@ -306,21 +321,122 @@ inline bool storeTape(const std::string& dir, const TapeSet& set, float fs, bool
 	const uint32_t sr = (uint32_t) rate;
 	bool ok = true;
 	std::string w;
-	if (tape && !writeWav(jobs::join(dir, STORED_TAPE), set.tape.ch[0], set.tape.ch[1], set.tape.length + set.tape.tail, sr, 1.f, w)) {
+	if (tape && !writeWav(join(dir, STORED_TAPE), tapeSource.ch[0], tapeSource.ch[1], tapeSource.length + tapeSource.tail, sr, 1.f, w)) {
 		why = std::string(STORED_TAPE) + ": " + w;
 		ok = false;
 	}
 	if (original && ok
-	    && !writeWav(jobs::join(dir, STORED_ORIGINAL), set.original.ch[0], set.original.ch[1], set.original.length + set.original.tail, sr, 1.f, w)) {
+	    && !writeWav(join(dir, STORED_ORIGINAL), set.original.ch[0], set.original.ch[1], set.original.length + set.original.tail, sr, 1.f, w)) {
 		why = std::string(STORED_ORIGINAL) + ": " + w;
 		ok = false;
 	}
-	const float tails[2] = {(float) set.tape.tail, (float) set.original.tail};
-	if (ok && !writeWav(jobs::join(dir, STORED_TAILS), &tails[0], &tails[1], 1, sr, 1.f, w)) {
+	const float tails[2] = {(float) tapeSource.tail, (float) set.original.tail};
+	if (ok && !writeWav(join(dir, STORED_TAILS), &tails[0], &tails[1], 1, sr, 1.f, w)) {
 		why = std::string(STORED_TAILS) + ": " + w;
 		ok = false;
 	}
 	return ok;
+}
+} // namespace jobs
+
+inline bool storeTape(const std::string& dir, const TapeSet& set, float fs, bool tape, bool original, std::string& why) {
+	return jobs::storeFrom(dir, set.tape, set, fs, tape, original, why);
+}
+
+// ---- What the patch's storage holds, and what a save writes.
+//
+// The module keeps a StoreRecord: a fact, not an inference. A file is
+// "current" only when it is known to hold the live set's tape (or original)
+// as of the change count recorded, at the rate recorded: because the module
+// wrote it so, or because it loaded the set whole from it (loadStored's
+// `whole`). Anything else (a converted or partial load, a removal, a failed
+// write) leaves the files not current, and the next save writes both.
+struct StoreRecord {
+	bool tapeCurrent = false, originalCurrent = false;
+	uint32_t tapeChanges = 0, originalChanges = 0;
+	float fs = 0.f;
+};
+
+// What the save knows at the moment it is made.
+struct SaveFacts {
+	bool keepTape = true;
+	bool loading = false;        // the patch's stored tape is still being loaded (not yet live)
+	bool haveSet = false;        // a live set (none: between rates)
+	bool known = false;          // the counters and readsOriginal below are the live set's
+	bool readsOriginal = false;  // the tape is to become the original (a recording's copy, a Restore)
+	size_t tapeLength = 0, originalLength = 0;
+	uint32_t tapeChanges = 0, originalChanges = 0;
+	float fs = 0.f;              // the live set's rate
+};
+
+struct SavePlan {
+	bool remove = false;            // empty the folder
+	bool tape = false, original = false;
+	bool tapeFromOriginal = false;  // tape.wav made from the original
+};
+
+// The save's decision. Nothing while the stored tape loads or with no live
+// set (what is stored stays); the folder removed with "Keep the tape" off or
+// an empty tape; otherwise each file written unless the record says it
+// already holds this, at this rate. While the tape is to become the
+// original, tape.wav is written from the original (so a new recording is
+// never stored beside the old tape).
+inline SavePlan planSave(const SaveFacts& f, const StoreRecord& r) {
+	SavePlan p;
+	if (!f.keepTape) {
+		p.remove = true;
+		return p;
+	}
+	if (f.loading || !f.haveSet)
+		return p;
+	const size_t tapeLength = f.readsOriginal ? f.originalLength : f.tapeLength;
+	if (tapeLength == 0 || f.originalLength == 0) {
+		p.remove = true;
+		return p;
+	}
+	const bool sameRate = r.fs == f.fs;
+	p.tapeFromOriginal = f.readsOriginal;
+	p.tape = f.readsOriginal || !f.known || !(r.tapeCurrent && sameRate && r.tapeChanges == f.tapeChanges);
+	p.original = !f.known || !(r.originalCurrent && sameRate && r.originalChanges == f.originalChanges);
+	return p;
+}
+
+// The record after a save made by `p`: `ok` whether the files were written.
+inline void savedAs(StoreRecord& r, const SaveFacts& f, const SavePlan& p, bool ok) {
+	if (p.remove || !ok) {
+		r = StoreRecord();
+		return;
+	}
+	if (!p.tape && !p.original)
+		return;
+	if (r.fs != f.fs || !f.known)
+		r = StoreRecord();
+	r.fs = f.fs;
+	if (p.tape) {
+		// From the original: the tape is not yet the original, so its file
+		// is written again once the copy has moved the tape's counter.
+		r.tapeCurrent = f.known && !p.tapeFromOriginal;
+		r.tapeChanges = f.tapeChanges;
+	}
+	if (p.original) {
+		r.originalCurrent = f.known;
+		r.originalChanges = f.originalChanges;
+	}
+}
+
+// The record after the set loaded whole from the files went live, with the
+// counters at that moment, at rate fs.
+inline void loadedWhole(StoreRecord& r, uint32_t tapeChanges, uint32_t originalChanges, float fs) {
+	r.tapeCurrent = r.originalCurrent = true;
+	r.tapeChanges = tapeChanges;
+	r.originalChanges = originalChanges;
+	r.fs = fs;
+}
+
+// Carries out a plan's writes (not its removal: the module removes the
+// folder through Rack). True if there was nothing to write.
+inline bool storePlanned(const std::string& dir, const TapeSet& set, float fs, const SavePlan& p, std::string& why) {
+	return jobs::storeFrom(dir, p.tapeFromOriginal ? set.original : set.tape, set, fs, p.tape, p.original, why);
 }
 
 // The whole tape (not its tail) as a 32-bit float stereo WAV at rate fs, / 5.

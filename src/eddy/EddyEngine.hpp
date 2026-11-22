@@ -62,7 +62,7 @@
 // - setSampleRate retires the set only if its rate differs; clear() empties
 //   the set in place (both tape and original, so both change counters move).
 //
-// Threads: process() and activeVoices() are the audio thread's. The
+// Threads: process(), activeVoices() and readsOriginal() are the audio thread's. The
 // read-only calls, live(), copyWanted(), tapeChanges() and
 // originalChanges(), are atomic loads and safe from any thread. The rest
 // (offer, collect, copyDone, clear, requestCopy, setTransport,
@@ -232,6 +232,14 @@ public:
 	// For the tests: voices sounding now.
 	int activeVoices() const {
 		return voices_.count();
+	}
+	// True while what is heard is the original and the tape is to become
+	// it: a recording has ended (or a Restore is waiting or under way) and
+	// the original is not yet copied to the tape. For the save, which then
+	// stores the original as the tape too (the module publishes it with
+	// the change counters).
+	bool readsOriginal() const {
+		return usableSet() && wantOriginal();
 	}
 
 	void process(const EddyFrame& f, EddyResult& out) {
