@@ -599,13 +599,17 @@ void stored_partial() {
 		CHECK(!why.empty(), "no tails.wav: no note");
 		delete out;
 	}
-	// An empty folder, and a missing one: false, out untouched, a reason.
+	// An empty folder, and a missing one: false, out untouched, a reason,
+	// and nothing left allocated once the reason is gone (it is a string of
+	// its own, freed before the count: a reused one keeps what it grew to).
 	for (const std::string& d : {t.sub("empty"), t.file("missing")}) {
 		TapeSet sentinel;
 		TapeSet* out = &sentinel;
-		why.clear();
 		const long long base = gLive;
-		CHECK(!rka::eddy::loadStored(d, fs, out, why) && out == &sentinel && !why.empty(), "%s", d.c_str());
+		{
+			std::string reason;
+			CHECK(!rka::eddy::loadStored(d, fs, out, reason) && out == &sentinel && !reason.empty(), "%s", d.c_str());
+		}
 		CHECK(gLive == base, "%lld bytes left", gLive - base);
 	}
 	// A folder that cannot be written: false and a reason, no crash; what
