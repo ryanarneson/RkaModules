@@ -2,6 +2,8 @@
 
 Status: idea, 2026-11-21. Not designed; no sketch yet. The name is a
 working title and has not been checked against the VCV Library.
+(2026-11-22: moved down the order, among the ideas built only if
+wanted; Eddy's 5 minutes are enough for now.)
 
 **Where it came from.** While Eddy was designed, the user said: "I have
 a lot of ambient field recordings in the 100-300MB range", and then "we

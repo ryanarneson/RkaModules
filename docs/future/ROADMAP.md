@@ -56,6 +56,10 @@ not carry over. Eddy is also the first module whose aliasing is
 measured (`docs/DSP-ALIASING.md`, `TESTING.md` rule 16); measuring the
 others that make or bend sound is issue #67.
 
+**Changes since (the user, 2026-11-22, later):** Fetch moves down to the
+ideas that wait until they are wanted: Eddy's 5 minutes are enough for
+now. Spindrift is next.
+
 ## 1. A whole patch from RKA alone
 
 With Sway, Fathom and Shoal these six make a complete dark ambient patch:
@@ -82,8 +86,7 @@ and Spindrift starts from those.
 | 8 | [Wake](wake.md) (built) | L | The delay. Built as a stereo echo for struck sounds, with three styles, Ratio, ping pong and Freeze; the taps and the Send and Return of the first sketch were left out. Its moving read point (`src/DelayTap.hpp`) was expected to carry over to Eddy and Spindrift; it did not carry over to Eddy, whose tape stands still while the head moves (2026-11-22). |
 | new | [Narrows](narrows.md) (built) | M | Polyphonic stereo filter: low-pass, band-pass or high-pass on a Mode sweep, with a comb and a ping input. The collection had no filter outside Fathom's voice, and every texture module here wants one after it. Two cores on a switch: Fathom's ladder, now shared code (`src/fathom/LadderCore.hpp`), and a state-variable filter. Its four-wide float type (`src/Float4.hpp`) is there for the next polyphonic module. |
 | 9 | [Eddy](eddy.md) (built) | L | Tape loop that also loads and saves files, up to 5 minutes, with a waveform window (drag in it to set Start and Length), wear in the loop and a Restore to the original. Larger than first guessed: its tape and write head are new code (Wake's read point did not carry over), and it paid for the first drawn window. Built 2026-11-22, 16 HP. |
-| new | [Fetch](fetch.md) | M | A player for long field recordings, read from disk. Follows Eddy, whose window widget, WAV reader, rate conversion and band-limited read it reuses. |
-| 10 | [Spindrift](spindrift.md) | L | Grain cloud; the user singled it out. Its window starts from Eddy's, and its buffer from Eddy's tape and band-limited read. |
+| 10 | [Spindrift](spindrift.md) | L | Next. Grain cloud; the user singled it out. Its window starts from Eddy's, and its buffer from Eddy's tape and band-limited read. |
 | 11 | [Doldrums](doldrums.md) | L | Spectral freeze and stretch. The highest reward and the highest risk here, so it comes last; how a window is drawn is settled already (Eddy's `TapeWindow`). |
 
 ## 3. Slow movement and long form
@@ -150,6 +153,7 @@ Good ideas that this music does not need, or that Shoal already covers.
 | 35 | [Sounding](sounding.md) | M | Step sequencer. Shoal covers it. |
 | 36 | [Bearing](bearing.md) | M | Quantiser. Shoal covers it. |
 | 37 | [Seastate](seastate.md) | S | Wavefolder. The weakest idea in the set. |
+| new | [Fetch](fetch.md) (later) | M | A player for long field recordings, read from disk. Moved down 2026-11-22: Eddy's 5 minutes are enough for now. Built when a piece needs a recording longer than that; it reuses Eddy's window widget, WAV reader, rate conversion and band-limited read. |
 
 ## Things that could change the order
 
