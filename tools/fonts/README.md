@@ -9,5 +9,7 @@ lettering on any machine and never falls back to a system font.
   of DIN 1451; "D-DIN Condensed" is a Reserved Font Name).
 - Licence: SIL Open Font License 1.1. See `COPYING.txt` and `OFL-1.1.txt`.
 
-The fonts are build inputs only. Panels ship with their text converted to
-paths; the font files are not part of the plugin package.
+Panels ship with their text converted to paths. One file ships in the
+plugin package, with its licence (`DISTRIBUTABLES` in the Makefile):
+`D-DINCondensed.ttf`, which Eddy's window (`rka::TapeWindow` in
+`src/widgets.hpp`) uses to letter the tape's length at run time.

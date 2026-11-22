@@ -1,7 +1,7 @@
 {
   "slug": "rka",
   "name": "RKA",
-  "version": "2.0.24",
+  "version": "2.0.28",
   "license": "GPL-3.0-or-later",
   "brand": "RKA",
   "author": "Ryan Arneson",
@@ -137,6 +137,17 @@
         "Stereo"
       ],
       "keywords": "filter vcf ladder moog state variable svf lowpass bandpass highpass comb ping resonator stereo polyphonic"
+    },
+    {
+      "slug": "Eddy",
+      "name": "Eddy",
+      "description": "Stereo tape loop and sampler: record up to 5 minutes or load a WAV, speed from twice forwards through stopped to twice backwards, a window by Start and Length, Dub, Wear, Smear at the join, Restore to the original, kept with the patch",
+      "tags": [
+        "Sampler",
+        "Recording",
+        "Delay"
+      ],
+      "keywords": "tape loop looper sampler sound on sound dub wear varispeed reverse wav ambient"
     }
   ]
 }

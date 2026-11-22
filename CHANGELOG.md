@@ -2,6 +2,10 @@
 
 ## Test builds
 
+- 2.0.28 (2026-11-22): Eddy: final review fixes: Wear and Dub keep the bass unless the tape clips, Restore no longer swells, a stored tape survives rate changes while loading, saves cannot go quiet
+- 2.0.27 (2026-11-22): Eddy: band-limited tape read at every speed, aliasing tests; drag in the window to set Start and Length; a quick double tap on REC leaves the tape alone
+- 2.0.26 (2026-11-21): Eddy: the window fits the tape while recording; Mix has input and tape both at full at noon, and starts there
+- 2.0.25 (2026-11-21): Eddy: tape loop with WAV load and save, waveform window (first listening build)
 - 2.0.24 (2026-11-21): Narrows: final review fixes (the core switch keeps the level with sound passing; a comb opened by CV from noon starts at pitch); manual
 - 2.0.23 (2026-11-20): Narrows: the comb is louder (it keeps noise at its level, so its peaks and a pinged comb stand out)
 - 2.0.22 (2026-11-20): Narrows: first build for listening (polyphonic stereo filter: ladder and state cores, Mode sweep LP/BP/HP, drive, self-oscillation, comb, Ping, Spread)
@@ -29,6 +33,42 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Eddy**, a 16 HP stereo tape loop that also plays files:
+  - One tape, up to 5 minutes: filled by recording (REC button or gate)
+    or by loading a WAV (the menu, or dropped on the panel), and saved as
+    a 32-bit float WAV.
+  - It comes round at any speed from twice forwards to twice backwards,
+    by knob, CV and V/OCT (to four times with V/OCT), the pitch following
+    as on tape; read band-limited, so a fast tape does not alias.
+  - A window on the tape, Start and Length (10 ms to the whole tape),
+    with a CV on Start; Smear overlaps the turns at the join, up to half
+    the window.
+  - Dub layers the input onto the tape, with one Dub Level for the new
+    layer and what it erases; Wear costs the tape a little each pass
+    (level, highs, saturation, hiss, dropouts); at 0 the loop repeats
+    exactly.
+  - The original is kept beside the tape: Restore (button or trigger)
+    puts it back, wear and dubs gone.
+  - Play and Loop, a PLAY trigger from Start, and EOC: played as a
+    sample, or looped.
+  - Mix from the input alone through both at full to the tape alone.
+  - A waveform window showing the tape, the part in play and the head;
+    drag in it to set Start and Length.
+  - The tape and the original are kept with the patch.
+  - Final review fixes: Wear and Dub cost the tape only what their laws
+    say (a DC blocker on the tape going round took its bass, 15 dB at
+    50 Hz in 300 passes of Wear at 2 %; now it acts on what a dub adds,
+    and on the tape only while the write bound is clipping it); Restore no longer swells 3 dB; a tape loading when Rack's
+    rate changes (as at launch) is loaded again at the new rate, not
+    converted twice, and keeps its saved Dub; a stored tape is never lost
+    to a set made for an older request, nor kept from saving by a flag
+    left set; a Clear during a load wins; the stored files are kept when
+    they failed to load or loaded cut at a high rate; Save file asks
+    before replacing a file it adds .wav to; a stored tape that cannot be
+    removed no longer fails the patch's save; huge samples in a file are
+    held to 100 V.
+- `docs/DSP-ALIASING.md` and `TESTING.md` rule 16: how aliasing is kept
+  out and measured; Eddy is the first module measured.
 - New module: **Narrows**, a 14 HP polyphonic stereo filter:
   - Two filters on a switch: Fathom's four-pole ladder (24 dB per octave)
     and a state-variable filter (12 dB), matched in pitch, in where they

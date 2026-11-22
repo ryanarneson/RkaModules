@@ -1,0 +1,2011 @@
+// Eddy's engine (src/eddy/EddyEngine.hpp) against the spec's Testing section:
+// the exact loop, length, speed, the window, Smear, Dub, Wear, Play and EOC,
+// Restore, the view, Mix, the limit and clicks. Built with the plugin's
+// floating-point flags. Tapes are short (0.05 to 1 s) so the 1000-pass
+// tests stay quick.
+#include "eddy/test_rig.hpp"
+#include "testing.hpp"
+
+#include <cmath>
+#include <complex>
+#include <cstdint>
+#include <cstdio>
+#include <utility>
+#include <vector>
+
+namespace {
+
+using namespace rig;
+using rka::eddy::Window;
+
+// Records n frames of in(i) from the REC gate's rise, lowers it at frame n,
+// and feeds `after` more samples of in() (the tail is taken from these).
+// Returns the sample count at the edge that ended it. The gate, not the
+// button: a recording the button starts or ends is thrown away under 0.3 s,
+// and these are shorter.
+long record(Rig& g, long n, long after, const std::function<void(long, float&, float&)>& in) {
+	float l = 0, r = 0;
+	g.f.recGate = 10.f;
+	long end = 0;
+	for (long i = 0; i < n + after; i++) {
+		if (i == n) {
+			g.f.recGate = 0.f;
+			end = g.t;
+		}
+		in(i, l, r);
+		g.step(l, r);
+	}
+	return end;
+}
+
+std::vector<float> noiseVec(size_t n, float volts, uint32_t seed) {
+	rka::hadal::Random rnd;
+	rnd.seed(seed);
+	std::vector<float> x(n);
+	for (float& v : x)
+		v = volts * rnd.uniform();
+	return x;
+}
+
+// Rising edges of EOC over n samples, as sample counts.
+std::vector<long> eocEdges(Rig& g, long n) {
+	std::vector<long> at;
+	bool was = g.r.eoc;
+	for (long i = 0; i < n; i++) {
+		g.step();
+		if (g.r.eoc && !was)
+			at.push_back(g.t);
+		was = g.r.eoc;
+	}
+	return at;
+}
+
+void exact_loop() {
+	Rig g;
+	g.f.inRPatched = true;
+	const long N = 4800, M = 480;   // 0.1 s; m = F = 10 ms
+	const std::vector<float> x0 = noiseVec(N + M, 5.f, 11), x1 = noiseVec(N + M, 5.f, 12);
+	const long end = record(g, N, M, [&](long i, float& l, float& r) {
+		l = i < N + M ? x0[(size_t) i] : 0.f;
+		r = i < N + M ? x1[(size_t) i] : 0.f;
+	});
+	CHECK(!g.r.recording && g.r.playing, "the recording ended and plays");
+	// The voice started at the end press reading frame 0, so sample
+	// end + j N + k plays frame k.
+	for (int pass : {1, 1000}) {
+		if (g.t < end + (long) (pass - 1) * N)
+			g.run(end + (long) (pass - 1) * N - g.t);
+		long bad = 0, first = -1;
+		while (g.t < end + (long) pass * N) {
+			const long k = g.t - end - (long) (pass - 1) * N;
+			g.step();
+			if (k > M && (g.r.l != x0[(size_t) k] || g.r.r != x1[(size_t) k])) {
+				if (first < 0)
+					first = k;
+				bad++;
+			}
+		}
+		CHECK(bad == 0, "pass %d: %ld samples outside the join differ from the recorded input (first at frame %ld)", pass, bad,
+		      first);
+	}
+}
+
+void length() {
+	for (float fs : {44100.f, 48000.f, 96000.f}) {
+		Rig g(fs);
+		const long N = std::lround(0.0731 * fs) + 7;
+		const std::vector<float> x = noiseVec((size_t) N + 2000, 3.f, 5);
+		record(g, N, 2000, [&](long i, float& l, float& r) { l = r = x[(size_t) i]; });
+		CHECK(std::lround(g.r.seconds * fs) == N, "%.0f Hz: a recording of %ld frames gives a tape of %.1f", fs, N,
+		      (double) g.r.seconds * fs);
+		const std::vector<long> at = eocEdges(g, 6 * N);
+		bool ok = at.size() >= 5;
+		for (size_t i = 1; i < at.size(); i++)
+			ok = ok && at[i] - at[i - 1] == N;
+		CHECK(ok, "%.0f Hz: %zu turns, each %ld samples (first gap %ld)", fs, at.size(), N, at.size() > 1 ? at[1] - at[0] : -1L);
+	}
+}
+
+// Left: sin + half the second harmonic, rising a third of each cycle and
+// falling two; right: the plain sine, for the pitch.
+TapeSet* asymmetric(Rig& g) {
+	const double fs = g.fs;
+	return g.loaded(48000, 480, [=](size_t k, float& l, float& r) {
+		const double th = 2 * PI * 100.0 * (double) k / fs;
+		l = (float) (2.0 * (std::sin(th) + 0.5 * std::sin(2 * th)));
+		r = (float) (2.0 * std::sin(th));
+	});
+}
+
+void speed() {
+	// Speed x pitch, and the phase's direction.
+	for (float knob : {0.5f, -0.5f, 1.f, -1.f, 2.f, -2.f}) {
+		Rig g;
+		g.f.params[F::SPEED] = knob;
+		g.use(asymmetric(g));
+		g.press(&F::playPress);
+		g.run(4800);
+		std::vector<float> y(48000), a(48000);
+		long rising = 0;
+		for (size_t i = 0; i < y.size(); i++) {
+			g.step();
+			y[i] = g.r.r;
+			a[i] = g.r.l;
+			rising += i > 0 && a[i] > a[i - 1];
+		}
+		const double hz = crossingsHz(y, g.fs), want = 100.0 * std::fabs(knob);
+		CHECK(std::fabs(hz / want - 1.0) < 1e-3, "Speed %+.1f plays the 100 Hz tape at %.3f Hz (want %.1f)", knob, hz, want);
+		const double up = (double) rising / (double) y.size();
+		CHECK(knob > 0 ? up < 0.4 : up > 0.6, "Speed %+.1f: rising %.2f of the time (forwards 1/3, backwards 2/3)", knob, up);
+	}
+	// V/OCT: an octave a volt, within 1 cent, over +-2 V.
+	for (float volts : {-2.f, -1.5f, -1.f, -0.5f, 0.f, 0.5f, 1.f, 1.5f, 2.f}) {
+		Rig g;
+		g.f.voct = volts;
+		g.use(asymmetric(g));
+		g.press(&F::playPress);
+		g.run(4800);
+		std::vector<float> y(96000);
+		for (float& v : y) {
+			g.step();
+			v = g.r.r;
+		}
+		const double want = 100.0 * std::pow(2.0, volts);
+		const double cents = 1200.0 * std::log2(crossingsHz(y, g.fs) / want);
+		CHECK(std::fabs(cents) < 1.0, "V/OCT %+.1f V is %+.3f cents off", volts, cents);
+	}
+	// Stopped: silent, no DC (from the start, and after gliding there).
+	for (int glided = 0; glided < 2; glided++) {
+		Rig g;
+		g.f.params[F::SPEED] = glided ? 1.f : 0.f;
+		g.use(asymmetric(g));
+		g.press(&F::playPress);
+		g.run(4800);
+		g.f.params[F::SPEED] = 0.f;
+		g.run(48000);
+		double peak = 0, sum = 0;
+		for (int i = 0; i < 48000; i++) {
+			g.step();
+			peak = std::max(peak, (double) std::fabs(g.r.l) + std::fabs(g.r.r));
+			sum += g.r.l;
+		}
+		CHECK(peak == 0.0 && sum == 0.0, "Speed 0%s: peak %g, mean %g (want silence)", glided ? " (glided)" : "", peak, sum / 48000);
+	}
+	// A knob step glides; a V/OCT step lands within 5 ms.
+	{
+		Rig g;
+		g.use(asymmetric(g));
+		g.f.playTrig = 10.f;
+		g.run(2400);
+		g.f.params[F::SPEED] = 2.f;
+		const double early = g.speedOver(240);
+		g.f.playTrig = 0.f;
+		g.run(48000);
+		g.f.playTrig = 10.f;   // back to the start, away from a join
+		g.run(1000);
+		const double late = g.speedOver(480);
+		CHECK(early > 1.0 && early < 1.2, "5 ms after a knob step from 1 to 2 the speed is %.4f (gliding)", early);
+		CHECK(std::fabs(late / 2.0 - 1.0) < 1e-3, "a second later it is %.5f", late);
+	}
+	{
+		Rig g;
+		g.use(asymmetric(g));
+		g.f.playTrig = 10.f;
+		g.run(2400);
+		g.f.voct = 1.f;
+		g.run(240);
+		const double s = g.speedOver(48);
+		const double cents = 1200.0 * std::log2(s / 2.0);
+		CHECK(std::fabs(cents) < 1.0, "5 ms after a 1 V step the speed is %.5f (%+.2f cents)", s, cents);
+	}
+}
+
+// Both sides code the place: (sin, cos) of a turn of the tape.
+TapeSet* placeCoded(Rig& g, size_t n, size_t tail = 0) {
+	return g.loaded(n, tail, [=](size_t k, float& l, float& r) {
+		l = (float) (4.0 * std::sin(2 * PI * (double) k / (double) n));
+		r = (float) (4.0 * std::cos(2 * PI * (double) k / (double) n));
+	});
+}
+double place(const EddyResult& r, double n) {
+	double p = std::atan2((double) r.l, (double) r.r) / (2 * PI) * n;
+	return p < 0 ? p + n : p;
+}
+// Distance from p forward to q round a tape of n.
+double ahead(double p, double q, double n) {
+	double d = q - p;
+	return d < 0 ? d + n : d;
+}
+
+void window() {
+	const double n = 48000;
+	struct Case {
+		float start;
+		double frac;
+	} cases[] = {{0.25f, 0.3}, {0.8f, 0.4}};
+	for (const Case& c : cases) {
+		Rig g;
+		g.use(placeCoded(g, (size_t) n));
+		g.f.params[F::START] = c.start;
+		g.f.params[F::LENGTH] = lengthKnob(c.frac * n, n, g.fs);
+		const Window w = rka::eddy::window(c.start, 0.f, g.f.params[F::LENGTH], 0.f, n, 0.0, g.fs);
+		const bool wraps = w.start + w.length > n;
+		const double turn = w.length;   // the tape beyond the end holds the whole of m
+		g.press(&F::playPress);
+		g.run(2400);
+		long outside = 0, samples = 0, firstWrong = 0;
+		bool sawEnd = false, sawBeginning = false, eocWas = g.r.eoc;
+		std::vector<long> eoc;
+		long since = 100000;
+		for (long i = 0; i < 4 * (long) turn; i++) {
+			g.step();
+			if (g.r.eoc && !eocWas) {
+				eoc.push_back(g.t);
+				since = 0;
+			}
+			eocWas = g.r.eoc;
+			since++;
+			if (g.e.activeVoices() != 1)
+				continue;
+			const double p = place(g.r, n);
+			samples++;
+			if (ahead(w.start - 1.0, p, n) > w.length + 1.0)
+				outside++;
+			// Just after the join's fade the head is m frames past Start.
+			if (since == (long) std::ceil(w.minFade) + 2 && std::fabs(ahead(w.start, p, n) - (since - 1)) > 1.5)
+				firstWrong++;
+			sawEnd = sawEnd || p > 0.9 * n;
+			sawBeginning = sawBeginning || p < 0.1 * n;
+		}
+		CHECK(samples > 1000 && outside == 0, "Start %.2f, Length %.2f: %ld of %ld places read outside the window", c.start, c.frac,
+		      outside, samples);
+		CHECK(firstWrong == 0 && eoc.size() >= 3, "Start %.2f: each turn starts at Start (%ld wrong, %zu turns)", c.start,
+		      firstWrong, eoc.size());
+		bool spaced = eoc.size() >= 3;
+		for (size_t i = 1; i < eoc.size(); i++)
+			spaced = spaced && std::fabs((double) (eoc[i] - eoc[i - 1]) - turn) <= 1.0;
+		CHECK(spaced, "Start %.2f, Length %.2f: turns of %ld samples (want %.1f)", c.start, c.frac,
+		      eoc.size() > 1 ? eoc[1] - eoc[0] : -1L, turn);
+		if (wraps)
+			CHECK(sawEnd && sawBeginning, "a window past the end wraps: both the end and the beginning are read");
+	}
+}
+
+// Samples a turn during which two voices sound.
+double overlapSamples(Rig& g, long turns, long turn) {
+	g.run(turn / 2);
+	long two = 0;
+	for (long i = 0; i < turns * turn; i++) {
+		g.step();
+		two += g.e.activeVoices() == 2;
+	}
+	return (double) two / (double) turns;
+}
+
+void smear() {
+	// Smear 0: the join is m (F on a whole recording, L / 4 in a short window).
+	{
+		Rig g;
+		g.use(g.loaded(24000, 480, [](size_t k, float& l, float& r) { l = r = k < 24000 ? 1.f : -1.f; }));
+		g.press(&F::playPress);
+		const double two = overlapSamples(g, 4, 24000);
+		CHECK(std::fabs(two - 480.0) <= 1.0, "Smear 0, a whole tape: the join lasts %.1f samples (want m = 480)", two);
+	}
+	{
+		Rig g;
+		g.use(g.sine(1.0, 100.0, 2.f));
+		g.f.params[F::START] = 0.25f;
+		g.f.params[F::LENGTH] = lengthKnob(960, 48000, g.fs);
+		const Window w = rka::eddy::window(0.25f, 0.f, g.f.params[F::LENGTH], 0.f, 48000, 0.0, g.fs);
+		g.press(&F::playPress);
+		const double two = overlapSamples(g, 8, (long) std::lround(w.length));
+		CHECK(std::fabs(two - w.minFade) <= 1.0 && std::fabs(w.minFade - w.length / 4) < 1e-9,
+		      "Smear 0, a 20 ms window: the join lasts %.1f samples (want L / 4 = %.1f)", two, w.minFade);
+	}
+	// Above 0: noise keeps its RMS through the overlap; the turn is the law's.
+	for (float s : {0.5f, 1.f}) {
+		Rig g;
+		TapeSet* set = g.noise(1.0, 3.f, 77);
+		g.use(set);
+		g.f.params[F::SMEAR] = s;
+		const Window w = rka::eddy::window(0.f, 0.f, 1.f, s, 48000, 0.0, g.fs);
+		g.press(&F::playPress);
+		g.run(4800);
+		const double ref = rms(set->tape.ch[0], 48000);
+		const int B = 2400;
+		double worst = 0;
+		std::vector<float> blk(B);
+		for (int b = 0; b < 40; b++) {
+			for (int i = 0; i < B; i++) {
+				g.step();
+				blk[(size_t) i] = g.r.l;
+			}
+			worst = std::max(worst, std::fabs(db(rms(blk.data(), B) / ref)));
+		}
+		CHECK(worst < 0.5, "Smear %.1f: the level wanders %.2f dB through the overlap (want under 0.5)", s, worst);
+		const std::vector<long> at = eocEdges(g, 4 * (long) w.turn);
+		bool ok = at.size() >= 3;
+		for (size_t i = 1; i < at.size(); i++)
+			ok = ok && std::fabs((double) (at[i] - at[i - 1]) - w.turn) <= 1.0;
+		CHECK(ok, "Smear %.1f: turns of %ld samples (the law: %.1f)", s, at.size() > 1 ? at[1] - at[0] : -1L, w.turn);
+	}
+	// A whole 5 minute tape (at 8 kHz) at Smear 1: the overlap is 1.2 M
+	// frames, the fades move under 1e-6 a frame, and the level holds.
+	{
+		Rig g(8000.f);
+		TapeSet* set = g.noise(300.0, 3.f, 78);
+		g.f.params[F::SMEAR] = 1.f;
+		g.use(set);
+		g.press(&F::playPress);
+		const double ref = rms(set->tape.ch[0], set->tape.length);
+		const long B = 8000;
+		std::vector<float> blk((size_t) B);
+		double worst = 0;
+		int most = 0;
+		for (long b = 0; b < 1300000 / B * 2; b++) {
+			for (long i = 0; i < B; i++) {
+				g.step();
+				blk[(size_t) i] = g.r.l;
+				most = std::max(most, g.e.activeVoices());
+			}
+			if (b > 0)
+				worst = std::max(worst, std::fabs(db(rms(blk.data(), (size_t) B) / ref)));
+		}
+		CHECK(worst < 0.5 && most == 2, "Smear 1 on a 5 minute tape: the level wanders %.2f dB over two turns, %d voices", worst, most);
+	}
+}
+
+// Least squares: x[k] ~ a sin + b cos at each of two frequencies (cycles a
+// frame); the two amplitudes.
+void fitTwo(const float* x, size_t n, long k0, double f1, double f2, double& amp1, double& amp2) {
+	double A[4][5] = {};
+	for (size_t i = 0; i < n; i++) {
+		const double k = (double) (k0 + (long) i);
+		const double b[4] = {std::sin(2 * PI * f1 * k), std::cos(2 * PI * f1 * k), std::sin(2 * PI * f2 * k),
+		                     std::cos(2 * PI * f2 * k)};
+		for (int r = 0; r < 4; r++) {
+			for (int c = 0; c < 4; c++)
+				A[r][c] += b[r] * b[c];
+			A[r][4] += b[r] * x[i];
+		}
+	}
+	for (int p = 0; p < 4; p++)
+		for (int r = p + 1; r < 4; r++) {
+			const double q = A[r][p] / A[p][p];
+			for (int c = p; c < 5; c++)
+				A[r][c] -= q * A[p][c];
+		}
+	double s[4];
+	for (int r = 3; r >= 0; r--) {
+		double v = A[r][4];
+		for (int c = r + 1; c < 4; c++)
+			v -= A[r][c] * s[c];
+		s[r] = v / A[r][r];
+	}
+	amp1 = std::hypot(s[0], s[1]);
+	amp2 = std::hypot(s[2], s[3]);
+}
+
+void dub_levels() {
+	for (float d : {0.f, 0.25f, 0.5f, 0.75f, 1.f}) {
+		Rig g;
+		TapeSet* set = g.sine(1.0, 100.0, 2.f);
+		g.use(set);
+		const Snapshot before(set->tape);
+		g.f.params[F::DUB_LEVEL] = d;
+		g.press(&F::playPress);
+		g.run(4800);
+		const long k0 = (long) std::lround(g.r.head * 48000.0);
+		g.press(&F::dubPress);
+		for (int i = 0; i < 24000; i++)
+			g.step(2.f * (float) std::sin(2 * PI * 1000.0 * i / 48000.0));
+		g.press(&F::dubPress);
+		g.run(2000);
+		CHECK(!g.r.dubbing, "dub off");
+		if (d == 0.f) {
+			CHECK(before.equals(set->tape), "Dub Level 0: the tape is unchanged to the bit");
+			continue;
+		}
+		// Frames written once at full gain: well inside [k0 + F, k0 + 24000).
+		const long a = k0 + 700, n = 22000;
+		double oldA, newA;
+		fitTwo(set->tape.ch[0] + a, (size_t) n, a, 100.0 / 48000.0, 1000.0 / 48000.0, oldA, newA);
+		float add, keep;
+		rka::eddy::dubGains(d, add, keep);
+		CHECK(std::fabs(db(newA / 2.0 / add)) < 0.2, "Dub Level %.2f: the new layer is %+.2f dB re %.3f", d, db(newA / 2.0 / add),
+		      add);
+		if (d < 1.f)
+			CHECK(std::fabs(db(oldA / 2.0 / keep)) < 0.2, "Dub Level %.2f: the old is %+.2f dB re %.4f", d, db(oldA / 2.0 / keep),
+			      keep);
+		else
+			CHECK(oldA / 2.0 < 1e-3, "Dub Level 1: the old is gone (%.2e of it left)", oldA / 2.0);
+	}
+}
+
+void dub_at_speed() {
+	for (float knob : {0.5f, -1.f}) {
+		Rig g;
+		g.f.params[F::SPEED] = knob;
+		g.use(g.loaded(48000, 0, [](size_t, float& l, float& r) { l = r = 0.f; }));
+		g.f.params[F::DUB_LEVEL] = 1.f;
+		g.press(&F::playPress);
+		g.run(4800);
+		const double v = std::fabs((double) rka::eddy::speedKnob(knob));
+		const Window w = rka::eddy::window(0.f, 0.f, 1.f, 0.f, 48000, 0.0, g.fs);
+		const long T = std::lround(w.turn / v);   // samples a turn
+		const long D = (long) (0.8 * T);
+		std::vector<float> in((size_t) D), out((size_t) D);
+		std::vector<int> single((size_t) D);
+		g.press(&F::dubPress);
+		for (long i = 0; i < D; i++) {
+			in[(size_t) i] = 2.f * (float) std::sin(2 * PI * 1000.0 * i / 48000.0 + 0.3);
+			g.step(in[(size_t) i]);
+		}
+		g.press(&F::dubPress);
+		g.run(T - D);
+		for (long i = 0; i < D; i++) {
+			g.step();
+			out[(size_t) i] = g.r.l;
+			single[(size_t) i] = g.e.activeVoices() == 1;
+		}
+		double err = 0, sig = 0;
+		for (long i = 1000; i < D - 1000; i++) {
+			if (!single[(size_t) i])
+				continue;
+			err += std::pow((double) out[(size_t) i] - in[(size_t) i], 2);
+			sig += std::pow((double) in[(size_t) i], 2);
+		}
+		CHECK(sig > 0 && db(std::sqrt(err / sig)) < -40.0, "dubbed at Speed %+.1f and played back: the error is %.1f dB", knob,
+		      db(std::sqrt(err / (sig > 0 ? sig : 1))));
+	}
+}
+
+void dub_bounded() {
+	// Passes of +-10 V noise (the same loop of it each pass, with a 1 V
+	// offset or without), dubbed into the bound. The loop's turn is the
+	// whole tape (a tail of m), so the tape's mean is the loop's DC. The
+	// input's DC is blocked as it comes in: the offset makes no difference
+	// (within 0.1 mV). Nothing filters the tape going round unless the
+	// bound is clipping (WriteBound, Wear.hpp); clipped, the written
+	// signal's DC is taken off before the bound. What is left: at full
+	// level under 10 mV (measured 0.1 to 8.2 mV over three noise loops); at
+	// lower levels, driven to the ceiling, 0.4 to 63 mV of either sign
+	// depending on the noise (measured 2026-11-22 after R1, Dub 2 % to
+	// 50 %, three noise loops, 3000 passes), settled by 1000 passes. Held
+	// under 100 mV and to not building (under 10 mV from 1000 to 2000
+	// passes); the tape under its 10 V bound.
+	struct Case {
+		float d;
+		uint32_t seed;
+	};
+	for (const Case& c : {Case{1.f, 3}, Case{1.f, 5}, Case{1.f, 7}, Case{0.5f, 3}, Case{0.5f, 5}, Case{0.05f, 3}, Case{0.05f, 5}}) {
+		double dcs[2][2];
+		float peak = 0.f;
+		for (int o = 0; o < 2; o++) {
+			const float offset = (float) o;
+			Rig g;
+			TapeSet* set = g.loaded(2400, 480, [](size_t, float& l, float& r) { l = r = 0.f; });
+			g.use(set);
+			g.f.params[F::DUB_LEVEL] = c.d;
+			g.f.inRPatched = true;
+			g.press(&F::playPress);
+			const Window w = rka::eddy::window(0.f, 0.f, 1.f, 0.f, 2400, 480.0, g.fs);
+			const long T = std::lround(w.turn);
+			const std::vector<float> n0 = noiseVec((size_t) T, 10.f, c.seed), n1 = noiseVec((size_t) T, 10.f, c.seed + 100);
+			g.press(&F::dubPress);
+			const int passes = c.d == 1.f ? 1000 : 2000;
+			for (int pass = 1; pass <= passes; pass++) {
+				for (long i = 0; i < T; i++)
+					g.step(n0[(size_t) i] + offset, n1[(size_t) i] + offset);
+				if (pass == 1000 || pass == 2000) {
+					double sum = 0;
+					for (int ch = 0; ch < 2; ch++)
+						for (size_t k = 0; k < 2400; k++) {
+							peak = std::max(peak, std::fabs(set->tape.ch[ch][k]));
+							sum += set->tape.ch[ch][k];
+						}
+					dcs[o][pass == 1000 ? 0 : 1] = sum / 4800.0;
+				}
+			}
+			if (passes == 1000)
+				dcs[o][1] = dcs[o][0];
+		}
+		const double dc = dcs[0][1];
+		CHECK(peak <= 10.f, "Dub Level %.2f, noise %u: the tape peaks at %.4f V (bound 10)", c.d, c.seed, peak);
+		CHECK(std::fabs(dcs[1][1] - dc) < 1e-4, "Dub Level %.2f, noise %u: a 1 V input offset moves the DC by %.3f mV", c.d, c.seed,
+		      (dcs[1][1] - dc) * 1e3);
+		if (c.d == 1.f)
+			CHECK(std::fabs(dc) < 1e-2, "full-level dubs, noise %u: DC on the tape %.3f mV (want under 10)", c.seed, dc * 1e3);
+		else
+			CHECK(std::fabs(dc) < 0.1 && std::fabs(dc - dcs[0][0]) < 1e-2,
+			      "Dub Level %.2f, noise %u: DC on the tape %.2f mV after 2000 passes, %.2f after 1000 (want under 100, not building)", c.d,
+			      c.seed, dc * 1e3, dcs[0][0] * 1e3);
+	}
+}
+
+// Lopsided material with no DC of its own (a 25 % pulse; a sine with its
+// 2nd harmonic in phase), synced to the loop and dubbed pass after pass, is
+// clipped harder on one side; the final re-review's R1 measured volts of DC
+// left by it once nothing in the loop took the clipping's DC off (-3.9 V
+// from a 1 V pulse at Dub 5 %). Held to about twice what 943c0d0 (build
+// 2.0.27, the 5 Hz blocker on everything written) left: 943c0d0 / bound /
+// measured 2026-11-22: pulse 5 V Dub 50 % -374 / 750 / -393 mV; pulse 1 V
+// Dub 5 % -17 / 35 / -0.4 mV; sine + 2nd 1 V Dub 5 % -3.7 / 10 / +6.2 mV;
+// sine + 2nd 5 V Dub 50 % +1075 / 2150 / +1052 mV. 1000 passes of a 2400-
+// frame loop (a tail of m, so the turn is the tape), period 96 samples.
+double tapeMean(const Tape& t, size_t n);
+
+void dub_lopsided() {
+	struct Case {
+		const char* what;
+		bool pulse;
+		float volts, d;
+		double bound;
+	};
+	for (const Case& c : {Case{"25 % pulse, 5 V, Dub 50 %", true, 5.f, 0.5f, 0.75}, Case{"25 % pulse, 1 V, Dub 5 %", true, 1.f, 0.05f, 0.035},
+	                      Case{"sine + 2nd, 1 V, Dub 5 %", false, 1.f, 0.05f, 0.01},
+	                      Case{"sine + 2nd, 5 V, Dub 50 %", false, 5.f, 0.5f, 2.15}}) {
+		Rig g;
+		TapeSet* set = g.loaded(2400, 480, [](size_t, float& l, float& r) { l = r = 0.f; });
+		g.use(set);
+		g.f.params[F::DUB_LEVEL] = c.d;
+		g.press(&F::playPress);
+		g.press(&F::dubPress);
+		for (long i = 0; i < 1000L * 2400; i++) {
+			const long k = i % 96;
+			const double th = 2 * PI * (double) k / 96.0;
+			const float x = c.pulse ? (k < 24 ? 0.75f * c.volts : -0.25f * c.volts)
+			                        : (float) (c.volts * (std::sin(th) + 0.5 * std::cos(2 * th)));
+			g.step(x, x);
+		}
+		float peak = 0.f;
+		for (int ch = 0; ch < 2; ch++)
+			for (size_t k = 0; k < 2400; k++)
+				peak = std::max(peak, std::fabs(set->tape.ch[ch][k]));
+		const double dc = tapeMean(set->tape, 2400);
+		CHECK(std::fabs(dc) < c.bound && peak <= 10.f, "%s, 1000 passes: DC on the tape %.1f mV (want under %.0f), peak %.3f V", c.what, dc * 1e3,
+		      c.bound * 1e3, peak);
+	}
+}
+
+// The same with Wear on (the third re-review's R3-1). Wear's saturation
+// shifts the mean of lopsided material and takes that shift off through a
+// 5 Hz estimate; while every voice began its own at 0, on a loop shorter
+// than the estimate settles in it never settled, and what got through each
+// pass built up through the dub (the tape stays under 8 V, so the bound's
+// gate never opens). The estimate now goes on from voice to voice on one
+// tape. The worst mean over the second half of the passes (Wear's dropouts
+// and hiss move it from pass to pass), in mV, each voice fresh / bound /
+// measured 2026-11-22 (943c0d0, the 5 Hz blocker on everything, beside it):
+//   50 ms  sine + 2nd 1 V, Dub 5 %, Wear 30 %    +983 / 120 /  -59   (-23)
+//   50 ms  25 % pulse 1 V, Dub 5 %, Wear 30 %    -295 / 120 /  -57   (-14)
+//   50 ms  25 % pulse 5 V, Dub 50 %, Wear 100 %  -701 / 250 / +120  (+122)
+//   200 ms sine + 2nd, as above                  +419 /  40 /  -16    (-5)
+//   200 ms pulse 5 V, as above                   -245 /  40 /  +14   (+15)
+//   1 s    sine + 2nd, as above                   +63 /  20 /   +2    (-2)
+//   1 s    pulse 5 V, as above                    -51 /  15 /   -3    (-2)
+// and with Smear at 0.5 on the 200 ms loop, where two voices write through
+// every join's crossfade, each with its own copy of the estimate (the next
+// voice takes the newest's alone; nothing is added up):
+//   sine + 2nd, as above                         +401 / 100 /  -51    (-2)
+//   pulse 5 V, as above                          -252 /  60 /  +25   (+25)
+// The input's period is 96 samples and every loop a multiple of it.
+void wear_dub_lopsided() {
+	struct Case {
+		const char* what;
+		bool pulse;
+		float volts, d, wear, smear;
+		size_t frames;
+		int passes;
+		double bound;
+	};
+	for (const Case& c : {Case{"50 ms, sine + 2nd 1 V, Dub 5 %, Wear 30 %", false, 1.f, 0.05f, 0.3f, 0.f, 2400, 1000, 0.12},
+	                      Case{"50 ms, 25 % pulse 1 V, Dub 5 %, Wear 30 %", true, 1.f, 0.05f, 0.3f, 0.f, 2400, 1000, 0.12},
+	                      Case{"50 ms, 25 % pulse 5 V, Dub 50 %, Wear 100 %", true, 5.f, 0.5f, 1.f, 0.f, 2400, 1000, 0.25},
+	                      Case{"200 ms, sine + 2nd 1 V, Dub 5 %, Wear 30 %", false, 1.f, 0.05f, 0.3f, 0.f, 9600, 1000, 0.04},
+	                      Case{"200 ms, 25 % pulse 5 V, Dub 50 %, Wear 100 %", true, 5.f, 0.5f, 1.f, 0.f, 9600, 200, 0.04},
+	                      Case{"1 s, sine + 2nd 1 V, Dub 5 %, Wear 30 %", false, 1.f, 0.05f, 0.3f, 0.f, 48000, 300, 0.02},
+	                      Case{"1 s, 25 % pulse 5 V, Dub 50 %, Wear 100 %", true, 5.f, 0.5f, 1.f, 0.f, 48000, 100, 0.015},
+	                      Case{"200 ms, Smear 0.5, sine + 2nd 1 V, Dub 5 %, Wear 30 %", false, 1.f, 0.05f, 0.3f, 0.5f, 9600, 1000, 0.1},
+	                      Case{"200 ms, Smear 0.5, 25 % pulse 5 V, Dub 50 %, Wear 100 %", true, 5.f, 0.5f, 1.f, 0.5f, 9600, 400, 0.06}}) {
+		Rig g;
+		TapeSet* set = g.loaded(c.frames, 480, [](size_t, float& l, float& r) { l = r = 0.f; });
+		g.use(set);
+		g.f.params[F::DUB_LEVEL] = c.d;
+		g.f.params[F::WEAR] = c.wear;
+		g.f.params[F::SMEAR] = c.smear;
+		g.press(&F::playPress);
+		g.press(&F::dubPress);
+		double worst = 0;
+		float peak = 0.f;
+		long i = 0, two = 0;
+		for (int pass = 1; pass <= c.passes; pass++) {
+			for (size_t j = 0; j < c.frames; j++, i++) {
+				const long k = i % 96;
+				const double th = 2 * PI * (double) k / 96.0;
+				const float x = c.pulse ? (k < 24 ? 0.75f * c.volts : -0.25f * c.volts)
+				                        : (float) (c.volts * (std::sin(th) + 0.5 * std::cos(2 * th)));
+				g.step(x, x);
+				two += g.e.activeVoices() >= 2 ? 1 : 0;
+			}
+			if (pass > c.passes / 2) {
+				const double m = tapeMean(set->tape, c.frames);
+				if (std::fabs(m) > std::fabs(worst))
+					worst = m;
+			}
+		}
+		for (int ch = 0; ch < 2; ch++)
+			for (size_t k = 0; k < c.frames; k++)
+				peak = std::max(peak, std::fabs(set->tape.ch[ch][k]));
+		// The tape must hold the dub (a case that wrote nothing would pass).
+		CHECK(std::fabs(worst) < c.bound && peak > 5.f && peak <= 10.f,
+		      "%s: DC on the tape reaches %+.1f mV in the last %d passes (want under %.0f), peak %.3f V (want 5 to 10)", c.what, worst * 1e3,
+		      c.passes - c.passes / 2, c.bound * 1e3, peak);
+		if (c.smear > 0.f)
+			CHECK(two > i / 4, "%s: two voices at once for %ld of %ld samples (want over a quarter)", c.what, two, i);
+	}
+}
+
+// ---- What Wear and Dub do to the old tape, per frequency (the final
+// review's I2: a DC blocker on the tape going round took 15 dB at 50 Hz in
+// 300 passes of Wear at 2 %). Through the engine's own write path.
+
+const double LOWS_HZ[5] = {30.0, 50.0, 200.0, 1000.0, 8000.0};
+
+// A 1 s tape (48000 frames, a tail of 480 so a turn is the whole tape) of
+// the five tones at `volts` each, every one a whole number of cycles.
+TapeSet* tones(Rig& g, double volts) {
+	return g.loaded(48000, 480, [=](size_t k, float& l, float& r) {
+		double s = 0;
+		for (double f : LOWS_HZ)
+			s += volts * std::sin(2 * PI * f * (double) k / 48000.0);
+		l = r = (float) s;
+	});
+}
+
+// Each tone's amplitude on side 0 over frames [a, b) (by default 2400 to
+// 45600, 0.9 s: away from the join's fade at frame 0, and a whole number of
+// cycles of each).
+void toneLevels(const Tape& t, double amp[5], size_t a = 2400, size_t b = 45600) {
+	for (int k = 0; k < 5; k++) {
+		double sc = 0, ss = 0;
+		for (size_t i = a; i < b; i++) {
+			const double th = 2 * PI * LOWS_HZ[k] * (double) i / 48000.0;
+			sc += t.ch[0][i] * std::cos(th);
+			ss += t.ch[0][i] * std::sin(th);
+		}
+		amp[k] = 2.0 * std::hypot(sc, ss) / (double) (b - a);
+	}
+}
+
+// Wear's law for one pass at w, in dB at f (EddyTuning.hpp): the level, and
+// the highs moved WEAR_HIGHS_AMOUNT w^2 of the way to a one-pole low-pass.
+double wearLawDb(double w, double f) {
+	using namespace rka::eddy;
+	const double fs = 48000.0;
+	const double a = 1.0 - std::exp(-2 * PI * WEAR_HIGHS_HZ / fs);
+	const std::complex<double> z = std::polar(1.0, -2 * PI * f / fs);
+	const std::complex<double> lp = a / (1.0 - (1.0 - a) * z);
+	const double h = WEAR_HIGHS_AMOUNT * w * w;
+	return WEAR_LEVEL_DB * w * w + db(std::abs(1.0 + h * (lp - 1.0)));
+}
+
+void wear_lows() {
+	// Wear 1 for 50 passes only: its law takes the tones 25 to 30 dB down in
+	// that many, and down into its own hiss in 100. The dropouts (shared by
+	// every frequency) cost up to 0.4 dB more at 0.25 over 300 passes and
+	// about 2 dB at 1 over 50; at 2 % there are none in 300 s of tape.
+	struct Case {
+		float w;
+		int passes;
+		double below;   // how far under the law a tone may be (the dropouts)
+	};
+	for (const Case& c : {Case{0.02f, 300, 0.05}, Case{0.25f, 300, 0.6}, Case{1.f, 50, 3.0}}) {
+		Rig g;
+		const double A = 0.55;   // 2.75 V at most: under the saturation at every setting
+		TapeSet* set = tones(g, A);
+		g.use(set);
+		g.f.params[F::WEAR] = c.w;
+		g.press(&F::playPress);
+		g.run((long) c.passes * 48000);
+		double amp[5];
+		toneLevels(set->tape, amp);
+		double dev[5];
+		for (int k = 0; k < 5; k++)
+			dev[k] = db(amp[k] / A) - c.passes * wearLawDb(c.w, LOWS_HZ[k]);
+		const int top = c.w < 1.f ? 5 : 4;   // at 1 the 8 kHz tone is under the hiss
+		for (int k = 0; k < top; k++) {
+			CHECK(dev[k] < 0.05 && dev[k] > -c.below, "Wear %.2f, %d passes, %.0f Hz: %+.2f dB re its law (%+.2f), want within +0.05/-%.2f",
+			      c.w, c.passes, LOWS_HZ[k], dev[k], c.passes * wearLawDb(c.w, LOWS_HZ[k]), c.below);
+			// No more loss at the bottom than at 1 kHz, beyond the law.
+			if (k < 3)
+				CHECK(std::fabs(dev[k] - dev[3]) < (c.w < 0.1f ? 0.03 : 0.4),
+				      "Wear %.2f, %d passes: %.0f Hz is %+.2f dB re its law, 1 kHz %+.2f (want the same within %.2f)", c.w, c.passes,
+				      LOWS_HZ[k], dev[k], dev[3], c.w < 0.1f ? 0.03 : 0.4);
+		}
+	}
+}
+
+// The dub's input block, a one-pole high-pass at 5 Hz (the design's figure,
+// written here, not read from EddyTuning.hpp, so a change to it is seen), at f.
+double inputBlockDb(double f) {
+	const double a = 1.0 - std::exp(-2 * PI * 5.0 / 48000.0);
+	const std::complex<double> z = std::polar(1.0, -2 * PI * f / 48000.0);
+	return db(std::abs((1.0 - z) / (1.0 - (1.0 - a) * z)));
+}
+
+void dub_lows() {
+	// The old tape under a dub of silence: keep = 1 - d^2 a pass, every
+	// frequency alike (the dub starts as the head leaves frame 0, so its fade
+	// is outside the frames measured).
+	for (float d : {0.25f, 0.5f}) {
+		Rig g;
+		const double A = 1.0;
+		TapeSet* set = tones(g, A);
+		g.use(set);
+		g.f.params[F::DUB_LEVEL] = d;
+		float add, keep;
+		rka::eddy::dubGains(d, add, keep);
+		const int passes = d == 0.25f ? 20 : 10;
+		g.press(&F::playPress);
+		g.press(&F::dubPress);
+		g.run((long) passes * 48000);
+		g.press(&F::dubPress);
+		g.step();
+		CHECK(!g.r.dubbing, "dub off");
+		double amp[5];
+		toneLevels(set->tape, amp);
+		for (int k = 0; k < 5; k++) {
+			const double want = passes * db(keep);
+			CHECK(std::fabs(db(amp[k] / A) - want) < 0.05, "Dub Level %.2f, silence in, %d passes: %.0f Hz at %+.2f dB (want %+.2f)", d,
+			      passes, LOWS_HZ[k], db(amp[k] / A), want);
+		}
+	}
+	// Hundreds of passes of the same loop of five tones dubbed in: each
+	// tone settles at add / (1 - keep) times the input (the passes add up in
+	// phase), less only the input's own DC block, once.
+	for (float d : {0.25f, 0.5f, 1.f}) {
+		Rig g;
+		float add, keep;
+		rka::eddy::dubGains(d, add, keep);
+		const double A = 0.2 * (1.0 - keep) / add;   // settles at 0.2 V a tone
+		TapeSet* set = g.loaded(48000, 480, [](size_t, float& l, float& r) { l = r = 0.f; });
+		g.use(set);
+		g.f.params[F::DUB_LEVEL] = d;
+		g.press(&F::playPress);
+		g.run(4800);
+		g.press(&F::dubPress);
+		for (long i = 0; i < 300L * 48000; i++) {
+			double x = 0;
+			for (double f : LOWS_HZ)
+				x += A * std::sin(2 * PI * f * (double) i / 48000.0);
+			g.step((float) x, (float) x);
+		}
+		double amp[5];
+		toneLevels(set->tape, amp);
+		for (int k = 0; k < 5; k++) {
+			const double got = db(amp[k] / (A * add / (1.0 - keep))), want = inputBlockDb(LOWS_HZ[k]);
+			CHECK(std::fabs(got - want) < 0.03, "Dub Level %.2f, 300 passes: %.0f Hz settles at %+.3f dB re add / (1 - keep) (want %+.3f)", d,
+			      LOWS_HZ[k], got, want);
+		}
+	}
+}
+
+// The tape's mean over [0, n) of side 0.
+double tapeMean(const Tape& t, size_t n) {
+	double m = 0;
+	for (size_t k = 0; k < n; k++)
+		m += t.ch[0][k];
+	return m / (double) n;
+}
+
+// A tape recorded with an offset (a recording keeps it) is not made worse by
+// Wear or Dub: its DC never grows past where it started and never crosses
+// zero by more than 10 mV (the final re-review's N2: a 0.01 Hz trim inside
+// the loop swung a 1 V offset to -0.66 V at Wear 2 %).
+void offset_kept() {
+	struct Case {
+		const char* what;
+		float wear, dub;
+		bool noise;
+		int passes;
+	};
+	for (const Case& c : {Case{"Wear 2 %", 0.02f, 0.f, false, 180}, Case{"Wear 25 %", 0.25f, 0.f, false, 180},
+	                      Case{"Wear 100 %", 1.f, 0.f, false, 60}, Case{"Dub 25 %, silence in", 0.f, 0.25f, false, 60},
+	                      Case{"Dub 50 %, noise in", 0.f, 0.5f, true, 120}, Case{"Dub 5 %, noise in", 0.f, 0.05f, true, 180}}) {
+		Rig g;
+		TapeSet* set = g.loaded(48000, 480, [](size_t k, float& l, float& r) {
+			l = r = 1.f + (float) std::sin(2 * PI * 200.0 * (double) k / 48000.0);
+		});
+		g.use(set);
+		const double start = tapeMean(set->tape, 48000);
+		g.f.params[F::WEAR] = c.wear;
+		g.f.params[F::DUB_LEVEL] = c.dub > 0.f ? c.dub : 0.5f;
+		g.press(&F::playPress);
+		if (c.dub > 0.f)
+			g.press(&F::dubPress);
+		rka::hadal::Random rnd;
+		rnd.seed(77);
+		double hi = start, lo = start;
+		for (int pass = 0; pass < c.passes; pass++) {
+			for (int i = 0; i < 48000; i++) {
+				const float x = c.noise ? 2.f * rnd.uniform() : 0.f;
+				g.step(x, x);
+			}
+			const double m = tapeMean(set->tape, 48000);
+			hi = std::max(hi, m);
+			lo = std::min(lo, m);
+		}
+		CHECK(hi <= start + 1e-3 && lo >= -0.01, "%s, %d passes from a %.3f V offset: the tape's mean ranged %.4f to %.4f V (want at most the start, above -10 mV)",
+		      c.what, c.passes, start, lo, hi);
+	}
+}
+
+// Nothing carries from one tape to the next: after a minute of wearing a tape
+// with 2 V of DC, a clean tape (loaded, restored, or recorded after a Clear)
+// worn on keeps its mean under 3 mV (N2: the trim's state put up to 1.5 V on
+// it).
+void tape_change_clean() {
+	for (int how = 0; how < 3; how++) {
+		Rig g;
+		const auto sine = [](size_t k, float& l, float& r) { l = r = (float) std::sin(2 * PI * 200.0 * (double) k / 48000.0); };
+		TapeSet* dirty = g.loaded(48000, 480, [&](size_t k, float& l, float& r) {
+			sine(k, l, r);
+			l += 2.f;
+			r += 2.f;
+		});
+		if (how == 1)   // Restore: the original is clean
+			for (size_t k = 0; k < 48480; k++)
+				for (int c = 0; c < 2; c++)
+					dirty->original.ch[c][k] -= 2.f;
+		g.use(dirty);
+		g.f.params[F::WEAR] = 0.1f;
+		g.press(&F::playPress);
+		g.run(60L * 48000);
+		TapeSet* now = dirty;
+		const char* name = "loaded";
+		if (how == 0) {
+			now = g.loaded(48000, 480, sine);
+			g.use(now);
+			g.press(&F::playPress);
+		}
+		else if (how == 1) {
+			name = "restored";
+			g.press(&F::restorePress);
+			g.run(4800);
+		}
+		else {
+			name = "recorded after a Clear";
+			g.e.clear();
+			g.run(4800);
+			long i = 0;
+			record(g, 48000, 480, [&](long, float& l, float& r) {
+				l = r = (float) std::sin(2 * PI * 200.0 * (double) (i++) / 48000.0);
+			});
+		}
+		if (!g.r.playing)
+			g.press(&F::playPress);
+		double worst = 0;
+		for (int pass = 0; pass < 5; pass++) {
+			g.run(48000);
+			worst = std::max(worst, std::fabs(tapeMean(now->tape, std::min<size_t>(now->tape.length, 48000))));
+		}
+		CHECK(now->tape.length > 40000 && worst < 3e-3, "a clean tape %s after a minute of DC: its mean reaches %.2f mV in 5 passes (want under 3)", name,
+		      worst * 1e3);
+	}
+}
+
+// Nor does Wear's saturation DC estimate, which goes on from voice to voice
+// on one tape (R3-1): after wearing a hot 25 % pulse at 1 (the estimate
+// stands near -0.8 V), a clean 1 V sine that follows it, on a new tape,
+// restored, recorded over it or recorded after a Clear, is never saturated,
+// so any mean it gains is the old tape's estimate written onto it. Under
+// 2 mV over 3 passes (measured 0.42 to 0.45 mV; with the estimate carried
+// across, 13 to 19 mV).
+void wear_dc_tape_change() {
+	for (int how = 0; how < 4; how++) {
+		Rig g;
+		const auto sine = [](size_t k, float& l, float& r) { l = r = (float) std::sin(2 * PI * 200.0 * (double) k / 48000.0); };
+		TapeSet* hot = g.loaded(48000, 480, [](size_t k, float& l, float& r) { l = r = (k % 96) < 24 ? 8.25f : -2.75f; });
+		if (how == 1)   // Restore: the original is the clean sine
+			for (size_t k = 0; k < 48480; k++)
+				sine(k, hot->original.ch[0][k], hot->original.ch[1][k]);
+		g.use(hot);
+		g.f.params[F::WEAR] = 1.f;
+		g.press(&F::playPress);
+		// Half a pass, with a retrigger 50 ms in: the estimate stands in two
+		// voices' slots, and the head is on tape not yet worn, still hot.
+		g.run(2400);
+		g.f.playTrig = 10.f;
+		g.run(100);
+		g.f.playTrig = 0.f;
+		g.run(21500);
+		TapeSet* now = hot;
+		const char* name = "loaded";
+		if (how == 0) {
+			now = g.loaded(48000, 480, sine);
+			g.use(now);
+			g.press(&F::playPress);
+		}
+		else if (how == 1) {
+			name = "restored";
+			g.press(&F::restorePress);
+		}
+		else {
+			name = how == 2 ? "recorded over it" : "recorded after a Clear";
+			if (how == 3) {
+				g.e.clear();
+				g.run(4800);
+			}
+			long i = 0;
+			record(g, 48000, 480, [&](long, float& l, float& r) {
+				l = r = (float) std::sin(2 * PI * 200.0 * (double) (i++) / 48000.0);
+			});
+		}
+		g.run(4800);
+		if (!g.r.playing)
+			g.press(&F::playPress);
+		double worst = 0;
+		for (int pass = 0; pass < 3; pass++) {
+			g.run(48000);
+			const double m = tapeMean(now->tape, std::min<size_t>(now->tape.length, 48000));
+			if (std::fabs(m) > std::fabs(worst))
+				worst = m;
+		}
+		const double level = rms(now->tape.ch[0], std::min<size_t>(now->tape.length, 48000));
+		CHECK(now->tape.length > 40000 && level > 0.3 && level < 0.75 && std::fabs(worst) < 2e-3,
+		      "a clean sine %s after a hot pulse worn at 1: its mean reaches %+.2f mV in 3 passes (want under 2), %.3f V RMS (the sine, worn)", name,
+		      worst * 1e3, level);
+	}
+}
+
+// Nor does it outlast Wear itself (the fourth re-review's F4-1). With Wear at
+// 0 the estimate is not updated, and carried across the joins as it stood it
+// would be written onto whatever the tape holds when Wear comes back: a hot
+// 25 % pulse worn at 1 for a pass (the estimate near -0.8 V), Wear to 0, a
+// 1 V sine dubbed over it at 100 % for 20 passes, Dub off, then Wear at 5 %.
+// The sine is never saturated, so Wear at 5 % must leave its mean alone: the
+// worst change of the tape's mean over the next 10 passes, and on the 1 s
+// loop the worst change of any 10 ms stretch's mean after one pass (the
+// thump). With the estimate kept through Wear 0 / bound / measured
+// 2026-11-22: 50 ms +315.9 / 3 / +0.05 mV; 200 ms +103.5 / 3 / +0.01 mV; 1 s
+// +20.9 / 3 / 0.00 mV, and the 10 ms stretch +483.6 / 5 / 0.0 mV.
+void wear_off_and_back() {
+	for (size_t n : {(size_t) 2400, (size_t) 9600, (size_t) 48000}) {
+		Rig g;
+		TapeSet* set = g.loaded(n, 480, [](size_t k, float& l, float& r) { l = r = (k % 96) < 24 ? 8.25f : -2.75f; });
+		g.use(set);
+		g.f.params[F::WEAR] = 1.f;
+		g.f.params[F::DUB_LEVEL] = 1.f;
+		g.press(&F::playPress);
+		g.run((long) n);
+		g.f.params[F::WEAR] = 0.f;
+		g.run(480);
+		g.press(&F::dubPress);
+		for (long i = 0; i < 20L * (long) n; i++) {
+			const float x = (float) std::sin(2 * PI * 200.0 * (double) i / 48000.0);
+			g.step(x, x);
+		}
+		g.press(&F::dubPress);
+		g.run(24000);
+		const double level = rms(set->tape.ch[0], n);
+		const double before = tapeMean(set->tape, n);
+		const std::vector<float> was(set->tape.ch[0], set->tape.ch[0] + n);
+		g.f.params[F::WEAR] = 0.05f;
+		double worst = 0, thump = 0;
+		for (int pass = 1; pass <= 10; pass++) {
+			g.run((long) n);
+			const double d = tapeMean(set->tape, n) - before;
+			if (std::fabs(d) > std::fabs(worst))
+				worst = d;
+			if (pass == 1)
+				for (size_t a = 0; a + 480 <= n; a += 480) {
+					double m = 0;
+					for (size_t k = a; k < a + 480; k++)
+						m += set->tape.ch[0][k] - was[k];
+					if (std::fabs(m / 480.0) > std::fabs(thump))
+						thump = m / 480.0;
+				}
+		}
+		CHECK(level > 0.6 && level < 0.9 && std::fabs(before) < 0.05, "%zu frames: the sine dubbed over the pulse is %.3f V RMS, mean %+.2f mV", n,
+		      level, before * 1e3);
+		CHECK(std::fabs(worst) < 3e-3, "%zu frames, Wear back at 5 %% after a stretch at 0: the tape's mean moves by %+.2f mV in 10 passes (want under 3)",
+		      n, worst * 1e3);
+		if (n == 48000)
+			CHECK(std::fabs(thump) < 5e-3, "%zu frames, Wear back at 5 %%: a 10 ms stretch's mean moves by %+.1f mV in the first pass (want under 5)", n,
+			      thump * 1e3);
+	}
+}
+
+// Dub at 5 %, the final review's own case: the old tape is kept nearly
+// whole (keep 0.9975), so any loss or phase a pass inside the loop compounds
+// over hundreds of passes. 3000 passes of five tones on a 0.3 s loop: each
+// settles at add / (1 - keep) times the input, less the input's 5 Hz block
+// once, within 0.03 dB (a 0.05 Hz trim in the loop cost 1.7 dB at 30 Hz
+// here; the final re-review's N4).
+void dub_lows_5() {
+	Rig g;
+	float add, keep;
+	rka::eddy::dubGains(0.05f, add, keep);
+	const double A = 0.2 * (1.0 - keep) / add;
+	TapeSet* set = g.loaded(14400, 480, [](size_t, float& l, float& r) { l = r = 0.f; });
+	g.use(set);
+	g.f.params[F::DUB_LEVEL] = 0.05f;
+	g.press(&F::playPress);
+	g.run(480);
+	g.press(&F::dubPress);
+	for (long i = 0; i < 3000L * 14400; i++) {
+		double x = 0;
+		for (double f : LOWS_HZ)
+			x += A * std::sin(2 * PI * f * (double) i / 48000.0);
+		g.step((float) x, (float) x);
+	}
+	double amp[5];
+	toneLevels(set->tape, amp, 4800, 14400);   // 0.2 s: past the join, whole cycles of each
+	for (int k = 0; k < 5; k++) {
+		const double got = db(amp[k] / (A * add / (1.0 - keep))), want = inputBlockDb(LOWS_HZ[k]);
+		CHECK(std::fabs(got - want) < 0.03, "Dub Level 0.05, 3000 passes: %.0f Hz settles at %+.3f dB re add / (1 - keep) (want %+.3f)",
+		      LOWS_HZ[k], got, want);
+	}
+}
+
+// A hot asymmetric tape (a 25 % pulse of 11 V, no DC) worn at 1: Wear's
+// saturation shifts its mean; the shift is taken off, so the tape's mean
+// stays within 40 mV over the first 20 passes (about 0.7 V without).
+void wear_dc() {
+	Rig g;
+	TapeSet* set = g.loaded(48000, 480, [](size_t k, float& l, float& r) { l = r = (k % 96) < 24 ? 8.25f : -2.75f; });
+	g.use(set);
+	g.f.params[F::WEAR] = 1.f;
+	g.press(&F::playPress);
+	double worst = 0;
+	for (int pass = 0; pass < 20; pass++) {
+		g.run(48000);
+		double m = 0;
+		for (size_t k = 0; k < 48000; k++)
+			m += set->tape.ch[0][k];
+		worst = std::max(worst, std::fabs(m / 48000.0));
+	}
+	CHECK(worst < 0.04, "a hot pulse worn at 1: the tape's mean reaches %.1f mV in 20 passes (want under 40)", worst * 1e3);
+}
+
+uint64_t checksum(const Tape& t) {
+	uint64_t h = 1469598103934665603ull;
+	for (int c = 0; c < 2; c++) {
+		const unsigned char* b = (const unsigned char*) t.ch[c] - Tape::GUARD * sizeof(float);
+		const size_t n = (t.capacity() + t.tailCapacity() + 2 * Tape::GUARD) * sizeof(float);
+		for (size_t i = 0; i < n; i++)
+			h = (h ^ b[i]) * 1099511628211ull;
+	}
+	return h;
+}
+
+void wear_zero() {
+	Rig g(8000.f);   // a small allocation to checksum
+	TapeSet* set = g.noise(0.05, 4.f, 9, 80);
+	g.use(set);
+	const uint64_t h0 = checksum(set->tape), o0 = checksum(set->original);
+	g.press(&F::playPress);
+	g.run(1000 * 400);
+	CHECK(checksum(set->tape) == h0 && checksum(set->original) == o0, "Wear 0, Dub off: 1000 passes leave the tape's memory unchanged");
+	CHECK(g.r.playing && g.e.activeVoices() >= 1, "it played");
+}
+
+void wear_window() {
+	// Both directions: going backwards the last move of a turn ends a frame
+	// below Start, and only the window's clip keeps the write off it.
+	for (float knob : {1.f, -1.f})
+		for (float start : {0.3f, 0.8f}) {
+			Rig g;
+			TapeSet* set = g.noise(0.2, 3.f, 21, 480);
+			const double n = 9600;
+			g.f.params[F::SPEED] = knob;
+			g.f.params[F::START] = start;
+			g.f.params[F::LENGTH] = lengthKnob(0.4 * n, n, g.fs);
+			g.f.params[F::WEAR] = 1.f;
+			g.use(set);
+			const Snapshot before(set->tape);
+			const Window w = rka::eddy::window(start, 0.f, g.f.params[F::LENGTH], 0.f, n, 0.0, g.fs);
+			g.press(&F::playPress);
+			g.run(50 * (long) w.length);
+			// What the voices pass: the window and the join's read-on, m past
+			// its end (the tape there or the tail) going forwards, m below
+			// Start (and the frame Start - 1) going backwards; round the tape
+			// if the window wraps. Beyond both nothing changes.
+			const bool wraps = w.start + w.length > n;
+			const double beyond = wraps ? n - w.length : n + 480 - (w.start + w.length), below = wraps ? n - w.length : w.start - 1;
+			const double t = std::min(w.minFade, beyond), tb = std::min(w.minFade, below);
+			const double first = knob > 0 ? std::floor(w.start) : std::floor(w.start - 1.0 - tb);
+			const double last = knob > 0 ? std::ceil(w.start + w.length + t) : std::ceil(w.start + w.length);
+			long changedOut = 0, changedIn = 0, in = 0;
+			for (size_t k = 0; k < (size_t) n + 480; k++) {
+				const double kk = (double) k;
+				const bool inside = wraps ? k < (size_t) n && ahead(first, kk, n) < last - first : kk >= first && kk < last;
+				const bool changed = set->tape.ch[0][k] != before.ch[0][k] || set->tape.ch[1][k] != before.ch[1][k];
+				if (inside) {
+					in++;
+					changedIn += changed;
+				}
+				else
+					changedOut += changed;
+			}
+			CHECK(changedOut == 0, "Wear 1, Speed %+.0f, Start %.1f: %ld frames beyond the window and its read-on changed", knob,
+			      start, changedOut);
+			CHECK(changedIn > in * 9 / 10, "Wear 1, Speed %+.0f, Start %.1f: %ld of %ld frames in the window worn", knob, start,
+			      changedIn, in);
+		}
+	// Dropouts take both sides together, through the engine's own write path.
+	{
+		Rig g;
+		TapeSet* set = g.sine(0.2, 100.0, 2.f);
+		g.use(set);
+		g.f.params[F::WEAR] = 1.f;
+		g.press(&F::playPress);
+		g.run(60 * 9600);
+		float worstDiff = 0;
+		double lo = 1e9, hi = 0;
+		for (size_t b = 0; b + 240 <= 9600; b += 240) {
+			lo = std::min(lo, rms(set->tape.ch[0] + b, 240));
+			hi = std::max(hi, rms(set->tape.ch[0] + b, 240));
+			for (size_t k = b; k < b + 240; k++)
+				worstDiff = std::max(worstDiff, std::fabs(set->tape.ch[0][k] - set->tape.ch[1][k]));
+		}
+		CHECK(lo < 0.85 * hi, "Wear 1 for 12 s of tape: a dropout has marked it (quietest 5 ms at %.2f of the loudest)", lo / hi);
+		CHECK(worstDiff < 0.05f, "both sides dip together: they differ by at most %.3f V", worstDiff);
+	}
+}
+
+void play_trigger() {
+	const double n = 48000;
+	for (float knob : {1.f, -1.f}) {
+		Rig g;
+		g.f.params[F::SPEED] = knob;
+		g.use(placeCoded(g, (size_t) n));
+		g.f.params[F::START] = 0.3f;
+		g.f.params[F::LENGTH] = lengthKnob(0.4 * n, n, g.fs);
+		const Window w = rka::eddy::window(0.3f, 0.f, g.f.params[F::LENGTH], 0.f, n, 0.0, g.fs);
+		const double from = knob > 0 ? w.start : w.start + w.length - 1.0;
+		for (int round = 0; round < 2; round++) {   // from stopped, then a retrigger while playing
+			g.run(round ? 7000 : 100);
+			g.f.playTrig = 10.f;
+			g.step();
+			g.f.playTrig = 0.f;
+			CHECK(g.r.playing, "a PLAY trigger turns Play on");
+			const double h = g.r.head * n;
+			CHECK(std::fabs(h - from) < 1.5, "Speed %+.0f, %s: the head goes to %.1f (want %.1f)", knob, round ? "playing" : "stopped",
+			      h, from);
+			g.run(480);
+			const double p = place(g.r, n), want = from + knob * 481.0;
+			CHECK(std::fabs(p - want) < 2.0, "Speed %+.0f, %s: F after the trigger it reads %.1f (want %.1f)", knob,
+			      round ? "playing" : "stopped", p, want);
+		}
+	}
+}
+
+void one_shot() {
+	Rig g;
+	g.use(g.sine(0.5, 100.0, 2.f, 0.0, 480));
+	g.f.loop = false;
+	for (int shot = 0; shot < 2; shot++) {
+		g.f.playTrig = 10.f;
+		g.step();
+		g.f.playTrig = 0.f;
+		long edges = 0, playingAt = -1;
+		bool was = g.r.eoc;
+		double late = 0;
+		for (long i = 0; i < 36000; i++) {
+			g.step();
+			edges += g.r.eoc && !was;
+			was = g.r.eoc;
+			if (g.r.playing)
+				playingAt = i;
+			if (i > 24000 + 960)
+				late = std::max(late, (double) std::fabs(g.r.l));
+		}
+		CHECK(edges == 1, "Loop off, shot %d: %ld EOCs (want one)", shot, edges);
+		CHECK(!g.r.playing && std::labs(playingAt - 23999) <= 2, "Loop off, shot %d: Play goes off at the window's end (%ld)", shot,
+		      playingAt);
+		CHECK(late == 0.0, "Loop off, shot %d: silent after the end (%.3g)", shot, late);
+	}
+}
+
+void eoc() {
+	for (float knob : {1.f, -1.f}) {
+		Rig g;
+		g.f.params[F::SPEED] = knob;
+		g.use(g.sine(0.25, 100.0, 2.f, 0.0, 480));
+		g.press(&F::playPress);
+		g.run(100);
+		long width = 0, maxWidth = 0, edges = 0;
+		std::vector<long> at;
+		bool was = false;
+		for (long i = 0; i < 5 * 12000; i++) {
+			g.step();
+			if (g.r.eoc) {
+				width++;
+				if (!was)
+					at.push_back(g.t);
+			}
+			else {
+				if (was)
+					maxWidth = std::max(maxWidth, width);
+				width = 0;
+			}
+			was = g.r.eoc;
+		}
+		edges = (long) at.size();
+		const Window w = rka::eddy::window(0.f, 0.f, 1.f, 0.f, 12000, knob > 0 ? 480.0 : 0.0, g.fs);
+		bool spaced = edges >= 4;
+		for (size_t i = 1; i < at.size(); i++)
+			spaced = spaced && std::fabs((double) (at[i] - at[i - 1]) - w.turn) <= 1.0;
+		CHECK(spaced, "Speed %+.0f: EOC once a turn (%ld in 5 turns, first gap %ld, want %.0f)", knob, edges,
+		      at.size() > 1 ? at[1] - at[0] : -1L, w.turn);
+		CHECK(maxWidth == 48, "Speed %+.0f: EOC is %ld samples wide (want 48)", knob, maxWidth);
+	}
+}
+
+void restore() {
+	Rig g;
+	g.copySamples = 64;   // the copy takes its time, a slice a sample
+	TapeSet* set = g.noise(0.05, 3.f, 31, 480);
+	g.use(set);
+	const Snapshot first(set->original);
+	g.f.params[F::WEAR] = 1.f;
+	g.press(&F::playPress);
+	g.run(4800);
+	g.press(&F::dubPress);
+	for (int i = 0; i < 4800; i++)
+		g.step(2.f * (float) std::sin(2 * PI * 300.0 * i / 48000.0));
+	g.press(&F::dubPress);
+	g.run(1000 * 2400);   // a turn is the whole 2400: the tail holds m
+	while (std::fabs(g.r.head - 0.5) > 0.01)   // Restore with the head mid-tape
+		g.step();
+	CHECK(!first.equals(set->tape), "dubbed and worn, the tape differs from the original");
+	CHECK(first.equals(set->original), "the original never changed");
+	const double h0 = g.r.head * 2400;
+	long done = -1;
+	g.onCopyDone = [&](EddyEngine::Copy c) {
+		if (c == EddyEngine::ORIGINAL_TO_TAPE && done < 0) {
+			done = g.t;
+			CHECK(sameTape(set->tape, set->original), "once the copy is done the tape equals the original to the bit");
+		}
+	};
+	const long t0 = g.t;
+	g.press(&F::restorePress);
+	g.run(5000);
+	CHECK(done > 0 && done - t0 < 4800, "Restore: the copy was asked for and done (%ld samples)", done - t0);
+	CHECK(g.tapeMatchedAtDone, "nothing wrote the tape while it was copied");
+	CHECK(first.equals(set->original), "the original is unchanged by Restore");
+	// The head kept its place: it moved on by the time passed, round the
+	// turn of 2400.
+	const double h1 = g.r.head * 2400;
+	const double moved = std::fmod(h1 - h0 + 4 * 2400.0, 2400.0), want = std::fmod(5000.0, 2400.0);
+	CHECK(std::fabs(moved - want) < 2.0, "the head kept its place (moved %.1f, want %.1f)", moved, want);
+	// Triggered at audio rate for a second, it stays so.
+	g.f.params[F::WEAR] = 0.f;
+	g.copySamples = 0;
+	for (int i = 0; i < 48000; i++) {
+		g.f.restoreTrig = (i / 4) % 2 ? 10.f : 0.f;
+		g.step();
+	}
+	g.f.restoreTrig = 0.f;
+	g.run(4800);
+	CHECK(first.equals(set->tape) && first.equals(set->original), "after a second of Restore at audio rate both are the original");
+}
+
+// Restore swaps the head from the tape to the original at the same place:
+// the same audio there (or nearly), so the fade is equal in gain. Equal in
+// power, the two summed to 3 dB over it for the 10 ms (the final review's
+// I4: 4.24 V from a 3 V sine).
+void restore_level() {
+	// An unworn tape: the output with Restore is the output without it, to
+	// within 1e-4 V (-90 dB re the 3 V sine), and the copy is done.
+	{
+		Rig a, b;
+		TapeSet* sa = a.sine(0.5, 100.0, 3.f, 0.0, 480);
+		TapeSet* sb = b.sine(0.5, 100.0, 3.f, 0.0, 480);
+		a.use(sa);
+		b.use(sb);
+		a.press(&F::playPress);
+		b.press(&F::playPress);
+		a.run(4800);
+		b.run(4800);
+		const long copies = b.copies;
+		b.press(&F::restorePress);
+		double worst = 0, peak = 0;
+		for (int i = 0; i < 9600; i++) {
+			a.step();
+			b.step();
+			worst = std::max(worst, (double) std::fabs(a.r.l - b.r.l));
+			peak = std::max(peak, (double) std::fabs(b.r.l));
+		}
+		CHECK(b.copies > copies, "Restore on an unworn tape: the copy was done");
+		CHECK(worst < 1e-4, "Restore on an unworn tape: the output moved by %.3g V (peak %.4f V; want under 1e-4)", worst, peak);
+	}
+	// A worn tape (Wear 1 for 30 passes: well under the original) restores
+	// with no step: no sample-to-sample jump beyond the sine's own largest
+	// step and the fade's share, and no peak over the original's 3 V.
+	{
+		Rig g;
+		TapeSet* set = g.sine(0.5, 100.0, 3.f, 0.0, 480);
+		g.use(set);
+		g.f.params[F::WEAR] = 1.f;
+		g.press(&F::playPress);
+		g.run(30L * 24000);
+		g.f.params[F::WEAR] = 0.f;
+		g.run(1000);
+		double worn = 0;
+		for (int i = 0; i < 480; i++) {
+			g.step();
+			worn = std::max(worn, (double) std::fabs(g.r.l));
+		}
+		CHECK(worn < 1.5, "worn to %.2f V before Restore", worn);
+		g.press(&F::restorePress);
+		double prev = g.r.l, step = 0, peak = 0;
+		for (int i = 0; i < 4800; i++) {
+			g.step();
+			step = std::max(step, std::fabs((double) g.r.l - prev));
+			peak = std::max(peak, (double) std::fabs(g.r.l));
+			prev = g.r.l;
+		}
+		const double sineStep = 3.0 * 2 * PI * 100.0 / 48000.0, fadeStep = 3.0 / 480.0;
+		CHECK(step < sineStep + fadeStep, "Restore on a worn tape: the largest step is %.4f V (want under %.4f)", step, sineStep + fadeStep);
+		CHECK(peak <= 3.0 + 1e-3 && peak > 2.99, "Restore on a worn tape: the output peaks at %.4f V (the original is 3 V)", peak);
+	}
+	// Restore 2.5 ms after Play (at the sine's peak), the head still fading
+	// in (equal in power): it goes over to the equal-gain fade at the gain it
+	// has, so no step.
+	{
+		Rig g;
+		g.use(g.sine(0.5, 100.0, 3.f, 0.0, 480));
+		g.press(&F::playPress);
+		g.run(120);
+		g.press(&F::restorePress);
+		double prev = g.r.l, step = 0;
+		for (int i = 0; i < 2400; i++) {
+			g.step();
+			step = std::max(step, std::fabs((double) g.r.l - prev));
+			prev = g.r.l;
+		}
+		const double sineStep = 3.0 * 2 * PI * 100.0 / 48000.0, fadeStep = 3.0 / 480.0 * 1.6;
+		CHECK(step < sineStep + fadeStep, "Restore while Play fades in: the largest step is %.4f V (want under %.4f)", step, sineStep + fadeStep);
+	}
+}
+
+void make_original() {
+	Rig g;
+	TapeSet* set = g.noise(0.05, 3.f, 41, 480);
+	g.use(set);
+	const Snapshot first(set->original);
+	g.f.params[F::WEAR] = 1.f;
+	g.press(&F::playPress);
+	g.run(200 * 1920);
+	g.e.requestCopy(EddyEngine::TAPE_TO_ORIGINAL);
+	g.run(2000);
+	const Snapshot worn(set->original);
+	CHECK(!first.equals(set->original), "Make this the original: the original is now the worn tape");
+	g.run(200 * 1920);
+	g.f.params[F::WEAR] = 0.f;   // and its write fades out (F) before Restore
+	g.run(960);
+	g.press(&F::restorePress);
+	g.run(4800);
+	CHECK(worn.equals(set->tape) && !first.equals(set->tape), "then Restore returns the worn tape, not the first take");
+}
+
+void view() {
+	const double n = 48000;
+	{
+		Rig g;
+		g.f.params[F::START] = 0.25f;
+		g.f.params[F::LENGTH] = lengthKnob(0.5 * n, n, g.fs);
+		g.f.params[F::SMEAR] = 0.4f;
+		g.use(g.sine(1.0, 100.0, 2.f));
+		const Window w = rka::eddy::window(0.25f, 0.f, g.f.params[F::LENGTH], 0.4f, n, 0.0, g.fs);
+		g.press(&F::playPress);
+		g.run(9000);
+		const double h = g.r.head;
+		CHECK(std::fabs(g.r.winStart - 0.25) < 1e-6 && std::fabs(g.r.winLength - w.length / n) < 1e-6 &&
+		          std::fabs(g.r.overlap - w.overlap / n) < 1e-6 && std::fabs(g.r.seconds - 1.0) < 1e-6,
+		      "a window in the middle: start %.4f, length %.4f, overlap %.4f, %.3f s", g.r.winStart, g.r.winLength, g.r.overlap,
+		      g.r.seconds);
+		CHECK(std::fabs(h - (0.25 + (9000 - 1) / n)) < 2 / n, "the head at %.5f (want %.5f)", h, 0.25 + 8999 / n);
+	}
+	{
+		Rig g;
+		g.f.params[F::START] = 0.8f;
+		g.f.params[F::LENGTH] = lengthKnob(0.5 * n, n, g.fs);
+		g.use(g.sine(1.0, 100.0, 2.f));
+		g.press(&F::playPress);
+		g.run(14400);
+		CHECK(std::fabs(g.r.winStart - 0.8) < 1e-6 && g.r.winStart + g.r.winLength > 1.f, "a window that wraps: start %.3f, length %.3f",
+		      g.r.winStart, g.r.winLength);
+		CHECK(std::fabs(g.r.head - std::fmod(0.8 + 14399 / n, 1.0)) < 2 / n, "past the end the head reads from the beginning (%.4f)",
+		      g.r.head);
+	}
+	{
+		Rig g;
+		g.press(&F::recPress);
+		g.run(4800);
+		const double c = 4.0 * 48000;   // the first span
+		CHECK(g.r.recording && std::fabs(g.r.head - 4800 / c) < 1e-7 && g.r.winStart == 0.f &&
+		          std::fabs(g.r.winLength - 4800 / c) < 1e-7 && std::fabs(g.r.seconds - 0.1) < 1e-6,
+		      "while recording: the head at %.3g and the tape %.3g of the span, %.3f s", g.r.head, g.r.winLength, g.r.seconds);
+	}
+}
+
+// The overview's columns against the tape's peaks by brute force (both
+// sides; frames at or past the length are silence; a column with no frames
+// is 0, 0), over a mapping `frames` long. The number of columns that differ.
+int overviewMismatches(const rka::Overview& o, const Tape& t, size_t frames) {
+	const int N = rka::Overview::COLS;
+	int bad = 0;
+	for (int c = 0; c < N; c++) {
+		const size_t f0 = (size_t) ((unsigned long long) c * frames / N), f1 = (size_t) ((unsigned long long) (c + 1) * frames / N);
+		float l = 0.f, h = 0.f;
+		if (f1 > f0) {
+			l = 1e30f;
+			h = -1e30f;
+			for (size_t f = f0; f < f1; f++)
+				for (int s = 0; s < 2; s++) {
+					const float v = f < t.length ? t.ch[s][f] : 0.f;
+					l = std::min(l, v);
+					h = std::max(h, v);
+				}
+		}
+		if (o.lo[c].load() != l || o.hi[c].load() != h)
+			bad++;
+	}
+	return bad;
+}
+
+// Columns holding some of the recording (noise: never exactly 0 at both ends).
+int filledColumns(const rka::Overview& o) {
+	int n = 0;
+	for (int c = 0; c < rka::Overview::COLS; c++)
+		n += o.lo[c].load() < 0.f || o.hi[c].load() > 0.f;
+	return n;
+}
+
+// A recording ended: the window is the tape across the whole glass, its
+// length lettered, the overview over the length and equal to the tape's
+// peaks column by column.
+void checkAfterRecording(Rig& g, size_t n, const char* what) {
+	// Long enough for the tail, the copy and two full rescans at 32 frames a
+	// sample (the end's and the copy's).
+	g.run((long) (n / 16) + (long) (0.1 * g.fs) + 100);
+	const TapeSet* s = g.e.live();
+	CHECK(!g.r.recording && s->tape.length == n && s->original.length == n, "%s: ended, %zu frames on the tape (want %zu)", what,
+	      s->tape.length, n);
+	CHECK(!g.r.empty && g.r.winStart == 0.f && g.r.winLength == 1.f && std::fabs(g.r.seconds - (double) n / g.fs) < 1e-6 * (double) n / g.fs,
+	      "%s: the window is the whole tape (start %g, length %g) and letters %.4f s (want %.4f)", what, g.r.winStart, g.r.winLength,
+	      g.r.seconds, (double) n / g.fs);
+	const int bad = overviewMismatches(s->overview, s->tape, n);
+	CHECK(bad == 0, "%s: the overview is over the length and matches the tape's peaks (%d columns differ)", what, bad);
+	CHECK(filledColumns(s->overview) == rka::Overview::COLS || n < (size_t) rka::Overview::COLS,
+	      "%s: the waveform fills the glass (%d columns)", what, filledColumns(s->overview));
+}
+
+// While recording the window shows a span that starts at 4 s and doubles
+// each time the recording reaches its end: 15 s at 48 kHz is shown over 4,
+// then 8, then 16 s. The span is read from the result as seconds / head (the
+// recorded time over the head's fraction of the span).
+void record_span() {
+	Rig g;
+	g.f.inRPatched = true;
+	const long N = 15 * 48000;
+	const std::vector<float> x = noiseVec((size_t) N + 48000, 3.f, 21), y = noiseVec((size_t) N + 48000, 3.f, 22);
+	g.press(&F::recPress);
+	int wrongSpan = 0, wrongHead = 0, thin = 0, firstThin = -1;
+	long wrongAt = -1;
+	double wrongWas = 0;
+	for (long i = 0; i < N; i++) {
+		g.step(x[(size_t) i], y[(size_t) i]);
+		const long n = i + 1;   // frames recorded
+		if (n % 97 != 0 && n != 4 * 48000 && n != 8 * 48000)
+			continue;
+		const double want = n < 4 * 48000 ? 4.0 : n < 8 * 48000 ? 8.0 : 16.0;
+		const double span = g.r.seconds / g.r.head;
+		if (!(std::fabs(span - want) < 1e-5 * want) || !g.r.recording) {
+			if (wrongSpan++ == 0) {
+				wrongAt = n;
+				wrongWas = span;
+			}
+		}
+		if (!(std::fabs(g.r.head - n / (want * 48000)) < 1e-6) || g.r.winLength != g.r.head || g.r.winStart != 0.f ||
+		    !(std::fabs(g.r.seconds - n / 48000.0) < 1e-6 * n / 48000.0))
+			wrongHead++;
+		if (n == 4 * 48000 || n == 8 * 48000) {
+			// At the doubling, with no rescan: the tape's peaks over the new
+			// span but for the columns at the head, still being rescanned.
+			const int bad = overviewMismatches(g.e.live()->overview, g.e.live()->original, (size_t) (want * 48000));
+			CHECK(bad <= 2, "at %ld frames the overview is over the doubled span at once (%d columns differ)", n, bad);
+		}
+		if (n >= 4 * 48000 && filledColumns(g.e.live()->overview) < rka::Overview::COLS / 2) {
+			if (thin++ == 0)
+				firstThin = (int) n;
+		}
+	}
+	CHECK(wrongSpan == 0, "the span is 4, 8 and 16 s in turn (%d wrong, first after %ld frames: %.4f s)", wrongSpan, wrongAt, wrongWas);
+	CHECK(wrongHead == 0, "the head and the recorded part are the recording over the span, lettered as the recorded time (%d wrong)",
+	      wrongHead);
+	CHECK(thin == 0, "past the first span the waveform fills at least half the columns (%d times not, first after %d frames)", thin,
+	      firstThin);
+	// Settled, the overview while recording is the tape's peaks over the span.
+	for (int i = 0; i < 48000 / 32 * 16 + 100; i++)
+		g.step(x[(size_t) (N + i)], y[(size_t) (N + i)]);
+	const long n = N + 48000 / 32 * 16 + 100;
+	CHECK(g.r.recording && std::fabs(g.r.seconds / g.r.head - 16.0) < 1e-4, "still recording at %.3f s, span %.3f s", g.r.seconds,
+	      g.r.seconds / g.r.head);
+	const int bad = overviewMismatches(g.e.live()->overview, g.e.live()->original, 16 * 48000);
+	// The column at the head is still being rescanned; the rest are exact.
+	CHECK(bad <= 1, "while recording the overview is the tape's peaks over the 16 s span (%d columns differ)", bad);
+	// The end, with the worker's copy of the original to the tape held back:
+	// the window is over the length from the end on, not from the copy on.
+	g.copySamples = 1 << 30;
+	g.press(&F::recPress);
+	g.step(x[(size_t) n], y[(size_t) n]);
+	g.run(n / 16 + 4800);
+	const int early = overviewMismatches(g.e.live()->overview, g.e.live()->original, (size_t) n);
+	CHECK(g.copying != EddyEngine::NONE && g.copies == 0 && early == 0,
+	      "before the tape is copied the overview is the recording's peaks over its length (%d columns differ)", early);
+	g.copyLeft = 0;   // the copy finishes
+	checkAfterRecording(g, (size_t) n, "15 s at 48 kHz");
+}
+
+// A recording over a tape whose length is the first span (a 4 s loop, so
+// the overview's mapping length does not change when the recording stands):
+// the old tape's peaks are gone from the window at once, and while recording
+// the overview is the new recording's peaks over the span.
+void record_over_a_tape() {
+	Rig g;
+	g.f.inRPatched = true;
+	g.use(g.sine(4.0, 50.0, 4.f));
+	CHECK(filledColumns(g.e.live()->overview) == rka::Overview::COLS, "the loaded tape fills the window");
+	const std::vector<float> x = noiseVec(48000, 1.f, 41);
+	g.press(&F::recPress);
+	long stood = -1;
+	int stale = 0;
+	for (long i = 0; i < 48000; i++) {
+		g.step(x[(size_t) i], -x[(size_t) i]);
+		if (stood < 0 && g.e.live()->original.length > 0 && g.r.recording && i >= std::lround(rka::eddy::REC_BUTTON_MIN_S * 48000))
+			stood = i;
+		// From the moment it stands, nothing louder than the recording (1 V)
+		// is shown: the sine's 4 V peaks are gone.
+		if (stood >= 0) {
+			float top = 0.f;
+			for (int c = 0; c < rka::Overview::COLS; c++)
+				top = std::max(top, g.e.live()->overview.hi[c].load());
+			stale += top > 1.f;
+		}
+	}
+	CHECK(stood >= 0 && stale == 0, "the old tape's peaks are not shown once the recording stands (%d samples showed them)", stale);
+	CHECK(g.r.recording && std::fabs(g.r.seconds / g.r.head - 4.0) < 1e-4, "recording over a 4 s span");
+	const int bad = overviewMismatches(g.e.live()->overview, g.e.live()->original, 4 * 48000);
+	CHECK(bad <= 1, "the overview is the recording's peaks over the span (%d columns differ)", bad);
+}
+
+// A recording run to the tape's capacity: the last span is the capacity
+// itself (at 2 kHz, 8000 frames doubled six times is 512 000, then 600 000),
+// and the overview ends over the length. At 1 Hz the tape is 300 frames,
+// under one frame a column.
+void record_to_capacity() {
+	const float rates[2] = {2000.f, 1.f};
+	for (int k = 0; k < 2; k++) {
+		const float fs = rates[k];
+		Rig g(fs);
+		g.f.inRPatched = true;
+		g.run(10);   // the set is taken
+		const size_t cap = g.e.live()->original.capacity();
+		const std::vector<float> x = noiseVec(cap + 10, 3.f, 31), y = noiseVec(cap + 10, 3.f, 32);
+		g.press(&F::recPress);
+		double span = 0;
+		int wrongSpan = 0;
+		for (size_t i = 0; i < cap + 5; i++) {
+			g.step(x[i], y[i]);
+			if (!g.r.recording)
+				break;
+			const double n = (double) (i + 1);
+			span = g.r.seconds / g.r.head * fs;
+			// The span: 4 s doubled until it is past the recording, held to
+			// the capacity.
+			double want = std::floor(4.0 * fs + 0.5);
+			while (want <= n && want < (double) cap)
+				want = std::min(2 * want, (double) cap);
+			if (!(std::fabs(span - want) < 1e-4 * want))
+				wrongSpan++;
+		}
+		CHECK(wrongSpan == 0, "%g Hz: the span doubles and is held to the capacity (%d wrong)", fs, wrongSpan);
+		CHECK(std::fabs(span - (double) cap) < 1e-4 * (double) cap, "%g Hz: the last span is the capacity (%.1f frames, want %zu)", fs, span,
+		      cap);
+		CHECK(!g.r.recording, "%g Hz: the recording ended by itself", fs);
+		char what[64];
+		std::snprintf(what, sizeof what, "to capacity at %g Hz", fs);
+		checkAfterRecording(g, cap, what);
+	}
+}
+
+// Mix's law: input gain min(1, 2(1 - m)), tape gain min(1, 2m).
+void mix_law() {
+	struct Fit {
+		double tape, input;
+	};
+	auto measure = [](float mix, int mode) {
+		Rig g;
+		TapeSet* set = g.sine(1.0, 100.0, 2.f);
+		g.use(set);
+		g.f.params[F::MIX] = mix;
+		g.f.params[F::DUB_LEVEL] = 0.f;   // a dub that writes nothing
+		g.press(&F::playPress);
+		if (mode == 1)
+			g.press(&F::dubPress);
+		if (mode == 2)
+			g.press(&F::recPress);
+		std::vector<float> y(24000);
+		for (int i = 0; i < 26400; i++) {
+			const float in = 2.f * (float) std::sin(2 * PI * 1000.0 * i / 48000.0);
+			g.step(in);
+			if (i >= 2400)
+				y[(size_t) (i - 2400)] = g.r.l;
+		}
+		Fit f;
+		// The tape: 100 Hz in the tape's frames, which run with the samples.
+		fitTwo(y.data(), y.size(), 2400, 100.0 / 48000.0, 1000.0 / 48000.0, f.tape, f.input);
+		f.tape /= 2.0;
+		f.input /= 2.0;
+		return f;
+	};
+	// Within 1e-3 of the law (the fit's own error is far smaller).
+	for (float mix : {0.f, 0.25f, 0.5f, 0.75f, 1.f}) {
+		const Fit f = measure(mix, 0);
+		const double wet = std::min(1.0, 2.0 * mix), dry = std::min(1.0, 2.0 * (1.0 - mix));
+		CHECK(std::fabs(f.tape - wet) < 1e-3 && std::fabs(f.input - dry) < 1e-3, "Mix %.2f: tape %.4f, input %.4f (want %.4f, %.4f)",
+		      mix, f.tape, f.input, wet, dry);
+	}
+	for (int mode : {1, 2}) {
+		const Fit f = measure(1.f, mode);
+		CHECK(std::fabs(f.input - 1.0) < 1e-3, "%s at Mix 1: the input is heard at %.4f (want unity)", mode == 1 ? "dubbing" : "recording",
+		      f.input);
+	}
+	// A tape playing and an input present, at Mix 0, 0.5 and 1, to the bit.
+	// The input is 3 V of 1 kHz and the tape 2 V of 100 Hz, so their sum
+	// stays below the limit's knee (8 V). The tape's frames under the head
+	// are copied out with the output: the Rig frees its sets when it goes.
+	auto render = [](float mix) {
+		Rig g;
+		TapeSet* set = g.sine(1.0, 100.0, 2.f);
+		g.use(set);
+		g.f.params[F::MIX] = mix;
+		g.f.playTrig = 10.f;
+		g.run(1000);
+		std::vector<float> y, tape;
+		for (int i = 0; i < 4000; i++) {
+			g.step(3.f * (float) std::sin(2 * PI * 1000.0 * i / 48000.0));
+			y.push_back(g.r.l);
+			y.push_back(g.r.r);
+			for (int c = 0; c < 2; c++)
+				tape.push_back(set->tape.ch[c][1000 + i]);
+		}
+		return std::make_pair(y, tape);
+	};
+	{
+		const auto in0 = render(0.f), in1 = render(1.f), in5 = render(0.5f);
+		bool tapeAlone = true, inputAlone = true, sum = true;
+		for (int i = 0; i < 4000; i++) {
+			const float x = 3.f * (float) std::sin(2 * PI * 1000.0 * i / 48000.0);
+			for (int c = 0; c < 2; c++) {
+				const size_t j = (size_t) (2 * i + c);
+				inputAlone = inputAlone && in0.first[j] == x;
+				tapeAlone = tapeAlone && in1.first[j] == in1.second[j];
+				sum = sum && in5.first[j] == in0.first[j] + in1.first[j];
+			}
+		}
+		CHECK(inputAlone, "Mix 0: the output is the input, to the bit (no tape)");
+		CHECK(tapeAlone, "Mix 1: the output is the tape, to the bit (no input)");
+		CHECK(sum, "Mix 0.5: the output is input + tape, to the bit");
+	}
+}
+
+// The default: Mix in the middle, and a new engine passes its input.
+void mix_default() {
+	const F defaults;
+	CHECK(defaults.params[F::MIX] == 0.5f, "the default Mix is 0.5 (it is %g)", defaults.params[F::MIX]);
+	// No tape at all, and an empty tape: the input to the bit below the knee.
+	for (int withSet = 0; withSet < 2; withSet++) {
+		Rig g(48000.f, 1, withSet == 1);
+		g.f.inRPatched = true;
+		bool same = true;
+		for (int i = 0; i <= 4000; i++) {
+			const float x = -8.f + 16.f * i / 4000.f;
+			g.step(x, -0.5f * x);
+			same = same && g.r.l == x && g.r.r == -0.5f * x;
+		}
+		CHECK(same, "%s, the controls at their defaults: the output is the input, to the bit", withSet ? "an empty tape" : "no tape");
+	}
+}
+
+// Mix moved fast: the gains ramp over F (10 ms), so with a still input and
+// a still tape the output moves at most (|in| + |tape|) / 480 a sample.
+void mix_smooth() {
+	Rig g;
+	// 2 s, so no join (whose crossfade of a still tape is not still) is met.
+	g.use(g.loaded(96000, 0, [](size_t, float& l, float& r) { l = r = 3.f; }));
+	g.f.playTrig = 10.f;
+	g.f.params[F::MIX] = 0.f;
+	for (int i = 0; i < 4800; i++)
+		g.step(4.f);
+	const float bound = (3.f + 4.f) / 480.f * 1.001f;
+	float worst = 0, prev = g.r.l;
+	float lo = 1e9f, hi = -1e9f;
+	rka::hadal::Random rnd;
+	rnd.seed(5);
+	for (int i = 0; i < 24000; i++) {
+		// The knob thrown end to end every 64 samples, then at random.
+		g.f.params[F::MIX] = i < 12000 ? (float) ((i / 64) & 1) : 0.5f + 0.5f * rnd.uniform();
+		g.step(4.f);
+		worst = std::max(worst, std::fabs(g.r.l - prev));
+		prev = g.r.l;
+		lo = std::min(lo, g.r.l);
+		hi = std::max(hi, g.r.l);
+	}
+	CHECK(worst <= bound, "Mix swept: the largest step is %.5f V (bound %.5f)", worst, bound);
+	CHECK(hi - lo > 3.f, "and the sweep moved the output (%.3f to %.3f V)", lo, hi);
+}
+
+void limit() {
+	Rig g(48000.f, 1, false);
+	g.f.params[F::MIX] = 0.f;
+	g.f.inRPatched = true;
+	g.run(16);
+	bool identity = true, bounded = true, monotonic = true;
+	float last = -1e9f;
+	for (int i = 0; i <= 4000; i++) {
+		const float x = -20.f + 40.f * i / 4000.f;
+		g.step(x, -x);
+		if (std::fabs(x) <= 8.f)
+			identity = identity && g.r.l == x && g.r.r == -x;
+		bounded = bounded && std::fabs(g.r.l) <= 10.f && std::fabs(g.r.r) <= 10.f;
+		monotonic = monotonic && g.r.l >= last;
+		last = g.r.l;
+	}
+	CHECK(identity, "the output is the input to the bit below 8 V");
+	CHECK(bounded && monotonic, "and never over 10 V, rising with it");
+	g.step(NAN, INFINITY);
+	CHECK(g.r.l == 0.f && g.r.r == 0.f, "NaN and infinite inputs read as 0 V");
+}
+
+// The largest sample-to-sample step of a tape round its turn (frames
+// [0, n) then the tail).
+float tapeStep(const Tape& t) {
+	float worst = 0;
+	for (int c = 0; c < 2; c++)
+		for (size_t k = 1; k < t.length + t.tail; k++)
+			worst = std::max(worst, std::fabs(t.ch[c][k] - t.ch[c][k - 1]));
+	return worst;
+}
+
+void no_clicks() {
+	Rig g;
+	// Mix 1 (the tape alone): the input is heard only while recording or
+	// dubbing, as here it jumps between sections by design.
+	g.f.params[F::MIX] = 1.f;
+	const double w = 2 * PI * 100.0 / 48000.0;
+	const float bound = 1.5f * 5.f * (float) w;   // 1.5 x the 5 V sine's largest step
+	long t = 0;
+	float worst = 0, prev = 0;
+	const char* where = "start";
+	const char* worstAt = "";
+	float input = 5.f;
+	double inPhase = 0.0;
+	auto tick = [&](long n, const char* what) {
+		where = what;
+		for (long i = 0; i < n; i++) {
+			g.step(input * (float) std::sin(w * (double) t + inPhase));
+			t++;
+			const float d = std::fabs(g.r.l - prev);
+			if (d > worst) {
+				worst = d;
+				worstAt = where;
+			}
+			prev = g.r.l;
+		}
+	};
+	tick(1000, "start");
+	g.press(&F::recPress);   // Rec in: on an empty tape
+	tick(48000, "recording");
+	g.press(&F::recPress);   // Rec out: 1 s, 100 cycles
+	tick(2400, "rec out");
+	input = 2.f;
+	inPhase = PI / 2;        // a dub at right angles to the tape
+	tick(48000 * 2, "the join");
+	g.press(&F::dubPress);
+	tick(24000, "dub in");
+	g.press(&F::dubPress);
+	tick(4800, "dub out");
+	TapeSet* live = g.e.live();
+	const float written = tapeStep(live->tape);
+	tick(48000, "after the dub");
+	g.press(&F::restorePress);
+	tick(9600, "restore");
+	g.f.playTrig = 10.f;
+	tick(4800, "retrigger");
+	g.f.playTrig = 0.f;
+	tick(10000, "playing");
+	g.press(&F::playPress);
+	tick(4800, "stop");
+	g.press(&F::playPress);
+	tick(9600, "play");
+	for (int i = 0; i < 24000; i++) {
+		g.f.params[F::START] = 0.3f * i / 24000.f;
+		tick(1, "Start by knob");
+	}
+	for (int i = 0; i < 24000; i++) {
+		g.f.params[F::LENGTH] = 1.f - 0.3f * i / 24000.f;
+		tick(1, "Length by knob");
+	}
+	g.f.startCv = 1.f;
+	tick(9600, "Start by CV");
+	g.f.startCv = 0.f;
+	tick(9600, "Start by CV");
+	g.f.params[F::START] = 0.f;
+	g.f.params[F::LENGTH] = 1.f;
+	tick(9600, "knobs back");
+	CHECK(g.e.offer(g.sine(1.0, 100.0, 5.f, 2.0, 480)), "a new tape is offered");
+	tick(9600, "a new tape");
+	g.press(&F::recPress);   // Rec in over a playing tape
+	tick(24000, "rec in");
+	g.press(&F::recPress);
+	tick(9600, "rec out");
+	g.e.clear();
+	tick(9600, "clear");
+	CHECK(worst <= bound, "the largest step at the output is %.4f V, at %s (bound %.4f)", worst, worstAt, bound);
+	CHECK(written <= bound, "the largest step written on the tape by the dub is %.4f V (bound %.4f)", written, bound);
+	CHECK(g.r.empty && g.r.l == 0.f, "cleared: empty and silent");
+}
+
+// The join after a dub or wear has crossed it (Smear 0 and 1, forwards and
+// backwards, a whole tape with its tail and a short window inside a longer
+// tape): no step at the output over the bound, and none on the tape across
+// the window's end and the join's read-on.
+void no_clicks_join() {
+	const double w = 2 * PI * 100.0 / 48000.0;
+	const float bound = 1.5f * 5.f * (float) w;
+	for (int shortWindow = 0; shortWindow < 2; shortWindow++)
+		for (float smearK : {0.f, 1.f})
+			for (float knob : {1.f, -1.f}) {
+				Rig g;
+				const double n = 24000;
+				// Mix 1: the input (which starts and stops with the dub) is
+				// heard only while dubbing.
+				g.f.params[F::MIX] = 1.f;
+				g.f.params[F::SPEED] = knob;
+				g.f.params[F::SMEAR] = smearK;
+				if (shortWindow) {
+					g.f.params[F::START] = 0.25f;
+					g.f.params[F::LENGTH] = lengthKnob(14400, n, g.fs);
+				}
+				TapeSet* set = g.sine(0.5, 100.0, 5.f, 0.0, 480);
+				g.use(set);
+				const Window win = rka::eddy::window(g.f.params[F::START], 0.f, g.f.params[F::LENGTH], smearK, n, 0.0, g.fs);
+				// The turn: the tape beyond the window's end holds the whole of m
+				// (the tail, or tape), and so does the tape before Start going
+				// backwards, except from frame 0 of the whole tape.
+				const double tf = win.minFade, tb = shortWindow ? win.minFade : 0.0;
+				const long T = std::lround(win.length - (win.overlap - (knob > 0 ? tf : tb)));
+				long t = 0;
+				float worst = 0, prev = 0, input = 0.f;
+				const char* where = "";
+				const char* worstAt = "";
+				auto tick = [&](long k, const char* what) {
+					where = what;
+					for (long i = 0; i < k; i++) {
+						g.step(input * (float) std::sin(w * (double) t + PI / 2));
+						t++;
+						const float d = std::fabs(g.r.l - prev);
+						if (t > 1000 && d > worst) {
+							worst = d;
+							worstAt = where;
+						}
+						prev = g.r.l;
+					}
+				};
+				g.press(&F::playPress);
+				tick(T * 7 / 10, "playing");
+				input = 1.f;
+				g.press(&F::dubPress);   // a dub across the join
+				tick(T * 6 / 10, "dubbing across the join");
+				g.press(&F::dubPress);
+				tick(960, "dub out");
+				input = 0.f;
+				tick(T * 12 / 10, "the dub through the join");
+				const float dubbed = tapeStep(set->tape);
+				g.f.params[F::WEAR] = 1.f;
+				tick(30 * T, "Wear 1, 30 passes");
+				const float worn = tapeStep(set->tape);
+				const char* name = shortWindow ? "a short window" : "a whole tape";
+				CHECK(worst <= bound, "%s, Smear %.0f, Speed %+.0f: the largest step at the output is %.4f V, at %s (bound %.4f)", name,
+				      smearK, knob, worst, worstAt, bound);
+				CHECK(dubbed <= bound && worn <= bound,
+				      "%s, Smear %.0f, Speed %+.0f: the largest step on the tape is %.4f V after the dub, %.4f worn (bound %.4f)", name,
+				      smearK, knob, dubbed, worn, bound);
+			}
+}
+
+// A dub made across the join is heard at its own level through the join on
+// the next turn.
+void dub_through_join() {
+	for (float smearK : {0.f, 1.f}) {
+		Rig g;
+		g.f.params[F::SMEAR] = smearK;
+		g.f.params[F::DUB_LEVEL] = 1.f;
+		TapeSet* set = g.loaded(24000, 480, [](size_t, float& l, float& r) { l = r = 0.f; });
+		g.use(set);
+		const Window win = rka::eddy::window(0.f, 0.f, 1.f, smearK, 24000, 480.0, g.fs);
+		const long T = std::lround(win.turn);
+		g.press(&F::playPress);
+		// After the first join: the first turn's head came in by F, not by a
+		// join's fade, so it wrote its frames at full weight.
+		g.run(T + T / 2);
+		g.press(&F::dubPress);
+		for (long i = 0; i < T; i++)
+			g.step(2.f * (float) std::sin(2 * PI * 1000.0 * (double) i / 48000.0));
+		g.press(&F::dubPress);
+		double lo = 1e9, hi = -1e9;
+		std::vector<float> blk(48);
+		for (long b = 0; b < T / 48; b++) {
+			for (int i = 0; i < 48; i++) {
+				g.step();
+				blk[(size_t) i] = g.r.l;
+			}
+			if (b * 48 < 1000 || b * 48 > T - 1000)
+				continue;   // the dub's own fades in and out
+			const double level = db(rms(blk.data(), 48) / std::sqrt(2.0));
+			lo = std::min(lo, level);
+			hi = std::max(hi, level);
+		}
+		CHECK(lo > -0.5 && hi < 0.5, "Smear %.0f: a dub across the join is heard next turn at %+.2f to %+.2f dB of its own level", smearK,
+		      lo, hi);
+	}
+}
+
+} // namespace
+
+int main() {
+	exact_loop();
+	length();
+	speed();
+	window();
+	smear();
+	dub_levels();
+	dub_at_speed();
+	dub_bounded();
+	dub_lopsided();
+	wear_dub_lopsided();
+	wear_lows();
+	dub_lows();
+	dub_lows_5();
+	wear_dc();
+	offset_kept();
+	tape_change_clean();
+	wear_dc_tape_change();
+	wear_off_and_back();
+	wear_zero();
+	wear_window();
+	play_trigger();
+	one_shot();
+	eoc();
+	restore();
+	restore_level();
+	make_original();
+	view();
+	record_span();
+	record_over_a_tape();
+	record_to_capacity();
+	mix_law();
+	mix_default();
+	mix_smooth();
+	limit();
+	no_clicks();
+	no_clicks_join();
+	dub_through_join();
+	return rkatest::finish("eddy test_engine");
+}

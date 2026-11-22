@@ -18,7 +18,7 @@ process and a plain panel; **M** needs real DSP work or tuning by ear;
 The existing three are already in the Instrument look
 (`docs/specs/2026-11-15-instrument-look-design.md`): Sway, Fathom and
 Shoal moved to it in PR #7, after Shoal's friendly mode landed in PR #6
-(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging, Wake and Narrows were built in it from the start.
+(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging, Wake, Narrows and Eddy were built in it from the start.
 
 **Changes since (the user, 2026-11-18):** Squall was built next, ahead of
 Plimsoll and Lull. Plimsoll is skipped for now, since Ballast's soft limit
@@ -30,6 +30,31 @@ priority. The numbers below are the original order.
 added, to be built soon: it follows Wake, which was built the same day
 as a smaller module than its sketch (a stereo echo, 14 HP). Narrows has no
 number in the original order. It was built on 2026-11-21, polyphonic.
+
+**Changes since (the user, 2026-11-21):** Eddy was designed as a tape
+loop that also loads and saves WAV files, with a waveform window, so it
+and not Spindrift pays for the first window. Fetch, a player for long
+field recordings (the user's are 100 to 300 MB), was added to follow it;
+it has no number in the original order. Eddy's Wear covers much of
+Rust's ground.
+
+**Changes since (2026-11-22):** Eddy was built (16 HP), with dragging
+in its window to set Start and Length added at the listening stop.
+Trimming the tape to the window is left for later (issue #66). It left
+shared code that Fetch, Spindrift and Log can start from: the tape and
+its write head (`src/Tape.hpp`), a band-limited read at any speed
+(`src/BandLimitedRead.hpp`), offline rate conversion
+(`src/Resample.hpp`), WAV reading and writing (`src/WavFile.hpp`, over
+the vendored dr_wav), the waveform overview (`src/Overview.hpp`, 512
+columns of peaks, merged in pairs as a recording grows), the window
+widget with drag selection (`TapeWindow` in `src/widgets.hpp`, its
+gesture in `src/TapeGesture.hpp`), the worker's file jobs
+(`src/eddy/TapeJobs.hpp`, Eddy's own but a pattern to copy) and the
+aliasing meter for tests (`rkatest::AliasMeter`,
+`src/testing_alias.hpp`). Wake's read point (`src/DelayTap.hpp`) did
+not carry over. Eddy is also the first module whose aliasing is
+measured (`docs/DSP-ALIASING.md`, `TESTING.md` rule 16); measuring the
+others that make or bend sound is issue #67.
 
 ## 1. A whole patch from RKA alone
 
@@ -46,18 +71,20 @@ sound, space, loudness under control, stereo, and a safe output.
 
 ## 2. Texture
 
-The sounds that define the genre, and the hardest DSP. Wake comes before
-Eddy and Spindrift because all three read and write a buffer, and Wake's
-is the one to build first and reuse.
+The sounds that define the genre, and the hardest DSP. Wake, Eddy and
+Spindrift all read and write a buffer; Wake came first, but its read point
+did not carry over: Eddy built its own tape, band-limited read and window,
+and Spindrift starts from those.
 
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
 | 7 | [Rigging](rigging.md) (built) | M | Six tuned strings. Hadal's noise through Rigging is a tuned drone: a second voice from two modules already built; struck by Squall, it also covers some of Ping's and Buoy's ground. |
-| 8 | [Wake](wake.md) (built) | L | The delay. Built as a stereo echo for struck sounds, with three styles, Ratio, ping pong and Freeze; the taps and the Send and Return of the first sketch were left out. Its moving read point (`src/DelayTap.hpp`) is the code Eddy and Spindrift reuse. |
+| 8 | [Wake](wake.md) (built) | L | The delay. Built as a stereo echo for struck sounds, with three styles, Ratio, ping pong and Freeze; the taps and the Send and Return of the first sketch were left out. Its moving read point (`src/DelayTap.hpp`) was expected to carry over to Eddy and Spindrift; it did not carry over to Eddy, whose tape stands still while the head moves (2026-11-22). |
 | new | [Narrows](narrows.md) (built) | M | Polyphonic stereo filter: low-pass, band-pass or high-pass on a Mode sweep, with a comb and a ping input. The collection had no filter outside Fathom's voice, and every texture module here wants one after it. Two cores on a switch: Fathom's ladder, now shared code (`src/fathom/LadderCore.hpp`), and a state-variable filter. Its four-wide float type (`src/Float4.hpp`) is there for the next polyphonic module. |
-| 9 | [Eddy](eddy.md) | M | Tape loop. Reuses Wake's buffer code; gives layered, decaying loops. |
-| 10 | [Spindrift](spindrift.md) | L | Grain cloud. The first module with a window to draw; the user singled it out. |
-| 11 | [Doldrums](doldrums.md) | L | Spectral freeze and stretch. The highest reward and the highest risk here, so it follows Spindrift, which settles how a window is drawn. |
+| 9 | [Eddy](eddy.md) (built) | L | Tape loop that also loads and saves files, up to 5 minutes, with a waveform window (drag in it to set Start and Length), wear in the loop and a Restore to the original. Larger than first guessed: its tape and write head are new code (Wake's read point did not carry over), and it paid for the first drawn window. Built 2026-11-22, 16 HP. |
+| new | [Fetch](fetch.md) | M | A player for long field recordings, read from disk. Follows Eddy, whose window widget, WAV reader, rate conversion and band-limited read it reuses. |
+| 10 | [Spindrift](spindrift.md) | L | Grain cloud; the user singled it out. Its window starts from Eddy's, and its buffer from Eddy's tape and band-limited read. |
+| 11 | [Doldrums](doldrums.md) | L | Spectral freeze and stretch. The highest reward and the highest risk here, so it comes last; how a window is drawn is settled already (Eddy's `TapeWindow`). |
 
 ## 3. Slow movement and long form
 
@@ -94,7 +121,7 @@ Processes that change the character of what is already there.
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
 | 24 | [Doppler](doppler.md) | M | Frequency shifter. Slow inharmonic beating; could move earlier if space ambient leads. |
-| 25 | [Rust](rust.md) | M | Wear and decay. Could also become part of Eddy. |
+| 25 | [Rust](rust.md) | M | Wear and decay. Eddy's Wear now does much of it inside a loop; Rust would be the same on any sound as it passes, with wow and flutter. |
 | 26 | [Thermocline](thermocline.md) | S | Crossover, to treat lows and highs apart. |
 
 ## 6. Utilities, as a patch calls for them
@@ -134,4 +161,5 @@ Good ideas that this music does not need, or that Shoal already covers.
 - **How Shoal lands.** If its apps prove awkward for slow work, Neap,
   Squall and Sounding rise.
 - **A window is a shared cost.** Spindrift, Doldrums, Log and Signal all
-  draw one. The first to be built pays for the rest.
+  draw one. The first to be built pays for the rest. (2026-11-22: Eddy
+  paid for it: `TapeWindow` in `src/widgets.hpp`.)

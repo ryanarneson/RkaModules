@@ -12,9 +12,10 @@ layout.
   each also a verb (Sway = a boat at anchor, Fathom = depth). Decided
   2026-10-24. Reserved for the ideas in `~/ws/plugins/IDEAS.md`: Swell
   (slope/function generator), Undertow or Drift (chaos / smooth random),
-  Tide (clocked modulator), Eddy (random sampler), Loom (a darker voice).
-  Pick from this family before inventing a new name; never rename a
-  released module.
+  Tide (clocked modulator), Loom (a darker voice). Eddy, once reserved
+  there for a random sampler, is the tape loop (built 2026-11-22). Pick
+  from this family before inventing a new name; never rename a released
+  module.
 - One shared look, "Instrument" (brass and ivory on near-black; rules in
   `docs/DESIGN-THEME.md`, detail in
   `docs/specs/2026-11-15-instrument-look-design.md`): palette and panel
@@ -58,6 +59,9 @@ layout.
 - DSP lives in Rack-free headers in `src/<folder>/` with tests in
   `src/<folder>/test_*.cpp` (using `src/testing.hpp`). Modules only map params/ports/polyphony onto the
   core.
+- Aliasing: `docs/DSP-ALIASING.md` (the three sources and their remedies,
+  what to reuse, how to measure) and `TESTING.md` rule 16: a module that
+  makes or bends sound measures its aliasing against a bound in dB.
 - A new module with an engine follows `TESTING.md`, "Adding a module":
   `src/<folder>/bench.inc` gets it `make bench`, `libm-calls` and
   `engine-globals` with no other change.

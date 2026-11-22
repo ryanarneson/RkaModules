@@ -5,9 +5,11 @@ can be picked up later. Each is a concept and a rough panel sketch in the
 Instrument look (`docs/specs/2026-11-15-instrument-look-design.md`), not a
 design: names are working titles and have not been checked against the VCV
 Library, and the control sets are first guesses made to draw the panels.
-Sluice, Fog, Hadal, Ballast (with its Pan expander), Squall, Rigging, Wake and Narrows have since been designed and built (their pages point to
+Sluice, Fog, Hadal, Ballast (with its Pan expander), Squall, Rigging, Wake, Narrows and Eddy have since been designed and built (their pages point to
 their specs and manuals); the rest have not been through a design
 conversation yet.
+A design for any of them that makes or bends sound names its aliasing
+sources and what is done about each (`docs/DSP-ALIASING.md`).
 
 A suggested order for building them, with the user's music in mind, is
 in [ROADMAP.md](ROADMAP.md).
@@ -19,7 +21,7 @@ takes one more instrument and builds its panel geometry from it.
 | Module | What it does | The instrument | Width |
 |--------|--------------|----------------|-------|
 | [Wake](wake.md) | Stereo echo (built) | A ship's wake | 14 HP |
-| [Eddy](eddy.md) | Tape loop (reworked from a small delay) | An eddy, drawn as a spiral | 10 HP |
+| [Eddy](eddy.md) | Tape loop that also loads and saves files, with a waveform window (built) | An eddy, drawn as a spiral in the sketch | 16 HP |
 | [Neap](neap.md) | Very slow, layered modulation | A tide-predicting machine | 12 HP |
 | [Bearing](bearing.md) | Quantiser | A compass rose | 10 HP |
 | [Squall](squall.md) | Random source (built) | An aneroid barometer | 8 HP |
@@ -78,6 +80,7 @@ are Doldrums, Rigging, Hadal and Sluice.
 | [Rust](rust.md) | Decay and wear | Rust | 8 HP |
 | [Helm](helm.md) | Scene morph: eight scenes, six outputs | A ship's wheel | 12 HP |
 | [Lee](lee.md) | Ducker and envelope follower | The sheltered side | 8 HP |
+| [Fetch](fetch.md) | Player for long field recordings, read from disk (added 2026-11-21) | The fetch: open water the wind has crossed | not drawn |
 
 Eddy, in the first table, was reworked into a tape loop as part of this.
 

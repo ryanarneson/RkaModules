@@ -10,7 +10,7 @@ last section lists where they fall short.
 | Command | What it does | Needs |
 |---|---|---|
 | `make test` | Builds and runs every `src/<module>/test_*.cpp`, the Shoal and engine globals checks, the libm check (Linux) and the bench declarations check | A C++17 compiler |
-| `make -f tests.mk test TEST_WERROR=-Werror CXX=g++` | The same, as CI runs it on Linux | No Rack SDK |
+| `make -f tests.mk test TEST_WERROR=-Werror CXX=g++ TSAN_REQUIRED=1` | The same, as CI runs it on Linux (`TSAN_REQUIRED=1`: fail, not skip, if the ThreadSanitizer test cannot start; rule 7) | No Rack SDK |
 | `make` | Builds the plugin | Rack SDK (`RACK_DIR`) |
 | `make smoke` | Loads the plugin in Rack with a temporary user folder and screenshots every module to `build/screenshots/` | Rack SDK, Rack |
 | `make shoal-globals` | Fails if the firmware object holds writable global state | |
@@ -134,6 +134,25 @@ sample until the allocation counter existed.
 - Pointers handed across threads must point to storage that outlives both
   sides.
 
+Eddy hands tape sets between the audio thread and its worker through
+atomics. `src/eddy/test_threads.cpp` runs the engine with three real
+threads (the audio thread in a trigger storm, a worker offering, collecting
+and copying sets, the window reading the live overview) under
+ThreadSanitizer, which has its own rule in `tests.mk` because it cannot be
+combined with ASan; the build fails, saying so, where the compiler cannot
+link it. GCC's TSan runtime cannot start on a Linux kernel whose address
+randomisation is wider than it handles (`vm.mmap_rnd_bits` over 28, as in
+Colima's VM) or under Rosetta: `make test` then reruns it under
+`setarch -R`, and only if it cannot start that way either (Docker's default
+seccomp profile refuses `setarch -R`; Rosetta fails either way) skips it
+with the reason printed, and `make test` still passes. With
+`TSAN_REQUIRED=1` that skip is a failure instead: `make test` fails,
+naming the test. CI sets it (and narrows `vm.mmap_rnd_bits` to 28 first),
+so a green CI run means the thread test ran. One data race is accepted by design and is not in that test: the
+worker reading the live tape to save it while the engine may be writing it
+(Wear, Dub). A torn read costs one sample of wear either side of it; the save
+names it where it reads.
+
 ### 8. Instances are independent
 
 Two instances with different seeds give different results and never affect
@@ -200,10 +219,29 @@ instance, Apple M-series Mac:
 | Wake measured | 0.155 | 0.157 | 0.178 |
 | Narrows budget | 0.7 | 0.7 | 4.9 |
 | Narrows measured | 0.33 | 0.33 | 2.43 |
+| Eddy budget | 0.2 | 0.3 | 1.7 |
+| Eddy measured (was) | 0.086 (0.089) | 0.130 (0.140) | 1.36 (0.845) |
 
 Narrows' idle and outputs cases are one stereo voice through the ladder and
 its busy case is sixteen voices with everything engaged; it also has a state
 case (one voice through the state core): budget 0.5, measured 0.24.
+
+Eddy's idle has no tape; outputs plays a 10 s tape at the defaults; busy
+is a full tape (5 minutes) at Speed 2 by a moving CV, Dub on, Wear and Smear
+at 1 and a window of about 1 s, so two voices read, write and wear at once
+all the time and the overview is always rescanning. Its measurements are
+the most of three runs at 1, 4 or 16 instances. Busy rose from 0.845 to
+1.36 with the band-limited read (2026-11-22; most of it is the two
+voices' kernels at speed 2), inside the budget it had. Two more cases:
+slow, the 10 s tape at half speed (the module's common case, through the
+interpolating kernel): budget 0.35, measured 0.162 (0.138 with the
+Hermite read before); and fast4, the heaviest steady patch (Speed 4 by
+the knob at 2 and V/OCT +1 V, Dub on, Wear and Smear at 1, a window of
+about 0.1 s, so two voices read at 4 and write all the time): budget
+3.85, measured 1.91. Four voices at 4 at once (retriggers and joins
+overlapping) are rarer and not a case: about 0.42 % of a core more per
+voice read at 4. Its libm cases are idle, outputs, busy with the Speed CV
+still and slow, all knobs-still.
 
 Sluice also has a mixDown case (as busy, but only D connected): budget 2.25,
 measured 1.11. Its budgets are about twice the measurement, rounded up to
@@ -300,6 +338,21 @@ What only a person can verify goes in a numbered list at the end of the plan
 and is handed over with the build. State plainly what has not been tried with
 a real mouse or in a live Rack. Automated checks do not stand in for them.
 
+### 16. Aliasing is measured
+
+A module that generates sound, has a nonlinearity, or reads a buffer at a
+variable rate has an offline test that measures its aliasing with
+`rkatest::AliasMeter` (`src/testing_alias.hpp`) against a bound stated in
+dB, at 44.1 and 48 kHz, and that bound is shown to fail by a mutation that
+removes the anti-aliasing (rule 1). A source left alone is pinned at its
+measured level plus a few dB. A module that needs no such test (linear,
+control-rate only) says why in the table below. `docs/DSP-ALIASING.md`
+has the sources, the remedies and how to set a bound.
+
+Why: Eddy read its tape faster than normal through a Hermite interpolator
+and nothing else; at speeds 2 to 4 a high tone came out entirely as an
+alias at full level, and no test measured it.
+
 ## Adding a module
 
 A new module with per-sample DSP gets the CPU bench, the libm check and
@@ -328,7 +381,10 @@ the globals check by declaring its engine; nothing in `src/bench/` or
    through both and bounds the difference, as `src/fathom/test_engine.cpp`
    and `src/sway/test_engine.cpp` do; add it to `PLUGIN_MATH_TESTS` in
    `tests.mk` so it builds with the plugin's floating-point flags.
-5. Then, with no other change: `make test` runs `bench-modules`,
+5. If it makes or bends sound, name its aliasing sources in its design
+   (`docs/DSP-ALIASING.md`) and add a `test_alias.cpp` as rule 16 says,
+   or say in the table below why it needs none.
+6. Then, with no other change: `make test` runs `bench-modules`,
    `engine-globals` and (on Linux, so in CI) `libm-calls` for it, and
    `make bench` times it and checks its budgets. Add the folder to
    `MODULES` in the Makefile and fill in its column of the table below.
@@ -379,20 +435,21 @@ Three habits behind most of them:
 
 ## What each module has today
 
-| | Sway | Fathom | Shoal | Sluice | Fog | Hadal | Ballast | Pan | Squall | Rigging | Wake | Narrows |
-|---|---|---|---|---|---|---|---|---|---| --- | --- | --- |
-| Rack-free core with offline tests | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| `-Wall -Wextra`, `-Werror` in CI | Yes | Yes | No (vendored firmware warns) | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| Sanitizers | No | No | Yes | Partly (`test_hostile` only: the fuzz, hostile input, sample rates, allocation) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) |
-| Hostile-input and sample-rate sweeps | Partly | Partly | Yes | Yes (NaN, infinity, 1e30, a sample-rate change, 1 Hz to 768 kHz, 0 and negative rates) | Yes (NaN and infinity on every input, CV and parameter, 1 Hz to 768 kHz, 0, negative and NaN rates, a rate change over a tail) | Yes (NaN and infinity on every CV, 1 Hz to 768 kHz, 0, negative, NaN and 1e9 rates, rate changes) | Yes (NaN and infinity on every input, CV and CHAIN, 1 Hz to 768 kHz, 0, negative, NaN and 1e9 rates, rate changes) | Yes (NaN and infinity on every knob, attenuverter and CV, 0, negative, NaN and 1e9 rates) | Yes (NaN and infinity on every CV, Clock and Freeze, 1 Hz to 768 kHz, 0, negative, NaN and 1e9 rates, rate changes) | Yes (NaN, infinity and 1e30 on every input, CV and knob, 1 Hz to 768 kHz, 0, negative and NaN rates, rate changes while ringing, a tuned square with Ring at 60 s, STRUM at audio rate) | Yes (NaN, infinity and 1e30 on every input, CV and parameter, 1 Hz to 768 kHz, unusable rates, rate changes while frozen and at Feedback 110 %, gate and clock at audio rate) | Yes (NaN and infinity on every port and knob, 1 Hz to 768 kHz, unusable rates, rate changes, channel counts changing every sample, FM, the core switch, Mode and PING at audio rate) |
-| Random fuzz with seeds | No | No | Yes | Yes (`test_hostile`: 600 fixed-seed trials against a scalar model; no seed sweep) | Yes (`test_hostile`: 200 fixed-seed trials; no seed sweep) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, patch states and rates, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, poly counts, patch states and rates, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed Pan and Ballast controls, modes and links, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, clock, Freeze, menus and rates, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, triggers, patch states and rates; no seed sweep) | Yes (`test_hostile`: six seeds of fuzzed knobs, CVs, switches, patch states and resets) | Yes (`test_hostile`: twelve seeds of fuzzed knobs, CVs, channel counts, rates and resets) |
-| Golden saved-state image | No (params only) | No (params only) | Yes | No (params only) | No (params only) | No (params only) | No (params and `dcBlock`) | No (params and `stereoMode`) | No (params, `range`, `loopLength`, `history`, `step` and `swell`; round trip and bad values tested on the engine) | No (params and `freePitch`) | No (params, `style` and the two latches) | No (params only) |
-| Allocation check on the audio path | No | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| Thread tests | Not needed (no shared state) | Not needed | Yes | Not needed | Not needed | Not needed | Not needed | Not needed (one atomic counter) | Not needed (no shared state) | Not needed (no shared state) | Not needed (no shared state) | Not needed (no shared state) |
-| CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes (`make shoal-bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`, with Ballast) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) |
-| No libm call per sample, knobs still | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Not checked | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) |
-| No writable global state | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make shoal-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) |
-| Smoke screenshot | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| | Sway | Fathom | Shoal | Sluice | Fog | Hadal | Ballast | Pan | Squall | Rigging | Wake | Narrows | Eddy |
+|---|---|---|---|---|---|---|---|---|---| --- | --- | --- | --- |
+| Rack-free core with offline tests | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| `-Wall -Wextra`, `-Werror` in CI | Yes | Yes | No (vendored firmware warns) | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Sanitizers | No | No | Yes | Partly (`test_hostile` only: the fuzz, hostile input, sample rates, allocation) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile` only) | Partly (`test_hostile`, `test_files`, `test_jobs` and `test_book` (the worker's bookkeeping, `WorkerBook.hpp`, by scenario and a seeded sweep) under ASan and UBSan, with every tape fenced by ASan poisoning; `test_threads` under ThreadSanitizer) |
+| Hostile-input and sample-rate sweeps | Partly | Partly | Yes | Yes (NaN, infinity, 1e30, a sample-rate change, 1 Hz to 768 kHz, 0 and negative rates) | Yes (NaN and infinity on every input, CV and parameter, 1 Hz to 768 kHz, 0, negative and NaN rates, a rate change over a tail) | Yes (NaN and infinity on every CV, 1 Hz to 768 kHz, 0, negative, NaN and 1e9 rates, rate changes) | Yes (NaN and infinity on every input, CV and CHAIN, 1 Hz to 768 kHz, 0, negative, NaN and 1e9 rates, rate changes) | Yes (NaN and infinity on every knob, attenuverter and CV, 0, negative, NaN and 1e9 rates) | Yes (NaN and infinity on every CV, Clock and Freeze, 1 Hz to 768 kHz, 0, negative, NaN and 1e9 rates, rate changes) | Yes (NaN, infinity and 1e30 on every input, CV and knob, 1 Hz to 768 kHz, 0, negative and NaN rates, rate changes while ringing, a tuned square with Ring at 60 s, STRUM at audio rate) | Yes (NaN, infinity and 1e30 on every input, CV and parameter, 1 Hz to 768 kHz, unusable rates, rate changes while frozen and at Feedback 110 %, gate and clock at audio rate) | Yes (NaN and infinity on every port and knob, 1 Hz to 768 kHz, unusable rates, rate changes, channel counts changing every sample, FM, the core switch, Mode and PING at audio rate) | Yes (NaN, infinity and 1e30 on every input and parameter, 1 Hz, 8 kHz and 768 kHz, rate changes while playing, dubbing, recording, copying and clearing, unusable rates, the window's extremes for 60 s) |
+| Random fuzz with seeds | No | No | Yes | Yes (`test_hostile`: 600 fixed-seed trials against a scalar model; no seed sweep) | Yes (`test_hostile`: 200 fixed-seed trials; no seed sweep) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, patch states and rates, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, poly counts, patch states and rates, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed Pan and Ballast controls, modes and links, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, clock, Freeze, menus and rates, fixed seed) | Yes (`test_hostile`: 10^6 samples of fuzzed knobs, CVs, triggers, patch states and rates; no seed sweep) | Yes (`test_hostile`: six seeds of fuzzed knobs, CVs, switches, patch states and resets) | Yes (`test_hostile`: twelve seeds of fuzzed knobs, CVs, channel counts, rates and resets) | Yes (`test_hostile`: five seeds, 10 minutes of audio, every control, gate and button each 32-sample block, and the worker's requests) |
+| Golden saved-state image | No (params only) | No (params only) | Yes | No (params only) | No (params only) | No (params only) | No (params and `dcBlock`) | No (params and `stereoMode`) | No (params, `range`, `loopLength`, `history`, `step` and `swell`; round trip and bad values tested on the engine) | No (params and `freePitch`) | No (params, `style` and the two latches) | No (params only) | Yes (`test_jobs`: the stored tape's files made by hand and loaded to the bit; partial and damaged stores) |
+| Allocation check on the audio path | No | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes (operator new and delete, and every malloc and free through the sanitizer's hooks) |
+| Thread tests | Not needed (no shared state) | Not needed | Yes | Not needed | Not needed | Not needed | Not needed | Not needed (one atomic counter) | Not needed (no shared state) | Not needed (no shared state) | Not needed (no shared state) | Not needed (no shared state) | Yes (`test_threads`: the audio thread in a trigger storm, a worker offering, collecting and copying sets, and the window reading overviews, under ThreadSanitizer) |
+| CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes (`make shoal-bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`, with Ballast) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) |
+| No libm call per sample, knobs still | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Not checked | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) |
+| No writable global state | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make shoal-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) |
+| Aliasing measured (rule 16) | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Yes (`test_alias`: the read at every speed, band-limited to 50 dB from x1.02 up, images 60 dB down below 1, level against speed, x1 to the bit; wear, the limits and dub pinned; `test_band_read`) |
+| Smoke screenshot | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes (with a tape: `make smoke` makes a WAV for it, and loads it into Eddy in two headless runs, one quit while it loads) |
 
 Fog also has `make fog-soak` (opt-in, minutes, not in `make test`): every
 mode at v = 1 and three corners of Size, Damp and Drift, 10 minutes of noise
@@ -417,5 +474,9 @@ Other open items:
 - Shoal's own code (not the vendored firmware) should compile with
   `-Wall -Wextra -Werror` in CI; today CI's `-Werror` reaches only the other
   modules' tests.
-- CI does not run `make smoke`, the benches, the fuzz seeds or ThreadSanitizer;
-  those are run by hand before a merge.
+- CI does not run `make smoke`, the benches or the fuzz seeds; those are run
+  by hand before a merge. ThreadSanitizer is part of `make test` for
+  Eddy's `test_threads` only, and runs only where it can start (rule 7):
+  on the Mac, and on Linux where address randomisation is narrow enough or
+  `setarch -R` is allowed. Elsewhere `make test` skips it and says why,
+  unless `TSAN_REQUIRED=1` is set, when it fails instead. CI sets it.

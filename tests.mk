@@ -8,9 +8,39 @@
 MODULES ?= $(patsubst src/%/,%,$(sort $(dir $(wildcard src/*/test_*.cpp))))
 
 TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_*.cpp)))
+# The ThreadSanitizer tests (Eddy's test_threads) run after the rest. Where
+# the sanitizer cannot start (GCC's runtime on a Linux kernel whose address
+# randomisation is wider than it handles, vm.mmap_rnd_bits over 28, or under
+# emulation) it stops before main with "unexpected memory mapping": then the
+# test runs again with randomisation off (setarch -R), and only if it cannot
+# start that way either is it skipped, saying why. Any other failure fails.
+# With TSAN_REQUIRED set (to anything but empty or 0; CI sets it) a test that
+# cannot start fails `make test` instead of being skipped.
+TSAN_TESTS = $(filter %/test_threads,$(TEST_BINS))
+TSAN_START_FAILED = ThreadSanitizer: unexpected memory mapping
+TSAN_REQUIRED ?=
 .PHONY: test
 test: shoal-globals bench-modules engine-globals libm-calls panels-test $(TEST_BINS)
-	@for t in $(TEST_BINS); do ./$$t || exit 1; done
+	@for t in $(filter-out $(TSAN_TESTS),$(TEST_BINS)); do ./$$t || exit 1; done
+	@for t in $(TSAN_TESTS); do \
+		./$$t > $$t.log 2>&1; rc=$$?; \
+		if [ $$rc != 0 ] && grep -q "$(TSAN_START_FAILED)" $$t.log; then \
+			setarch "$$(uname -m)" -R ./$$t > $$t.log 2>&1; rc=$$?; \
+			if [ $$rc != 0 ] && grep -q -e "$(TSAN_START_FAILED)" -e setarch $$t.log; then \
+				cat $$t.log; \
+				if [ -n "$(TSAN_REQUIRED)" ] && [ "$(TSAN_REQUIRED)" != 0 ]; then \
+					echo "$$t: FAILED: ThreadSanitizer cannot start here, nor under setarch -R, and TSAN_REQUIRED is set" \
+						"(it needs vm.mmap_rnd_bits of 28 or less or personality(2) allowed, and no emulation)"; \
+					exit 1; \
+				fi; \
+				echo "$$t: skipped (ThreadSanitizer cannot start here, nor under setarch -R:" \
+					"it needs vm.mmap_rnd_bits of 28 or less or personality(2) allowed, and no emulation;" \
+					"set TSAN_REQUIRED=1 to make this a failure)"; \
+				continue; \
+			fi; \
+		fi; \
+		cat $$t.log; [ $$rc = 0 ] || exit 1; \
+	done
 
 # The panel generator's geometry and layout checks, and that the committed
 # panels, layout headers, colours and components are what it generates.
@@ -67,6 +97,36 @@ build/test/rigging/test_hostile: src/rigging/test_hostile.cpp src/testing.hpp $(
 build/test/wake/test_hostile: src/wake/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/wake/*.hpp src/hadal/*.hpp)
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/wake $< -o $@
+
+# Eddy's file test: the sanitizers, and counting allocators (operator new and
+# dr_wav's malloc). WavFile.hpp is compiled into it (RKA_WAV_IMPLEMENTATION).
+build/test/eddy/test_files: src/eddy/test_files.cpp src/testing.hpp $(wildcard src/*.hpp src/eddy/*.hpp src/dep/*.h)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/eddy $< -o $@
+
+# Eddy's worker jobs (TapeJobs.hpp): the sanitizers, and the sanitizer's malloc
+# and free hooks counting live bytes. WavFile.hpp is compiled into it.
+build/test/eddy/test_jobs: src/eddy/test_jobs.cpp src/testing.hpp $(wildcard src/*.hpp src/eddy/*.hpp src/dep/*.h)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/eddy $< -o $@
+
+# Eddy's worker bookkeeping (WorkerBook.hpp): the sanitizers.
+build/test/eddy/test_book: src/eddy/test_book.cpp src/testing.hpp src/eddy/WorkerBook.hpp
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/eddy $< -o $@
+
+# Eddy's hostile-input test: the sanitizers (and the tapes fenced with ASan's
+# poisoning), and counting allocators.
+build/test/eddy/test_hostile: src/eddy/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/eddy/*.hpp src/hadal/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/eddy $< -o $@
+
+# Eddy's thread test: ThreadSanitizer, which cannot be combined with ASan.
+# Fails, saying why, where the compiler cannot build with it.
+build/test/eddy/test_threads: src/eddy/test_threads.cpp src/testing.hpp $(wildcard src/*.hpp src/eddy/*.hpp src/hadal/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=thread -Isrc -Isrc/eddy $< -o $@ || \
+		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Eddy's thread test needs it" >&2; exit 1; }
 
 # Narrows' hostile-input test: the sanitizers, and the counting operator new.
 build/test/narrows/test_hostile: src/narrows/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/narrows/*.hpp src/fathom/*.hpp)
@@ -170,7 +230,7 @@ bench: build/bench/bench
 # pre-optimisation references, built with the plugin's floating-point and
 # architecture flags so they check what the plugin computes.
 PLUGIN_MATH_TEST_FLAGS = -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR)
-PLUGIN_MATH_TESTS = build/test/fathom/test_fast_math build/test/fathom/test_ladder_fast build/test/fathom/test_engine build/test/sway/test_engine build/test/sluice/test_engine build/test/fog/test_blocks build/test/fog/test_network build/test/fog/test_engine build/test/fog/test_modes build/test/fog/test_stereo build/test/hadal/test_layers build/test/hadal/test_engine build/test/ballast/test_engine build/test/ballast/test_expander build/test/pan/test_core build/test/squall/test_events build/test/squall/test_parts build/test/squall/test_engine build/test/rigging/test_chords build/test/rigging/test_string build/test/rigging/test_strike build/test/rigging/test_engine build/test/wake/test_tap build/test/wake/test_timing build/test/wake/test_loop build/test/wake/test_engine build/test/narrows/test_laws build/test/narrows/test_state build/test/narrows/test_parts build/test/narrows/test_engine
+PLUGIN_MATH_TESTS = build/test/fathom/test_fast_math build/test/fathom/test_ladder_fast build/test/fathom/test_engine build/test/sway/test_engine build/test/sluice/test_engine build/test/fog/test_blocks build/test/fog/test_network build/test/fog/test_engine build/test/fog/test_modes build/test/fog/test_stereo build/test/hadal/test_layers build/test/hadal/test_engine build/test/ballast/test_engine build/test/ballast/test_expander build/test/pan/test_core build/test/squall/test_events build/test/squall/test_parts build/test/squall/test_engine build/test/rigging/test_chords build/test/rigging/test_string build/test/rigging/test_strike build/test/rigging/test_engine build/test/wake/test_tap build/test/wake/test_timing build/test/wake/test_loop build/test/wake/test_engine build/test/eddy/test_tape build/test/eddy/test_laws build/test/eddy/test_select build/test/eddy/test_wear build/test/eddy/test_overview build/test/eddy/test_engine build/test/eddy/test_transport build/test/eddy/test_band_read build/test/eddy/test_alias build/test/narrows/test_laws build/test/narrows/test_state build/test/narrows/test_parts build/test/narrows/test_engine
 $(filter $(TEST_BINS),$(PLUGIN_MATH_TESTS)): build/test/%: src/%.cpp $(wildcard src/*.hpp $(MODULES:%=src/%/*.hpp) $(MODULES:%=src/%/testdata/ref/*.hpp))
 	@mkdir -p $(@D)
 	$(CXX) $(PLUGIN_MATH_TEST_FLAGS) -Isrc -I$(<D) $< -o $@

@@ -4,7 +4,7 @@ RACK_DIR ?= ../..
 # One folder per module: code and test_*.cpp tests in src/<module>/,
 # panels in res/<module>/ (generated from res-src/<module>/). src/ itself
 # has the shared plugin entry point and widgets.
-MODULES = sway fathom shoal sluice fog hadal ballast pan squall rigging wake narrows
+MODULES = sway fathom shoal sluice fog hadal ballast pan squall rigging wake narrows eddy
 
 # FLAGS will be passed to both the C and C++ compiler
 FLAGS += -Isrc
@@ -24,6 +24,8 @@ SOURCES += $(filter-out $(wildcard $(MODULES:%=src/%/test_*.cpp)),$(wildcard $(M
 DISTRIBUTABLES += res
 DISTRIBUTABLES += $(wildcard LICENSE*)
 DISTRIBUTABLES += $(wildcard presets)
+# Eddy's window letters the tape's length in the panels' typeface, with its licence.
+DISTRIBUTABLES += tools/fonts/D-DINCondensed.ttf tools/fonts/OFL-1.1.txt tools/fonts/COPYING.txt
 
 # Include the Rack plugin Makefile framework
 include $(RACK_DIR)/plugin.mk

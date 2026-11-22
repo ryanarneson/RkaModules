@@ -1,7 +1,9 @@
 #pragma once
 #include <rack.hpp>
 #include "Detents.hpp"
+#include "Overview.hpp"
 #include "RkaTheme.hpp"
+#include "TapeGesture.hpp"
 #include "plugin.hpp"
 
 // Components shared by every RKA module, so the plugin keeps one look,
@@ -439,6 +441,234 @@ struct KnurlEncoder : Encoder {
 			window::svgDraw(args.vg, knurl[dark]->handle);
 			nvgRestore(args.vg);
 		}
+	}
+};
+
+// What the window on a tape shows (TapeWindow): the overview's columns and,
+// as fractions of the tape (0..1), the head, the window's start and length
+// and the overlap at its join; the tape's length in seconds. While
+// recording, the overview and the fractions are over a span that grows with
+// the recording (Eddy: 4 s, doubled each time the recording reaches its end,
+// up to the tape's capacity), so the waveform fills half to all of the
+// glass; `seconds` is then the time recorded. `overview` must stay valid
+// while the window draws (the source hands it a copy it owns).
+struct TapeView {
+	const rka::Overview* overview = nullptr;
+	float head = 0, start = 0, length = 1, overlap = 0, seconds = 0;
+	bool empty = true, recording = false;
+	// Which tape this is (only compared: a drag stops if it changes).
+	const void* tape = nullptr;
+};
+
+// A window on a tape, drawn in vectors in the self-illuminating layer in
+// the theme's colours (Eddy's TAPE screen; Spindrift's and Log's start from
+// it). The columns of the overview as vertical strokes from lo to hi (a few
+// columns to a stroke where they are narrower than STROKE_PX, so the strokes
+// stay apart at any zoom, as on the mockup), those
+// inside the window at full strength and the rest at 30 %; a window that
+// passes the tape's end in two pieces; a thin line at each of its ends; the
+// overlap of the join along the bottom edge, back from the window's end;
+// the head as an ivory line; the tape's length, m:ss, in the top right
+// corner. Empty: a line along the middle. It knows nothing of the engine:
+// `source` fills a TapeView, or returns false to draw nothing.
+//
+// The mouse (TapeGesture.hpp): a left press near an end line takes that
+// end, elsewhere starts a new selection; once it has moved TAPE_CLICK_PX
+// sideways it is a drag: onSelectBegin once, then onSelect at every move
+// with what was taken and the press and the mouse as fractions of the
+// tape, and onSelectEnd at the release. A click that does not move changes
+// nothing; a double-click calls onWhole. With an empty tape, while
+// recording, or with no callbacks the press is still taken (the glass
+// never drags the module) and nothing else happens. A drag stops changing
+// anything the moment that becomes so, or the tape (TapeView::tape)
+// changes, and does not resume; its release still ends it. A press after a
+// drag whose release was lost ends that drag first. The module turns these
+// into its knobs; the window draws what the knobs then make.
+struct TapeWindow : widget::Widget {
+	std::function<bool(TapeView&)> source;
+	std::function<void()> onSelectBegin, onSelectEnd, onWhole;
+	std::function<void(TapeGrab grab, float press, float now)> onSelect;
+	// The gesture being followed (TapeGesture.hpp).
+	TapeDrag drag;
+	// The volts at the glass's top and bottom edges: a +-5 V tape fills most
+	// of it; a hotter one is held to the edges.
+	static constexpr float RANGE_VOLTS = 6.f;
+	// The least spacing of the strokes, in px at 100 % zoom.
+	static constexpr float STROKE_PX = 1.6f;
+
+	void drawLayer(const DrawArgs& args, int layer) override {
+		if (layer == 1 && source) {
+			TapeView v;
+			if (source(v))
+				drawView(args, v);
+		}
+		Widget::drawLayer(args, layer);
+	}
+
+	// x in the window for a fraction of the tape, and back (held to 0..1).
+	float xAt(float f) const {
+		return pad() + f * (box.size.x - 2.f * pad());
+	}
+	float fractionAt(float x) const {
+		return math::clamp((x - pad()) / (box.size.x - 2.f * pad()), 0.f, 1.f);
+	}
+
+	// A tape the mouse may set the window on: shown, not empty, not recording.
+	bool selectable(TapeView& v) {
+		return onSelect && source && source(v) && !v.empty && v.overview && !v.recording;
+	}
+	// The mouse's x in the widget's units, from Rack's own record of it.
+	float mouseX() {
+		return APP->scene->rack->getMousePos().x - getRelativeOffset(Vec(), APP->scene->rack).x;
+	}
+
+	void onButton(const ButtonEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;   // the right button: the module's menu
+		e.consume(this);
+		if (e.action != GLFW_PRESS)
+			return;
+		TapeView v;
+		const bool usable = selectable(v);
+		const float s = math::clamp(v.start, 0.f, 1.f);
+		// A drag whose release was lost (focus gone mid-drag) ends here.
+		if (drag.press(e.pos.x, usable, v.tape, xAt(s), xAt(wrap(s + math::clamp(v.length, 0.f, 1.f)))) && onSelectEnd)
+			onSelectEnd();
+	}
+
+	void onDragMove(const DragMoveEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT || !drag.pressed || drag.stopped)
+			return;
+		TapeView v;
+		const bool usable = selectable(v);
+		const float x = mouseX();
+		const TapeDrag::Step step = drag.move(x, usable, v.tape);
+		if (step == TapeDrag::BEGIN && onSelectBegin)
+			onSelectBegin();
+		if (step != TapeDrag::NOTHING)
+			onSelect(drag.grab, fractionAt(drag.pressX), fractionAt(x));
+	}
+
+	void onDragEnd(const DragEndEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		if (drag.release() && onSelectEnd)
+			onSelectEnd();
+	}
+
+	void onDoubleClick(const DoubleClickEvent& e) override {
+		TapeView v;
+		if (onWhole && selectable(v))
+			onWhole();
+		e.consume(this);
+	}
+	float pad() const {
+		return mm2px(0.6f);
+	}
+	// y for a voltage, finite and held to the glass.
+	float yAt(float volts) const {
+		float v = (volts - volts == 0.f) ? volts : (volts > 0.f ? RANGE_VOLTS : volts < 0.f ? -RANGE_VOLTS : 0.f);
+		v = math::clamp(v, -RANGE_VOLTS, RANGE_VOLTS);
+		const float half = 0.5f * box.size.y - pad();
+		return 0.5f * box.size.y - v / RANGE_VOLTS * half;
+	}
+	static bool inWindow(float f, const TapeView& v) {
+		const float end = v.start + v.length;
+		return end <= 1.f ? (f >= v.start && f < end) : (f >= v.start || f < end - 1.f);
+	}
+	// A fraction past the tape's end, back to its beginning (1 stays 1).
+	static float wrap(float f) {
+		return f > 1.f ? f - 1.f : f;
+	}
+
+	void line(NVGcontext* vg, float x0, float y0, float x1, float y1, NVGcolor c, float width) {
+		nvgBeginPath(vg);
+		nvgMoveTo(vg, x0, y0);
+		nvgLineTo(vg, x1, y1);
+		nvgStrokeColor(vg, c);
+		nvgStrokeWidth(vg, width);
+		nvgStroke(vg);
+	}
+
+	void drawView(const DrawArgs& args, const TapeView& v) {
+		NVGcontext* vg = args.vg;
+		const NVGcolor signal = RkaTheme::SIGNAL;
+		const NVGcolor ivory = settings::preferDarkPanels ? RkaTheme::IVORY_DARK : RkaTheme::IVORY;
+		const float top = pad(), bottom = box.size.y - pad();
+		nvgSave(vg);
+		nvgScissor(vg, 0.f, 0.f, box.size.x, box.size.y);
+		if (v.empty || !v.overview) {
+			line(vg, xAt(0.f), yAt(0.f), xAt(1.f), yAt(0.f), nvgTransRGBAf(signal, 0.6f), 1.f);
+			nvgRestore(vg);
+			return;
+		}
+		// The columns, `group` to a stroke (its least and greatest), one
+		// path for the strokes inside the window and one for the rest.
+		const int N = rka::Overview::COLS;
+		const float colW = (box.size.x - 2.f * pad()) / N;
+		int group = 1;
+		while (group < N && group * colW < STROKE_PX)
+			group *= 2;
+		const float strokeW = 0.55f * group * colW;
+		for (int bright = 0; bright < 2; bright++) {
+			nvgBeginPath(vg);
+			for (int c0 = 0; c0 < N; c0 += group) {
+				const float f = (c0 + 0.5f * group) / N;
+				if (inWindow(f, v) != (bright == 1))
+					continue;
+				float lo = v.overview->lo[c0].load(std::memory_order_relaxed);
+				float hi = v.overview->hi[c0].load(std::memory_order_relaxed);
+				for (int c = c0 + 1; c < c0 + group && c < N; c++) {
+					lo = std::min(lo, v.overview->lo[c].load(std::memory_order_relaxed));
+					hi = std::max(hi, v.overview->hi[c].load(std::memory_order_relaxed));
+				}
+				const float y0 = yAt(hi), y1 = yAt(lo);
+				if (!(y1 - y0 > 0.f))
+					continue;
+				const float x = xAt(f);
+				nvgMoveTo(vg, x, y0);
+				nvgLineTo(vg, x, y1);
+			}
+			nvgStrokeColor(vg, bright ? signal : nvgTransRGBAf(signal, 0.3f));
+			nvgStrokeWidth(vg, strokeW);
+			nvgStroke(vg);
+		}
+		// The window's two ends.
+		const float s = math::clamp(v.start, 0.f, 1.f), len = math::clamp(v.length, 0.f, 1.f);
+		const float e = wrap(s + len);
+		const NVGcolor edge = nvgTransRGBAf(signal, 0.8f);
+		line(vg, xAt(s), top, xAt(s), bottom, edge, 0.6f);
+		if (!v.recording)
+			line(vg, xAt(e), top, xAt(e), bottom, edge, 0.6f);
+		// The overlap, back from the window's end along the bottom edge
+		// (in two pieces if it passes the tape's start).
+		const float o = math::clamp(v.overlap, 0.f, len);
+		if (!v.recording && o > 0.f) {
+			const float y = bottom - mm2px(0.25f);
+			const float w = mm2px(0.5f);
+			if (e - o >= 0.f)
+				line(vg, xAt(e - o), y, xAt(e), y, signal, w);
+			else {
+				line(vg, xAt(0.f), y, xAt(e), y, signal, w);
+				line(vg, xAt(1.f + e - o), y, xAt(1.f), y, signal, w);
+			}
+		}
+		// The head.
+		const float h = math::clamp(v.head, 0.f, 1.f);
+		line(vg, xAt(h), top, xAt(h), bottom, ivory, 1.f);
+		// The tape's length.
+		std::shared_ptr<window::Font> font = APP->window->loadFont(asset::plugin(pluginInstance, "tools/fonts/D-DINCondensed.ttf"));
+		if (font && font->handle >= 0) {
+			const float secs = v.seconds > 0.f && v.seconds < 1e6f ? v.seconds : 0.f;
+			const int whole = (int) secs;
+			const std::string text = string::f("%d:%02d", whole / 60, whole % 60);
+			nvgFontFaceId(vg, font->handle);
+			nvgFontSize(vg, mm2px(2.6f));
+			nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
+			nvgFillColor(vg, nvgTransRGBAf(signal, 0.85f));
+			nvgText(vg, box.size.x - mm2px(1.0f), mm2px(0.7f), text.c_str(), NULL);
+		}
+		nvgRestore(vg);
 	}
 };
 

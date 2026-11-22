@@ -1,6 +1,19 @@
 # Eddy: a tape loop
 
-Status: idea, 2026-11-15. Not designed. 10 HP in the sketch.
+Status: built (2026-11-22, 16 HP). Design: `docs/specs/2026-11-21-eddy-design.md`;
+manual: `docs/eddy/README.md`. As built it is a stereo tape loop that also
+loads and saves WAV files, up to 5 minutes, with a waveform window that can
+be dragged to set Start and Length. Of the sketch: Speed (-2 to +2, with CV,
+attenuverter and now V/OCT), Smear, Mix, Rec, Dub and the Rec gate stayed;
+Decay became Wear (level, highs, saturation, hiss and dropouts, written back
+each pass, so Rust's wear is in the loop); Layer became Dub Level (one knob
+for the new layer and what it erases). New: Start and Length (the loop is
+set by recording or loading, then windowed), Play, Loop and a PLAY trigger
+(it plays as a sample too), EOC, a Dub gate, the original kept beside the
+tape with Restore, and the tape kept with the patch. Left out: several
+loops of different lengths (two Eddys do it), a clock. The spiral was not
+drawn; the window took the top of the panel. Trimming the tape to the
+window is future work (issue #66). The text below is the original idea.
 
 ![mockup](eddy-mockup.svg)
 
