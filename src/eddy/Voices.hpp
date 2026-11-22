@@ -46,6 +46,7 @@ struct Voice {
 	// The write head: last sample's move, written this sample (EddyEngine).
 	TapeWriter writer;
 	Wear wear{0u};
+	WriteBound bound;   // the write bound and the DC of its clipping (Wear.hpp)
 	struct Run {
 		double a, b;
 	};
@@ -147,6 +148,13 @@ struct Voices {
 			}
 		if (slot < 0)
 			return nullptr;
+		// The write bound's state goes on from the voice this one replaces
+		// on the same tape (a join, a retrigger, a swap): it follows the
+		// tape, not the voice. A voice with none before it (a new tape, a
+		// recording, a Clear: all faded out first) starts fresh.
+		v[slot].bound.reset();
+		if (newest >= 0 && v[newest].src && v[newest].owner == owner)
+			v[slot].bound = v[newest].bound;
 		if (newest >= 0) {
 			Voice& o = v[newest];
 			if (perSample == 0.0 && perFrame == 0.0)

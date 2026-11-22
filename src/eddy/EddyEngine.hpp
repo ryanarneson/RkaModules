@@ -23,7 +23,8 @@
 //   start (the join) and gives EOC, or with Loop off fades and stops;
 //   every voice writes what it passed last sample (its own TapeWriter and
 //   wear state): wear, then keep x old + add x input (the input DC-blocked
-//   once a sample), then the soft bound (writeBound), at the strength of that voice's own gain (and the
+//   once a sample), then the voice's WriteBound (the soft bound, less the
+//   DC of its own clipping, held to 10 V), at the strength of that voice's own gain (and the
 //   Dub, Stopped, Play and hold fades), linear on the tape;
 //   the overview is touched where the tape was written and serviced;
 //   Mix, and the soft limit.
@@ -999,6 +1000,7 @@ private:
 		if (n) {
 			n->wear = eddy::Wear(seed_ * 2654435761u + n->born);
 			n->wear.setSampleRate(rate_);
+			n->bound.setSampleRate(rate_);
 			n->wear.set(wearK_);
 		}
 		return n;
@@ -1188,10 +1190,11 @@ private:
 		Tape& t = live_->tape;
 		const float keep = keep_, add = add_, dub = dubGain_;
 		eddy::Wear& wear = x.wear;
+		eddy::WriteBound& bound = x.bound;
 		x.writer.write(t, p0, p1, in, [&](int c, float old, float v) -> float {
 			const float w = wear.process(c, old, 1.f);
 			const float pre = w + dub * ((keep * w + add * v) - w);
-			const float y = eddy::writeBound(pre);
+			const float y = bound.process(c, pre);
 			// Under 1e-20 V (-400 dB) is silence: a dub over silence would
 			// otherwise take the tape down into subnormals and leave it there.
 			return eddy::detail::flushTiny(old + gain * (y - old));

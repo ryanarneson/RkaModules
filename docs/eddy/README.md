@@ -242,10 +242,17 @@ passes a soft bound (exact up to 8 V, never past 10 V), so layers settle
 rather than pile up, and the input's offset never reaches the tape. The
 tape going round is not filtered: what it keeps each pass is exactly the
 table's share, at every frequency, and an offset already on the tape (a
-recording keeps one) only fades as the tape does. One limit: dubbing a
-loud signal into the bound for a long time at a low Dub Level (the tape
-held at its 10 V ceiling) can leave up to about 0.15 V of DC on it,
-settled within a few hundred passes. Dub in and out are faded on the tape.
+recording keeps one) only fades as the tape does. That holds while the
+tape stays under 8 V. Dubbed past it, into the bound (a loud or repeated
+dub at a low Dub Level drives the tape there), the bound takes the DC of
+what it clips off before clipping, as a 5 Hz blocker would, and only then:
+the tape is then shaped as build 2.0.27 shaped it, its lows thinning pass
+after pass while it is held at the ceiling. What DC is left depends on the
+material: lopsided material repeated in time with the loop (a pulse wave,
+a strong second harmonic) keeps up to about 0.4 V for a 5 V pulse dubbed
+at 50 %, and about 1.5 V at the extreme of a 10 V pulse driven into the
+ceiling; ordinary material, a few to a few tens of millivolts. Dub in and
+out are faded on the tape.
 
 Dub does nothing on an empty tape or while recording, and turns off when a
 recording starts, a file loads or Restore is pressed. While dubbing, the

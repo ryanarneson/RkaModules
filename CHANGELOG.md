@@ -56,8 +56,8 @@
   - The tape and the original are kept with the patch.
   - Final review fixes: Wear and Dub cost the tape only what their laws
     say (a DC blocker on the tape going round took its bass, 15 dB at
-    50 Hz in 300 passes of Wear at 2 %; now only what a dub adds is
-    DC-blocked); Restore no longer swells 3 dB; a tape loading when Rack's
+    50 Hz in 300 passes of Wear at 2 %; now it acts on what a dub adds,
+    and on the tape only while the write bound is clipping it); Restore no longer swells 3 dB; a tape loading when Rack's
     rate changes (as at launch) is loaded again at the new rate, not
     converted twice, and keeps its saved Dub; a stored tape is never lost
     to a set made for an older request, nor kept from saving by a flag

@@ -72,15 +72,53 @@ private:
 };
 
 // The bound every write to the tape passes: the soft bound (exact to 8 V, a
-// ceiling of 10 V; NaN as silence). No state and no filter: nothing in the
-// loop lags the tape (a 0.01 Hz trim here rang with the loop and carried DC
-// from one tape to the next: the final re-review's N2). A tape dubbed into
-// the bound for a long time at a low Dub Level can keep some DC from the
-// clipping (each clipped frame holds its sign); test_engine's dub_bounded
-// bounds it.
+// ceiling of 10 V; NaN as silence).
 inline float writeBound(float x) {
 	return detail::softBound(detail::tameVolts(x));
 }
+
+// The bound as a voice writes through it. Lopsided material synced to the
+// loop and dubbed pass after pass at a low Dub Level is driven far past the
+// ceiling, clipped harder on one side, and the clipping leaves volts of DC
+// on the tape (the final re-review's R1: -3.9 V from a 1 V 25 % pulse at
+// Dub 5 %). Taking off only the DC of the change the bound makes cannot fix
+// that (the clipped frames sit at the ceiling, which eats the correction);
+// what does is what 943c0d0's 5 Hz blocker did, taking the written signal's
+// DC off before the bound, which centres what is clipped. But that blocker,
+// acting all the time, cost the tape its bass pass after pass (I2). So here
+// it acts only while the bound does: the share of frames the bound is
+// clipping (above 8 V either way, low-passed at WRITE_DC_HZ) sets how much
+// of the written signal's DC (low-passed at WRITE_DC_HZ) is taken off before
+// the bound, in full from a 5 % share. Where nothing is clipped the share
+// and the gate are exactly 0 and the write is the bound itself: the tape
+// going round below 8 V is not filtered (an offset recorded on it stays).
+// One per voice, fresh with each voice (reset()), so nothing carries from
+// one tape to the next.
+struct WriteBound {
+	void setSampleRate(float fs) {
+		fs = fs == fs ? clampKeepNan(fs, 1000.f, 4e6f) : 48000.f;
+		a_ = detail::onePoleCoeff(WRITE_DC_HZ, fs);
+	}
+	void reset() {
+		dc_[0] = dc_[1] = 0.f;
+		clip_[0] = clip_[1] = 0.f;
+	}
+
+	float process(int c, float x) {
+		const int s = c & 1;
+		const float in = detail::tameVolts(x);
+		const bool clips = in > 8.f || in < -8.f;
+		clip_[s] = detail::flushTiny(clip_[s] + a_ * ((clips ? 1.f : 0.f) - clip_[s]));
+		const float g = clip_[s] * WRITE_CLIP_GATE;
+		const float gate = g < 1.f ? g : 1.f;
+		dc_[s] = detail::flushTiny(dc_[s] + a_ * (in - dc_[s]));
+		return detail::softBound(in - gate * dc_[s]);
+	}
+
+private:
+	float a_ = 6.5e-4f;
+	float dc_[2] = {0.f, 0.f}, clip_[2] = {0.f, 0.f};
+};
 
 struct Wear {
 	explicit Wear(uint32_t seed) {

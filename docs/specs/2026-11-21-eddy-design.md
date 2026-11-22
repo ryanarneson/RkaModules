@@ -413,11 +413,20 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   there rang with the loop (a recorded 1 V offset swung to -0.66 V) and
   carried DC onto the next tape (the final re-review's N2), and a
   lag-free share of a fast DC estimate costs the bass more than Wear's
-  lowest law. So an offset recorded on the tape stays and fades with it,
-  and a tape dubbed hard into the bound at a low Dub Level keeps what the
-  clipping leaves (each clipped frame holds its sign): measured 55 to
-  120 mV, either sign, for +-10 V noise at Dub 2 % to 50 %, under 10 mV
-  at full level; tested under 150 mV. Each pass costs the tape exactly
+  lowest law. So an offset recorded on the tape stays and fades with it.
+  Into the bound is the exception (the final re-review's R1): with
+  nothing taking off the DC its clipping made, lopsided material synced
+  to the loop and dubbed pass after pass left volts (-3.9 V from a 1 V
+  25 % pulse at Dub 5 %). So each voice's write bound takes the written
+  signal's DC (5 Hz) off before clipping, gated by the share of frames it
+  is clipping (full from 5 %, exactly 0 when none are; its state carried
+  from voice to voice on the same tape, fresh for a new one): 943c0d0's
+  blocker, only while the bound acts, and then the same sound as 943c0d0
+  (lows thinning while the tape is held at the ceiling). Measured, 1000
+  passes, synced: a 5 V 25 % pulse at Dub 50 % -393 mV (943c0d0 -374), a
+  1 V pulse at Dub 5 % -0.4 mV (-17), a sine with its 2nd harmonic at 1 V,
+  Dub 5 % +6 mV (-4), at 5 V, Dub 50 % +1.05 V (+1.08); +-10 V noise 0.4 to
+  63 mV at Dub 2 % to 50 %. Each pass costs the tape exactly
   what the Wear and Dub laws say, from 30 Hz up; at Wear 0.5 and 1, 50
   passes keep about 2.3 dB more at 50 Hz and 0.15 dB more at 1 kHz than
   build 2.0.27 did.)

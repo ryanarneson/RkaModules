@@ -40,6 +40,10 @@ constexpr float WEAR_DROPOUT_EDGE_S = 0.002f;
 // The write path's DC blocker, on what is added (the dub's input, and the
 // change Wear's saturation makes), never on the tape going round.
 constexpr float WRITE_DC_HZ = 5.f;
+// The write bound takes the written signal's DC off before clipping only
+// while it clips: in full once this share's reciprocal (5 %) of the frames
+// written are past 8 V, not at all when none are (Wear.hpp, WriteBound).
+constexpr float WRITE_CLIP_GATE = 20.f;
 
 // The engine (EddyEngine.hpp). The tape: 5 minutes, at most 2^24 frames,
 // and a tail of 10 ms (the join's longest fade, F) after it.

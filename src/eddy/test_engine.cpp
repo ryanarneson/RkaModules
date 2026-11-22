@@ -465,15 +465,15 @@ void dub_bounded() {
 	// offset or without), dubbed into the bound. The loop's turn is the
 	// whole tape (a tail of m), so the tape's mean is the loop's DC. The
 	// input's DC is blocked as it comes in: the offset makes no difference
-	// (within 0.1 mV). Nothing in the loop filters the tape (the final
-	// re-review's N2), so what clipping in the bound leaves stays: at full
-	// level each pass replaces the tape and it is under 10 mV (measured 1.4
-	// to 5.9 mV over three noise loops); at lower levels the tape is driven
-	// to the ceiling and each clipped frame holds its sign, which leaves
-	// 55 to 120 mV of DC of either sign depending on the noise (measured
-	// 2026-11-22, Dub 2 % to 50 %, three noise loops, 3000 passes), settled
-	// by 1000 passes. Held under 150 mV and to not building (under 10 mV
-	// from 1000 to 2000 passes); the tape under its 10 V bound.
+	// (within 0.1 mV). Nothing filters the tape going round unless the
+	// bound is clipping (WriteBound, Wear.hpp); clipped, the written
+	// signal's DC is taken off before the bound. What is left: at full
+	// level under 10 mV (measured 0.1 to 8.2 mV over three noise loops); at
+	// lower levels, driven to the ceiling, 0.4 to 63 mV of either sign
+	// depending on the noise (measured 2026-11-22 after R1, Dub 2 % to
+	// 50 %, three noise loops, 3000 passes), settled by 1000 passes. Held
+	// under 100 mV and to not building (under 10 mV from 1000 to 2000
+	// passes); the tape under its 10 V bound.
 	struct Case {
 		float d;
 		uint32_t seed;
@@ -517,9 +517,54 @@ void dub_bounded() {
 		if (c.d == 1.f)
 			CHECK(std::fabs(dc) < 1e-2, "full-level dubs, noise %u: DC on the tape %.3f mV (want under 10)", c.seed, dc * 1e3);
 		else
-			CHECK(std::fabs(dc) < 0.15 && std::fabs(dc - dcs[0][0]) < 1e-2,
-			      "Dub Level %.2f, noise %u: DC on the tape %.2f mV after 2000 passes, %.2f after 1000 (want under 150, not building)", c.d,
+			CHECK(std::fabs(dc) < 0.1 && std::fabs(dc - dcs[0][0]) < 1e-2,
+			      "Dub Level %.2f, noise %u: DC on the tape %.2f mV after 2000 passes, %.2f after 1000 (want under 100, not building)", c.d,
 			      c.seed, dc * 1e3, dcs[0][0] * 1e3);
+	}
+}
+
+// Lopsided material with no DC of its own (a 25 % pulse; a sine with its
+// 2nd harmonic in phase), synced to the loop and dubbed pass after pass, is
+// clipped harder on one side; the final re-review's R1 measured volts of DC
+// left by it once nothing in the loop took the clipping's DC off (-3.9 V
+// from a 1 V pulse at Dub 5 %). Held to about twice what 943c0d0 (build
+// 2.0.27, the 5 Hz blocker on everything written) left: 943c0d0 / bound /
+// measured 2026-11-22: pulse 5 V Dub 50 % -374 / 750 / -393 mV; pulse 1 V
+// Dub 5 % -17 / 35 / -0.4 mV; sine + 2nd 1 V Dub 5 % -3.7 / 10 / +6.2 mV;
+// sine + 2nd 5 V Dub 50 % +1075 / 2150 / +1052 mV. 1000 passes of a 2400-
+// frame loop (a tail of m, so the turn is the tape), period 96 samples.
+double tapeMean(const Tape& t, size_t n);
+
+void dub_lopsided() {
+	struct Case {
+		const char* what;
+		bool pulse;
+		float volts, d;
+		double bound;
+	};
+	for (const Case& c : {Case{"25 % pulse, 5 V, Dub 50 %", true, 5.f, 0.5f, 0.75}, Case{"25 % pulse, 1 V, Dub 5 %", true, 1.f, 0.05f, 0.035},
+	                      Case{"sine + 2nd, 1 V, Dub 5 %", false, 1.f, 0.05f, 0.01},
+	                      Case{"sine + 2nd, 5 V, Dub 50 %", false, 5.f, 0.5f, 2.15}}) {
+		Rig g;
+		TapeSet* set = g.loaded(2400, 480, [](size_t, float& l, float& r) { l = r = 0.f; });
+		g.use(set);
+		g.f.params[F::DUB_LEVEL] = c.d;
+		g.press(&F::playPress);
+		g.press(&F::dubPress);
+		for (long i = 0; i < 1000L * 2400; i++) {
+			const long k = i % 96;
+			const double th = 2 * PI * (double) k / 96.0;
+			const float x = c.pulse ? (k < 24 ? 0.75f * c.volts : -0.25f * c.volts)
+			                        : (float) (c.volts * (std::sin(th) + 0.5 * std::cos(2 * th)));
+			g.step(x, x);
+		}
+		float peak = 0.f;
+		for (int ch = 0; ch < 2; ch++)
+			for (size_t k = 0; k < 2400; k++)
+				peak = std::max(peak, std::fabs(set->tape.ch[ch][k]));
+		const double dc = tapeMean(set->tape, 2400);
+		CHECK(std::fabs(dc) < c.bound && peak <= 10.f, "%s, 1000 passes: DC on the tape %.1f mV (want under %.0f), peak %.3f V", c.what, dc * 1e3,
+		      c.bound * 1e3, peak);
 	}
 }
 
@@ -1733,6 +1778,7 @@ int main() {
 	dub_levels();
 	dub_at_speed();
 	dub_bounded();
+	dub_lopsided();
 	wear_lows();
 	dub_lows();
 	dub_lows_5();

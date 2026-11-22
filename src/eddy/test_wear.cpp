@@ -360,6 +360,47 @@ void guard() {
 	for (int i = 0; i < 48000; i++)
 		writeBound(9.f);
 	CHECK(writeBound(3.f) == first && first == 3.f, "the bound has no state: 3 V writes 3 V before and after (%g)", writeBound(3.f));
+
+	// A voice's WriteBound (R1): the bound itself, to the bit, while nothing
+	// clips; and again, to the bit, once clipping has stopped for 2 s (its
+	// gate back to exactly 0). While clipping it takes the written signal's
+	// DC off before the bound, and stays within 10 V.
+	{
+		WriteBound b;
+		b.setSampleRate(fs);
+		rka::hadal::Random r;
+		r.seed(5);
+		bool exactQuiet = true;
+		for (int i = 0; i < 96000; i++) {
+			const float x = 1.f + 7.f * r.uniform();   // up to 8 V: never clipped, with an offset
+			exactQuiet = exactQuiet && b.process(i & 1, x) == x;
+		}
+		CHECK(exactQuiet, "nothing clipped (an offset and up to 8 V): written exactly");
+		float hot = 0.f, top = 0.f;
+		double sum = 0;
+		for (int i = 0; i < 48000; i++) {
+			const float x = (i % 96) < 24 ? 30.f : -6.f;   // clipped on one side, with 1.5 V of DC
+			const float y = b.process(0, x);
+			top = std::max(top, std::fabs(y));
+			if (i >= 24000)
+				sum += y;
+			hot = y;
+		}
+		(void) hot;
+		const double pulseDc = sum / 24000.0;
+		CHECK(top <= 10.f, "clipping, the write stays within 10 V (%g)", top);
+		CHECK(std::fabs(pulseDc - (0.25 * 10.0 + 0.75 * -6.0)) > 1.0, "clipping, the written signal's DC is taken off before the bound (mean %.3f V)", pulseDc);
+		bool exactAfter = true;
+		for (int i = 0; i < 96000; i++) {
+			const float x = 1.f + 7.f * r.uniform();
+			const float y = b.process(0, x);
+			if (i >= 96000 - 4800)
+				exactAfter = exactAfter && y == x;
+		}
+		CHECK(exactAfter, "2 s after clipping stops the write is exact again");
+		b.reset();
+		CHECK(b.process(0, 3.f) == 3.f && b.process(1, -7.5f) == -7.5f, "reset: fresh");
+	}
 }
 
 // Wear's saturation, on asymmetric material, takes the DC of what it changes
@@ -392,6 +433,8 @@ void hostile() {
 		w.set(a);
 		InputDcBlock g;
 		g.setSampleRate(48000.f);
+		WriteBound wb;
+		wb.setSampleRate(48000.f);
 		bool fin = true;
 		for (float v : vals)
 			for (float f : fr)
@@ -399,12 +442,13 @@ void hostile() {
 					fin = fin && std::isfinite(w.process(c, v, f));
 					fin = fin && std::isfinite(g.process(c, v)) && std::fabs(g.process(c, v)) <= 200.f;
 					fin = fin && std::isfinite(writeBound(v)) && std::fabs(writeBound(v)) <= 10.f;
+					fin = fin && std::isfinite(wb.process(c, v)) && std::fabs(wb.process(c, v)) <= 10.f;
 				}
 		CHECK(fin, "amount %g: every hostile call gives a finite result", a);
 		bool ok = true;
 		for (int i = 0; i < 1000; i++)
 			for (int c = 0; c < 2; c++)
-				ok = ok && std::isfinite(w.process(c, 1.f, 1.f)) && std::isfinite(g.process(c, 1.f)) && std::isfinite(writeBound(1.f));
+				ok = ok && std::isfinite(w.process(c, 1.f, 1.f)) && std::isfinite(g.process(c, 1.f)) && std::isfinite(writeBound(1.f)) && std::isfinite(wb.process(c, 1.f));
 		CHECK(ok, "amount %g: normal calls are finite afterwards", a);
 	}
 	InputDcBlock g;
