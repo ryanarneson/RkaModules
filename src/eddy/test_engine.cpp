@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <vector>
 
 namespace {
@@ -782,10 +783,201 @@ void view() {
 		Rig g;
 		g.press(&F::recPress);
 		g.run(4800);
-		const double c = 300.0 * 48000;
-		CHECK(g.r.recording && std::fabs(g.r.head - 4800 / c) < 1e-9 && g.r.winStart == 0.f &&
-		          std::fabs(g.r.winLength - 4800 / c) < 1e-9 && std::fabs(g.r.seconds - 0.1) < 1e-6,
-		      "while recording: the head at %.3g and the tape %.3g of the capacity, %.3f s", g.r.head, g.r.winLength, g.r.seconds);
+		const double c = 4.0 * 48000;   // the first span
+		CHECK(g.r.recording && std::fabs(g.r.head - 4800 / c) < 1e-7 && g.r.winStart == 0.f &&
+		          std::fabs(g.r.winLength - 4800 / c) < 1e-7 && std::fabs(g.r.seconds - 0.1) < 1e-6,
+		      "while recording: the head at %.3g and the tape %.3g of the span, %.3f s", g.r.head, g.r.winLength, g.r.seconds);
+	}
+}
+
+// The overview's columns against the tape's peaks by brute force (both
+// sides; frames at or past the length are silence; a column with no frames
+// is 0, 0), over a mapping `frames` long. The number of columns that differ.
+int overviewMismatches(const rka::Overview& o, const Tape& t, size_t frames) {
+	const int N = rka::Overview::COLS;
+	int bad = 0;
+	for (int c = 0; c < N; c++) {
+		const size_t f0 = (size_t) ((unsigned long long) c * frames / N), f1 = (size_t) ((unsigned long long) (c + 1) * frames / N);
+		float l = 0.f, h = 0.f;
+		if (f1 > f0) {
+			l = 1e30f;
+			h = -1e30f;
+			for (size_t f = f0; f < f1; f++)
+				for (int s = 0; s < 2; s++) {
+					const float v = f < t.length ? t.ch[s][f] : 0.f;
+					l = std::min(l, v);
+					h = std::max(h, v);
+				}
+		}
+		if (o.lo[c].load() != l || o.hi[c].load() != h)
+			bad++;
+	}
+	return bad;
+}
+
+// Columns holding some of the recording (noise: never exactly 0 at both ends).
+int filledColumns(const rka::Overview& o) {
+	int n = 0;
+	for (int c = 0; c < rka::Overview::COLS; c++)
+		n += o.lo[c].load() < 0.f || o.hi[c].load() > 0.f;
+	return n;
+}
+
+// A recording ended: the window is the tape across the whole glass, its
+// length lettered, the overview over the length and equal to the tape's
+// peaks column by column.
+void checkAfterRecording(Rig& g, size_t n, const char* what) {
+	// Long enough for the tail, the copy and two full rescans at 32 frames a
+	// sample (the end's and the copy's).
+	g.run((long) (n / 16) + (long) (0.1 * g.fs) + 100);
+	const TapeSet* s = g.e.live();
+	CHECK(!g.r.recording && s->tape.length == n && s->original.length == n, "%s: ended, %zu frames on the tape (want %zu)", what,
+	      s->tape.length, n);
+	CHECK(!g.r.empty && g.r.winStart == 0.f && g.r.winLength == 1.f && std::fabs(g.r.seconds - (double) n / g.fs) < 1e-6 * (double) n / g.fs,
+	      "%s: the window is the whole tape (start %g, length %g) and letters %.4f s (want %.4f)", what, g.r.winStart, g.r.winLength,
+	      g.r.seconds, (double) n / g.fs);
+	const int bad = overviewMismatches(s->overview, s->tape, n);
+	CHECK(bad == 0, "%s: the overview is over the length and matches the tape's peaks (%d columns differ)", what, bad);
+	CHECK(filledColumns(s->overview) == rka::Overview::COLS || n < (size_t) rka::Overview::COLS,
+	      "%s: the waveform fills the glass (%d columns)", what, filledColumns(s->overview));
+}
+
+// While recording the window shows a span that starts at 4 s and doubles
+// each time the recording reaches its end: 15 s at 48 kHz is shown over 4,
+// then 8, then 16 s. The span is read from the result as seconds / head (the
+// recorded time over the head's fraction of the span).
+void record_span() {
+	Rig g;
+	g.f.inRPatched = true;
+	const long N = 15 * 48000;
+	const std::vector<float> x = noiseVec((size_t) N + 48000, 3.f, 21), y = noiseVec((size_t) N + 48000, 3.f, 22);
+	g.press(&F::recPress);
+	int wrongSpan = 0, wrongHead = 0, thin = 0, firstThin = -1;
+	long wrongAt = -1;
+	double wrongWas = 0;
+	for (long i = 0; i < N; i++) {
+		g.step(x[(size_t) i], y[(size_t) i]);
+		const long n = i + 1;   // frames recorded
+		if (n % 97 != 0 && n != 4 * 48000 && n != 8 * 48000)
+			continue;
+		const double want = n < 4 * 48000 ? 4.0 : n < 8 * 48000 ? 8.0 : 16.0;
+		const double span = g.r.seconds / g.r.head;
+		if (!(std::fabs(span - want) < 1e-5 * want) || !g.r.recording) {
+			if (wrongSpan++ == 0) {
+				wrongAt = n;
+				wrongWas = span;
+			}
+		}
+		if (!(std::fabs(g.r.head - n / (want * 48000)) < 1e-6) || g.r.winLength != g.r.head || g.r.winStart != 0.f ||
+		    !(std::fabs(g.r.seconds - n / 48000.0) < 1e-6 * n / 48000.0))
+			wrongHead++;
+		if (n == 4 * 48000 || n == 8 * 48000) {
+			// At the doubling, with no rescan: the tape's peaks over the new
+			// span but for the columns at the head, still being rescanned.
+			const int bad = overviewMismatches(g.e.live()->overview, g.e.live()->original, (size_t) (want * 48000));
+			CHECK(bad <= 2, "at %ld frames the overview is over the doubled span at once (%d columns differ)", n, bad);
+		}
+		if (n >= 4 * 48000 && filledColumns(g.e.live()->overview) < rka::Overview::COLS / 2) {
+			if (thin++ == 0)
+				firstThin = (int) n;
+		}
+	}
+	CHECK(wrongSpan == 0, "the span is 4, 8 and 16 s in turn (%d wrong, first after %ld frames: %.4f s)", wrongSpan, wrongAt, wrongWas);
+	CHECK(wrongHead == 0, "the head and the recorded part are the recording over the span, lettered as the recorded time (%d wrong)",
+	      wrongHead);
+	CHECK(thin == 0, "past the first span the waveform fills at least half the columns (%d times not, first after %d frames)", thin,
+	      firstThin);
+	// Settled, the overview while recording is the tape's peaks over the span.
+	for (int i = 0; i < 48000 / 32 * 16 + 100; i++)
+		g.step(x[(size_t) (N + i)], y[(size_t) (N + i)]);
+	const long n = N + 48000 / 32 * 16 + 100;
+	CHECK(g.r.recording && std::fabs(g.r.seconds / g.r.head - 16.0) < 1e-4, "still recording at %.3f s, span %.3f s", g.r.seconds,
+	      g.r.seconds / g.r.head);
+	const int bad = overviewMismatches(g.e.live()->overview, g.e.live()->original, 16 * 48000);
+	// The column at the head is still being rescanned; the rest are exact.
+	CHECK(bad <= 1, "while recording the overview is the tape's peaks over the 16 s span (%d columns differ)", bad);
+	// The end, with the worker's copy of the original to the tape held back:
+	// the window is over the length from the end on, not from the copy on.
+	g.copySamples = 1 << 30;
+	g.press(&F::recPress);
+	g.step(x[(size_t) n], y[(size_t) n]);
+	g.run(n / 16 + 4800);
+	const int early = overviewMismatches(g.e.live()->overview, g.e.live()->original, (size_t) n);
+	CHECK(g.copying != EddyEngine::NONE && g.copies == 0 && early == 0,
+	      "before the tape is copied the overview is the recording's peaks over its length (%d columns differ)", early);
+	g.copyLeft = 0;   // the copy finishes
+	checkAfterRecording(g, (size_t) n, "15 s at 48 kHz");
+}
+
+// A recording over a tape whose length is the first span (a 4 s loop, so
+// the overview's mapping length does not change when the recording stands):
+// the old tape's peaks are gone from the window at once, and while recording
+// the overview is the new recording's peaks over the span.
+void record_over_a_tape() {
+	Rig g;
+	g.f.inRPatched = true;
+	g.use(g.sine(4.0, 50.0, 4.f));
+	CHECK(filledColumns(g.e.live()->overview) == rka::Overview::COLS, "the loaded tape fills the window");
+	const std::vector<float> x = noiseVec(48000, 1.f, 41);
+	g.press(&F::recPress);
+	long stood = -1;
+	int stale = 0;
+	for (long i = 0; i < 48000; i++) {
+		g.step(x[(size_t) i], -x[(size_t) i]);
+		if (stood < 0 && g.e.live()->original.length > 0 && g.r.recording && i >= 2400)
+			stood = i;
+		// From the moment it stands, nothing louder than the recording (1 V)
+		// is shown: the sine's 4 V peaks are gone.
+		if (stood >= 0) {
+			float top = 0.f;
+			for (int c = 0; c < rka::Overview::COLS; c++)
+				top = std::max(top, g.e.live()->overview.hi[c].load());
+			stale += top > 1.f;
+		}
+	}
+	CHECK(stood >= 0 && stale == 0, "the old tape's peaks are not shown once the recording stands (%d samples showed them)", stale);
+	CHECK(g.r.recording && std::fabs(g.r.seconds / g.r.head - 4.0) < 1e-4, "recording over a 4 s span");
+	const int bad = overviewMismatches(g.e.live()->overview, g.e.live()->original, 4 * 48000);
+	CHECK(bad <= 1, "the overview is the recording's peaks over the span (%d columns differ)", bad);
+}
+
+// A recording run to the tape's capacity: the last span is the capacity
+// itself (at 2 kHz, 8000 frames doubled six times is 512 000, then 600 000),
+// and the overview ends over the length. At 1 Hz the tape is 300 frames,
+// under one frame a column.
+void record_to_capacity() {
+	const float rates[2] = {2000.f, 1.f};
+	for (int k = 0; k < 2; k++) {
+		const float fs = rates[k];
+		Rig g(fs);
+		g.f.inRPatched = true;
+		g.run(10);   // the set is taken
+		const size_t cap = g.e.live()->original.capacity();
+		const std::vector<float> x = noiseVec(cap + 10, 3.f, 31), y = noiseVec(cap + 10, 3.f, 32);
+		g.press(&F::recPress);
+		double span = 0;
+		int wrongSpan = 0;
+		for (size_t i = 0; i < cap + 5; i++) {
+			g.step(x[i], y[i]);
+			if (!g.r.recording)
+				break;
+			const double n = (double) (i + 1);
+			span = g.r.seconds / g.r.head * fs;
+			// The span: 4 s doubled until it is past the recording, held to
+			// the capacity.
+			double want = std::floor(4.0 * fs + 0.5);
+			while (want <= n && want < (double) cap)
+				want = std::min(2 * want, (double) cap);
+			if (!(std::fabs(span - want) < 1e-4 * want))
+				wrongSpan++;
+		}
+		CHECK(wrongSpan == 0, "%g Hz: the span doubles and is held to the capacity (%d wrong)", fs, wrongSpan);
+		CHECK(std::fabs(span - (double) cap) < 1e-4 * (double) cap, "%g Hz: the last span is the capacity (%.1f frames, want %zu)", fs, span,
+		      cap);
+		CHECK(!g.r.recording, "%g Hz: the recording ended by itself", fs);
+		char what[64];
+		std::snprintf(what, sizeof what, "to capacity at %g Hz", fs);
+		checkAfterRecording(g, cap, what);
 	}
 }
 
@@ -1075,6 +1267,9 @@ int main() {
 	restore();
 	make_original();
 	view();
+	record_span();
+	record_over_a_tape();
+	record_to_capacity();
 	mix_law();
 	limit();
 	no_clicks();

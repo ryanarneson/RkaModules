@@ -6,6 +6,7 @@
 #include "Overview.hpp"
 #include "testing.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <vector>
@@ -277,6 +278,125 @@ void short_tape() {
 	CHECK(o.hi[3].load() == 0.f && o.settled(), "clear");
 }
 
+// Records `n` frames of noise from frame `from` on, touching as the engine
+// does (one frame a sample over a mapping `frames` long) and servicing at
+// budget 32 each sample.
+void recordOn(rka::Overview& o, rka::Tape& t, Noise& nz, size_t from, size_t n, size_t frames) {
+	for (size_t f = from; f < from + n; f++) {
+		t.ch[0][f] = nz.next();
+		t.ch[1][f] = nz.next();
+		t.length = f + 1;
+		o.touch(f, f + 1, frames);
+		o.service(t, 32);
+	}
+}
+
+// A doubling: column c of the left half is exactly old columns 2c and
+// 2c + 1 merged (an old column with no frames adds nothing), the right half
+// is empty, and it equals the tape's peaks over the doubled length at once,
+// with no rescan. Then recording on gives the same columns, exactly (the
+// tolerance is 0: min and max are exact), as an overview mapped over the
+// doubled length from the start. Tapes of 48 000 frames (93.75 to a column)
+// and of 5 and 300 (under one frame a column, so most columns are empty).
+void doubles() {
+	const size_t sizes[3] = {48000, 300, 5};
+	for (int k = 0; k < 3; k++) {
+		const size_t F = sizes[k];
+		rka::Tape t;
+		t.allocate(4 * F, 0);
+		fill(t, F);   // the recording so far: F frames, mapped over F
+		rka::Overview o;
+		o.build(t);
+		CHECK(o.settled() && mismatches(o, t, F) == 0, "%zu: built over the length", F);
+		float lo0[COLS], hi0[COLS];
+		for (int c = 0; c < COLS; c++) {
+			lo0[c] = o.lo[c].load();
+			hi0[c] = o.hi[c].load();
+		}
+		o.doubleSpan();
+		int pairs = 0, right = 0;
+		for (int c = 0; c < COLS / 2; c++) {
+			float l = 0.f, h = 0.f;
+			bool any = false;
+			for (int j = 2 * c; j <= 2 * c + 1; j++) {
+				if (colStart(j + 1, F) <= colStart(j, F))
+					continue;   // no frames
+				l = any ? std::min(l, lo0[j]) : lo0[j];
+				h = any ? std::max(h, hi0[j]) : hi0[j];
+				any = true;
+			}
+			pairs += o.lo[c].load() != l || o.hi[c].load() != h;
+		}
+		for (int c = COLS / 2; c < COLS; c++)
+			right += o.lo[c].load() != 0.f || o.hi[c].load() != 0.f;
+		CHECK(pairs == 0 && right == 0, "%zu: the left half is the old pairs merged (%d differ), the right half empty (%d not)", F, pairs, right);
+		CHECK(o.settled() && mismatches(o, t, 2 * F) == 0, "%zu: at once the tape's peaks over %zu frames, nothing to rescan (%d differ)", F,
+		      2 * F, mismatches(o, t, 2 * F));
+		// Now mapped over 2F: a touch there marks one column, not all (as a
+		// change of length would).
+		{
+			rka::Overview m;
+			m.build(t);
+			m.doubleSpan();
+			m.touch(0, 1, 2 * F);
+			m.service(t, (int) (colStart(1, 2 * F) > 0 ? colStart(1, 2 * F) : 1));
+			CHECK(m.settled(), "%zu: after the doubling the mapping length is %zu (a touch there rescans one column)", F, 2 * F);
+		}
+		// Recording on over the doubled length, against an overview mapped
+		// over it from the start (the same writes, one frame a sample).
+		rka::Tape u;
+		u.allocate(4 * F, 0);
+		rka::Overview p;
+		p.build(u);
+		for (size_t f = 0; f < F; f++) {   // the same first F frames
+			u.ch[0][f] = t.ch[0][f];
+			u.ch[1][f] = t.ch[1][f];
+			u.length = f + 1;
+			p.touch(f, f + 1, 2 * F);
+			p.service(u, 32);
+		}
+		Noise nz, nz2;   // the same frames after them
+		recordOn(o, t, nz, F, F, 2 * F);
+		recordOn(p, u, nz2, F, F, 2 * F);
+		service_all(o, t, 32);
+		service_all(p, u, 32);
+		int differ = 0;
+		for (int c = 0; c < COLS; c++)
+			differ += o.lo[c].load() != p.lo[c].load() || o.hi[c].load() != p.hi[c].load();
+		CHECK(differ == 0, "%zu: doubled then recorded on equals mapped over %zu from the start (%d columns differ)", F, 2 * F, differ);
+		CHECK(mismatches(o, t, 2 * F) == 0, "%zu: and both are the tape's peaks", F);
+	}
+}
+
+// Columns touched and not yet rescanned, and the column in hand, when the
+// span doubles: their new columns are still to be rescanned, and end right.
+void doubles_while_touched() {
+	const size_t F = 48000;
+	rka::Tape t;
+	t.allocate(2 * F, 0);
+	fill(t, F);
+	rka::Overview q;
+	q.build(t);
+	const size_t a41 = colStart(41, F), a150 = colStart(150, F), a300 = colStart(300, F);
+	// 41 changed and is rescanned; 300 changed and is in hand, its first 40
+	// frames read (the change, at frame 80, not yet); 150 changed and waits.
+	t.ch[1][a41 + 3] = -8.f;
+	t.ch[0][a300 + 80] = 9.f;
+	q.touch(a41 + 3, a41 + 4, F);
+	q.touch(a300 + 80, a300 + 81, F);
+	q.service(t, (int) (colStart(42, F) - a41) + 40);
+	t.ch[1][a150] = 7.f;
+	q.touch(a150, a150 + 1, F);
+	CHECK(!q.settled() && q.hi[300].load() != 9.f && q.lo[41].load() == -8.f && q.hi[150].load() != 7.f,
+	      "before: 41 published, 300 in hand and not published, 150 waiting");
+	q.doubleSpan();
+	CHECK(q.lo[20].load() == -8.f, "41's change is in its new column at once");
+	CHECK(!q.settled(), "the columns of 150 and 300 wait for a rescan");
+	service_all(q, t, 32);
+	CHECK(mismatches(q, t, 2 * F) == 0, "after the rescan: the tape's peaks over the doubled length (%d differ)", mismatches(q, t, 2 * F));
+	CHECK(q.hi[150].load() == 9.f && q.hi[75].load() == 7.f, "the changes are shown (%g, %g)", q.hi[150].load(), q.hi[75].load());
+}
+
 }
 
 int main() {
@@ -287,5 +407,7 @@ int main() {
 	grows_with_recording();
 	dub_in_one_column();
 	short_tape();
+	doubles();
+	doubles_while_touched();
 	return rkatest::finish("eddy test_overview");
 }

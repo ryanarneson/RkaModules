@@ -49,6 +49,13 @@
 //   PRE_COPY_FRAMES a sample. At the end, m more of the input is taken as
 //   the tail, the tape plays from the original at once (from Start), and the
 //   engine asks for the original to be copied to the tape.
+// - While recording, the overview is over a span (span_) rather than the
+//   tape's capacity, so the window fills: REC_SPAN_S at first, doubled each
+//   time the recording reaches its end (the overview's columns merged in
+//   pairs, exact, no rescan) and held to the capacity (that last, uneven
+//   step is a full rescan through the budgeted service). The result's
+//   fractions are of the span then, and `seconds` is the time recorded.
+//   When the recording ends the overview is redone over its length.
 // - While a copy is wanted or under way nothing writes the tape (Dub and
 //   Wear are faded out on it, F) and the voices read whichever of the two
 //   the copy does not write. A Restore or "Make this the original" that
@@ -146,8 +153,12 @@ struct EddyResult {
 	bool eoc = false;
 	bool recording = false, dubbing = false, playing = false;   // for the lights and the saved params
 	bool empty = true;
-	float head = 0, winStart = 0, winLength = 1, overlap = 0;   // fractions of the tape, for the window
-	float seconds = 0;                                          // the tape's length
+	// For the window: fractions of the tape, and the tape's length in seconds.
+	// While recording the fractions are of the span the overview is drawn
+	// over (the head and winLength both the part recorded, winStart 0) and
+	// seconds is the time recorded so far.
+	float head = 0, winStart = 0, winLength = 1, overlap = 0;
+	float seconds = 0;
 };
 
 class EddyEngine {
@@ -720,6 +731,9 @@ private:
 	void startRec() {
 		rec_ = REC_PRE;
 		recN_ = 0;
+		const size_t cap = live_->original.capacity();
+		const double first = std::floor(eddy::REC_SPAN_S * (double) fs_ + 0.5);
+		span_ = first < 1.0 ? 1 : first >= (double) cap ? cap : (size_t) first;
 		dubOn_ = false;
 		oneShotTail_ = false;
 		if (const Voice* h = voices_.head())
@@ -768,6 +782,8 @@ private:
 			pre0[recN_] = in[0];
 			pre1[recN_] = in[1];
 			recN_++;
+			while (recN_ >= span_ && span_ < o.capacity())   // only at a very low rate
+				span_ = 2 * span_ < o.capacity() ? 2 * span_ : o.capacity();
 			if (recN_ >= preN_) {
 				// It stands: from here on it goes onto the original.
 				rec_ = REC_ON;
@@ -775,7 +791,9 @@ private:
 				o.tail = 0;
 				o.length = recN_;
 				queued_ = NONE;
-				live_->overview.touch(0, recN_, o.capacity());
+				// The window: the old tape gone, the recording over the span.
+				live_->overview.clear(span_);
+				live_->overview.touch(0, recN_, span_);
 				if (recN_ >= o.capacity())
 					endRec();
 			}
@@ -787,7 +805,9 @@ private:
 			o.ch[1][recN_] = in[1];
 			recN_++;
 			o.length = recN_;
-			live_->overview.touch(recN_ - 1, recN_, o.capacity());
+			live_->overview.touch(recN_ - 1, recN_, span_);
+			if (recN_ >= span_ && span_ < o.capacity())
+				widenSpan();
 			if (recN_ >= o.capacity())
 				endRec();
 		}
@@ -798,6 +818,21 @@ private:
 			o.tail = tailK_;
 			if (tailK_ >= tailN_)
 				finishRec();
+		}
+	}
+
+	// The recording has reached the end of the span: it doubles (the
+	// overview merges its columns in pairs), or becomes the capacity if that
+	// is nearer (the overview is mapped anew and rescanned).
+	void widenSpan() {
+		const size_t cap = live_->original.capacity();
+		if (span_ <= cap / 2) {
+			span_ *= 2;
+			live_->overview.doubleSpan();
+		}
+		else {
+			span_ = cap;
+			live_->overview.touch(0, recN_, span_);
 		}
 	}
 
@@ -814,7 +849,7 @@ private:
 			o.ch[0][i] = pre0[i];
 			o.ch[1][i] = pre1[i];
 		}
-		const size_t frames = rec_ == REC_ON ? o.capacity() : recN_;
+		const size_t frames = rec_ == REC_ON ? span_ : recN_;
 		live_->overview.touch(preCopied_, preCopied_ + n, frames);
 		preCopied_ += n;
 	}
@@ -1154,7 +1189,7 @@ private:
 		if (!usableSet())
 			return;
 		if (rec_ == REC_PRE || rec_ == REC_ON) {
-			const double c = (double) live_->original.capacity();
+			const double c = (double) span_;
 			const double n = (double) recN_;
 			out.empty = rec_ == REC_PRE && curLength() == 0;
 			out.head = (float) (n / c);
@@ -1207,6 +1242,7 @@ private:
 	Schmitt recGate_, dubGate_, playTrig_, restoreTrig_;
 	Rec rec_ = REC_IDLE;
 	size_t recN_ = 0, preCopied_ = 0, tailN_ = 0, tailK_ = 0;
+	size_t span_ = 1;   // while recording, the frames the window shows
 
 	// Controls.
 	int countdown_ = 0;

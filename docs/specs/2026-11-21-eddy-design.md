@@ -188,7 +188,10 @@ The tape's length in the corner and the Smear mark are not drawn in it.
 - A line marks the play head. The stretch that Smear overlaps is marked
   at the join.
 - While recording, the waveform grows from the left as the tape fills,
-  against the 5 minute limit.
+  against the 5 minute limit. (Changed at the listening stop, 2026-11-21:
+  against a span that starts at 4 s and doubles each time the recording
+  reaches its end, up to the limit, so the recording fills half to all of
+  the window; the time recorded is drawn in the corner.)
 - It shows the tape as it is now: a dub appears as it lands, and wear
   shows as the waveform thins.
 - Empty, it says so (a flat line; the builder may add a word).

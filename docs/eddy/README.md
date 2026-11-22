@@ -19,7 +19,10 @@ From the top:
   The part in play is bright, the rest dim; a thin line at each end of the
   part in play, the head as an ivory line, the stretch Smear overlaps
   marked along the bottom edge, and the tape's length in the top right
-  corner. Empty, a flat line.
+  corner. Empty, a flat line. While recording it shows the recording
+  filling at least half of the glass: the first 4 seconds across it, then
+  8, 16 and so on up to the tape's 5 minutes, with the time recorded in
+  the corner; when the recording ends the tape fills the window.
 - **REC** and **DUB** on the left, **PLAY** and **LOOP** on the right, lit
   buttons, either side of **SPEED**, the large dial (-2 to +2).
 - **START**, **LENGTH**, Speed's attenuverter, **WEAR**, **SMEAR**.

@@ -51,6 +51,11 @@ constexpr double TAIL_S = 0.01;
 constexpr double REC_MIN_S = 0.05;
 constexpr float REC_BUFFER_FS = 768000.f;
 constexpr int PRE_COPY_FRAMES = 64;
+// While recording the window shows a span this long at first, doubled each
+// time the recording reaches its end and held to the tape's capacity, so the
+// waveform fills half to all of it (changed at the listening stop,
+// 2026-11-21: it was the whole capacity).
+constexpr double REC_SPAN_S = 4.0;
 // EOC's width; the fade that cuts the oldest voice when all are in use.
 constexpr double EOC_S = 0.001;
 constexpr double CUT_S = 0.001;

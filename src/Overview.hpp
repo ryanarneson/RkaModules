@@ -8,13 +8,16 @@
 // silence (0). A column with no frames (a tape shorter than COLS) is 0, 0.
 //
 // The mapping length. `frames` is whatever was last given: build() sets it to
-// tape.length and touch() sets it to its argument. While recording the engine
-// passes the tape's capacity, so the waveform grows from the left against the
-// limit. If touch() is given a different length from the last, every column
-// has changed its meaning and all are marked for a rescan.
+// tape.length, touch() sets it to its argument and doubleSpan() doubles it.
+// While recording the engine passes a span that grows with the recording (it
+// doubles each time the recording reaches its end, until it is the tape's
+// capacity), so the waveform fills half to all of the window. If touch() is
+// given a different length from the last, every column has changed its
+// meaning and all are marked for a rescan; doubleSpan() needs none.
 //
-// Threads. touch() and service() are for the audio thread alone; build() and
-// clear() run off it, on an overview the audio thread is not using. lo and hi
+// Threads. touch(), doubleSpan() and service() are for the audio thread
+// alone; build() runs off it, on an overview the audio thread is not using;
+// clear() is either's (on the audio thread, for the overview it uses). lo and hi
 // are atomics because the UI thread reads them at any time (relaxed: a
 // column's peaks are independent of one another). The bookkeeping (which
 // columns are touched, where the rescan has got to) is plain data that the
@@ -47,8 +50,10 @@ struct Overview {
 		clear();
 	}
 
-	// Every column 0, nothing touched, mapping length 0. Off the audio thread.
-	void clear() {
+	// Every column 0 (a tape of silence), nothing touched, mapping length
+	// `frames`. COLS columns of work: the engine calls it when a recording
+	// stands, so the tape it replaces is gone from the window at once.
+	void clear(size_t frames = 0) {
 		for (int c = 0; c < COLS; c++) {
 			lo[c].store(0.f, std::memory_order_relaxed);
 			hi[c].store(0.f, std::memory_order_relaxed);
@@ -57,7 +62,7 @@ struct Overview {
 		dirtyCount_ = 0;
 		cursor_ = 0;
 		cur_ = -1;
-		frames_ = 0;
+		frames_ = frames;
 	}
 
 	// The whole tape, mapped over tape.length. Off the audio thread.
@@ -107,6 +112,50 @@ struct Overview {
 			else
 				mark((int) c);
 		}
+	}
+
+	// Audio thread. The mapping length doubles, with no rescan: column c of
+	// the left half covers exactly the frames of old columns 2c and 2c + 1
+	// (start(c, 2F) is start(2c, F)), so it takes their peaks merged, the
+	// least lo and the greatest hi (an old column with no frames adds
+	// nothing; with neither, 0, 0). The right half covers the frames from
+	// the old length on, which must be past the tape's length (the engine
+	// doubles when the recording reaches the end of the span): silence, 0,
+	// 0. A new column whose old ones were touched and not yet rescanned, or
+	// was in hand, is touched. COLS columns of work, no tape read. Written in
+	// place from the left (column c reads 2c and 2c + 1, never one already
+	// written), so a window drawn meanwhile may show the old and the new
+	// mapping side by side, each column a pair of peaks that were on the tape.
+	void doubleSpan() {
+		const size_t was = frames_;
+		if (cur_ >= 0) {   // its scratch is for an old column: read it again
+			mark(cur_);
+			cur_ = -1;
+		}
+		dirtyCount_ = 0;
+		for (int c = 0; c < COLS / 2; c++) {
+			float l = 0.f, h = 0.f;
+			bool any = false;
+			for (int j = 2 * c; j <= 2 * c + 1; j++) {
+				if (start(j + 1, was) <= start(j, was))
+					continue;
+				const float jl = lo[j].load(std::memory_order_relaxed), jh = hi[j].load(std::memory_order_relaxed);
+				l = any && l < jl ? l : jl;
+				h = any && h > jh ? h : jh;
+				any = true;
+			}
+			lo[c].store(l, std::memory_order_relaxed);
+			hi[c].store(h, std::memory_order_relaxed);
+			dirty_[c] = dirty_[2 * c] || dirty_[2 * c + 1];
+			dirtyCount_ += dirty_[c] ? 1 : 0;
+		}
+		for (int c = COLS / 2; c < COLS; c++) {
+			lo[c].store(0.f, std::memory_order_relaxed);
+			hi[c].store(0.f, std::memory_order_relaxed);
+			dirty_[c] = false;
+		}
+		cursor_ /= 2;
+		frames_ = 2 * was;
 	}
 
 	// Audio thread, every sample: rescans at most `budget` frames of touched

@@ -446,9 +446,11 @@ struct KnurlEncoder : Encoder {
 // What the window on a tape shows (TapeWindow): the overview's columns and,
 // as fractions of the tape (0..1), the head, the window's start and length
 // and the overlap at its join; the tape's length in seconds. While
-// recording, the overview and the fractions are over the tape's capacity,
-// so the tape grows from the left. `overview` must stay valid while the
-// window draws (the source hands it a copy it owns).
+// recording, the overview and the fractions are over a span that grows with
+// the recording (Eddy: 4 s, doubled each time the recording reaches its end,
+// up to the tape's capacity), so the waveform fills half to all of the
+// glass; `seconds` is then the time recorded. `overview` must stay valid
+// while the window draws (the source hands it a copy it owns).
 struct TapeView {
 	const rka::Overview* overview = nullptr;
 	float head = 0, start = 0, length = 1, overlap = 0, seconds = 0;
