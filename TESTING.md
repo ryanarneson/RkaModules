@@ -140,7 +140,12 @@ threads (the audio thread in a trigger storm, a worker offering, collecting
 and copying sets, the window reading the live overview) under
 ThreadSanitizer, which has its own rule in `tests.mk` because it cannot be
 combined with ASan; the build fails, saying so, where the compiler cannot
-link it. One data race is accepted by design and is not in that test: the
+link it. GCC's TSan runtime cannot start on a Linux kernel whose address
+randomisation is wider than it handles (`vm.mmap_rnd_bits` over 28, as in
+Colima's VM) or under Rosetta: `make test` then reruns it under
+`setarch -R`, and only if it cannot start that way either (Docker's default
+seccomp profile refuses `setarch -R`; Rosetta fails either way) skips it
+with the reason printed. One data race is accepted by design and is not in that test: the
 worker reading the live tape to save it while the engine may be writing it
 (Wear, Dub). A torn read costs one sample of wear either side of it; the save
 names it where it reads.

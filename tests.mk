@@ -12,8 +12,8 @@ TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_
 # the sanitizer cannot start (GCC's runtime on a Linux kernel whose address
 # randomisation is wider than it handles, vm.mmap_rnd_bits over 28, or under
 # emulation) it stops before main with "unexpected memory mapping": then the
-# test runs again with randomisation off (setarch -R), and only if that is not
-# allowed either is it skipped, saying why. Any other failure fails.
+# test runs again with randomisation off (setarch -R), and only if it cannot
+# start that way either is it skipped, saying why. Any other failure fails.
 TSAN_TESTS = $(filter %/test_threads,$(TEST_BINS))
 TSAN_START_FAILED = ThreadSanitizer: unexpected memory mapping
 .PHONY: test
@@ -25,8 +25,8 @@ test: shoal-globals bench-modules engine-globals libm-calls panels-test $(TEST_B
 			setarch "$$(uname -m)" -R ./$$t > $$t.log 2>&1; rc=$$?; \
 			if [ $$rc != 0 ] && grep -q -e "$(TSAN_START_FAILED)" -e setarch $$t.log; then \
 				cat $$t.log; \
-				echo "$$t: skipped (ThreadSanitizer cannot start here, and setarch -R is not allowed:" \
-					"lower vm.mmap_rnd_bits to 28, or allow personality(2) in the container)"; \
+				echo "$$t: skipped (ThreadSanitizer cannot start here, nor under setarch -R:" \
+					"it needs vm.mmap_rnd_bits of 28 or less or personality(2) allowed, and no emulation)"; \
 				continue; \
 			fi; \
 		fi; \
