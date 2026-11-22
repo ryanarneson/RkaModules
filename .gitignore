@@ -20,3 +20,6 @@
 *.mp3
 *.ogg
 *.m4a
+
+# Python bytecode from tools/
+__pycache__/
