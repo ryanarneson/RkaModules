@@ -93,13 +93,17 @@ inline double lengthLaw(double k, double tape, double lmin) {
 // The loop window, all in frames. start: where it begins; length: L;
 // minFade: m = min(F, L/4); overlap: o; turn: how long a turn of the loop is
 // (L - (o - t), t = the part of m the tape holds past the window's end).
-// An empty tape (or one without a rate) gives all zeros.
+// An empty tape (or one without a rate) gives all zeros. The engine takes
+// start, length, minFade and overlap from here (with tailAfter 0) and works
+// out its own turn, both ways, from what the tape at hand holds past the
+// window's end (or before its start, going backwards); `turn` and
+// `tailAfter` are the law the tests hold the engine's turns to.
 struct Window {
 	double start, length, minFade, overlap, turn;
 };
 
 // tailAfter: frames of audio the tape holds after the window's end (0 if it
-// wraps). Start is held at most one frame inside the tape (a window past the
+// wraps; only `turn` uses it). Start is held at most one frame inside the tape (a window past the
 // end wraps to the beginning).
 inline Window window(float startKnob, float startCvVolts, float lengthKnob, float smear, double tapeFrames,
                      double tailAfter, float fs) {

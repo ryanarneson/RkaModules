@@ -4,10 +4,12 @@
 //
 // Tape: two channels of float frames, `length` frames of tape followed by
 // `tail` frames of audio that ran on after it (a recording's tail, read by
-// the join). Reads are Hermite (the maths of src/DelayLine.hpp), at any
-// fractional frame, so a head may move at any speed in either direction.
-// A head faster than 1 aliases through these, and between frames they
-// lose the top octave; Eddy reads through src/BandLimitedRead.hpp instead.
+// the join). Its own reads, read() and readWrapped(), are Hermite (the maths
+// of src/DelayLine.hpp), at any fractional frame. A head faster than 1
+// aliases through them, and between frames they lose the top octave, so
+// the plugin no longer calls them: Eddy reads through
+// src/BandLimitedRead.hpp. They are kept for Spindrift (a later module) and
+// as the tests' reference for how a read wraps and clamps.
 //
 // TapeWriter: the write head, which travels with a read head at whatever
 // speed it moves and lays the input down at that speed (see its comment).

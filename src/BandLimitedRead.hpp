@@ -16,8 +16,9 @@
 // frames. It uses the same window with the cutoff exactly at the tape's
 // Nyquist (an interpolating kernel: zero at every other whole frame), so at
 // a whole frame it returns that frame, to the bit, and between frames it
-// keeps the band flat to 0.8 of Nyquist and the slow read's images 57 dB
-// down at 0.4 of the rate. (A 4-point Hermite, used before 2026-11-22, lost
+// keeps the band flat to 0.8 of Nyquist and the slow read's images 63 dB
+// or more down up to 0.4 of the rate (63 to 66 dB measured; above that, at
+// the top of the band, about -8 dB: test_band_read, test_alias). (A 4-point Hermite, used before 2026-11-22, lost
 // up to 2.8 dB of the top octave between frames, 0.9 dB of white noise's
 // level, and left images at -11 dB.)
 //

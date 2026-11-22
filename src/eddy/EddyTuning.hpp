@@ -1,6 +1,7 @@
 #pragma once
 // Eddy's numbers in one place (docs: the Global Constraints of the plan).
-// The Wear ones are starting values, settled by ear at the listening stop.
+// The Wear ones were settled by ear at the listening stop (build 2.0.27,
+// 2026-11-22).
 
 namespace rka {
 namespace eddy {
