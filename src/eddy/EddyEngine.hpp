@@ -139,7 +139,7 @@ struct TapeSet {
 
 struct EddyFrame {
 	enum { SPEED, SPEED_ATT, START, LENGTH, WEAR, SMEAR, DUB_LEVEL, MIX, PARAMS_LEN };
-	float params[PARAMS_LEN] = {1.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.5f, 1.f};
+	float params[PARAMS_LEN] = {1.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.5f, 0.5f};
 	float speedCv = 0, voct = 0, startCv = 0;
 	float recGate = 0, dubGate = 0, playTrig = 0, restoreTrig = 0;   // volts
 	float inL = 0, inR = 0;
@@ -1141,20 +1141,12 @@ private:
 		const float dl = f.params[EddyFrame::DUB_LEVEL];
 		dubGains(dl, add_, keep_);
 		dubLevel_ = add_;
+		// Mix: the input alone at 0, both at full at 0.5, the tape alone at
+		// 1 (input min(1, 2(1 - m)), tape min(1, 2m); exact at 0, 0.5, 1).
 		float mix = f.params[EddyFrame::MIX];
-		mix = mix == mix ? mix : 1.f;
-		if (mix >= 1.f) {
-			dryT_ = 0.f;
-			wetT_ = 1.f;
-		}
-		else if (mix <= 0.f) {
-			dryT_ = 1.f;
-			wetT_ = 0.f;
-		}
-		else {
-			dryT_ = fastSin2pi(0.25f + 0.25f * mix);
-			wetT_ = fastSin2pi(0.25f * mix);
-		}
+		mix = mix == mix ? (mix < 0.f ? 0.f : mix > 1.f ? 1.f : mix) : 0.5f;
+		dryT_ = mix <= 0.5f ? 1.f : 2.f * (1.f - mix);
+		wetT_ = mix >= 0.5f ? 1.f : 2.f * mix;
 		computeWindow();
 		// A window that moved off the head: the head fades to its start.
 		Voice* h = voices_.head();
@@ -1250,7 +1242,7 @@ private:
 	float speedTarget_ = 1.f, glide_ = 1.f, voctTarget_ = 0.f, voct_ = 0.f, voctStep_ = 0.f;
 	float startK_ = 0.f, startCv_ = 0.f, lengthK_ = 1.f, smearK_ = 0.f;
 	float add_ = 1.f, keep_ = 0.75f, dubLevel_ = 1.f;
-	float dryT_ = 0.f, wetT_ = 1.f, inGain_ = 0.f, wet_ = 1.f;
+	float dryT_ = 1.f, wetT_ = 1.f, inGain_ = 1.f, wet_ = 1.f;
 	int dir_ = 1;
 	float speedNow_ = 1.f;
 

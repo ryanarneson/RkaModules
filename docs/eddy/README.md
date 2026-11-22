@@ -105,9 +105,12 @@ is not rewritten at all and the loop repeats exactly.
 
 ### Mix
 
-From the input alone to the tape alone (the default). While recording or
-dubbing the input is heard at full whatever Mix says. The outputs are held
-under a soft limit.
+At noon (the default) the input and the tape are both heard at full, so
+what you play passes through whether or not it is being recorded. Turning
+left fades the tape out, to the input alone at 0 %; turning right fades the
+input out, to the tape alone at 100 %. While recording or dubbing the input
+is heard at full whatever Mix says. The outputs are held under a soft
+limit, which the input and the tape together can reach.
 
 ### Restore, and the original
 

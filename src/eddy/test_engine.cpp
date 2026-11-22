@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -981,6 +982,7 @@ void record_to_capacity() {
 	}
 }
 
+// Mix's law: input gain min(1, 2(1 - m)), tape gain min(1, 2m).
 void mix_law() {
 	struct Fit {
 		double tape, input;
@@ -1010,9 +1012,10 @@ void mix_law() {
 		f.input /= 2.0;
 		return f;
 	};
+	// Within 1e-3 of the law (the fit's own error is far smaller).
 	for (float mix : {0.f, 0.25f, 0.5f, 0.75f, 1.f}) {
 		const Fit f = measure(mix, 0);
-		const double wet = std::sin(PI / 2 * mix), dry = std::cos(PI / 2 * mix);
+		const double wet = std::min(1.0, 2.0 * mix), dry = std::min(1.0, 2.0 * (1.0 - mix));
 		CHECK(std::fabs(f.tape - wet) < 1e-3 && std::fabs(f.input - dry) < 1e-3, "Mix %.2f: tape %.4f, input %.4f (want %.4f, %.4f)",
 		      mix, f.tape, f.input, wet, dry);
 	}
@@ -1021,21 +1024,87 @@ void mix_law() {
 		CHECK(std::fabs(f.input - 1.0) < 1e-3, "%s at Mix 1: the input is heard at %.4f (want unity)", mode == 1 ? "dubbing" : "recording",
 		      f.input);
 	}
-	// Mix 1 is the tape alone, to the bit.
-	{
+	// A tape playing and an input present, at Mix 0, 0.5 and 1, to the bit.
+	// The input is 3 V of 1 kHz and the tape 2 V of 100 Hz, so their sum
+	// stays below the limit's knee (8 V).
+	auto render = [](float mix) {
 		Rig g;
 		TapeSet* set = g.sine(1.0, 100.0, 2.f);
 		g.use(set);
+		g.f.params[F::MIX] = mix;
 		g.f.playTrig = 10.f;
 		g.run(1000);
-		bool exact = true;
+		std::vector<float> y;
 		for (int i = 0; i < 4000; i++) {
-			g.step(3.f);
-			const size_t k = (size_t) (1000 + i);
-			exact = exact && g.r.l == set->tape.ch[0][k] && g.r.r == set->tape.ch[1][k];
+			g.step(3.f * (float) std::sin(2 * PI * 1000.0 * i / 48000.0));
+			y.push_back(g.r.l);
+			y.push_back(g.r.r);
 		}
-		CHECK(exact, "Mix 1: the output is the tape, to the bit");
+		return std::make_pair(y, set);
+	};
+	{
+		const auto in0 = render(0.f), in1 = render(1.f), in5 = render(0.5f);
+		bool tapeAlone = true, inputAlone = true, sum = true;
+		for (int i = 0; i < 4000; i++) {
+			const float x = 3.f * (float) std::sin(2 * PI * 1000.0 * i / 48000.0);
+			const size_t k = (size_t) (1000 + i);
+			for (int c = 0; c < 2; c++) {
+				const size_t j = (size_t) (2 * i + c);
+				inputAlone = inputAlone && in0.first[j] == x;
+				tapeAlone = tapeAlone && in1.first[j] == in1.second->tape.ch[c][k];
+				sum = sum && in5.first[j] == in0.first[j] + in1.first[j];
+			}
+		}
+		CHECK(inputAlone, "Mix 0: the output is the input, to the bit (no tape)");
+		CHECK(tapeAlone, "Mix 1: the output is the tape, to the bit (no input)");
+		CHECK(sum, "Mix 0.5: the output is input + tape, to the bit");
 	}
+}
+
+// The default: Mix in the middle, and a new engine passes its input.
+void mix_default() {
+	const F defaults;
+	CHECK(defaults.params[F::MIX] == 0.5f, "the default Mix is 0.5 (it is %g)", defaults.params[F::MIX]);
+	// No tape at all, and an empty tape: the input to the bit below the knee.
+	for (int withSet = 0; withSet < 2; withSet++) {
+		Rig g(48000.f, 1, withSet == 1);
+		g.f.inRPatched = true;
+		bool same = true;
+		for (int i = 0; i <= 4000; i++) {
+			const float x = -8.f + 16.f * i / 4000.f;
+			g.step(x, -0.5f * x);
+			same = same && g.r.l == x && g.r.r == -0.5f * x;
+		}
+		CHECK(same, "%s, the controls at their defaults: the output is the input, to the bit", withSet ? "an empty tape" : "no tape");
+	}
+}
+
+// Mix moved fast: the gains ramp over F (10 ms), so with a still input and
+// a still tape the output moves at most (|in| + |tape|) / 480 a sample.
+void mix_smooth() {
+	Rig g;
+	// 2 s, so no join (whose crossfade of a still tape is not still) is met.
+	g.use(g.loaded(96000, 0, [](size_t, float& l, float& r) { l = r = 3.f; }));
+	g.f.playTrig = 10.f;
+	g.f.params[F::MIX] = 0.f;
+	for (int i = 0; i < 4800; i++)
+		g.step(4.f);
+	const float bound = (3.f + 4.f) / 480.f * 1.001f;
+	float worst = 0, prev = g.r.l;
+	float lo = 1e9f, hi = -1e9f;
+	rka::hadal::Random rnd;
+	rnd.seed(5);
+	for (int i = 0; i < 24000; i++) {
+		// The knob thrown end to end every 64 samples, then at random.
+		g.f.params[F::MIX] = i < 12000 ? (float) ((i / 64) & 1) : 0.5f + 0.5f * rnd.uniform();
+		g.step(4.f);
+		worst = std::max(worst, std::fabs(g.r.l - prev));
+		prev = g.r.l;
+		lo = std::min(lo, g.r.l);
+		hi = std::max(hi, g.r.l);
+	}
+	CHECK(worst <= bound, "Mix swept: the largest step is %.5f V (bound %.5f)", worst, bound);
+	CHECK(hi - lo > 3.f, "and the sweep moved the output (%.3f to %.3f V)", lo, hi);
 }
 
 void limit() {
@@ -1072,6 +1141,9 @@ float tapeStep(const Tape& t) {
 
 void no_clicks() {
 	Rig g;
+	// Mix 1 (the tape alone): the input is heard only while recording or
+	// dubbing, as here it jumps between sections by design.
+	g.f.params[F::MIX] = 1.f;
 	const double w = 2 * PI * 100.0 / 48000.0;
 	const float bound = 1.5f * 5.f * (float) w;   // 1.5 x the 5 V sine's largest step
 	long t = 0;
@@ -1158,6 +1230,9 @@ void no_clicks_join() {
 			for (float knob : {1.f, -1.f}) {
 				Rig g;
 				const double n = 24000;
+				// Mix 1: the input (which starts and stops with the dub) is
+				// heard only while dubbing.
+				g.f.params[F::MIX] = 1.f;
 				g.f.params[F::SPEED] = knob;
 				g.f.params[F::SMEAR] = smearK;
 				if (shortWindow) {
@@ -1271,6 +1346,8 @@ int main() {
 	record_over_a_tape();
 	record_to_capacity();
 	mix_law();
+	mix_default();
+	mix_smooth();
 	limit();
 	no_clicks();
 	no_clicks_join();

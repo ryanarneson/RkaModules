@@ -265,7 +265,8 @@ struct Eddy : Module {
 		configParam(WEAR_PARAM, 0.f, 1.f, defaults.params[F::WEAR], "Wear (each pass costs the tape a little)", "%", 0.f, 100.f);
 		configParam(SMEAR_PARAM, 0.f, 1.f, defaults.params[F::SMEAR], "Smear (the overlap at the join)", "%", 0.f, 100.f);
 		configParam(DUB_LEVEL_PARAM, 0.f, 1.f, defaults.params[F::DUB_LEVEL], "Dub level", "%", 0.f, 100.f);
-		configParam(MIX_PARAM, 0.f, 1.f, defaults.params[F::MIX], "Mix (input to tape)", "%", 0.f, 100.f);
+		configParam(MIX_PARAM, 0.f, 1.f, defaults.params[F::MIX], "Mix", "%", 0.f, 100.f)->description =
+		    "0 %: the input alone; 50 %: the input and the tape both at full; 100 %: the tape alone";
 		configSwitch(REC_PARAM, 0.f, 1.f, 0.f, "Rec", {"Off", "On"});
 		configSwitch(DUB_PARAM, 0.f, 1.f, 0.f, "Dub", {"Off", "On"});
 		configSwitch(PLAY_PARAM, 0.f, 1.f, 0.f, "Play", {"Off", "On"});

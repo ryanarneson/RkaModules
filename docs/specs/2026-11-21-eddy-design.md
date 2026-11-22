@@ -328,6 +328,11 @@ The tape's length in the corner and the Smear mark are not drawn in it.
 
 - **Mix** runs from the input alone to the tape alone; the default is the
   tape alone.
+  *Changed at the listening stop, 2026-11-21:* Mix m (0 to 1) is a
+  balance with both at full in the middle: input gain min(1, 2(1 − m)),
+  tape gain min(1, 2m), so 0 is the input alone, 0.5 the input and the
+  tape both at full, and 1 the tape alone. The default is 0.5, so the input
+  is heard through the module whether or not it is being recorded.
 - Audio is ±5 V. The outputs are held under a soft limit.
 - Recording puts the input on the tape unchanged, offset and all, so a
   plain loop is exact. What is written back by Dub and Wear passes a DC

@@ -216,7 +216,9 @@ void load_ends_rec_and_dub() {
 // Silent, Dub and Restore ignored, empty. (Rec records into an empty set;
 // with no set at all it is ignored too.)
 void expectEmpty(Rig& g, const char* what, bool noSet) {
+	// Mix 1 (the tape alone), settled: what is heard is the tape.
 	g.f.params[F::MIX] = 1.f;
+	g.run(960);
 	if (noSet) {
 		g.press(&F::recPress);
 		g.step(3.f, 3.f);
