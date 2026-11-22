@@ -5,9 +5,15 @@
 // header-only; no allocation, no libm. Audio thread only.
 //
 // A voice's envelope is linear (0..1) and heard as sin(pi/2 env): two voices
-// fading opposite ways at the same rate are an equal-power crossfade. A fade
-// moves by `perSample` each sample and by `perFrame` for each frame of tape
-// the voice travels (the join's overlap is a stretch of tape, whatever the
+// fading opposite ways at the same rate are an equal-power crossfade, right
+// for two reads of different audio. A voice started `linear` is heard at
+// env itself, and the voice it replaces is made linear too (its gain kept
+// where it is): an equal-gain crossfade, the gains summing to 1, for two
+// reads of the same audio (the tape and the original at one place), which
+// equal power would sum to 3 dB over it. A voice stays linear until its
+// fade-in ends; one fading out keeps its law to the end. A fade moves by
+// `perSample` each sample and by `perFrame` for each frame of tape the
+// voice travels (the join's overlap is a stretch of tape, whatever the
 // speed). At 1 the envelope is exactly 1 and the gain exactly 1.
 //
 // Each voice also carries a write head (TapeWriter) and a wear state, so it
@@ -35,6 +41,7 @@ struct Voice {
 	uint32_t born = 0;
 	bool wrap = false;             // reads round the tape's end (a window that wraps)
 	bool active = false;
+	bool linear = false;           // heard at env, not sin(pi/2 env)
 
 	// The write head: last sample's move, written this sample (EddyEngine).
 	TapeWriter writer;
@@ -58,7 +65,7 @@ struct Voice {
 		reader.read(*src, pos, speed, wrap, out);
 	}
 	float gain() const {
-		return env >= 1.0 ? 1.f : fastSin2pi(0.25f * (float) env);
+		return env >= 1.0 ? 1.f : linear ? (float) env : fastSin2pi(0.25f * (float) env);
 	}
 	double length() const {
 		return (double) src->extent(src->length);
@@ -79,6 +86,7 @@ struct Voice {
 		if (d > 0.0 && env >= 1.0) {
 			env = 1.0;
 			perSample = perFrame = 0.0;
+			linear = false;   // at 1 both laws give 1
 		}
 		else if (d < 0.0 && env <= 0.0) {
 			env = 0.0;
@@ -106,7 +114,7 @@ struct Voice {
 struct Voices {
 	enum { N = 4 };
 	Voice v[N];
-	int newest = -1;   // the voice the write head follows, or -1
+	int newest = -1;   // the head: the voice the window, the join and the view follow, or -1
 	uint32_t clock = 0;
 
 	Voice* head() {
@@ -126,10 +134,11 @@ struct Voices {
 	}
 
 	// A new voice at p, fading in at the given rates while the newest fades
-	// out at the same rates; or straight in at full (both rates 0). Its
-	// writer is fresh and no moves wait; its wear state is the caller's to
-	// set. Null, and nothing changes, if all four are in use.
-	Voice* start(const Tape* src, const void* owner, double p, bool wrap, double perSample, double perFrame) {
+	// out at the same rates; or straight in at full (both rates 0). `linear`:
+	// an equal-gain crossfade (see the top). Its writer is fresh and no moves
+	// wait; its wear state is the caller's to set. Null, and nothing changes,
+	// if all four are in use.
+	Voice* start(const Tape* src, const void* owner, double p, bool wrap, double perSample, double perFrame, bool linear = false) {
 		int slot = -1;
 		for (int i = 0; i < N; i++)
 			if (!v[i].active) {
@@ -145,6 +154,10 @@ struct Voices {
 			else {
 				o.perSample = -perSample;
 				o.perFrame = -perFrame;
+				if (linear && !o.linear) {
+					o.env = o.gain();   // the same gain, now on the linear law
+					o.linear = true;
+				}
 			}
 		}
 		Voice& n = v[slot];
@@ -155,6 +168,7 @@ struct Voices {
 		n.perSample = perSample;
 		n.perFrame = perFrame;
 		n.env = (perSample == 0.0 && perFrame == 0.0) ? 1.0 : 0.0;
+		n.linear = linear && n.env < 1.0;
 		n.active = true;
 		n.born = ++clock;
 		n.writer.reset();

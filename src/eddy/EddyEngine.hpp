@@ -394,6 +394,7 @@ private:
 
 	struct Pending {
 		bool active = false;
+		bool same = false;   // a swap at the head's own place (linear; it starts where the head is then)
 		double pos = 0.0, perSample = 0.0, perFrame = 0.0;
 	};
 
@@ -983,9 +984,11 @@ private:
 	// ---- Voices.
 
 	// A new voice (Voices::start) with a fresh wear state of its own, seeded
-	// from the engine's seed and the voice's number.
-	Voice* startVoice(double p, double perSample, double perFrame) {
-		Voice* n = voices_.start(source(), live_, p, wrap_, perSample, perFrame);
+	// from the engine's seed and the voice's number. `linear`: the fade is
+	// equal in gain, not in power (Voices.hpp), for a swap between two reads
+	// of the same audio.
+	Voice* startVoice(double p, double perSample, double perFrame, bool linear = false) {
+		Voice* n = voices_.start(source(), live_, p, wrap_, perSample, perFrame, linear);
 		if (n) {
 			n->wear = eddy::Wear(seed_ * 2654435761u + n->born);
 			n->wear.setSampleRate(rate_);
@@ -994,18 +997,22 @@ private:
 		return n;
 	}
 
-	// The head goes to p: a new voice there, fading in as the last fades out.
-	// Silent (stopped), the voices simply go and the head waits at p.
-	void jumpTo(double p, double perSample, double perFrame) {
+	// The head goes to p: a new voice there, fading in as the last fades out
+	// (equal in power: different audio), or with `same`, the head's own
+	// place read from the other of tape and original (equal in gain: the
+	// same audio, or nearly). Silent (stopped), the voices simply go and the
+	// head waits at p.
+	void jumpTo(double p, double perSample, double perFrame, bool same = false) {
 		if (!(playGain_ > 0.f)) {
 			voices_.killAll();
 			pend_.active = false;
 			head_ = p;
 			return;
 		}
-		if (!startVoice(p, perSample, perFrame)) {
+		if (!startVoice(p, perSample, perFrame, same)) {
 			voices_.cutOldest(cutRate_);
 			pend_.active = true;
+			pend_.same = same;
 			pend_.pos = p;
 			pend_.perSample = perSample;
 			pend_.perFrame = perFrame;
@@ -1018,14 +1025,18 @@ private:
 			pend_.active = false;
 			return;
 		}
-		if (startVoice(pend_.pos, pend_.perSample, pend_.perFrame))
+		const Voice* h = voices_.head();
+		const double p = pend_.same && h ? h->pos : pend_.pos;
+		if (startVoice(p, pend_.perSample, pend_.perFrame, pend_.same))
 			pend_.active = false;
 		else
 			voices_.cutOldest(cutRate_);
 	}
 
 	// The voices read what the copies allow: the newest crossfades (F) to the
-	// other of tape and original at the same place; the rest fade out within F.
+	// other of tape and original at the same place, equal in gain (the two
+	// hold the same audio there, or nearly: equal in power they would add to
+	// 3 dB over it, the final review's I4); the rest fade out within F.
 	void syncSources() {
 		if (!usableSet())
 			return;
@@ -1033,7 +1044,7 @@ private:
 		const Tape* other = want == &live_->tape ? &live_->original : &live_->tape;
 		Voice* h = voices_.head();
 		if (h && h->owner == live_ && h->src == other)
-			jumpTo(h->pos, fadeRate_, 0.0);
+			jumpTo(h->pos, fadeRate_, 0.0, true);
 		for (int i = 0; i < Voices::N; i++) {
 			Voice& x = voices_.v[i];
 			if (x.active && i != voices_.newest && x.src == other)

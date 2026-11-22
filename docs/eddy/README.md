@@ -283,8 +283,9 @@ is heard at full whatever Mix says.
 When a file loads or a recording ends, an untouched copy is kept beside
 the tape: the original. Dub and Wear change the tape and never the
 original. **RESTORE** (the button, or a trigger at **TRIG**) puts the
-original back on the tape, wear and dubs gone, with a short fade; the head
-keeps its place and the tape keeps playing. It ends a dub, and does nothing
+original back on the tape, wear and dubs gone, with a short fade (10 ms,
+equal in gain: a tape still close to the original does not swell); the
+head keeps its place and the tape keeps playing. It ends a dub, and does nothing
 on an empty tape or while recording. The menu's **Make this the original**
 keeps the tape as it now is, worn and dubbed, as the new original.
 

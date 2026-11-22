@@ -333,6 +333,11 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   back on the tape: wear and every dub are gone. The head keeps its
   place and the tape keeps playing; the change is a short fade, heard
   within a few milliseconds of the trigger.
+  (As built, 2026-11-22, after the final review's I4: the fade is equal
+  in gain, not in power: the tape and the original at one place are the
+  same audio, or nearly, and an equal-power fade between them swelled
+  the output 3 dB for its 10 ms. Every other fade between two reads, the
+  join's included, is between different audio and stays equal in power.)
 - Restore does nothing on an empty tape or while recording. It ends a
   dub in progress.
 - Menu: **Make this the original** keeps the tape as it now is, worn and

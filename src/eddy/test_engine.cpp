@@ -903,6 +903,85 @@ void restore() {
 	CHECK(first.equals(set->tape) && first.equals(set->original), "after a second of Restore at audio rate both are the original");
 }
 
+// Restore swaps the head from the tape to the original at the same place:
+// the same audio there (or nearly), so the fade is equal in gain. Equal in
+// power, the two summed to 3 dB over it for the 10 ms (the final review's
+// I4: 4.24 V from a 3 V sine).
+void restore_level() {
+	// An unworn tape: the output with Restore is the output without it, to
+	// within 1e-4 V (-90 dB re the 3 V sine), and the copy is done.
+	{
+		Rig a, b;
+		TapeSet* sa = a.sine(0.5, 100.0, 3.f, 0.0, 480);
+		TapeSet* sb = b.sine(0.5, 100.0, 3.f, 0.0, 480);
+		a.use(sa);
+		b.use(sb);
+		a.press(&F::playPress);
+		b.press(&F::playPress);
+		a.run(4800);
+		b.run(4800);
+		const long copies = b.copies;
+		b.press(&F::restorePress);
+		double worst = 0, peak = 0;
+		for (int i = 0; i < 9600; i++) {
+			a.step();
+			b.step();
+			worst = std::max(worst, (double) std::fabs(a.r.l - b.r.l));
+			peak = std::max(peak, (double) std::fabs(b.r.l));
+		}
+		CHECK(b.copies > copies, "Restore on an unworn tape: the copy was done");
+		CHECK(worst < 1e-4, "Restore on an unworn tape: the output moved by %.3g V (peak %.4f V; want under 1e-4)", worst, peak);
+	}
+	// A worn tape (Wear 1 for 30 passes: well under the original) restores
+	// with no step: no sample-to-sample jump beyond the sine's own largest
+	// step and the fade's share, and no peak over the original's 3 V.
+	{
+		Rig g;
+		TapeSet* set = g.sine(0.5, 100.0, 3.f, 0.0, 480);
+		g.use(set);
+		g.f.params[F::WEAR] = 1.f;
+		g.press(&F::playPress);
+		g.run(30L * 24000);
+		g.f.params[F::WEAR] = 0.f;
+		g.run(1000);
+		double worn = 0;
+		for (int i = 0; i < 480; i++) {
+			g.step();
+			worn = std::max(worn, (double) std::fabs(g.r.l));
+		}
+		CHECK(worn < 1.5, "worn to %.2f V before Restore", worn);
+		g.press(&F::restorePress);
+		double prev = g.r.l, step = 0, peak = 0;
+		for (int i = 0; i < 4800; i++) {
+			g.step();
+			step = std::max(step, std::fabs((double) g.r.l - prev));
+			peak = std::max(peak, (double) std::fabs(g.r.l));
+			prev = g.r.l;
+		}
+		const double sineStep = 3.0 * 2 * PI * 100.0 / 48000.0, fadeStep = 3.0 / 480.0;
+		CHECK(step < sineStep + fadeStep, "Restore on a worn tape: the largest step is %.4f V (want under %.4f)", step, sineStep + fadeStep);
+		CHECK(peak <= 3.0 + 1e-3 && peak > 2.99, "Restore on a worn tape: the output peaks at %.4f V (the original is 3 V)", peak);
+	}
+	// Restore 2.5 ms after Play (at the sine's peak), the head still fading
+	// in (equal in power): it goes over to the equal-gain fade at the gain it
+	// has, so no step.
+	{
+		Rig g;
+		g.use(g.sine(0.5, 100.0, 3.f, 0.0, 480));
+		g.press(&F::playPress);
+		g.run(120);
+		g.press(&F::restorePress);
+		double prev = g.r.l, step = 0;
+		for (int i = 0; i < 2400; i++) {
+			g.step();
+			step = std::max(step, std::fabs((double) g.r.l - prev));
+			prev = g.r.l;
+		}
+		const double sineStep = 3.0 * 2 * PI * 100.0 / 48000.0, fadeStep = 3.0 / 480.0 * 1.6;
+		CHECK(step < sineStep + fadeStep, "Restore while Play fades in: the largest step is %.4f V (want under %.4f)", step, sineStep + fadeStep);
+	}
+}
+
 void make_original() {
 	Rig g;
 	TapeSet* set = g.noise(0.05, 3.f, 41, 480);
@@ -1518,6 +1597,7 @@ int main() {
 	one_shot();
 	eoc();
 	restore();
+	restore_level();
 	make_original();
 	view();
 	record_span();
