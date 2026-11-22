@@ -445,7 +445,10 @@ void rates_change() {
 			g.f.recPress = true;
 			for (long i = 0; i < (long) (0.35 * now) + 2; i++)   // past the button's 0.3 s
 				g.stepNoise(4.f);
-			CHECK(g.r.recording, "state %d at %g Hz: recording", state, now);
+			// Past the button's minimum, so it stands (seconds counts the
+			// time recorded from the press).
+			CHECK(g.r.recording && g.r.seconds >= rka::eddy::REC_BUTTON_MIN_S, "state %d at %g Hz: recording, %.3f s in", state, now,
+			      g.r.seconds);
 		}
 		else if (state == 2) {   // a copy under way
 			g.e.requestCopy(EddyEngine::TAPE_TO_ORIGINAL);
@@ -462,8 +465,13 @@ void rates_change() {
 			g.f.recPress = true;
 			for (long i = 0; i < (long) (0.35 * now) + 2; i++)   // past the button's 0.3 s
 				g.stepNoise(4.f);
+			CHECK(g.r.recording && g.r.seconds >= rka::eddy::REC_BUTTON_MIN_S, "state %d at %g Hz: recording, %.3f s in", state, now,
+			      g.r.seconds);
 			g.f.recPress = true;
 			g.step();
+			// It ended as a recording: the tape is read from the original
+			// until the copy is done.
+			CHECK(!g.r.recording && g.e.readsOriginal(), "state %d at %g Hz: the recording ended and stood", state, now);
 		}
 		const float old = now;
 		now = rates[k];

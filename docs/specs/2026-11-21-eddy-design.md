@@ -217,8 +217,9 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   (2026-11-22, after the listening build: a quick double tap on REC
   erased the tape, since a person's double tap is 100 to 250 ms. Now a
   recording the button starts or stops is thrown away under 0.3 s; one
-  the REC gate starts and stops keeps the 50 ms. The window shows a
-  recording from the moment it is kept.)
+  the REC gate starts and stops keeps the 50 ms. The old waveform stays
+  in the window, dimmed under the growing recording, until the recording
+  is kept.)
 - The join is made from real audio: the input goes on being taken for a
   moment after Rec ends, and is faded into the tape's start, so the end
   runs into the beginning (as Tabes).

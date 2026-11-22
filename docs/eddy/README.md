@@ -50,11 +50,16 @@ fade, never a step.
 **REC** starts and stops a recording; the **REC** jack records while it is
 above 1 V. Recording is always at speed 1, forwards, and takes the input
 unchanged. A recording the **REC** button starts or stops is thrown away
-if it is shorter than 0.3 s, and the tape before it stays, playing as it
-was: a quick double tap on the button does not erase the tape. One the
-**REC** jack starts and stops is kept from 50 ms, so a gate can take a
-short slice. Until a recording is long enough to keep, the window still
-shows the old tape. At 5 minutes it ends by itself. When it ends, the tape plays from Start.
+if it is shorter than 0.3 s, and the tape before it stays: a quick double
+tap on the button does not erase the tape. The tape still pauses for the
+moment of the tap (it fades out at the first press and fades back in where
+it stopped), and the press turns **DUB** off, as any recording does. One
+the **REC** jack starts and stops is kept from 50 ms, so a gate can take a
+short slice. From the press the window shows the recording as it grows: a
+bright strip and the head from the left edge, the time counting from 0:00,
+over the old tape's waveform, now dimmed, until the recording is long
+enough to keep; then the old waveform goes. If it is thrown away the old
+tape's window comes back as it was. At 5 minutes it ends by itself. When it ends, the tape plays from Start.
 **IN R** takes **IN L** when nothing is patched into it; polyphonic cables
 are summed.
 

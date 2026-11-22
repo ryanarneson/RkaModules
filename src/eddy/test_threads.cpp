@@ -241,6 +241,16 @@ void threads() {
 			f.dubGate = f.playTrig = f.restoreTrig = 0.f;
 			f.recPress = f.dubPress = f.restorePress = false;
 		}
+		// The storm's last 200 samples before phase 1 are calm, and Rec is
+		// off by their end (a recording the button started is pressed off),
+		// so phase 1's recording is started by the gate: its 50 ms minimum
+		// is passed when the rate change comes (0.21 s in), and it stands.
+		// (Started by the button it would need 0.3 s and be thrown away.)
+		const long toPhase1 = 20000 - i % 60000;
+		if (toPhase1 > 0 && toPhase1 <= 200) {
+			f.recGate = 0.f;
+			f.recPress = toPhase1 == 200 && r.recording;
+		}
 		f.inL = 2.f * (float) std::sin((double) i * 0.01);
 		f.inR = -f.inL;
 		e.process(f, r);
@@ -259,6 +269,8 @@ void threads() {
 	CHECK(w.offered > 20 && w.collected > 20 && w.copies > 10 && w.clears > 5 && w.rateChanges > 10 && w.stale > 0,
 	      "the worker offered %ld sets, collected %ld (%ld stale), made %ld copies, %ld clears and %ld rate changes", w.offered,
 	      w.collected, w.stale, w.copies, w.clears, w.rateChanges);
+	std::printf("  the worker: %ld sets offered, %ld collected (%ld stale), %ld copies, %ld clears, %ld rate changes\n", w.offered, w.collected,
+	            w.stale, w.copies, w.clears, w.rateChanges);
 	CHECK(reads > 100 && notFinite == 0, "the window read %ld overviews, %ld columns not finite", reads, notFinite);
 	CHECK(playing > ran / 10 && recording > ran / 20, "the storm played (%ld samples) and recorded (%ld)", playing, recording);
 
