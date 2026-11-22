@@ -8,131 +8,262 @@ be layered onto it with **Dub**; and it can **Wear** a little on every
 pass. A trigger plays it from the start, once or looped. The tape can be
 saved as a file, and it is kept with the patch.
 
-(First draft. The picture of the panel and the numbers settled at the
-listening stop come later.)
+![Eddy panel](Eddy.png)
 
 ## The panel
 
 From the top:
 
-- **The window**: the whole tape as its waveform, over a ruler in tenths.
-  The part in play is bright, the rest dim; a thin line at each end of the
-  part in play, the head as an ivory line, the stretch Smear overlaps
-  marked along the bottom edge, and the tape's length in the top right
-  corner. Empty, a flat line. While recording it shows the recording
-  filling at least half of the glass: the first 4 seconds across it, then
-  8, 16 and so on up to the tape's 5 minutes, with the time recorded in
-  the corner; when the recording ends the tape fills the window.
-- **REC** and **DUB** on the left, **PLAY** and **LOOP** on the right, lit
-  buttons, either side of **SPEED**, the large dial (-2 to +2).
+- **The window**: the whole tape as its waveform, over a ruler in tenths
+  (see "The window" below).
+- **REC** and **DUB** on the left, **PLAY** and **LOOP** on the right: lit
+  buttons, either side of **SPEED**, the large dial lettered -2 to +2.
 - **START**, **LENGTH**, Speed's attenuverter, **WEAR**, **SMEAR**.
-- **START CV**, **V/OCT** and **SPEED CV**; **DUB LEVEL** and **MIX**.
+- The Start CV jack (joined by a line to START), **V/OCT**, the Speed CV
+  jack (joined to Speed's attenuverter), **DUB LEVEL** and **MIX**.
 - **IN L**, the **REC** gate, the **PLAY** trigger, the **RESTORE** button
   and, on ivory, the **L** output.
 - **IN R**, the **DUB** gate, **EOC** on ivory, **TRIG** (Restore's
-  trigger) and the **R** output.
+  trigger) and, on ivory, the **R** output.
 
 ## The tape
 
-Stereo, up to 5 minutes at any sample rate (at 96 kHz and above, 2^24
-frames: about 175 s at 96 kHz). Empty when the module is added. It is held
-at the engine's sample rate: a file at another rate, and the tape itself
-when the engine's rate changes, are converted off the audio thread, and
-until a converted tape is ready the module is silent.
+Stereo, up to 5 minutes. Empty when the module is added. It is held at
+Rack's sample rate, and its length is also held to 2^24 frames, so above
+about 56 kHz it is shorter than 5 minutes: 3:10 at 88.2 kHz, 2:54 at
+96 kHz, 1:27 at 192 kHz.
+
+A file at another rate, and the tape itself when Rack's rate changes, are
+converted off the audio thread. A file plays the old tape until it is
+ready; after a rate change the module is silent until the converted tape
+is ready.
 
 A new tape (a recording ending, a file arriving, Clear) comes in by a short
 fade, never a step.
+
+## The window
+
+The whole tape, left to right, as its waveform (the peaks of both sides
+together; the glass spans ±6 V, so a ±5 V tape fills most of it).
+
+- The part in play is bright and the rest dim, with a thin line at each
+  end of the part in play. A window that runs past the tape's end is shown
+  in two pieces.
+- The play head is an ivory line.
+- The stretch Smear overlaps is marked along the bottom edge, back from
+  the window's end.
+- The tape's length, as m:ss, is in the top right corner.
+- A dub shows as it lands, and wear as the waveform thins.
+- Empty: a flat line.
+
+**While recording** the window shows a span that starts at 4 seconds and
+doubles each time the recording reaches its end (8, 16, 32 s and so on, up
+to the tape's length), so the recording always fills half to all of the
+glass. The head is at the recording's front and the corner counts the time
+recorded. For the first 0.3 s of a recording a bright strip grows from the
+left over the old tape's waveform, now dimmed (over an empty tape, the
+flat line); then the old waveform goes. When the recording ends the window
+shows the new tape edge to edge.
+
+### Setting the window with the mouse
+
+A drag in the window sets **START** and **LENGTH**; the knobs turn to
+match.
+
+- **Drag across the waveform** to select the part to play, either way
+  round.
+- **Take hold of an end line** (press within about 4 pixels of it) and drag
+  to move that end alone: moving the start keeps the end where it is, and
+  moving the end leaves START untouched. An end dragged past the other
+  swaps roles.
+- **Double-click** for the whole tape.
+- A click without a drag changes nothing.
+- One undo step puts both knobs back, however long the drag.
+- A selection is at least 10 ms and never wraps past the tape's end.
+  Dragging an end of a window that wraps keeps its other end where it is
+  drawn and selects the stretch between it and the mouse, so the window
+  stops wrapping.
+- With the Start CV patched, the drag sets the knob so that knob plus CV,
+  as the CV is at that moment, puts the start under the mouse. The knob
+  stops at its ends, so a large CV can leave the start short of the mouse.
+- Nothing happens with an empty tape or while recording, and a drag stops
+  where it is if a recording starts or the tape is cleared or replaced
+  while you drag.
+- There is no fine mode: the drag follows the mouse.
 
 ## Controls
 
 ### Rec
 
-**REC** starts and stops a recording; the **REC** jack records while it is
-above 1 V. Recording is always at speed 1, forwards, and takes the input
-unchanged. A recording the **REC** button starts or stops is thrown away
-if it is shorter than 0.3 s, and the tape before it stays: a quick double
-tap on the button does not erase the tape. The tape still pauses for the
-moment of the tap (it fades out at the first press and fades back in where
-it stopped), and the press turns **DUB** off, as any recording does. One
-the **REC** jack starts and stops is kept from 50 ms, so a gate can take a
-short slice. From the press the window shows the recording as it grows: a
-bright strip and the head from the left edge, the time counting from 0:00,
-over the old tape's waveform, now dimmed, until the recording is long
-enough to keep; then the old waveform goes. If it is thrown away the old
-tape's window comes back as it was. At 5 minutes it ends by itself. When it ends, the tape plays from Start.
-**IN R** takes **IN L** when nothing is patched into it; polyphonic cables
-are summed.
+**REC** (the button) starts a recording and, pressed again, ends it. The
+**REC** jack starts one when its gate rises and ends it when the gate
+falls. Either can end a recording the other started. Recording is always
+at speed ×1, forwards, whatever Speed says, and takes the input as it is,
+offset and all, so a plain loop is exact. **IN R** takes **IN L** when
+nothing is patched into it; polyphonic cables are summed.
+
+When a recording starts, the old tape fades out (it is kept until the
+recording is long enough to stand) and Dub turns off. When it ends, the
+input goes on being taken for a moment (up to 10 ms) to make the join from
+real sound; the recording becomes the tape and the original, Play comes on
+and the tape plays from Start (once, if Loop is off). At the tape's
+length it ends by itself.
+
+A recording too short to keep is thrown away and the tape before it stays
+exactly as it was:
+
+- Under **0.3 s** if the REC button started or ended it, so a quick double
+  tap on the button does not erase the tape. The tape still pauses for the
+  moment of the tap (it fades out at the first press and fades back in
+  where it stopped), and Dub stays off.
+- Under **50 ms** if the REC gate started it and ended it, so a patch can
+  take a short slice.
+
+A gate that is already high when a recording ends, a file arrives or the
+tape is cleared does not start a recording: the gate has to fall and rise
+again.
+
+While recording, the input is heard at the outputs at full whatever Mix
+says.
 
 ### Play and Loop
 
-**PLAY** starts and stops the tape. A trigger at the **PLAY** jack plays it
-from Start (from the window's end when the speed is backwards). With
-**LOOP** off, the tape stops at the window's end. **EOC** gives 10 V for
-1 ms at the end of each turn and of a one-shot.
+**PLAY** starts and stops the tape, by a short fade (10 ms). Stopped, the
+head stays where it is, and Play goes on from there.
 
-The buttons show what the tape is doing: a press the module cannot take
-(Rec with no tape at this rate, Dub on an empty tape) leaves the button
-dark.
+A trigger at the **PLAY** jack plays the tape from Start (from the
+window's end when the speed is backwards), running or not: a retrigger
+while it plays fades from the old place to the new. It is ignored while
+recording.
+
+**LOOP** on (the default): the head comes round the window for ever. Off:
+it plays to the window's end, fades out through the join, and Play goes
+off with its light; the next Play starts from Start.
+
+**EOC** gives 10 V for 1 ms at every join, in either direction, and at the
+end of a one-shot.
+
+The buttons show what the tape is doing. A press the module cannot take
+(Rec while the tape is being converted to a new rate, Dub on an empty
+tape) leaves the button dark.
 
 ### Speed
 
-Twice forwards to twice backwards, the pitch following as on tape. The
-knob holds exactly at -1, 0 and +1 over a short stretch either side.
-**SPEED CV** adds 0.4 per volt through the attenuverter; that sum glides
-(60 ms). **V/OCT** multiplies it by an octave a volt. The result is held to
-±4. Around 0 the output fades out, so a stopped tape is silent. The tooltip
-shows the speed (×); you can type one in.
+From twice forwards to twice backwards on the knob, the pitch following as
+on tape. The knob holds exactly at -1, 0 and +1, flat for 1 % of its
+travel either side of each, and is straight between them. The
+tooltip shows the speed (×); you can type one in.
 
-The tape is read through a fine interpolating filter at every speed.
-Faster than ×1 it also takes out what would land above the top of the
-audio band, instead of letting it fold back as harsh inharmonic tones;
-slower than ×1 it keeps the highs between samples and adds no grit of its
-own. Either way the very top of the band (above about 18 kHz at 44.1 kHz)
-rolls off a little. At exactly ×1 you hear the tape's own samples.
+- **Speed CV** adds 0.4 per volt at full on its attenuverter, so ±5 V is
+  ±2. The knob plus the CV glides (a 60 ms lag, as a reel has weight).
+- **V/OCT** multiplies the result by an octave a volt, landing within
+  2 ms, so the tape can be played as a voice.
+- The result is held to ±4.
+- Around 0 the output fades out (fully back by 1/64 of normal speed), so a
+  stopped tape is silent with no DC.
+- Dub and Wear stop writing below 1/16 of normal speed, coming back in up
+  to 1/8: too little tape passes the head to write on.
+
+The tape is read through a band-limited reader at every speed but one.
+
+- **Faster than ×1** it takes out whatever the speed would push above the
+  top of the audio band, instead of letting it fold back as harsh
+  inharmonic tones: from ×1.02 to ×4 anything that would fold back is at
+  least 57 dB down. Between ×1 and ×1.02 only the very top of the tape's
+  band can fold, and only into the top of the output's.
+- **Slower than ×1** it interpolates between frames: the images it leaves
+  are about 63 dB down for content up to 0.4 of the sample rate (above
+  that they reach about -8 dB), and it adds no grit of its own.
+- Either way the very top of the band, from 0.8 to 1.0 of Nyquist (above
+  17.6 kHz at 44.1 kHz), rolls off a little.
+- **At exactly ×1 from a whole frame** you hear the tape's own samples,
+  untouched: the knob resting at +1 or -1 since Play or a retrigger, with
+  the window on whole frames (the whole tape is). Anywhere between frames,
+  as after a glide lands on ×1, the tape is interpolated as above.
 
 ### Start and Length: the window
 
-**START** sets where the window begins, as a share of the tape; **START
-CV** adds the whole tape for 5 V. **LENGTH** sets how long it is, from
-10 ms to the whole tape, on a logarithmic scale; its tooltip shows the
-time. A window past the tape's end wraps to its beginning (the window shows
-it in two pieces). Moving the window leaves the head alone unless it is now
-outside it.
+**START** sets where the window begins, as a share of the tape (0 to
+100 %); the Start CV adds the whole tape for 5 V, and knob plus CV is held
+to the tape. **LENGTH** sets how long it is, from 10 ms to the whole tape,
+on a logarithmic scale; its tooltip shows the time, and you can type one
+("1.5" for seconds, "250 ms"). The defaults, Start 0 and Length full, are
+the whole tape. A window past the tape's end wraps to its beginning.
 
-You can also set the window with the mouse, in the window itself (the
-knobs turn to match, and one Undo puts both back). Drag across the
-waveform to select the part to play, either way round. Take hold of either
-end line (within about 4 pixels of it) and drag it to move that end alone:
-moving the start keeps the end where it is. A selection is at least 10 ms
-and never wraps past the tape's end; dragging an end of a window that
-wraps keeps its other end and selects the stretch between it and the
-mouse. A click without a drag changes nothing; a double-click selects the
-whole tape. With **START CV** patched the window is where the knob and the
-CV put it, so a drag sets the knob to put the start under the mouse with
-the CV as it is at that moment (the knob stops at its ends, so a large CV
-can keep the start short of the mouse). Nothing happens while recording or
-with an empty tape, and a drag stops where it is if a recording starts or
-the tape is cleared or replaced while you drag.
+Moving the window leaves the head alone unless it is now outside it; then
+it fades to the window's start.
 
 ### Smear
 
 The fade at the window's join. At 0, the shortest fade that does not
-click; turned up, the next turn starts before the last has ended and the
-two overlap, up to half the window, in equal power.
+click: 10 ms, or a quarter of the window if that is shorter. It reads on
+into the tape just past the window's end (for a recording, the moment
+taken after Rec ended), so a turn is exactly Length long; only where
+nothing follows the window (the very end of a loaded file) does the fade
+come out of the turn. Turned up, the
+next turn starts before the last has ended and the two overlap, up to
+half the window at full, in equal power, so the level does not dip or rise.
+Any overlap beyond the shortest fade comes out of the turn: each turn
+starts that much sooner, and EOC follows the turns as heard.
 
 ### Dub and Dub Level
 
-**DUB** (or the **DUB** gate, while above 1 V) adds the input to the tape
-as it passes, and takes away some of what was there, so layers never pile
-up. At Dub Level d the new layer goes on at min(1, 2d) and the old tape
-keeps 1 - d². At 0 nothing is written. What is written passes a DC blocker
-and a soft bound.
+**DUB** (the button, or the **DUB** gate, on when it rises and off when it
+falls) writes the input onto the tape at the head as the tape goes by, at
+whatever speed and direction it is going. Played back at the speed it was
+made at, a dub sounds as it was played. As with Rec, a gate already high
+does nothing until it rises again.
+
+**DUB LEVEL** is one knob for two things: how loud the new layer goes on,
+and how much of the old is erased under it. At level d, what was there is
+kept at 1 - d² and the input is added at min(1, 2d):
+
+| Dub Level | The old tape keeps | The new layer goes on at |
+|---|---|---|
+| 0 | all of it (nothing is written) | 0 |
+| 25 % | 94 % | 50 % |
+| 50 % (default) | 75 % | 100 % |
+| 75 % | 44 % | 100 % |
+| 100 % | nothing (it replaces) | 100 % |
+
+What is written passes a DC blocker (5 Hz) and a soft bound (exact up to
+8 V, never past 10 V), so layers settle rather than pile up, and no offset
+builds. Dub in and out are faded on the tape.
+
+Dub does nothing on an empty tape or while recording, and turns off when a
+recording starts, a file loads or Restore is pressed. While dubbing, the
+input is heard at the outputs at full whatever Mix says.
+
+With Smear, each of the two overlapping turns writes what it plays,
+scaled by its fade, so a dub is heard once at its level through the join.
+A dub made in the first turn after Play, a retrigger or a window move is
+heard through the next join within about 2 dB of its level, and exactly
+after that.
+
+A dub made far from ×1 is not band-limited the way the read is: slower
+than ×1 the input is averaged over the head's travel, and what lands above
+the tape's top (above a quarter of the sample rate at half speed) folds
+back; faster, faint images are left. At ×1 a dub is clean.
 
 ### Wear
 
-Each pass costs the tape a little where the window is: a little level, a
-little of the highs, a little saturation, hiss and dropouts. At 0 the tape
-is not rewritten at all and the loop repeats exactly.
+Each pass costs the tape a little, written back as the head goes by, so
+the loss builds pass over pass. At Wear w (0 to 1), each pass:
+
+- sinks the level by 0.5 dB × w²;
+- moves the tape 0.3 × w² of the way toward a 4 kHz low-pass, so the highs
+  dull;
+- drives it into the soft bound by 1 + w, so loud parts press into
+  saturation (and the level is scaled back, so it never adds);
+- adds hiss, at -70 dB re 5 V RMS at full, less in proportion below;
+- and, at an average 0.5 × w² a second of tape passed, drops a stretch of
+  5 to 40 ms to between 30 % and 80 % of its level, with 2 ms edges.
+
+At 0 the tape is not rewritten at all and the loop repeats exactly, for
+ever. Wear acts only where the head passes: the window and the moment
+past its end that the join reads on into. Each Eddy wears in its own way
+(its random parts are seeded per module). Wear writes nothing while the
+tape is stopped or recording.
 
 ### Mix
 
@@ -140,47 +271,126 @@ At noon (the default) the input and the tape are both heard at full, so
 what you play passes through whether or not it is being recorded. Turning
 left fades the tape out, to the input alone at 0 %; turning right fades the
 input out, to the tape alone at 100 %. While recording or dubbing the input
-is heard at full whatever Mix says. The outputs are held under a soft
-limit, which the input and the tape together can reach.
+is heard at full whatever Mix says.
 
 ### Restore, and the original
 
 When a file loads or a recording ends, an untouched copy is kept beside
-the tape: the original. **RESTORE** (the button, or a trigger at **TRIG**)
-puts it back on the tape, wear and dubs gone, with a short fade; the head
-keeps its place. It ends a dub, and does nothing on an empty tape or while
-recording. The menu's **Make this the original** keeps the tape as it is
-now as the new original.
+the tape: the original. Dub and Wear change the tape and never the
+original. **RESTORE** (the button, or a trigger at **TRIG**) puts the
+original back on the tape, wear and dubs gone, with a short fade; the head
+keeps its place and the tape keeps playing. It ends a dub, and does nothing
+on an empty tape or while recording. The menu's **Make this the original**
+keeps the tape as it now is, worn and dubbed, as the new original.
+
+## Inputs and outputs
+
+- **IN L, IN R**: audio, ±5 V. IN R takes IN L when unpatched. Polyphonic
+  cables are summed.
+- **REC, DUB**: gates, acting on their rising and falling edges (high from
+  1 V, low under 0.1 V). **PLAY, TRIG**: triggers.
+- **Start CV, V/OCT, Speed CV**: a polyphonic cable's first channel.
+- NaN or infinite voltages read as 0 V.
+- **L, R**: the outputs pass a soft limit, exact up to 8 V and never past
+  10 V, which the input and the tape together can reach.
+- **EOC**: 10 V for 1 ms.
 
 ## Files
 
 Right-click the panel:
 
-- **Load file**: a WAV, mono, stereo or more (the first two channels),
-  8, 16, 24 or 32-bit integer or 32 or 64-bit float, at any rate. A file
-  longer than the tape gives its first 5 minutes. A file's full scale
-  (±1.0) is ±5 V. You can also drop a WAV on the panel. Loading stops
-  recording and dubbing; Play stays as it was.
-- **Save file**: the whole tape as it now is, as a 32-bit float stereo WAV
-  at the engine's rate, ±5 V back to ±1.0, so a tape dubbed hotter than
-  5 V is not clipped.
-- **Make this the original**, and **Clear** (empties the tape).
+- **Load file**: a WAV, mono (both sides), stereo or more (the first two
+  channels); 8, 16, 24 or 32-bit integer or 32 or 64-bit float; any rate
+  from 1 Hz to 768 kHz, converted to Rack's. A file's full scale (±1.0) is
+  ±5 V. A file longer than the tape gives its first 5 minutes (less at
+  high rates, above). You can also drop a WAV on the panel. Loading stops
+  recording and dubbing; Play stays as it was, and if it is on the new
+  tape plays from Start. The file on disk is only read, never written to.
+- **Save file**: the whole tape (not the window) as it now is, worn and
+  dubbed, as a 32-bit float stereo WAV at Rack's sample rate, ±5 V back to
+  ±1.0, so a tape dubbed hotter than 5 V is not clipped. It writes at
+  Rack's rate whatever the rate of the file that was loaded: a 96 kHz file
+  loaded with Rack at 48 kHz is saved at 48 kHz. Saved and loaded again,
+  the tape comes back within one rounding step of a float (the level goes
+  through ÷5 and ×5), not to the bit. The file is written in the
+  background; with an empty tape nothing is written and the log says so.
+- **Make this the original**: see Restore.
+- **Clear**: empties the tape and the original, and turns Rec, Dub and
+  Play off.
 - **Keep the tape with the patch** (on): see below.
 
-A file that cannot be read leaves the tape as it was and says why in
-Rack's log.
+A file that cannot be read (not a WAV, compressed, cut short, empty) leaves
+the tape as it was and says why in Rack's log.
 
 ## With the patch
 
-Saved: the knobs, Play, Loop and Dub, the path of the last file loaded, and
-the tape and the original, as files in the patch's own folder (written only
-when they have changed). Rec is never saved as on. With **Keep the tape
-with the patch** off, nothing of the tape is saved and a reopened patch
-loads the last file again from its path, if it is still there.
+Saved: the knobs, Play, Loop and Dub, the path of the last file loaded,
+and, with **Keep the tape with the patch** on, the tape itself. Rec is
+never saved as on. Play and Dub as saved take effect once the patch's tape
+is in.
 
-A patch whose stored tape is missing or damaged opens with what can be
-read (either file alone serves as both), or with an empty tape, and says
-so in the log.
+The tape is kept as three files in the module's own folder inside the
+patch: `tape.wav` and `original.wav` (32-bit float stereo, in volts, at
+Rack's rate, so they load back to the bit) and `tails.wav` (a single
+frame that says how much recorded sound follows each, for the join).
+They are written when you save the patch (and when the module is
+duplicated or deleted), and only those that have changed since they were
+last written;
+a tape that is wearing or being dubbed changes all the time, so it is
+written at every save. Rack's autosave does not write them: after a crash
+the patch reopens with the tape as of the last save.
 
-**Initialize** empties the tape and returns the buttons to their defaults
-(Loop on). **Bypassed**, the inputs pass to the outputs.
+Sizes: a full 5-minute tape at 48 kHz is about 115 MB, and the original as
+much again, so such a patch is about 230 MB larger (about 106 MB each at
+44.1 kHz). Saving a full tape takes about a quarter of a second on an
+Apple M-series Mac (writing the files, then Rack's own packing of the
+patch). An empty tape stores nothing.
+
+With **Keep the tape with the patch** off, nothing of the tape is stored
+and a reopened patch loads the last file again from its path, if it is
+still there; otherwise the tape is empty.
+
+A patch whose stored files are missing or damaged opens with what can be
+read (either of the tape and the original alone serves as both), or with
+an empty tape, and says so in the log. A patch saved at another sample
+rate is converted as it opens.
+
+## Patches to try
+
+- **A worn bed.** Hadal into IN L and IN R, Mix at noon. Record 20 s, then
+  Wear about 30 % and Length a few seconds. The bed comes round and
+  slowly crumbles; Restore brings it back.
+- **Now and then, new.** EOC through a probability gate (a Bernoulli gate,
+  set to about 10 %) into **TRIG**. With Wear up, the loop decays for a
+  while and is occasionally restored whole at a join.
+- **Wow.** A very slow Sway into the Speed CV, the attenuverter barely
+  open (a few percent). The loop wavers in pitch as a tired machine does.
+- **Jumps.** Squall's Step into the Start CV, Length short (about
+  200 ms), Smear up: each event sends the window somewhere else on the
+  tape.
+- **Below and backwards.** Speed at -0.5: a recording played an octave
+  down, backwards. Dub over it at that speed, then return to +1: the dub
+  comes back an octave up and backwards, under the recording as it was.
+- **A played sample.** Load a file, Loop off, a pitch into V/OCT and
+  Squall's Gate into PLAY: each gate plays the window once at the pitch.
+
+## Bypass
+
+Bypassed, the inputs pass to the outputs (IN R taking IN L when
+unpatched); EOC is low.
+
+## Other details
+
+- **Initialize** empties the tape, turns Rec, Dub and Play off and Loop
+  on, forgets the file and turns Keep the tape with the patch back on.
+- **Randomize** does not touch Rec, Dub, Play or Loop.
+- The tape and the original are held in memory. Each Eddy sets aside
+  room for a full pair, about 230 MB at 48 kHz; the system fills it as
+  the tape is filled.
+- Removing the module while a long file is loading holds Rack's audio
+  until the load finishes.
+- The lettering in the window is D-DIN Condensed, shipped with the
+  plugin under its licence (SIL Open Font License 1.1).
+- CPU, % of one core at 48 kHz on an Apple M-series Mac: 0.09 empty, 0.13
+  playing a tape, 0.16 at half speed, about 1.4 at speed 2 with Dub, Wear
+  and Smear up on a full tape.

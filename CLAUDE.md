@@ -12,9 +12,10 @@ layout.
   each also a verb (Sway = a boat at anchor, Fathom = depth). Decided
   2026-10-24. Reserved for the ideas in `~/ws/plugins/IDEAS.md`: Swell
   (slope/function generator), Undertow or Drift (chaos / smooth random),
-  Tide (clocked modulator), Eddy (random sampler), Loom (a darker voice).
-  Pick from this family before inventing a new name; never rename a
-  released module.
+  Tide (clocked modulator), Loom (a darker voice). Eddy, once reserved
+  there for a random sampler, is the tape loop (built 2026-11-22). Pick
+  from this family before inventing a new name; never rename a released
+  module.
 - One shared look, "Instrument" (brass and ivory on near-black; rules in
   `docs/DESIGN-THEME.md`, detail in
   `docs/specs/2026-11-15-instrument-look-design.md`): palette and panel

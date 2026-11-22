@@ -61,7 +61,8 @@ inharmonic whistles. It is cheapest to design out at the start.
   than 1, a windowed sinc whose width scales with the speed, from a table,
   cutting at the output's Nyquist; at 1 and slower the same window as an
   interpolating kernel (whole frames read exactly, flat to 0.8 of Nyquist,
-  images 63 dB down); the two crossfaded between 1 and 1.02. Eddy uses it;
+  images about 63 dB down for content up to 0.4 of the rate; above that
+  they reach about -8 dB); the two crossfaded between 1 and 1.02. Eddy uses it;
   it suits any tape, sampler or delay read.
 
 ## At design time

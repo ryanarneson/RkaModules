@@ -472,5 +472,8 @@ Other open items:
   `-Wall -Wextra -Werror` in CI; today CI's `-Werror` reaches only the other
   modules' tests.
 - CI does not run `make smoke`, the benches or the fuzz seeds; those are run
-  by hand before a merge. ThreadSanitizer runs in `make test` (so in CI) for
-  Eddy's `test_threads` only.
+  by hand before a merge. ThreadSanitizer is part of `make test` for
+  Eddy's `test_threads` only, and runs only where it can start (rule 7):
+  on the Mac, and on Linux where address randomisation is narrow enough or
+  `setarch -R` is allowed. Elsewhere `make test` skips it and says why, so
+  a green CI run does not show that it ran.

@@ -32,6 +32,30 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Eddy**, a 16 HP stereo tape loop that also plays files:
+  - One tape, up to 5 minutes: filled by recording (REC button or gate)
+    or by loading a WAV (the menu, or dropped on the panel), and saved as
+    a 32-bit float WAV.
+  - It comes round at any speed from twice forwards to twice backwards,
+    by knob, CV and V/OCT (to four times with V/OCT), the pitch following
+    as on tape; read band-limited, so a fast tape does not alias.
+  - A window on the tape, Start and Length (10 ms to the whole tape),
+    with a CV on Start; Smear overlaps the turns at the join, up to half
+    the window.
+  - Dub layers the input onto the tape, with one Dub Level for the new
+    layer and what it erases; Wear costs the tape a little each pass
+    (level, highs, saturation, hiss, dropouts); at 0 the loop repeats
+    exactly.
+  - The original is kept beside the tape: Restore (button or trigger)
+    puts it back, wear and dubs gone.
+  - Play and Loop, a PLAY trigger from Start, and EOC: played as a
+    sample, or looped.
+  - Mix from the input alone through both at full to the tape alone.
+  - A waveform window showing the tape, the part in play and the head;
+    drag in it to set Start and Length.
+  - The tape and the original are kept with the patch.
+- `docs/DSP-ALIASING.md` and `TESTING.md` rule 16: how aliasing is kept
+  out and measured; Eddy is the first module measured.
 - New module: **Narrows**, a 14 HP polyphonic stereo filter:
   - Two filters on a switch: Fathom's four-pole ladder (24 dB per octave)
     and a state-variable filter (12 dB), matched in pitch, in where they

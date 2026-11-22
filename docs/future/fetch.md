@@ -27,6 +27,13 @@ panel.
 
 **What it would take from Eddy.** The window widget, the WAV reader, the
 rate conversion, and the play head with its click-free join.
+(2026-11-22, Eddy built: these are `TapeWindow` in `src/widgets.hpp`
+with `src/TapeGesture.hpp` for its drag selection, `src/WavFile.hpp`,
+`src/Resample.hpp`, `src/Overview.hpp` and `src/BandLimitedRead.hpp`,
+which reads at any speed without aliasing. The voices and their join are
+in `src/eddy/Voices.hpp`, Eddy's own, to be lifted out when Fetch needs
+them. Eddy's reader takes a whole file into memory; Fetch's will read as
+it plays.)
 
 **Open questions.** How far Speed goes, and backwards, when the file is
 read from disk as it plays; whether the patch keeps only the file's path

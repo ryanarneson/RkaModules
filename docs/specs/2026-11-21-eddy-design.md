@@ -6,6 +6,11 @@ waveform window added the same day, at their word). Panel:
 draft description that is not in the repo; its positions are listed under
 Panel. Grows from the idea in `docs/future/eddy.md`.
 
+(2026-11-22: built, and accepted by the user on test build 2.0.27
+("everything in the checklist behaves as expected"). Notes marked "as
+built" below say where the build differs from or settles what this
+design says; the manual is `docs/eddy/README.md`.)
+
 ## Intent
 
 The roadmap put Eddy next: a sound-on-sound looper for layered, slowly
@@ -173,6 +178,8 @@ The tape's length in the corner and the Smear mark are not drawn in it.
 
 - Stereo, up to 5 minutes at any sample rate. Empty when the module is
   added.
+  (As built, 2026-11-22: and at most 2^24 frames, so above about 56 kHz
+  the tape is shorter: 2:54 at 96 kHz, 1:27 at 192 kHz.)
 - It is held at the engine's sample rate. A file at another rate, and the
   tape itself when the engine's rate changes, are converted off the audio
   thread; until the new tape is ready the old one plays (or silence, for
@@ -211,6 +218,11 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   length is the tape's length, Play comes on, and it plays from its
   start (once, if Loop is off). The REC jack
   does the same with a gate: high records.
+  (As built, 2026-11-22: the REC and DUB gates act on their edges: a
+  rising edge starts, a falling edge ends. A gate already high when a
+  recording ends, a file loads or the tape is cleared starts nothing
+  until it falls and rises again. The button and the gate can each end
+  what the other started.)
 - Recording runs at normal speed whatever Speed says.
 - At 5 minutes recording ends by itself.
 - A recording under 50 ms is thrown away and the tape before it stays.
@@ -250,6 +262,10 @@ The tape's length in the corner and the Smear mark are not drawn in it.
 - Speed changes glide a little, as a reel has weight; a V/OCT step does
   not (it lands within a few milliseconds, so the tape can be played as
   a voice).
+  (As built, 2026-11-22: the flat stretches are 1 % of the knob's travel
+  either side of -1, 0 and +1; the glide is a 60 ms lag on knob plus CV;
+  a V/OCT step lands within 2 ms; the output is fully back by 1/64 of
+  normal speed.)
 - Near stopped the output fades to silence, so a stopped tape gives no
   DC.
 
@@ -282,6 +298,11 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   stopped or slower than about an eighth of normal speed (there is too
   little tape passing to write on); the write fades out and in around
   that speed.
+  (As built, 2026-11-22: writing, Dub's and Wear's both, is off below
+  1/16 of normal speed and fully on from 1/8. A dub made away from
+  speed 1 is not band-limited: slower, the input averaged over the
+  head's travel folds back what lands above the tape's Nyquist; faster,
+  it leaves images. Pinned in `src/eddy/test_alias.cpp`.)
 - While dubbing, the input is heard at the outputs whatever Mix says.
 
 ### Wear
@@ -293,6 +314,12 @@ The tape's length in the corner and the Smear mark are not drawn in it.
 - At 0 the tape is not rewritten at all: the loop repeats exactly.
 - Low, a loop takes hundreds of passes to change; at full it crumbles in
   a few minutes.
+  (As built, 2026-11-22, the values the user accepted, from
+  `src/eddy/EddyTuning.hpp`: at Wear w, each pass sinks the level by
+  0.5 dB x w^2, moves the tape 0.3 x w^2 of the way to a 4 kHz low-pass,
+  drives it into the soft bound by 1 + w (scaled back), adds hiss at
+  -70 dB re 5 V RMS x w, and drops out 0.5 x w^2 times a second of tape
+  passed, for 5 to 40 ms, to 0.3 to 0.8 of the level, with 2 ms edges.)
 - Wear acts only where the window is, since that is the tape that
   passes the head.
 - No CV in this build.
@@ -312,6 +339,12 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   dubbed, as the new original.
 - The tape was first set at 2 minutes; the user raised it to 5. If a
   wearing 5 minute tape makes autosave felt, it comes down again.
+  (As built, 2026-11-22: Rack's autosave does not ask a module to save
+  its storage; only saving the patch (or duplicating or deleting the
+  module) does, so a wearing tape is never written at autosave, and after
+  a crash the tape is as of the last save. A full 5-minute tape saves in
+  about a quarter of a second on the Mac: 0.05 to 0.1 s for the files,
+  about 0.16 s for Rack's archive. It stays at 5 minutes.)
 - The original doubles the tape's memory (about 115 MB each for 5 minutes
   at 48 kHz).
 
@@ -326,6 +359,12 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   it.
 - The tape still has one write head: a dub lands once per turn of the
   tape, however many times it is heard.
+  (As built, 2026-11-22: each voice has its own write head. During the
+  overlap at the join both voices write what they play, each scaled by
+  its fade, so a dub laid down across the join is heard once at its
+  level next turn. A dub made in the first turn after Play, a retrigger
+  or a window move is heard through the next join within about 2 dB of
+  its level, then exactly.)
 - Nothing outside the window is played, with one exception. The shortest
   fade, at Smear 0, runs on into the tape just past the window's end (for
   a whole recording, the moment taken after Rec ended), so a turn is
@@ -343,6 +382,8 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   tape both at full, and 1 the tape alone. The default is 0.5, so the input
   is heard through the module whether or not it is being recorded.
 - Audio is ±5 V. The outputs are held under a soft limit.
+  (As built, 2026-11-22: exact up to 8 V, never past 10 V; the same
+  bound guards what is written to the tape.)
 - Recording puts the input on the tape unchanged, offset and all, so a
   plain loop is exact. What is written back by Dub and Wear passes a DC
   blocker, so no offset can build.
@@ -362,6 +403,12 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   a 32-bit float stereo WAV at the engine's rate, so a tape dubbed hotter
   than ±5 V is saved without clipping and loads back exactly. The whole tape, not the
   window.
+  (As built, 2026-11-22: it loads back within one rounding step of a
+  float (the level goes through ÷5 and ×5), not to the bit; the tape
+  stored with the patch, in volts, is exact. It writes at Rack's rate,
+  by the user's decision ("leave as is"): a file at another rate is
+  converted when it loads, so a 96 kHz file loaded with Rack at 48 kHz
+  is saved at 48 kHz.)
 - **Clear** (menu) empties the tape.
 - A file that cannot be read leaves the tape as it was and says so in
   Rack's log.
@@ -373,6 +420,12 @@ The tape's length in the corner and the Smear mark are not drawn in it.
 - Saved: the knobs, Play, Loop, Dub, the path of the last file, and the
   tape and the original, as two files in the patch's storage folder (as Fundamental's
   wavetable oscillator keeps its table).
+  (As built, 2026-11-22: three files, part of the patch format:
+  `tape.wav` and `original.wav` (32-bit float stereo, in volts, at
+  Rack's rate, each its length plus its tail) and `tails.wav` (one frame:
+  the tape's tail in frames on the left, the original's on the right).
+  About 115 MB each for a full 5-minute tape at 48 kHz. An empty tape,
+  or Keep the tape with the patch off, stores nothing.)
 - Rec is never saved as on.
 - Each is written only when it has changed since it was last written;
   the original changes only at a recording, a file load or "Make this
@@ -380,6 +433,8 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   at every autosave: that write must not hang the window or the audio
   (see Testing), and the builder may lower the 5 minute limit if it
   cannot be met.
+  (As built, 2026-11-22: written at every save of the patch, not at
+  autosave; see the note under The original.)
 - Menu: **Keep the tape with the patch**, on by default. Off, a reopened
   patch loads the last file again from its path, if it is still there,
   and is empty otherwise.
@@ -403,6 +458,16 @@ As every module (CLAUDE.md, TESTING.md "Adding a module"):
   buffer. A read head at a fractional place moving at any speed in
   either direction (the Hermite read of `src/DelayLine.hpp`), and a
   write head that travels with it and lays the input down at that speed.
+  (As built, 2026-11-22: shared under `src/`: `Tape.hpp` (the tape and
+  its write head), `BandLimitedRead.hpp` (the read, replacing the
+  Hermite one), `Resample.hpp`, `WavFile.hpp/.cpp` over the vendored
+  dr_wav, `Overview.hpp` (512 columns of peaks), `TapeGesture.hpp` and
+  `TapeWindow` in `widgets.hpp`, and `testing_alias.hpp` for the tests.
+  The voices and their join, `src/eddy/Voices.hpp`, and the file jobs,
+  `src/eddy/TapeJobs.hpp`, are Eddy's. The window letters the tape's
+  length at run time, so the plugin ships `D-DINCondensed.ttf` with its
+  licence. Removing the module while a long file loads holds Rack's
+  audio until the load ends: the worker is joined.)
 - **Less of Wake is reused than the roadmap says.** `src/DelayTap.hpp`
   reads a delay behind a write point that always moves; Eddy's tape
   stands still and the head moves over it, backwards too. The Hermite
@@ -469,6 +534,9 @@ TESTING.md applies in full. Particular to Eddy:
   sine at its pitch within 1 cent. A truncated file, an empty file and a
   file that is not a WAV leave the tape as it was. A file over 5 minutes
   gives 5 minutes.
+  (As built, 2026-11-22: the tape stored with the patch comes back to
+  the bit; a file saved from the menu comes back within one rounding
+  step.)
 - **With the patch.** Golden saved state: a saved module reloads with the
   same tape and the same original, to the bit. A patch saved without its tape file loads with
   an empty tape and no error.
@@ -518,6 +586,11 @@ Length, as in Non-goals' note.)
   images at -11 dB). The two crossfade between 1 and 1.02. The write is
   unaffected: the voices rewrite frames in place, never what they read.
   Tests: `src/eddy/test_alias.cpp`, `src/eddy/test_band_read.cpp`.)
+  (As built, 2026-11-22, a correction to the note above: the images
+  slower than 1 are about 63 dB down (measured -63 to -66 dB) for content
+  up to 0.4 of the rate; above that they reach about -8 dB. And "a whole
+  frame read at 1" holds only from a whole frame: after a glide lands on
+  1 the head sits between frames and is interpolated.)
 - Where wear's parts sit and how each is made; the hiss and dropout
   generators (seeded, so tests repeat).
 - The fade times, the smoothing, and how often controls are read.

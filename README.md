@@ -14,6 +14,7 @@ VCV Rack 2 modules.
 | [**Rigging**](docs/rigging/README.md) | 14 | Six tuned strings: a drone from any sound, or struck by a trigger or a new note; seven chords, a level per string, Ring to 60 s, Damp, Spread, CV on Chord, Ring and Damp |
 | [**Wake**](docs/wake/README.md) | 14 | Stereo echo, 10 ms to 10 s: Tape, Analog and Digital styles, a Ratio between the sides, ping pong, Freeze, Diffuse, Drift, a clock input, CV on Time, Feedback and Mix |
 | [**Narrows**](docs/narrows/README.md) | 14 | Polyphonic stereo filter: a ladder and a state-variable core on a switch, Mode sweeps low-pass, band-pass, high-pass, Drive, Res to a playable sine, a comb tuned to the cutoff, Spread, Ping, CV on FM, Res, Comb and Mode |
+| [**Eddy**](docs/eddy/README.md) | 16 | Stereo tape loop that also loads and saves WAV files, up to 5 minutes: a waveform window you can drag to set Start and Length, Speed -2 to +2 with CV and V/OCT, Dub with Dub Level, Wear, Smear, Play and Loop with a trigger and EOC, Restore to the original; the tape is kept with the patch |
 | [**Hadal**](docs/hadal/README.md) | 10 | Rumble and noise bed: Rumble, Hiss and Crackle darkened together by Depth (0 to 11 km), slow Drift, CV on all five, a layer out each and an L/R mix |
 | [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware, with a mouse-driven settings list |
 
@@ -33,6 +34,7 @@ src/widgets.hpp          the plugin's own knobs, jacks, buttons, lights, screw
 src/Detents.hpp          mouse and scroll travel to encoder detents (rka::Encoder)
 src/RkaTheme.hpp         the palette's colours for C++, generated
 src/testing.hpp          CHECK macro for the offline unit tests
+src/testing_alias.hpp    rkatest::AliasMeter: aliasing measured in tests (docs/DSP-ALIASING.md)
 src/sway/                the Sway module
   Sway.cpp               module (params, ports, polyphony) and widget
   Rate.hpp, Phasor.hpp,  DSP units, no Rack dependency, unit-tested
@@ -71,6 +73,13 @@ src/narrows/             the Narrows filter: Narrows.cpp, NarrowsEngine.hpp and 
                          Ping.hpp, NarrowsTuning.hpp; Fathom's ladder, shared as
                          src/fathom/LadderCore.hpp, and src/Float4.hpp), test_*.cpp,
                          bench.inc, NarrowsLayout.hpp
+src/eddy/                the Eddy tape loop: Eddy.cpp (the module and its worker thread),
+                         EddyEngine.hpp and the headers it is built from (Laws.hpp, Voices.hpp,
+                         Wear.hpp, Select.hpp, TapeJobs.hpp, EddyTuning.hpp), test_*.cpp,
+                         test_rig.hpp, bench.inc, EddyLayout.hpp; shared for Fetch and
+                         Spindrift: src/Tape.hpp, src/BandLimitedRead.hpp, src/Resample.hpp,
+                         src/Overview.hpp, src/TapeGesture.hpp, src/WavFile.hpp/.cpp
+                         (dr_wav, in src/dep/) and TapeWindow in src/widgets.hpp
 src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   Shoal.cpp              module and widget, mapped onto shoal::Host
   FriendlyList.hpp       the friendly-mode list widget on the lower screen
@@ -302,3 +311,7 @@ GPL-3.0-or-later. See `LICENSE-GPLv3.txt`.
 `src/dep/dr_wav.h` is dr_wav 0.13.16 by David Reid (public domain or MIT No
 Attribution), copied unedited from the Fundamental plugin; Eddy uses it to
 read and write WAV files.
+
+`tools/fonts/D-DINCondensed.ttf` (SIL Open Font License 1.1, with
+`tools/fonts/OFL-1.1.txt` and `COPYING.txt`) ships in the plugin package:
+Eddy's window letters the tape's length with it.
