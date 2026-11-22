@@ -299,6 +299,53 @@ void store_way_other_offered_first() {
 // A conversion refused in its turn (the rate moved again before it went
 // live) is converted again from the live tape it came from, which is kept
 // till then: never a conversion of a conversion.
+// The final re-review's N1: a conversion refused in its turn is converted
+// again from its source, and the rate moves during that re-conversion. The
+// module frees what it can before the next pass; the source must still be
+// needed then, until the conversion made from it is waiting (or the chain
+// ends).
+void reconversion_rate_moves() {
+	WorkerBook b;
+	const Request load = req(Request::LOAD, 2, false, "/a.wav");
+	b.started(load);
+	b.finished(load, 48000.f, 48000.f, id(1), false, false, 0, nullptr);
+	b.offer(nullptr, 0);
+	b.offered();
+	b.wentLive(id(1));
+	WorkerBook::HandedBack h = b.handedBack(id(1), true);
+	b.started(h.next);
+	b.finished(h.next, 44100.f, 44100.f, id(2), false, false, 0, nullptr, h.from);
+	b.offer(nullptr, 0);
+	b.offered();
+	h = b.handedBack(id(2), false);
+	CHECK(h.remake == WorkerBook::HandedBack::CONVERT && h.from == id(1), "the refused conversion: converted again from A");
+	CHECK(b.needed(id(1)), "A is needed while it is being converted from");
+	b.started(h.next);
+	WorkerBook::Finished d = b.finished(h.next, 96000.f, 48000.f, id(3), false, false, 0, nullptr, h.from);
+	CHECK(d.rerun && d.limbo == id(3), "the rate moved during the re-conversion: again");
+	CHECK(b.needed(id(1)), "A is still needed before the next pass (the module frees limbo there)");
+	b.started(d.next);
+	d = b.finished(d.next, 48000.f, 48000.f, id(4), false, false, 0, nullptr, h.from);
+	CHECK(d.pending && b.needed(id(1)), "made from A and waiting: A kept until the conversion is live");
+	b.offer(nullptr, 0);
+	b.offered();
+	b.wentLive(id(4));
+	CHECK(!b.needed(id(1)), "the conversion live: A can go");
+	// A re-conversion that fails ends the need too (an empty tape instead).
+	WorkerBook c;
+	c.started(load);
+	c.finished(load, 48000.f, 48000.f, id(5), false, false, 0, nullptr);
+	c.offer(nullptr, 0);
+	c.offered();
+	h = c.handedBack(id(5), true);
+	c.started(h.next);
+	d = c.finished(h.next, 44100.f, 44100.f, nullptr, false, false, 0, nullptr, h.from);
+	CHECK(d.rerun && d.next.kind == Request::FRESH && c.needed(id(5)), "cannot convert: an empty tape next, the source kept till then");
+	c.started(d.next);
+	d = c.finished(d.next, 44100.f, 44100.f, id(6), false, false, 0, nullptr);
+	CHECK(d.pending && !c.needed(id(5)), "the empty tape made: the source is no longer needed");
+}
+
 void conversion_from_source() {
 	WorkerBook b;
 	const Request load = req(Request::LOAD, 2, false, "/a.wav");
@@ -633,6 +680,7 @@ struct Sim {
 			if (!d.rerun)
 				break;
 			r = d.next;
+			freeLimbo();   // as Eddy.cpp's produce() does before the next pass
 		}
 		offerPending();
 	}
@@ -807,6 +855,7 @@ int main() {
 	clear_during_load();
 	rerun_and_failures();
 	conversion_from_source();
+	reconversion_rate_moves();
 	live_stands();
 	sweep();
 	return rkatest::finish("eddy test_book");

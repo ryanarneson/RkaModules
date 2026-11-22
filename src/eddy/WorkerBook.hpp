@@ -119,6 +119,18 @@ public:
 	// null; from: a conversion's source.
 	Finished finished(const Request& r, float fsUsed, float fsNow, SetId made, bool whole, bool cut, uint32_t clearSeq, SetId live,
 	                  SetId from = nullptr) {
+		const Finished d = finish(r, fsUsed, fsNow, made, whole, cut, clearSeq, live, from);
+		// A conversion's source is needed until the chain that reads it ends
+		// (made, given up, or replaced by an empty tape that is made): the
+		// module frees what it can between passes (the final re-review's N1).
+		if (!d.rerun)
+			converting_ = nullptr;
+		return d;
+	}
+
+private:
+	Finished finish(const Request& r, float fsUsed, float fsNow, SetId made, bool whole, bool cut, uint32_t clearSeq, SetId live,
+	                SetId from) {
 		Finished d;
 		if (fsNow != fsUsed) {
 			// Made at a rate no longer in force: again, from the source.
@@ -189,6 +201,7 @@ public:
 		return d;
 	}
 
+public:
 	// The set waiting, and what to do with it. live: the engine's live set if
 	// it is at the rate in force, else null.
 	Offer offer(SetId live, uint32_t clearSeq) {
@@ -262,6 +275,7 @@ public:
 			// A conversion refused in its turn: from its own source again.
 			h.remake = HandedBack::CONVERT;
 			h.from = e->source;
+			converting_ = h.from;
 		}
 		else if (!used && r.kind != Request::CONVERT) {
 			// Never live: made again from its source (a file, the stored
@@ -274,6 +288,7 @@ public:
 			// The user's tape, which exists nowhere else: converted.
 			h.remake = HandedBack::CONVERT;
 			h.from = s;
+			converting_ = s;
 			h.next.kind = Request::CONVERT;
 			h.next.path.clear();
 			h.next.transport = r.transport && !used;
@@ -289,14 +304,14 @@ public:
 			e->source = nullptr;
 	}
 
-	// Not to be freed yet: the source of a conversion waiting or offered and
-	// not yet live.
+	// Not to be freed yet: the source of a conversion under way, or of one
+	// waiting or offered and not yet live.
 	bool needed(SetId s) const {
 		if (!s)
 			return false;
 		const Entry* p = find(pending_);
 		const Entry* o = find(offered_);
-		return (p && p->source == s) || (o && o->source == s);
+		return s == converting_ || (p && p->source == s) || (o && o->source == s);
 	}
 
 	// `s` is about to be freed: true if the stored load ends with it (its set
@@ -361,6 +376,7 @@ private:
 	SetId offered_ = nullptr;      // the last offered (waiting in the engine, live, or refused and not yet back)
 	bool storing_ = false;         // the stored load is under way
 	uint32_t storeSeq_ = 0;        // its request
+	SetId converting_ = nullptr;   // the source of a conversion under way (N1)
 	bool rerunning_ = false;       // a re-made request is posted and not yet started
 	uint32_t rerunSeq_ = 0;
 };
