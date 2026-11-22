@@ -8,6 +8,8 @@ Library, and the control sets are first guesses made to draw the panels.
 Sluice, Fog, Hadal, Ballast (with its Pan expander), Squall, Rigging, Wake and Narrows have since been designed and built (their pages point to
 their specs and manuals); the rest have not been through a design
 conversation yet.
+A design for any of them that makes or bends sound names its aliasing
+sources and what is done about each (`docs/DSP-ALIASING.md`).
 
 A suggested order for building them, with the user's music in mind, is
 in [ROADMAP.md](ROADMAP.md).

@@ -327,6 +327,21 @@ What only a person can verify goes in a numbered list at the end of the plan
 and is handed over with the build. State plainly what has not been tried with
 a real mouse or in a live Rack. Automated checks do not stand in for them.
 
+### 16. Aliasing is measured
+
+A module that generates sound, has a nonlinearity, or reads a buffer at a
+variable rate has an offline test that measures its aliasing with
+`rkatest::AliasMeter` (`src/testing_alias.hpp`) against a bound stated in
+dB, at 44.1 and 48 kHz, and that bound is shown to fail by a mutation that
+removes the anti-aliasing (rule 1). A source left alone is pinned at its
+measured level plus a few dB. A module that needs no such test (linear,
+control-rate only) says why in the table below. `docs/DSP-ALIASING.md`
+has the sources, the remedies and how to set a bound.
+
+Why: Eddy read its tape faster than normal through a Hermite interpolator
+and nothing else; at speeds 2 to 4 a high tone came out entirely as an
+alias at full level, and no test measured it.
+
 ## Adding a module
 
 A new module with per-sample DSP gets the CPU bench, the libm check and
@@ -355,7 +370,10 @@ the globals check by declaring its engine; nothing in `src/bench/` or
    through both and bounds the difference, as `src/fathom/test_engine.cpp`
    and `src/sway/test_engine.cpp` do; add it to `PLUGIN_MATH_TESTS` in
    `tests.mk` so it builds with the plugin's floating-point flags.
-5. Then, with no other change: `make test` runs `bench-modules`,
+5. If it makes or bends sound, name its aliasing sources in its design
+   (`docs/DSP-ALIASING.md`) and add a `test_alias.cpp` as rule 16 says,
+   or say in the table below why it needs none.
+6. Then, with no other change: `make test` runs `bench-modules`,
    `engine-globals` and (on Linux, so in CI) `libm-calls` for it, and
    `make bench` times it and checks its budgets. Add the folder to
    `MODULES` in the Makefile and fill in its column of the table below.
@@ -419,6 +437,7 @@ Three habits behind most of them:
 | CPU bench | Yes (`make bench`) | Yes (`make bench`) | Yes (`make shoal-bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`, with Ballast) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) | Yes (`make bench`) |
 | No libm call per sample, knobs still | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Not checked | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) | Yes (`make libm-calls`) |
 | No writable global state | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make shoal-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) | Yes (`make engine-globals`) |
+| Aliasing measured (rule 16) | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Issue #67 | Yes (`test_alias`: the read at every speed, fast read band-limited to 50 dB at speeds 2 and 4; wear, the limits and dub pinned; `test_band_read`) |
 | Smoke screenshot | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes (with a tape: `make smoke` makes a WAV for it, and loads it into Eddy in two headless runs, one quit while it loads) |
 
 Fog also has `make fog-soak` (opt-in, minutes, not in `make test`): every

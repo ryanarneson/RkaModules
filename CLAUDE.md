@@ -58,6 +58,9 @@ layout.
 - DSP lives in Rack-free headers in `src/<folder>/` with tests in
   `src/<folder>/test_*.cpp` (using `src/testing.hpp`). Modules only map params/ports/polyphony onto the
   core.
+- Aliasing: `docs/DSP-ALIASING.md` (the three sources and their remedies,
+  what to reuse, how to measure) and `TESTING.md` rule 16: a module that
+  makes or bends sound measures its aliasing against a bound in dB.
 - A new module with an engine follows `TESTING.md`, "Adding a module":
   `src/<folder>/bench.inc` gets it `make bench`, `libm-calls` and
   `engine-globals` with no other change.
