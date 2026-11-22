@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="101.60mm" height="128.5mm" viewBox="0 0 101.60 128.5">
+<rect width="101.60" height="128.5" fill="#0d0e12"/>
+<path d="M7.8 69L7.8 61L7.8 52.3" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M23.5 69L23.5 61L23.5 52.3" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M78.1 69L78.1 61L78.1 52.3" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M93.8 69L93.8 61L93.8 52.3" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M50.8 69L50.8 68.338" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M29.3 98L29.3 94.3" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M50.8 98L50.8 94.3" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M72.3 98L72.3 94.3" fill="none" stroke="#757062" stroke-width="0.25" stroke-linejoin="round"/>
+<circle cx="7.8" cy="48" r="4.6" fill="#0d0e12"/>
+<circle cx="23.5" cy="48" r="4.6" fill="#0d0e12"/>
+<circle cx="78.1" cy="48" r="4.6" fill="#0d0e12"/>
+<circle cx="93.8" cy="48" r="4.6" fill="#0d0e12"/>
+<circle cx="7.8" cy="61" r="3.1" fill="#0d0e12"/>
+<circle cx="23.5" cy="61" r="3.1" fill="#0d0e12"/>
+<circle cx="78.1" cy="61" r="3.1" fill="#0d0e12"/>
+<circle cx="93.8" cy="61" r="3.1" fill="#0d0e12"/>
+<circle cx="7.8" cy="73" r="4.3" fill="#0d0e12"/>
+<circle cx="23.5" cy="73" r="4.3" fill="#0d0e12"/>
+<circle cx="50.8" cy="73" r="4.3" fill="#0d0e12"/>
+<circle cx="78.1" cy="73" r="4.3" fill="#0d0e12"/>
+<circle cx="93.8" cy="73" r="4.3" fill="#0d0e12"/>
+<circle cx="7.8" cy="90" r="3.5" fill="#0d0e12"/>
+<circle cx="29.3" cy="90" r="4.6" fill="#0d0e12"/>
+<circle cx="50.8" cy="90" r="4.6" fill="#0d0e12"/>
+<circle cx="72.3" cy="90" r="4.6" fill="#0d0e12"/>
+<circle cx="93.8" cy="90" r="3.5" fill="#0d0e12"/>
+<circle cx="7.8" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="7.8" cy="116" r="4.3" fill="#0d0e12"/>
+<circle cx="29.3" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="50.8" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="72.3" cy="102" r="4.3" fill="#0d0e12"/>
+<circle cx="29.3" cy="116" r="4.3" fill="#0d0e12"/>
+<circle cx="50.8" cy="116" r="3.5" fill="#0d0e12"/>
+<circle cx="72.3" cy="116" r="4.3" fill="#0d0e12"/>
+<rect x="4.775" y="19.275" width="92.05" height="14.45" rx="0.8" fill="#030508" stroke="#9c7f52" stroke-width="0.45"/>
+<path d="M7.29 34.35L7.29 34.95 M9.58 34.35L9.58 34.95 M11.87 34.35L11.87 34.95 M16.45 34.35L16.45 34.95 M18.74 34.35L18.74 34.95 M21.03 34.35L21.03 34.95 M25.61 34.35L25.61 34.95 M27.9 34.35L27.9 34.95 M30.19 34.35L30.19 34.95 M34.77 34.35L34.77 34.95 M37.06 34.35L37.06 34.95 M39.35 34.35L39.35 34.95 M43.93 34.35L43.93 34.95 M46.22 34.35L46.22 34.95 M48.51 34.35L48.51 34.95 M53.09 34.35L53.09 34.95 M55.38 34.35L55.38 34.95 M57.67 34.35L57.67 34.95 M62.25 34.35L62.25 34.95 M64.54 34.35L64.54 34.95 M66.83 34.35L66.83 34.95 M71.41 34.35L71.41 34.95 M73.7 34.35L73.7 34.95 M75.99 34.35L75.99 34.95 M80.57 34.35L80.57 34.95 M82.86 34.35L82.86 34.95 M85.15 34.35L85.15 34.95 M89.73 34.35L89.73 34.95 M92.02 34.35L92.02 34.95 M94.31 34.35L94.31 34.95" fill="none" stroke="#9c7f52" stroke-width="0.15"/>
+<path d="M5 34.35L5 35.65 M14.16 34.35L14.16 35.65 M23.32 34.35L23.32 35.65 M32.48 34.35L32.48 35.65 M41.64 34.35L41.64 35.65 M50.8 34.35L50.8 35.65 M59.96 34.35L59.96 35.65 M69.12 34.35L69.12 35.65 M78.28 34.35L78.28 35.65 M87.44 34.35L87.44 35.65 M96.6 34.35L96.6 35.65" fill="none" stroke="#9c7f52" stroke-width="0.25"/>
+<circle cx="50.8" cy="53" r="15" fill="#bab3a3" stroke="#9c7f52" stroke-width="0.675"/>
+<path d="M42.568 58.5L41.82 59 M41.654 56.789L40.822 57.133 M41.09 54.931L40.208 55.107 M41.09 51.069L40.208 50.893 M41.654 49.211L40.822 48.867 M42.568 47.5L41.82 47 M45.3 44.768L44.8 44.02 M47.011 43.854L46.667 43.022 M48.869 43.29L48.693 42.408 M52.731 43.29L52.907 42.408 M54.589 43.854L54.933 43.022 M56.3 44.768L56.8 44.02 M59.032 47.5L59.78 47 M59.946 49.211L60.778 48.867 M60.51 51.069L61.392 50.893 M60.51 54.931L61.392 55.107 M59.946 56.789L60.778 57.133 M59.032 58.5L59.78 59" fill="none" stroke="#161511" stroke-width="0.16"/>
+<path d="M43.8 60L42.598 61.202 M40.9 53L39.2 53 M43.8 46L42.598 44.798 M50.8 43.1L50.8 41.4 M57.8 46L59.002 44.798 M60.7 53L62.4 53 M57.8 60L59.002 61.202" fill="none" stroke="#161511" stroke-width="0.28"/>
+<rect x="89.4" y="94.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<rect x="89.4" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#bab3a3"/>
+<text x="5.00" y="10.00" font-family="D-DIN Condensed" font-size="5.2" font-weight="normal" letter-spacing="1.4" text-anchor="start" fill="#bab3a3">SPINDRIFT</text>
+<text x="5.00" y="13.80" font-family="D-DIN Condensed" font-size="1.7" font-weight="normal" letter-spacing="0.45" text-anchor="start" fill="#757062">GRANULAR CLOUD</text>
+<text x="42.85" y="61.07" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511" transform="rotate(-135 42.73 61.07)">12</text>
+<text x="39.51" y="53.00" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511" transform="rotate(-90 39.39 53.00)">8</text>
+<text x="42.85" y="44.93" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511" transform="rotate(-45 42.73 44.93)">4</text>
+<text x="50.92" y="41.59" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">0</text>
+<text x="59.00" y="44.93" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511" transform="rotate(45 58.87 44.93)">4</text>
+<text x="62.34" y="53.00" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511" transform="rotate(90 62.21 53.00)">8</text>
+<text x="59.00" y="61.07" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511" transform="rotate(135 58.87 61.07)">12</text>
+<text x="7.92" y="42.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">TIME</text>
+<text x="23.62" y="42.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">SIZE</text>
+<text x="51.10" y="66.00" font-family="D-DIN Condensed" font-size="2.3" font-weight="bold" letter-spacing="0.6" text-anchor="middle" fill="#161511">DENSITY</text>
+<text x="78.22" y="42.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">SHAPE</text>
+<text x="93.92" y="42.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">PITCH</text>
+<text x="93.92" y="79.58" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">V/OCT</text>
+<text x="7.92" y="85.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">FREEZE</text>
+<text x="29.43" y="84.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">FEEDBACK</text>
+<text x="50.92" y="84.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">DRY/WET</text>
+<text x="72.42" y="84.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">REVERB</text>
+<text x="93.92" y="85.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">SEED</text>
+<text x="7.92" y="96.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">IN L</text>
+<text x="7.92" y="110.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">IN R</text>
+<text x="29.43" y="110.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">GATE</text>
+<text x="50.92" y="111.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#bab3a3">QUALITY</text>
+<text x="72.42" y="110.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">TRIG</text>
+<text x="93.92" y="97.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">L</text>
+<text x="93.92" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#161511">R</text>
+<text x="37.92" y="69.50" font-family="D-DIN Condensed" font-size="1.3" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">REGULAR</text>
+<text x="63.92" y="69.50" font-family="D-DIN Condensed" font-size="1.3" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">RANDOM</text>
+<text x="51.05" y="125.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.5" text-anchor="middle" fill="#757062">R K A · INSTRUMENTS</text>
+<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
+<circle id="param-TIME" cx="7.8" cy="48.0" r="1" fill="#ff0000"/>
+<circle id="param-SIZE" cx="23.5" cy="48.0" r="1" fill="#ff0000"/>
+<circle id="param-DENSITY" cx="50.8" cy="53.0" r="1" fill="#ff0000"/>
+<circle id="param-SHAPE" cx="78.1" cy="48.0" r="1" fill="#ff0000"/>
+<circle id="param-PITCH" cx="93.8" cy="48.0" r="1" fill="#ff0000"/>
+<circle id="param-TIME_ATT" cx="7.8" cy="61.0" r="1" fill="#ff0000"/>
+<circle id="param-SIZE_ATT" cx="23.5" cy="61.0" r="1" fill="#ff0000"/>
+<circle id="param-SHAPE_ATT" cx="78.1" cy="61.0" r="1" fill="#ff0000"/>
+<circle id="param-PITCH_ATT" cx="93.8" cy="61.0" r="1" fill="#ff0000"/>
+<circle id="input-TIME_CV" cx="7.8" cy="73.0" r="1" fill="#00ff00"/>
+<circle id="input-SIZE_CV" cx="23.5" cy="73.0" r="1" fill="#00ff00"/>
+<circle id="input-DENSITY_CV" cx="50.8" cy="73.0" r="1" fill="#00ff00"/>
+<circle id="input-SHAPE_CV" cx="78.1" cy="73.0" r="1" fill="#00ff00"/>
+<circle id="input-PITCH_CV" cx="93.8" cy="73.0" r="1" fill="#00ff00"/>
+<circle id="param-FREEZE" cx="7.8" cy="90.0" r="1" fill="#ff0000"/>
+<circle id="param-FEEDBACK" cx="29.3" cy="90.0" r="1" fill="#ff0000"/>
+<circle id="param-DRYWET" cx="50.8" cy="90.0" r="1" fill="#ff0000"/>
+<circle id="param-REVERB" cx="72.3" cy="90.0" r="1" fill="#ff0000"/>
+<circle id="param-SEED" cx="93.8" cy="90.0" r="1" fill="#ff0000"/>
+<circle id="input-L" cx="7.8" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-R" cx="7.8" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="input-FEEDBACK_CV" cx="29.3" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-DRYWET_CV" cx="50.8" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-REVERB_CV" cx="72.3" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-FREEZE" cx="29.3" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="param-QUALITY" cx="50.8" cy="116.0" r="1" fill="#ff0000"/>
+<circle id="input-SEED" cx="72.3" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="output-L" cx="93.8" cy="102.0" r="1" fill="#0000ff"/>
+<circle id="output-R" cx="93.8" cy="116.0" r="1" fill="#0000ff"/>
+</g>
+</svg>
