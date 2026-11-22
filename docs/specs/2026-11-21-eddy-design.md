@@ -387,6 +387,17 @@ The tape's length in the corner and the Smear mark are not drawn in it.
 - Recording puts the input on the tape unchanged, offset and all, so a
   plain loop is exact. What is written back by Dub and Wear passes a DC
   blocker, so no offset can build.
+  (As built, 2026-11-22, after the final review's I2: the 5 Hz blocker
+  is on what a dub adds (the input), not on the tape going round. On the
+  whole of what was written it acted once a pass and its loss built pass
+  over pass: 15 dB at 50 Hz in 300 passes of Wear at 2 %, whose law says
+  0.06 dB. Wear's saturation takes off the offset it puts on lopsided
+  material, and the tape's own offset is trimmed at 0.01 Hz (a tape
+  dubbed into the bound at a low Dub Level keeps each clipped frame's
+  sign, and the share of them would otherwise stand as DC). Each pass
+  now costs the tape exactly what the Wear and Dub laws say, from 30 Hz
+  up; at Wear 0.5 and 1, 50 passes keep about 2.3 dB more at 50 Hz and
+  0.15 dB more at 1 kHz than build 2.0.27 did.)
 - Polyphonic cables are summed.
 
 ### Files

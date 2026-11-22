@@ -1,10 +1,14 @@
 #pragma once
-// Eddy's wear and the write path's guard. Wear is what each pass of the head
+// Eddy's wear and the write path's guards. Wear is what each pass of the head
 // costs the tape: the engine calls Wear::process for every frame the write
 // head passes and puts the result back on the tape, so the loss builds pass
-// over pass. WriteGuard is the DC blocker and soft bound that everything
-// written to the tape goes through. Rack-free; no libm (FastMath.hpp); no
-// allocation. Any input may be NaN or infinite; results are finite.
+// over pass. InputDcBlock takes DC off what a dub adds (the input), and
+// writeBound is the soft bound everything written to the tape goes through.
+// Only what is added is DC-blocked, never the tape going round again: a
+// filter on the recirculated tape would act once a pass and its loss would
+// build pass over pass (the final review's I2: 15 dB at 50 Hz in 300 passes
+// of Wear at 2 %). Rack-free; no libm (FastMath.hpp); no allocation. Any
+// input may be NaN or infinite; results are finite.
 #include <cstdint>
 
 #include "FastMath.hpp"
@@ -42,8 +46,12 @@ inline float flushTiny(float x) {
 
 } // namespace detail
 
-// The DC blocker (5 Hz) and the bound every write to the tape passes.
-struct WriteGuard {
+// The DC blocker on the dub's input (WRITE_DC_HZ, a one-pole high-pass with
+// unity gain in its passband: the output is the input less the DC as it
+// stood before this sample). The engine runs it on the input every sample,
+// dubbing or not, so it has settled when a dub starts. Held to +-100 V
+// first, so it cannot overflow.
+struct InputDcBlock {
 	void setSampleRate(float fs) {
 		fs = fs == fs ? clampKeepNan(fs, 1000.f, 4e6f) : 48000.f;
 		a_ = detail::onePoleCoeff(WRITE_DC_HZ, fs);
@@ -52,15 +60,46 @@ struct WriteGuard {
 
 	float process(int c, float x) {
 		float& dc = dc_[c & 1];
-		x = detail::tameVolts(x);
-		dc += a_ * (x - dc);
-		dc = detail::flushTiny(dc);
-		return detail::softBound(x - dc);
+		const float y = detail::tameVolts(x) - dc;
+		dc = detail::flushTiny(dc + a_ * y);
+		return y;
 	}
 
 private:
 	float a_ = 6.5e-4f;
 	float dc_[2] = {0.f, 0.f};
+};
+
+// The bound every write to the tape passes, and the trim of the tape's
+// offset: what is written, less its DC as it stood (a one-pole high-pass at
+// TAPE_DC_HZ, 0.01 Hz, unity in its passband), then the soft bound (exact
+// to 8 V, a ceiling of 10 V; NaN as silence). The trim is there for a tape
+// dubbed into the bound for a long time at a low Dub Level: kept nearly
+// whole each pass and clipped, each frame holds near +-9.8 V and the tape's
+// mean is whatever share of frames came out positive, which nothing else
+// takes back. So far below the audio band it costs the tape going round
+// about 2e-6 dB a pass at 30 Hz (its phase about 3e-4 rad), far under the
+// least Wear's law (2e-4 dB a pass at 2 %). The state is double: its step
+// at 768 kHz is 8e-8 of the frame.
+struct WriteBound {
+	void setSampleRate(float fs) {
+		fs = fs == fs ? clampKeepNan(fs, 1000.f, 4e6f) : 48000.f;
+		a_ = 6.283185307179586 * (double) TAPE_DC_HZ / (double) fs;
+	}
+	void reset() { off_[0] = off_[1] = 0.0; }
+
+	float process(int c, float x) {
+		double& off = off_[c & 1];
+		const float in = detail::tameVolts(x) - (float) off;
+		off += a_ * (double) in;
+		if (off < 1e-20 && off > -1e-20)
+			off = 0.0;
+		return detail::softBound(in);
+	}
+
+private:
+	double a_ = 1.3e-6;
+	double off_[2] = {0.0, 0.0};
 };
 
 struct Wear {
@@ -76,6 +115,7 @@ struct Wear {
 	void setSampleRate(float fs) {
 		fs_ = fs == fs ? clampKeepNan(fs, 1000.f, 4e6f) : 48000.f;
 		lpA_ = detail::onePoleCoeff(WEAR_HIGHS_HZ, fs_);
+		dcA_ = detail::onePoleCoeff(WRITE_DC_HZ, fs_);
 		edge_ = WEAR_DROPOUT_EDGE_S * fs_;
 	}
 
@@ -109,8 +149,12 @@ struct Wear {
 		// Highs: this pass moves the tape part of the way to its low-pass.
 		lp_[s] = detail::flushTiny(lp_[s] + lpA_ * (x - lp_[s]));
 		x += highs_ * (lp_[s] - x);
-		// Saturation: the bound at drive x, scaled back, so it never adds.
-		x = detail::softBound(x * drive_) / drive_;
+		// Saturation: the bound at drive x, scaled back, so it never adds;
+		// less the DC of what it changes (on asymmetric material it shifts
+		// the mean; the tape's own DC is the tape's, and is not touched).
+		const float e = detail::softBound(x * drive_) / drive_ - x - satDc_[s];
+		satDc_[s] = detail::flushTiny(satDc_[s] + dcA_ * e);
+		x += e;
 		x *= gain_ * dipGain();
 		return x + hissAmp_ * hiss_[s].uniform();
 	}
@@ -157,6 +201,7 @@ private:
 	float fs_ = 48000.f, lpA_ = 0.4f, edge_ = 96.f;
 	float gain_ = 1.f, highs_ = 0.f, drive_ = 1.f, hissAmp_ = 0.f, dropRate_ = 0.f;
 	float lp_[2] = {0.f, 0.f};
+	float dcA_ = 6.5e-4f, satDc_[2] = {0.f, 0.f};
 	float budget_ = 1.f, dipPos_ = 0.f, dipLen_ = 0.f, dipDepth_ = 1.f;
 	bool active_ = false, inDip_ = false;
 };

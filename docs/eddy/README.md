@@ -226,9 +226,12 @@ kept at 1 - d² and the input is added at min(1, 2d):
 | 75 % | 44 % | 100 % |
 | 100 % | nothing (it replaces) | 100 % |
 
-What is written passes a DC blocker (5 Hz) and a soft bound (exact up to
-8 V, never past 10 V), so layers settle rather than pile up, and no offset
-builds. Dub in and out are faded on the tape.
+The input a dub adds passes a DC blocker (5 Hz), and what is written
+passes a soft bound (exact up to 8 V, never past 10 V), so layers settle
+rather than pile up, and no offset builds. The tape going round is not
+filtered: what it keeps each pass is exactly the table's share, at every
+frequency (a slow trim of its offset, at 0.01 Hz, costs it nothing you can
+hear). Dub in and out are faded on the tape.
 
 Dub does nothing on an empty tape or while recording, and turns off when a
 recording starts, a file loads or Restore is pressed. While dubbing, the
@@ -254,13 +257,15 @@ the loss builds pass over pass. At Wear w (0 to 1), each pass:
 - moves the tape 0.3 × w² of the way toward a 4 kHz low-pass, so the highs
   dull;
 - drives it into the soft bound by 1 + w, so loud parts press into
-  saturation (and the level is scaled back, so it never adds);
+  saturation (and the level is scaled back, so it never adds; the offset
+  saturation puts on lopsided material is taken off);
 - adds hiss, at -70 dB re 5 V RMS at full, less in proportion below;
 - and, at an average 0.5 × w² a second of tape passed, drops a stretch of
   5 to 40 ms to between 30 % and 80 % of its level, with 2 ms edges.
 
-At 0 the tape is not rewritten at all and the loop repeats exactly, for
-ever. Wear acts only where the head passes: the window and the moment
+Nothing else is lost: the lows go only as the level does (at 2 %, 300
+passes cost 0.06 dB at 30 Hz as at 1 kHz). At 0 the tape is not
+rewritten at all and the loop repeats exactly, for ever. Wear acts only where the head passes: the window and the moment
 past its end that the join reads on into. Each Eddy wears in its own way
 (its random parts are seeded per module). Wear writes nothing while the
 tape is stopped or recording.

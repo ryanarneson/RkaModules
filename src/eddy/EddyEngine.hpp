@@ -22,9 +22,10 @@
 //   newest one crossing the window's turn starts a new one at the window's
 //   start (the join) and gives EOC, or with Loop off fades and stops;
 //   every voice writes what it passed last sample (its own TapeWriter and
-//   wear state): wear, then keep x old + add x input, then the WriteGuard,
-//   at the strength of that voice's own gain (and the Dub, Stopped, Play
-//   and hold fades), linear on the tape;
+//   wear state): wear, then keep x old + add x input (the input DC-blocked
+//   once a sample), then the WriteBound (the tape's slow offset trim and
+//   the soft bound), at the strength of that voice's own gain (and the
+//   Dub, Stopped, Play and hold fades), linear on the tape;
 //   the overview is touched where the tape was written and serviced;
 //   Mix, and the soft limit.
 //
@@ -38,7 +39,7 @@
 //   included, and a dub laid down by two crossfading voices is heard once at
 //   unity next turn (g_old^2 + g_new^2 = 1). Dub and Wear reach the window
 //   and its read-on, nothing beyond. A new voice has a fresh writer and wear
-//   state (its dropouts are its own); one DC blocker serves every voice. In
+//   state (its dropouts are its own); one WriteBound serves every voice. In
 //   the first turn after a voice comes in by a time fade (Play, a retrigger,
 //   a window move) it writes at full weight frames that later turns read
 //   through the join's fade, so a dub made in that turn is heard through the
@@ -344,7 +345,12 @@ public:
 		playGain_ = ramp(playGain_, runningTarget ? 1.f : 0.f, fadeStep_);
 		const bool running = runningTarget || playGain_ > 0.f;
 		const double mv = running ? (double) v : 0.0;
-		moveVoices(mv, in);
+		// What a dub adds is the input less its DC; the tape going round is
+		// never filtered (Wear.hpp).
+		float dubIn[2];
+		for (int c = 0; c < 2; c++)
+			dubIn[c] = dcBlock_.process(c, in[c]);
+		moveVoices(mv, dubIn);
 		if (oneShotTail_ && voices_.count() == 0)
 			oneShotTail_ = false;
 
@@ -435,7 +441,8 @@ private:
 		double gate = std::floor(REC_GATE_MIN_S * rate + 0.5);
 		gate = gate < 1.0 ? 1.0 : gate > pre ? pre : gate;
 		gateN_ = (size_t) gate;
-		guard_.setSampleRate((float) rate);
+		dcBlock_.setSampleRate((float) rate);
+		bound_.setSampleRate((float) rate);
 		rate_ = (float) rate;
 		// A set at another rate is silent at once and retired when no copy
 		// is under way on it (handoff).
@@ -1163,11 +1170,11 @@ private:
 		Tape& t = live_->tape;
 		const float keep = keep_, add = add_, dub = dubGain_;
 		eddy::Wear& wear = x.wear;
-		eddy::WriteGuard& guard = guard_;
+		eddy::WriteBound& bound = bound_;
 		x.writer.write(t, p0, p1, in, [&](int c, float old, float v) -> float {
 			const float w = wear.process(c, old, 1.f);
 			const float pre = w + dub * ((keep * w + add * v) - w);
-			const float y = guard.process(c, pre);
+			const float y = bound.process(c, pre);
 			// Under 1e-20 V (-400 dB) is silence: a dub over silence would
 			// otherwise take the tape down into subnormals and leave it there.
 			return eddy::detail::flushTiny(old + gain * (y - old));
@@ -1321,7 +1328,8 @@ private:
 	uint32_t seed_;
 	float rate_ = 48000.f, wearK_ = 0.f;
 	bool wearOn_ = false;
-	eddy::WriteGuard guard_;   // one DC blocker for every voice's writes
+	eddy::InputDcBlock dcBlock_;   // the dub's input, every sample
+	eddy::WriteBound bound_;       // one for every voice's writes
 	BandLimitedRead reader_;   // its kernel table, shared by the voices
 	std::unique_ptr<float[]> pre_;
 };

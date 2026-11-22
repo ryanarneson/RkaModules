@@ -1,4 +1,4 @@
-// Eddy's wear and write guard (src/eddy/Wear.hpp) against the numbers in the
+// Eddy's wear and the write path's guards (src/eddy/Wear.hpp) against the numbers in the
 // plan's Global Constraints. Built with the plugin's floating-point flags.
 #include "eddy/Wear.hpp"
 #include "hadal/Random.hpp"
@@ -301,20 +301,35 @@ void seeded() {
 
 void guard() {
 	const float fs = 48000.f;
-	WriteGuard g;
-	g.setSampleRate(fs);
-	g.reset();
-	double ei = 0, eo = 0;
-	for (int i = 0; i < 96000; i++) {
-		const float x = 5.f * (float) std::sin(2 * PI * 1000.0 * i / fs);
-		const float y = g.process(0, x);
-		if (i >= 48000) {
-			ei += (double) x * x;
-			eo += (double) y * y;
+	// The dub's input block: unity in its passband (a 1 kHz sine within
+	// 0.005 dB, 30 Hz within 0.15 dB: a one-pole at 5 Hz), 1 V of DC under
+	// 1 mV in 2 s, and the sides do not share a state.
+	for (double hz : {1000.0, 30.0}) {
+		InputDcBlock g;
+		g.setSampleRate(fs);
+		double ei = 0, eo = 0;
+		for (int i = 0; i < 96000; i++) {
+			const float x = 5.f * (float) std::sin(2 * PI * hz * i / fs);
+			const float y = g.process(0, x);
+			if (i >= 48000) {
+				ei += (double) x * x;
+				eo += (double) y * y;
+			}
 		}
+		const double db = 10.0 * std::log10(eo / ei);
+		CHECK(hz == 1000.0 ? std::fabs(db) < 0.005 : db < 0.0 && db > -0.15, "the input's block: a %.0f Hz sine at 5 V changes by %g dB", hz, db);
 	}
-	const double db = 10.0 * std::log10(eo / ei);
-	CHECK(std::fabs(db) < 0.01, "a 1 kHz sine at 5 V changes by %g dB", db);
+	{
+		InputDcBlock g;
+		g.setSampleRate(fs);
+		float last = 1.f, other = 0.f;
+		for (int i = 0; i < 96000; i++) {
+			last = g.process(0, 1.f);
+			other = std::max(other, std::fabs(g.process(1, 0.f)));
+		}
+		CHECK(std::fabs(last) < 1e-3f, "the input's block: 1 V of DC leaves %g V after 2 s", last);
+		CHECK(other == 0.f, "the input's block: side 1 is untouched by side 0 (%g)", other);
+	}
 
 	// The bound: the exact identity up to 8 V, a ceiling of 10 V.
 	bool exact = true;
@@ -332,7 +347,7 @@ void guard() {
 		prev = y;
 	}
 	CHECK(top <= 10.f && mono, "the bound tops at %g and is monotonic: %d", top, (int) mono);
-	WriteGuard h;
+	WriteBound h;
 	h.setSampleRate(fs);
 	float hi = 0.f, lo = 0.f;
 	for (int i = 0; i < 4800; i++) {
@@ -342,15 +357,58 @@ void guard() {
 	CHECK(hi <= 10.f && hi > 9.f, "20 V in gives %g V out", hi);
 	CHECK(lo >= -10.f && lo < -9.f, "-20 V in gives %g V out", lo);
 
-	// 1 V of DC decays under 1 mV in 2 s; the sides do not share a state.
-	g.reset();
-	float last = 1.f, other = 0.f;
-	for (int i = 0; i < 96000; i++) {
-		last = g.process(0, 1.f);
-		other = std::max(other, std::fabs(g.process(1, 0.f)));
+	// The tape's trim, far under the audio band: a 30 Hz sine through it
+	// changes by under 1e-4 dB (a pass of the tape, I2), yet 1 V of DC on
+	// the tape is under 1 mV after 2 minutes of writing (at 8 kHz, to be
+	// quick: it counts frames written, and the corner is per second).
+	{
+		WriteBound b;
+		b.setSampleRate(fs);
+		double ei = 0, eo = 0;
+		for (int i = 0; i < 4 * 48000; i++) {
+			const float x = 5.f * (float) std::sin(2 * PI * 30.0 * i / fs);
+			const float y = b.process(0, x);
+			if (i >= 48000) {
+				ei += (double) x * x;
+				eo += (double) y * y;
+			}
+		}
+		const double db = 10.0 * std::log10(eo / ei);
+		CHECK(std::fabs(db) < 1e-4, "the tape's trim: a 30 Hz sine at 5 V changes by %g dB a pass", db);
+		WriteBound d;
+		d.setSampleRate(8000.f);
+		float last = 1.f, at10 = 1.f, other = 0.f;
+		for (int i = 0; i < 120 * 8000; i++) {
+			last = d.process(0, 1.f);
+			if (i == 10 * 8000)
+				at10 = last;
+			other = std::max(other, std::fabs(d.process(1, 0.f)));
+		}
+		CHECK(std::fabs(last) < 1e-3f && at10 < 0.6f, "the tape's trim: 1 V of DC leaves %g V after 10 s, %g V after 120 s", at10, last);
+		CHECK(other == 0.f, "the tape's trim: side 1 is untouched by side 0 (%g)", other);
 	}
-	CHECK(std::fabs(last) < 1e-3f, "1 V of DC leaves %g V after 2 s", last);
-	CHECK(other == 0.f, "side 1 is untouched by side 0 (%g)", other);
+}
+
+// Wear's saturation, on asymmetric material, takes the DC of what it changes
+// off: a 25 % pulse of 11 V (no DC) worn at 1, by Wear alone, comes out with
+// its mean within 30 mV after the first pass and every pass after (the
+// saturation alone would leave about -0.7 V on it).
+void saturation_dc() {
+	Wear w(23);
+	w.set(1.f);
+	Tape t(48000);
+	for (int i = 0; i < t.size(); i++)
+		t.ch[0][i] = t.ch[1][i] = (i % 96) < 24 ? 8.25f : -2.75f;
+	double worst = 0;
+	for (int p = 0; p < 20; p++) {
+		t.pass(w);
+		double m = 0;
+		for (float v : t.ch[0])
+			m += v;
+		m /= t.size();
+		worst = std::max(worst, std::fabs(m));
+	}
+	CHECK(worst < 0.03, "a hot asymmetric pulse worn at 1: the tape's mean reaches %.1f mV in 20 passes (want under 30)", worst * 1e3);
 }
 
 void hostile() {
@@ -359,25 +417,31 @@ void hostile() {
 	for (float a : {0.f, 0.3f, 1.f}) {
 		Wear w(2);
 		w.set(a);
-		WriteGuard g;
+		InputDcBlock g;
 		g.setSampleRate(48000.f);
+		WriteBound b;
+		b.setSampleRate(48000.f);
 		bool fin = true;
 		for (float v : vals)
 			for (float f : fr)
 				for (int c = 0; c < 2; c++) {
 					fin = fin && std::isfinite(w.process(c, v, f));
-					fin = fin && std::isfinite(g.process(c, v));
+					fin = fin && std::isfinite(g.process(c, v)) && std::fabs(g.process(c, v)) <= 200.f;
+					fin = fin && std::isfinite(b.process(c, v)) && std::fabs(b.process(c, v)) <= 10.f;
 				}
 		CHECK(fin, "amount %g: every hostile call gives a finite result", a);
 		bool ok = true;
 		for (int i = 0; i < 1000; i++)
 			for (int c = 0; c < 2; c++)
-				ok = ok && std::isfinite(w.process(c, 1.f, 1.f)) && std::isfinite(g.process(c, 1.f));
+				ok = ok && std::isfinite(w.process(c, 1.f, 1.f)) && std::isfinite(g.process(c, 1.f)) && std::isfinite(b.process(c, 1.f));
 		CHECK(ok, "amount %g: normal calls are finite afterwards", a);
 	}
-	WriteGuard g;
+	InputDcBlock g;
 	g.setSampleRate(NAN_F);
-	CHECK(std::isfinite(g.process(0, 1.f)), "a NaN rate leaves the guard working");
+	CHECK(std::isfinite(g.process(0, 1.f)), "a NaN rate leaves the input's block working");
+	WriteBound b;
+	b.setSampleRate(NAN_F);
+	CHECK(std::isfinite(b.process(0, 1.f)), "a NaN rate leaves the write bound working");
 	Wear w(1);
 	w.setSampleRate(0.f);
 	w.set(1.f);
@@ -394,6 +458,7 @@ int main() {
 	dropouts();
 	seeded();
 	guard();
+	saturation_dc();
 	hostile();
 	return rkatest::finish("eddy test_wear");
 }

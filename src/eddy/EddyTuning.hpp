@@ -36,8 +36,11 @@ constexpr float WEAR_DROPOUT_MIN_S = 0.005f, WEAR_DROPOUT_MAX_S = 0.04f;
 constexpr float WEAR_DROPOUT_GAIN_MIN = 0.3f, WEAR_DROPOUT_GAIN_MAX = 0.8f;
 constexpr float WEAR_DROPOUT_EDGE_S = 0.002f;
 
-// The write path's DC blocker.
+// The write path's DC blockers: the dub's input (what is added), and the
+// trim of the whole tape's offset as it is written (far below the audio
+// band, so it costs the tape going round almost nothing a pass).
 constexpr float WRITE_DC_HZ = 5.f;
+constexpr float TAPE_DC_HZ = 0.01f;
 
 // The engine (EddyEngine.hpp). The tape: 5 minutes, at most 2^24 frames,
 // and a tail of 10 ms (the join's longest fade, F) after it.

@@ -7,6 +7,7 @@
 #include "testing.hpp"
 
 #include <cmath>
+#include <complex>
 #include <cstdint>
 #include <cstdio>
 #include <utility>
@@ -460,13 +461,17 @@ void dub_at_speed() {
 }
 
 void dub_bounded() {
-	// 1000 passes of +-10 V noise (the same loop of it each pass, with an
-	// offset or without), dubbed at full level: the tape stays under its
-	// bound and no DC builds. At noon the bound holds too, and the DC is what
-	// this loop leaves (its saturation after the DC blocker, and the join's
-	// fade frames, which converge slowly at their own weight): settled by
-	// 1000 passes (the same at 2000) and under 20 mV.
-	for (float d : {1.f, 0.5f})
+	// Passes of +-10 V noise (the same loop of it each pass, with an offset
+	// or without), dubbed: the tape stays under its bound and no DC builds.
+	// The input's DC is blocked as it comes in, so a 1 V offset makes no
+	// difference. At full level each pass replaces the tape: under 1 mV. At
+	// noon the bound clips all the time (the tape settles near 4 times the
+	// input) and the DC is what that clipping leaves: 11.8 mV, settled by
+	// 1000 passes (2026-11-22, after the I2 fix; 10.7 mV before it), held
+	// under 15 mV and to not building. At 5 % the tape is kept nearly whole
+	// each pass, clipped frames hold their sign, and only the tape's trim
+	// (WriteBound) keeps the share of them from leaving DC: under 5 mV.
+	for (float d : {1.f, 0.5f, 0.05f})
 		for (float offset : {0.f, 1.f}) {
 			Rig g;
 			TapeSet* set = g.loaded(2400, 0, [](size_t, float& l, float& r) { l = r = 0.f; });
@@ -498,14 +503,180 @@ void dub_bounded() {
 					measure(peak1000, dc1000);
 			}
 			measure(peak, dc);
-			CHECK(peak <= 10.f && peak1000 <= 10.f, "Dub Level %.1f, offset %.0f V: the tape peaks at %.4f V (bound 10)", d, offset, peak);
+			CHECK(peak <= 10.f && peak1000 <= 10.f, "Dub Level %.2f, offset %.0f V: the tape peaks at %.4f V (bound 10)", d, offset, peak);
 			if (d == 1.f)
 				CHECK(std::fabs(dc) < 1e-3, "full-level dubs, offset %.0f V: DC on the tape %.3f mV (want under 1)", offset, dc * 1e3);
-			else   // The spec: "Repeated full-level dubs ... no DC builds"; noon is held to not building.
-				CHECK(std::fabs(dc) < 2e-2 && std::fabs(dc - dc1000) < 5e-4,
-				      "Dub Level %.1f, offset %.0f V: DC on the tape %.3f mV after 2000 passes, %.3f after 1000 (want under 20, not building)",
+			else if (d == 0.5f)   // The spec: "Repeated full-level dubs ... no DC builds"; noon is held to not building.
+				CHECK(std::fabs(dc) < 1.5e-2 && std::fabs(dc - dc1000) < 5e-4,
+				      "Dub Level %.1f, offset %.0f V: DC on the tape %.3f mV after 2000 passes, %.3f after 1000 (want under 15, not building)",
 				      d, offset, dc * 1e3, dc1000 * 1e3);
+			else
+				CHECK(std::fabs(dc) < 5e-3, "Dub Level %.2f, offset %.0f V: DC on the tape %.3f mV after 2000 passes (want under 5)", d,
+				      offset, dc * 1e3);
 		}
+}
+
+// ---- What Wear and Dub do to the old tape, per frequency (the final
+// review's I2: a DC blocker on the tape going round took 15 dB at 50 Hz in
+// 300 passes of Wear at 2 %). Through the engine's own write path.
+
+const double LOWS_HZ[5] = {30.0, 50.0, 200.0, 1000.0, 8000.0};
+
+// A 1 s tape (48000 frames, a tail of 480 so a turn is the whole tape) of
+// the five tones at `volts` each, every one a whole number of cycles.
+TapeSet* tones(Rig& g, double volts) {
+	return g.loaded(48000, 480, [=](size_t k, float& l, float& r) {
+		double s = 0;
+		for (double f : LOWS_HZ)
+			s += volts * std::sin(2 * PI * f * (double) k / 48000.0);
+		l = r = (float) s;
+	});
+}
+
+// Each tone's amplitude on side 0 over frames [2400, 45600) (0.9 s: away
+// from the join's fade at frame 0, and a whole number of cycles of each).
+void toneLevels(const Tape& t, double amp[5]) {
+	for (int k = 0; k < 5; k++) {
+		double sc = 0, ss = 0;
+		for (size_t i = 2400; i < 45600; i++) {
+			const double th = 2 * PI * LOWS_HZ[k] * (double) i / 48000.0;
+			sc += t.ch[0][i] * std::cos(th);
+			ss += t.ch[0][i] * std::sin(th);
+		}
+		amp[k] = 2.0 * std::hypot(sc, ss) / 43200.0;
+	}
+}
+
+// Wear's law for one pass at w, in dB at f (EddyTuning.hpp): the level, and
+// the highs moved WEAR_HIGHS_AMOUNT w^2 of the way to a one-pole low-pass.
+double wearLawDb(double w, double f) {
+	using namespace rka::eddy;
+	const double fs = 48000.0;
+	const double a = 1.0 - std::exp(-2 * PI * WEAR_HIGHS_HZ / fs);
+	const std::complex<double> z = std::polar(1.0, -2 * PI * f / fs);
+	const std::complex<double> lp = a / (1.0 - (1.0 - a) * z);
+	const double h = WEAR_HIGHS_AMOUNT * w * w;
+	return WEAR_LEVEL_DB * w * w + db(std::abs(1.0 + h * (lp - 1.0)));
+}
+
+void wear_lows() {
+	// Wear 1 for 50 passes only: its law takes the tones 25 to 30 dB down in
+	// that many, and down into its own hiss in 100. The dropouts (shared by
+	// every frequency) cost up to 0.4 dB more at 0.25 over 300 passes and
+	// about 2 dB at 1 over 50; at 2 % there are none in 300 s of tape.
+	struct Case {
+		float w;
+		int passes;
+		double below;   // how far under the law a tone may be (the dropouts)
+	};
+	for (const Case& c : {Case{0.02f, 300, 0.05}, Case{0.25f, 300, 0.6}, Case{1.f, 50, 3.0}}) {
+		Rig g;
+		const double A = 0.55;   // 2.75 V at most: under the saturation at every setting
+		TapeSet* set = tones(g, A);
+		g.use(set);
+		g.f.params[F::WEAR] = c.w;
+		g.press(&F::playPress);
+		g.run((long) c.passes * 48000);
+		double amp[5];
+		toneLevels(set->tape, amp);
+		double dev[5];
+		for (int k = 0; k < 5; k++)
+			dev[k] = db(amp[k] / A) - c.passes * wearLawDb(c.w, LOWS_HZ[k]);
+		const int top = c.w < 1.f ? 5 : 4;   // at 1 the 8 kHz tone is under the hiss
+		for (int k = 0; k < top; k++) {
+			CHECK(dev[k] < 0.05 && dev[k] > -c.below, "Wear %.2f, %d passes, %.0f Hz: %+.2f dB re its law (%+.2f), want within +0.05/-%.2f",
+			      c.w, c.passes, LOWS_HZ[k], dev[k], c.passes * wearLawDb(c.w, LOWS_HZ[k]), c.below);
+			// No more loss at the bottom than at 1 kHz, beyond the law.
+			if (k < 3)
+				CHECK(std::fabs(dev[k] - dev[3]) < (c.w < 0.1f ? 0.03 : 0.4),
+				      "Wear %.2f, %d passes: %.0f Hz is %+.2f dB re its law, 1 kHz %+.2f (want the same within %.2f)", c.w, c.passes,
+				      LOWS_HZ[k], dev[k], dev[3], c.w < 0.1f ? 0.03 : 0.4);
+		}
+	}
+}
+
+// The dub's input block, a one-pole high-pass at WRITE_DC_HZ, at f.
+double inputBlockDb(double f) {
+	const double a = 1.0 - std::exp(-2 * PI * rka::eddy::WRITE_DC_HZ / 48000.0);
+	const std::complex<double> z = std::polar(1.0, -2 * PI * f / 48000.0);
+	return db(std::abs((1.0 - z) / (1.0 - (1.0 - a) * z)));
+}
+
+void dub_lows() {
+	// The old tape under a dub of silence: keep = 1 - d^2 a pass, every
+	// frequency alike (the dub starts as the head leaves frame 0, so its fade
+	// is outside the frames measured).
+	for (float d : {0.25f, 0.5f}) {
+		Rig g;
+		const double A = 1.0;
+		TapeSet* set = tones(g, A);
+		g.use(set);
+		g.f.params[F::DUB_LEVEL] = d;
+		float add, keep;
+		rka::eddy::dubGains(d, add, keep);
+		const int passes = d == 0.25f ? 20 : 10;
+		g.press(&F::playPress);
+		g.press(&F::dubPress);
+		g.run((long) passes * 48000);
+		g.press(&F::dubPress);
+		g.step();
+		CHECK(!g.r.dubbing, "dub off");
+		double amp[5];
+		toneLevels(set->tape, amp);
+		for (int k = 0; k < 5; k++) {
+			const double want = passes * db(keep);
+			CHECK(std::fabs(db(amp[k] / A) - want) < 0.05, "Dub Level %.2f, silence in, %d passes: %.0f Hz at %+.2f dB (want %+.2f)", d,
+			      passes, LOWS_HZ[k], db(amp[k] / A), want);
+		}
+	}
+	// Hundreds of passes of the same loop of five tones dubbed in: each
+	// tone settles at add / (1 - keep) times the input (the passes add up in
+	// phase), less only the input's own DC block, once.
+	for (float d : {0.25f, 0.5f, 1.f}) {
+		Rig g;
+		float add, keep;
+		rka::eddy::dubGains(d, add, keep);
+		const double A = 0.2 * (1.0 - keep) / add;   // settles at 0.2 V a tone
+		TapeSet* set = g.loaded(48000, 480, [](size_t, float& l, float& r) { l = r = 0.f; });
+		g.use(set);
+		g.f.params[F::DUB_LEVEL] = d;
+		g.press(&F::playPress);
+		g.run(4800);
+		g.press(&F::dubPress);
+		for (long i = 0; i < 300L * 48000; i++) {
+			double x = 0;
+			for (double f : LOWS_HZ)
+				x += A * std::sin(2 * PI * f * (double) i / 48000.0);
+			g.step((float) x, (float) x);
+		}
+		double amp[5];
+		toneLevels(set->tape, amp);
+		for (int k = 0; k < 5; k++) {
+			const double got = db(amp[k] / (A * add / (1.0 - keep))), want = inputBlockDb(LOWS_HZ[k]);
+			CHECK(std::fabs(got - want) < 0.03, "Dub Level %.2f, 300 passes: %.0f Hz settles at %+.3f dB re add / (1 - keep) (want %+.3f)", d,
+			      LOWS_HZ[k], got, want);
+		}
+	}
+}
+
+// A hot asymmetric tape (a 25 % pulse of 11 V, no DC) worn at 1: Wear's
+// saturation shifts its mean; the shift is taken off, so the tape's mean
+// stays within 40 mV over the first 20 passes (about 0.7 V without).
+void wear_dc() {
+	Rig g;
+	TapeSet* set = g.loaded(48000, 480, [](size_t k, float& l, float& r) { l = r = (k % 96) < 24 ? 8.25f : -2.75f; });
+	g.use(set);
+	g.f.params[F::WEAR] = 1.f;
+	g.press(&F::playPress);
+	double worst = 0;
+	for (int pass = 0; pass < 20; pass++) {
+		g.run(48000);
+		double m = 0;
+		for (size_t k = 0; k < 48000; k++)
+			m += set->tape.ch[0][k];
+		worst = std::max(worst, std::fabs(m / 48000.0));
+	}
+	CHECK(worst < 0.04, "a hot pulse worn at 1: the tape's mean reaches %.1f mV in 20 passes (want under 40)", worst * 1e3);
 }
 
 uint64_t checksum(const Tape& t) {
@@ -1338,6 +1509,9 @@ int main() {
 	dub_levels();
 	dub_at_speed();
 	dub_bounded();
+	wear_lows();
+	dub_lows();
+	wear_dc();
 	wear_zero();
 	wear_window();
 	play_trigger();
