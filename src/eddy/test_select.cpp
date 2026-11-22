@@ -51,7 +51,11 @@ void inverse_length() {
 			kn.length = k;
 			worstLaw = std::max(worstLaw, std::fabs(heard(kn, 0.f, T).length / share - 1.0));
 		}
-		CHECK(lengthKnobFor(m, T) == 0.f && lengthKnobFor(m * 0.5, T) == 0.f, "%g s: 10 ms and less is knob 0", T);
+		// 10 ms is knob 0 within 1e-9: m x T may come out a rounding above
+		// 10 ms where the compiler reassociates (GCC, fast maths: 1.4e-16 at a
+		// 0.05 s tape), a length 1e-15 of itself longer.
+		CHECK(lengthKnobFor(m, T) <= 1e-9f && lengthKnobFor(m, T) >= 0.f && lengthKnobFor(m * 0.5, T) == 0.f,
+		      "%g s: 10 ms and less is knob 0 (%.3g)", T, (double) lengthKnobFor(m, T));
 		CHECK(lengthKnobFor(1.0, T) == 1.f && lengthKnobFor(1.5, T) == 1.f, "%g s: the whole tape is knob 1", T);
 		CHECK(lengthShare(0.f, T) == m && lengthShare(1.f, T) == 1.0, "%g s: the forward law's ends (%g, %g)", T, lengthShare(0.f, T),
 		      lengthShare(1.f, T));
