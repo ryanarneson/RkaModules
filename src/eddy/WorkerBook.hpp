@@ -101,9 +101,10 @@ public:
 
 	// ---- Events.
 
-	// A job starts (the stored load is under way from here).
+	// A job starts (the stored load is under way from here; a re-load of a
+	// stored load already over does not start it again).
 	void started(const Request& r) {
-		if (r.kind == Request::LOAD_STORED) {
+		if (r.kind == Request::LOAD_STORED && (storing_ || r.seq != storeSeq_)) {
 			storeSeq_ = r.seq;
 			storing_ = true;
 		}

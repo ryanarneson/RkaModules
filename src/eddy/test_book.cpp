@@ -277,6 +277,23 @@ void store_way_other_offered_first() {
 	d = c.finished(file, 44100.f, 44100.f, id(7), false, false, 0, nullptr);
 	CHECK(d.limbo == id(6) && d.storeOff && !c.storing(), "a later file replaces the re-load waiting: the load is over");
 	CHECK(!c.freed(id(6)) && !c.storing(), "and freeing it leaves it so");
+	// A re-load of the stored tape posted first in the queue, but run after
+	// a later file the worker had already taken: the file ends the load, and
+	// the re-load starting after does not start it again, nor fail it.
+	WorkerBook e;
+	e.started(stored);
+	e.finished(stored, 44100.f, 44100.f, id(8), true, false, 0, nullptr);
+	e.offer(nullptr, 0);
+	e.offered();
+	h = e.handedBack(id(8), false);
+	CHECK(h.remake == WorkerBook::HandedBack::RERUN, "refused: loaded again");
+	e.started(file);
+	d = e.finished(file, 48000.f, 48000.f, id(9), false, false, 0, nullptr);
+	CHECK(d.storeOff && !e.storing(), "the later file ends the stored load");
+	e.started(h.next);
+	CHECK(!e.storing(), "the re-load starting after does not start it again");
+	d = e.finished(h.next, 48000.f, 48000.f, nullptr, false, false, 0, nullptr);
+	CHECK(!d.storeOff && !d.storeFailed, "nor, failing, report the stored load failed");
 }
 
 // A conversion refused in its turn (the rate moved again before it went
