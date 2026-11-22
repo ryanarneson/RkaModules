@@ -258,7 +258,7 @@ DC its own saturation makes: on a 50 ms loop, lopsided material in time
 with it then keeps about 60 mV (1 V in at Dub 5 %, Wear 30 %), and at
 Wear 100 % what is left moves from pass to pass with Wear's dropouts,
 between about -20 and +150 mV (a 5 V pulse dubbed at 50 %); longer loops
-keep less (under 20 mV at 200 ms, under 5 mV at 1 s, the same two cases).
+keep less (under 20 mV at 200 ms, under 10 mV at 1 s, the same two cases).
 Played in reverse, what is left does not settle: it wanders from pass to
 pass within tens of millivolts (a 1 V pulse at Dub 5 %, no Wear: between
 -79 and +64 mV over 2000 passes), and with Wear at 100 % between about

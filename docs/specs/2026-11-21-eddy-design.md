@@ -438,7 +438,11 @@ The tape's length in the corner and the Smear mark are not drawn in it.
   -14); a 5 V pulse, Dub 50 %, Wear 100 %, between -22 and +120 mV, moved
   from pass to pass by the dropouts (-701 to -405 / -52 to +122); the
   first and third on a 200 ms loop -16 and +14 mV (+419, -245 / -5, +15),
-  on a 1 s loop +2 and -3 mV (+63, -51 / -2, -2). Reversed, what is left
+  on a 1 s loop +2 and -3 mV at 300 and 100 passes (+63, -51 / -2, -2),
+  the first still moving, -9 mV by 600 passes. The estimate is also
+  dropped while Wear is at 0 (the fourth re-review's F4-1: kept, it was
+  written onto whatever was dubbed meanwhile when Wear came back, +316 mV
+  on a 50 ms loop). Reversed, what is left
   does not settle: a 1 V pulse at Dub 5 % without Wear wanders between
   -79 and +64 mV over 2000 passes (943c0d0: -5 mV, settled; the gate
   hovering part open, the re-review's R3-3, not fixed); the 5 V pulse at
