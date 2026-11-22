@@ -1028,7 +1028,8 @@ void mix_law() {
 	}
 	// A tape playing and an input present, at Mix 0, 0.5 and 1, to the bit.
 	// The input is 3 V of 1 kHz and the tape 2 V of 100 Hz, so their sum
-	// stays below the limit's knee (8 V).
+	// stays below the limit's knee (8 V). The tape's frames under the head
+	// are copied out with the output: the Rig frees its sets when it goes.
 	auto render = [](float mix) {
 		Rig g;
 		TapeSet* set = g.sine(1.0, 100.0, 2.f);
@@ -1036,24 +1037,25 @@ void mix_law() {
 		g.f.params[F::MIX] = mix;
 		g.f.playTrig = 10.f;
 		g.run(1000);
-		std::vector<float> y;
+		std::vector<float> y, tape;
 		for (int i = 0; i < 4000; i++) {
 			g.step(3.f * (float) std::sin(2 * PI * 1000.0 * i / 48000.0));
 			y.push_back(g.r.l);
 			y.push_back(g.r.r);
+			for (int c = 0; c < 2; c++)
+				tape.push_back(set->tape.ch[c][1000 + i]);
 		}
-		return std::make_pair(y, set);
+		return std::make_pair(y, tape);
 	};
 	{
 		const auto in0 = render(0.f), in1 = render(1.f), in5 = render(0.5f);
 		bool tapeAlone = true, inputAlone = true, sum = true;
 		for (int i = 0; i < 4000; i++) {
 			const float x = 3.f * (float) std::sin(2 * PI * 1000.0 * i / 48000.0);
-			const size_t k = (size_t) (1000 + i);
 			for (int c = 0; c < 2; c++) {
 				const size_t j = (size_t) (2 * i + c);
 				inputAlone = inputAlone && in0.first[j] == x;
-				tapeAlone = tapeAlone && in1.first[j] == in1.second->tape.ch[c][k];
+				tapeAlone = tapeAlone && in1.first[j] == in1.second[j];
 				sum = sum && in5.first[j] == in0.first[j] + in1.first[j];
 			}
 		}
