@@ -1111,8 +1111,14 @@ struct EddyWidget : ModuleWidget {
 			if (path) {
 				std::string p = path;
 				std::free(path);
-				if (string::lowercase(system::getExtension(p)) != ".wav")
+				if (string::lowercase(system::getExtension(p)) != ".wav") {
 					p += ".wav";
+					// The dialog asked about overwriting the name as typed,
+					// not this one (M4).
+					const std::string ask = system::getFilename(p) + " already exists. Replace it?";
+					if (system::exists(p) && !osdialog_message(OSDIALOG_WARNING, OSDIALOG_OK_CANCEL, ask.c_str()))
+						return;
+				}
 				m->exportPath(p);
 			}
 		}));
