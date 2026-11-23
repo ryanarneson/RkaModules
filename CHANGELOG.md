@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.32 (2026-11-22): Spindrift: final review fixes
 - 2.0.31 (2026-11-22): Spindrift: manual and release builds
 - 2.0.30 (2026-11-22): Spindrift: the window's GRAINS caption stays still
 - 2.0.29 (2026-11-22): Spindrift: first test build (Beads in the Instrument look)
