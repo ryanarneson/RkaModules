@@ -98,6 +98,9 @@ struct Spindrift : Module {
 		}
 	};
 
+	// Defaults (ruling R11): a new Spindrift makes a cloud. Density 0.65 is
+	// on the random side, clear of the dead zone (0.48 to 0.52), and Dry/Wet
+	// 0.5 plays the grains with the input; the rest at noon or 0.
 	Spindrift() : engine(random::u32()) {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
 		configParam(TIME_PARAM, 0.f, 1.f, 0.5f, "Time", "%", 0.f, 100.f)->description =
@@ -105,7 +108,7 @@ struct Spindrift : Module {
 		    "(with a clock into SEED, a ratio of it)";
 		configParam(SIZE_PARAM, 0.f, 1.f, 0.5f, "Size", "%", 0.f, 100.f)->description =
 		    "The grains' length; below a third they play backwards. Fully clockwise: delay mode";
-		configParam(DENSITY_PARAM, 0.f, 1.f, 0.5f, "Density", "%", 0.f, 100.f)->description =
+		configParam(DENSITY_PARAM, 0.f, 1.f, 0.65f, "Density", "%", 0.f, 100.f)->description =
 		    "Left of noon: regular grains, faster as it turns. Right: random grains. At noon: none of its own "
 		    "(each Seed press or trigger makes one). With a clock into SEED: a divider (left) or a probability (right)";
 		configParam(SHAPE_PARAM, 0.f, 1.f, 0.5f, "Shape", "%", 0.f, 100.f)->description =
@@ -123,7 +126,7 @@ struct Spindrift : Module {
 			configParam(atts[i], 0.f, 1.f, 0.5f, attNames[i], "%", 0.f, 200.f, -100.f)->description = attDescription;
 		configParam(FEEDBACK_PARAM, 0.f, 1.f, 0.f, "Feedback", "%", 0.f, 100.f)->description =
 		    "How much of the output goes back into the buffer. In the synth: the wavetable bank";
-		configParam(DRYWET_PARAM, 0.f, 1.f, 0.f, "Dry/Wet", "%", 0.f, 100.f)->description =
+		configParam(DRYWET_PARAM, 0.f, 1.f, 0.5f, "Dry/Wet", "%", 0.f, 100.f)->description =
 		    "The input against the grains. In the synth: the voice against its grain cloud";
 		configParam(REVERB_PARAM, 0.f, 1.f, 0.f, "Reverb", "%", 0.f, 100.f)->description =
 		    "Beads' reverb: its amount and its time together";
@@ -235,7 +238,16 @@ struct Spindrift : Module {
 			spindrift::BufferHeader h;
 			std::vector<uint8_t> payload(spindrift::kBufferPayloadBytes);
 			uint32_t imageSeq = 1;
-			if (engine.bufferImage(h, payload.data(), &imageSeq)) {
+			// Frozen when asked but written during the copy (the freeze
+			// ended meanwhile, or ended and began again): the copy is
+			// discarded (SpindriftEngine::bufferImage). Try again while it is
+			// frozen anew; say so if it never holds still.
+			bool wasFrozen = false, got = false;
+			for (int attempt = 0; attempt < 3 && !got; attempt++) {
+				wasFrozen |= !(engine.ringSeq() & 1u);
+				got = engine.bufferImage(h, payload.data(), &imageSeq);
+			}
+			if (got) {
 				createPatchStorageDirectory();
 				std::string why;
 				if (spindrift::writeBufferFile(path, h, payload.data(), why)) {
@@ -245,6 +257,8 @@ struct Spindrift : Module {
 				}
 				WARN("Spindrift: cannot store the frozen buffer in %s: %s", path.c_str(), why.c_str());
 			}
+			else if (wasFrozen)
+				WARN("Spindrift: the frozen buffer changed while saving (the freeze ended); not stored");
 		}
 		stored_ = false;
 		// Rack's filesystem calls throw on failure (a file held open

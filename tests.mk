@@ -179,6 +179,14 @@ build/test/spindrift/test_threads: src/spindrift/test_threads.cpp build/test/spi
 		$(filter %.cpp %.o,$^) -o $@ || \
 		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Spindrift's thread test needs it" >&2; exit 1; }
 
+# Spindrift's save against the running engine: two real threads and a
+# deliberate (detected) race on the image's bytes, so the sanitizers ASan and
+# UBSan, not ThreadSanitizer, and -pthread.
+build/test/spindrift/test_save_race: src/spindrift/test_save_race.cpp build/test/spindrift/BeadsFirmware.o \
+		src/testing.hpp $(wildcard src/*.hpp src/spindrift/*.hpp) $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 $(SPINDRIFT_TEST_FLAGS) -Wall -Wextra $(TEST_WERROR) -pthread -Isrc -isystem src/spindrift $(filter %.cpp %.o,$^) -o $@
+
 # Spindrift's hostile-input test: the sanitizers, the counting operator new,
 # and a thread for each mode and quality (-pthread). No reference needed.
 build/test/spindrift/test_hostile: src/spindrift/test_hostile.cpp build/test/spindrift/BeadsFirmware.o \

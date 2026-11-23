@@ -33,10 +33,14 @@ struct spindrift {
 		Instance(const Instance&) = delete;
 		Instance& operator=(const Instance&) = delete;
 
+		// As Spindrift.cpp's configParam defaults (ruling R11: Density 0.65,
+		// Dry/Wet 0.5, so a new module makes a cloud).
 		void defaults() {
-			k.time = k.size = k.shape = k.pitch = k.density = 0.5f;
+			k.time = k.size = k.shape = k.pitch = 0.5f;
+			k.density = 0.65f;
 			k.timeAtt = k.sizeAtt = k.shapeAtt = k.pitchAtt = 0.5f;
-			k.feedback = k.dryWet = k.reverb = 0.f;
+			k.feedback = k.reverb = 0.f;
+			k.dryWet = 0.5f;
 			j = ::spindrift::Jacks();
 		}
 
@@ -150,10 +154,12 @@ struct spindrift {
 		// outputs 1.347, busy 1.385, dirty 0.620, delay 0.736, synth 0.230,
 		// each the one-instance figure; 16 instances cost less each),
 		// rounded up to the next 0.05; elsewhere three times the Mac's,
-		// provisional (not measured on x86-64).
+		// provisional (not measured on x86-64). Idle re-measured with the
+		// defaults of ruling R11 (Density 0.65, Dry/Wet 0.5: grains run on
+		// silence): 0.245, budget 0.4.
 		const BenchCase<Instance> cases[BENCH_CASES] = {
 			// name     inputs   Apple arm64  elsewhere
-			{"idle", idle, 0.35, 1.05},
+			{"idle", idle, 0.4, 1.2},
 			{"outputs", outputs, 2.05, 6.15},
 			{"busy", busy, 2.1, 6.3},
 			{"dirty", dirty, 0.95, 2.85},
