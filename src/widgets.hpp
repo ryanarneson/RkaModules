@@ -269,6 +269,44 @@ struct Toggle2 : app::SvgSwitch {
 	}
 };
 
+// Three-position switch, 3.6 x 6.4 mm: handle up at the param's minimum
+// (0), middle at 1, down at 2. Configure the param with configSwitch().
+struct Toggle3 : app::SvgSwitch {
+	int shown = -1;
+
+	Toggle3() {
+		shadow->opacity = 0.f;
+		showTheme();
+	}
+
+	void showTheme() {
+		const int dark = settings::preferDarkPanels ? 1 : 0;
+		if (dark == shown)
+			return;
+		shown = dark;
+		frames.clear();
+		frames.push_back(instrumentArt("Toggle3_0", dark));
+		frames.push_back(instrumentArt("Toggle3_1", dark));
+		frames.push_back(instrumentArt("Toggle3_2", dark));
+		// As addFrame() does for a first frame, then the frame for the value.
+		sw->setSvg(frames[0]);
+		box.size = sw->box.size;
+		fb->box.size = sw->box.size;
+		shadow->box.size = sw->box.size;
+		shadow->box.pos = math::Vec(0, sw->box.size.y * 0.10f);
+		fb->setDirty();
+		if (getParamQuantity()) {
+			ChangeEvent e;
+			onChange(e);
+		}
+	}
+
+	void step() override {
+		showTheme();
+		SvgSwitch::step();
+	}
+};
+
 // A 6.4 mm button: a dark body in a brass rim. Its cap lights cyan, on the
 // layer Rack keeps bright in a dimmed room, by as much as lit() says. A flat
 // disc of light with no halo, as JewelLight.

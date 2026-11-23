@@ -481,7 +481,7 @@ class Clearance(unittest.TestCase):
         for size, layers in g.ART_LAYERS.items():
             for layer in layers:
                 w, h, _ = art[layer]
-                if size == "toggle":
+                if size in ("toggle", "toggle3"):
                     self.assertLessEqual(math.hypot(w, h) / 2, g.RADII[size] + 1e-9, layer)
                 else:
                     self.assertAlmostEqual(w / 2, g.RADII[size], places=9, msg=layer)
@@ -927,7 +927,7 @@ class Artwork(unittest.TestCase):
     def test_dark_variants_exist_and_differ(self):
         files = g.component_files()
         for name in ("HeroKnob", "HeroKnob_bg", "DialKnob", "DialKnob_bg", "FaceKnob", "LimbKnob", "Atten", "Encoder", "BrassPort",
-                     "Toggle2_0", "Toggle2_1", "Cap", "JewelSeat", "Screw"):
+                     "Toggle2_0", "Toggle2_1", "Toggle3_0", "Toggle3_1", "Toggle3_2", "Cap", "JewelSeat", "Screw"):
             self.assertIn(f"{name}.svg", files)
             self.assertIn(f"{name}-dark.svg", files)
             self.assertNotEqual(files[f"{name}.svg"], files[f"{name}-dark.svg"], name)
