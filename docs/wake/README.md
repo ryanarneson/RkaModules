@@ -213,8 +213,9 @@ adds to the knob: 10 V is its full travel.
 
 ## Bypass
 
-Bypassed, the inputs pass straight to the outputs: either input alone
-goes to both.
+Bypassed, the inputs pass straight to the outputs, routed as when Wake
+is working: either input alone goes to both, and with nothing in R, L
+carries the average of the two. The style light stays lit.
 
 ## Other details
 

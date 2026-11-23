@@ -207,6 +207,18 @@ public:
 		r.frozen = frozen_;
 	}
 
+	// Bypassed (no engine state): the dry input by the same rules as
+	// process(): either jack alone is both sides, and with R unpatched L
+	// carries the average of the two. Not limited (Mix fully left, the
+	// same as process() for inputs within the limit's 8 V knee).
+	static void bypass(const WakeFrame& f, WakeResult& r) {
+		const float l = f.inLPatched ? finite(f.inL) : f.inRPatched ? finite(f.inR) : 0.f;
+		const float rr = f.inRPatched ? finite(f.inR) : l;
+		r.l = f.outRPatched ? l : 0.5f * (l + rr);
+		r.r = rr;
+		r.frozen = false;
+	}
+
 	// The longest echo at this sample rate, seconds.
 	float maxSeconds() const {
 		return tMax_;

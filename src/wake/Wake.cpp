@@ -192,21 +192,28 @@ struct Wake : Module {
 
 		outputs[L_OUTPUT].setVoltage(result.l);
 		outputs[R_OUTPUT].setVoltage(result.r);
+		setLights(result.frozen);
+	}
+
+	void setLights(bool frozen) {
 		lights[TAPE_LIGHT].setBrightness(style == 0 ? 1.f : 0.f);
 		lights[ANALOG_LIGHT].setBrightness(style == 1 ? 1.f : 0.f);
 		lights[DIGITAL_LIGHT].setBrightness(style == 2 ? 1.f : 0.f);
-		lights[FREEZE_LIGHT].setBrightness(result.frozen ? 1.f : 0.f);
+		lights[FREEZE_LIGHT].setBrightness(frozen ? 1.f : 0.f);
 	}
 
-	// Bypassed: the dry input, either jack alone to both sides. The style
-	// still shows.
+	// Bypassed: the dry input, routed as the working module routes it
+	// (rka::WakeEngine::bypass). The style still shows.
 	void processBypass(const ProcessArgs&) override {
-		const bool l = inputs[L_INPUT].isConnected(), r = inputs[R_INPUT].isConnected();
-		const float inL = l ? inputs[L_INPUT].getVoltageSum() : r ? inputs[R_INPUT].getVoltageSum() : 0.f;
-		const float inR = r ? inputs[R_INPUT].getVoltageSum() : inL;
-		outputs[L_OUTPUT].setVoltage(inL);
-		outputs[R_OUTPUT].setVoltage(inR);
-		lights[FREEZE_LIGHT].setBrightness(0.f);
+		frame.inLPatched = inputs[L_INPUT].isConnected();
+		frame.inRPatched = inputs[R_INPUT].isConnected();
+		frame.inL = inputs[L_INPUT].getVoltageSum();
+		frame.inR = inputs[R_INPUT].getVoltageSum();
+		frame.outRPatched = outputs[R_OUTPUT].isConnected();
+		rka::WakeEngine::bypass(frame, result);
+		outputs[L_OUTPUT].setVoltage(result.l);
+		outputs[R_OUTPUT].setVoltage(result.r);
+		setLights(false);
 	}
 };
 
