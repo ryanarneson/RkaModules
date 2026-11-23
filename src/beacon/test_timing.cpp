@@ -74,8 +74,12 @@ void typed() {
 		formatSeconds(t, buf, sizeof buf);
 		float back = 0.f;
 		const bool good = parseSeconds(buf, back);
-		const double digit = t < 0.01f ? 1e-4 : t < 1.f ? 1e-3 : t < 10.f ? 1e-2 : 1e-1;
+		const double digit = t < 0.1f ? 1e-4 : t < 1.f ? 1e-3 : t < 10.f ? 1e-2 : 1e-1;
 		CHECK(good && std::fabs(back - t) <= digit * 0.5 * 1.01, "knob %.2f: %g s shows \"%s\" reads %g", i / 100.f, t, buf, back);
+		// And from 10 ms up (three digits) the shown text is within 0.5 % of
+		// the time; below, one decimal of a millisecond.
+		CHECK(good && (t < 0.00995f || std::fabs(back - t) <= 0.005 * t * 1.01), "knob %.2f: %g s shows \"%s\", %.2f %% off", i / 100.f, t, buf,
+		      100.0 * std::fabs(back - t) / t);
 	}
 	char buf[32];
 	formatSeconds(0.001f, buf, sizeof buf);
@@ -87,7 +91,8 @@ void typed() {
 	formatSeconds(0.3f, buf, sizeof buf);
 	CHECK(!std::strcmp(buf, "300 ms"), "300 ms shows \"%s\"", buf);
 	struct { float t; const char* want; } fm[] = {
-		{0.0099f, "9.9 ms"}, {0.00996f, "10 ms"}, {0.0105f, "10 ms"}, {0.9994f, "999 ms"}, {0.9996f, "1.00 s"},
+		{0.0099f, "9.9 ms"}, {0.00996f, "10.0 ms"}, {0.010f, "10.0 ms"}, {0.0473f, "47.3 ms"}, {0.0999f, "99.9 ms"},
+		{0.09996f, "100 ms"}, {0.1004f, "100 ms"}, {0.9994f, "999 ms"}, {0.9996f, "1.00 s"},
 		{9.99f, "9.99 s"}, {9.996f, "10.0 s"}, {59.96f, "60.0 s"}, {0.f, "1.0 ms"}, {100.f, "60.0 s"},
 	};
 	for (auto& c : fm) {

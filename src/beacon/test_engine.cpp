@@ -278,6 +278,64 @@ void channel_count() {
 	CHECK(g.r.channels == 16, "capped at 16 (%d)", g.r.channels);
 }
 
+// Review minor 6, pinned: four channels of GATE held high in GATE mode,
+// Sustain CV unpatched; to HOLD the count is the Sustain CV's, so it
+// collapses to 1 (channels 2-4 are dropped, their outputs 0 V); back to
+// GATE the count is 4 again and channels 2-4 appear as new channels: idle at
+// 0 V, then, the gate being high, a fresh Attack from 0 V (each equal to a
+// lone new Voice); channel 1 keeps its one level throughout and attacks
+// from it.
+void hold_collapses_channels() {
+	Eng g;
+	g.f.params[F::SUSTAIN] = 0.6f;
+	g.f.gate.channels = 4;
+	for (int c = 0; c < 4; c++)
+		g.gate[c] = 5.f;
+	g.run(48000);   // into Sustain at 6 V on every channel
+	bool sustaining = g.r.channels == 4;
+	for (int c = 0; c < 4; c++)
+		sustaining &= std::fabs(g.r.out[c] - 6.f) < 1e-3f && g.r.stageGate[2][c] == 10.f;
+	CHECK(sustaining, "GATE: four channels sustain at 6 V (%d channels, ch 2 %g V)", g.r.channels, g.r.out[1]);
+
+	// HOLD: one channel; the slew input is 10 V x 0.6 = 6 V, so channel 1 stays.
+	g.f.params[F::MODE] = 2.f;
+	bool one = true, quiet = true, steady = true;
+	for (int i = 0; i < 4800; i++) {
+		g.step();
+		one &= g.r.channels == 1;
+		steady &= std::fabs(g.r.out[0] - 6.f) < 1e-3f;
+		for (int c = 1; c < 4; c++)
+			quiet &= g.r.out[c] == 0.f && g.r.inv[c] == 0.f && g.r.trig[c] == 0.f && g.r.stageGate[2][c] == 0.f;
+	}
+	CHECK(one, "HOLD with Sustain CV unpatched: the count collapses to 1 (%d)", g.r.channels);
+	CHECK(quiet, "HOLD: channels 2-4 are dropped, their outputs 0 V");
+	CHECK(steady, "HOLD: channel 1 keeps its level (%g V)", g.r.out[0]);
+
+	// Back to GATE, the gates still high.
+	const float before = g.r.out[0];
+	g.f.params[F::MODE] = 0.f;
+	Voice ref[4];
+	VoiceOut o;
+	long bad = 0;
+	bool firstLow = true;
+	for (int i = 0; i < 2400; i++) {
+		g.step();
+		if (i == 0) {
+			CHECK(g.r.channels == 4, "back in GATE: 4 channels (%d)", g.r.channels);
+			CHECK(g.stage() == ATTACK && std::fabs(g.r.out[0] - before) < 0.05f,
+			      "channel 1 attacks from its level (%s, %g V from %g V)", stageName(g.stage()), g.r.out[0], before);
+			for (int c = 1; c < 4; c++)
+				firstLow &= g.r.out[c] < 0.2f && g.r.stageGate[0][c] == 10.f && g.r.trig[c] == 10.f;
+		}
+		for (int c = 1; c < 4; c++) {
+			ref[c].process(refIn(g, c, GATE_MODE), o);
+			bad += !same(g.r, c, o);
+		}
+	}
+	CHECK(firstLow, "channels 2-4 restart from 0 V (Attack begun, TRIG high, under 0.2 V on the first sample)");
+	CHECK(bad == 0, "channels 2-4 each equal a new lone Voice from 0 V (%ld samples differ)", bad);
+}
+
 // PUSH gates every channel, GATE patched or not.
 void push() {
 	{
@@ -725,6 +783,7 @@ int main() {
 	mono_cv_to_all();
 	poly_cv_per_channel();
 	channel_count();
+	hold_collapses_channels();
 	push();
 	schmitt();
 	mode_switch();

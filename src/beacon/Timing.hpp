@@ -37,13 +37,15 @@ inline float stageKnob(float seconds) {
 	return fastLog2(seconds / kMinSeconds) / kLog2Span;
 }
 
-// "1.0 ms" .. "999 ms", "1.00 s" .. "9.99 s", "10.0 s" .. "60.0 s".
+// "1.0 ms" .. "99.9 ms", "100 ms" .. "999 ms", "1.00 s" .. "9.99 s",
+// "10.0 s" .. "60.0 s": from 10 ms up three digits, so the text is within
+// 0.5 % of the time.
 inline void formatSeconds(float seconds, char* buf, int n) {
 	if (!buf || n <= 0)
 		return;
 	const float s = seconds > kMinSeconds ? (seconds < kMaxSeconds ? seconds : kMaxSeconds) : kMinSeconds;
 	const float ms = s * 1000.f;
-	if (ms < 9.95f)
+	if (ms < 99.95f)
 		std::snprintf(buf, (std::size_t) n, "%.1f ms", (double) ms);
 	else if (ms < 999.5f)
 		std::snprintf(buf, (std::size_t) n, "%.0f ms", (double) ms);

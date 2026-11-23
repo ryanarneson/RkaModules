@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 
 namespace {
 
@@ -136,6 +137,68 @@ void sustain_zero() {
 	CHECK(std::fabs(u - 0.5f * (e.x[2] + e.x[3])) < 1e-6f && h == 0.3f, "sustain 0.3: dot at %g, %g (mid-span)", u, h);
 }
 
+// The Hold line scrolls by time, not frames: 3 s at 60 Hz and at 144 Hz
+// (and at a jittery 30-50 Hz) write the same number of points, and the
+// lines match within a frame's change of the level (a 1 V/s ramp).
+void hold_ring_time() {
+	const double T = 3.0;
+	auto run = [&](HoldRing& r, double fps, bool jitter) {
+		double t = 0.0;
+		int k = 0;
+		while (t <= T + 1e-9) {
+			r.sample(float(t), t);
+			const double dt = jitter ? 1.0 / (30.0 + 20.0 * ((k * 7919) % 13) / 12.0) : 1.0 / fps;
+			t += dt;
+			k++;
+		}
+	};
+	HoldRing a, b, c;
+	run(a, 60.0, false);
+	run(b, 144.0, false);
+	run(c, 0.0, true);
+	const long want = long(T * HoldRing::POINTS_PER_SECOND);
+	CHECK(std::labs(a.pushed - want) <= 1 && std::labs(b.pushed - want) <= 1 && std::labs(c.pushed - want) <= 1,
+	      "3 s writes %ld points at 60 Hz, %ld at 144 Hz, %ld jittery (want %ld)", a.pushed, b.pushed, c.pushed, want);
+	float worst = 0.f;
+	// The same point at both rates holds levels under a 60 Hz frame apart
+	// (the newest point follows the level to the last frame of its slot).
+	for (int i = 0; i < HoldRing::RING; i++)
+		worst = std::fmax(worst, std::fabs(a.at(i) - b.at(i)));
+	CHECK(a.pushed == b.pushed && worst <= 1.f / 60.f + 1e-4f, "60 Hz and 144 Hz lines differ by %g V at most (a 1 V/s ramp; %ld and %ld points)", worst, a.pushed, b.pushed);
+	CHECK(std::fabs(b.at(HoldRing::RING - 1) - 3.f) < 0.01f, "the newest point follows the level (%g)", b.at(HoldRing::RING - 1));
+	CHECK(std::fabs(a.at(0) - b.at(0)) < 0.05f && a.at(0) > 0.2f, "the same span of time is shown (oldest %g and %g V)", a.at(0), b.at(0));
+
+	// A start fills the line flat; a stall writes one ring at most; NaN and
+	// a backward clock add nothing; NaN volts read 0, the rest clamp.
+	HoldRing r;
+	r.sample(4.f, 10.0);
+	bool flat = true;
+	for (int i = 0; i < HoldRing::RING; i++)
+		flat &= r.at(i) == 4.f;
+	CHECK(flat && r.pushed == 0, "a start fills the line at the level");
+	r.sample(5.f, 1000.0);
+	CHECK(r.pushed == HoldRing::RING, "a 990 s stall writes one ring (%ld)", r.pushed);
+	r.sample(6.f, std::nan(""));
+	r.sample(6.f, 900.0);
+	CHECK(r.pushed == HoldRing::RING, "a NaN or backward clock writes nothing (%ld)", r.pushed);
+	{
+		// Between points (a 144 Hz frame is under a point) the newest point
+		// still shows the level now.
+		const long before = r.pushed;
+		r.sample(7.5f, 900.001);   // the clock is still at 1000 s: nothing
+		r.sample(-7.5f, 1000.005);
+		CHECK(r.pushed == before && r.at(HoldRing::RING - 1) == -7.5f && r.at(HoldRing::RING - 2) == 5.f,
+		      "between points the newest follows the level (%g, %ld points)", r.at(HoldRing::RING - 1), r.pushed - before);
+	}
+	r.sample(std::nanf(""), 1000.1);
+	CHECK(r.at(HoldRing::RING - 1) == 0.f, "NaN volts read 0");
+	r.sample(50.f, 1000.2);
+	CHECK(r.at(HoldRing::RING - 1) == 10.f, "volts clamp to 10");
+	r.stop();
+	r.sample(-2.f, 1001.0);
+	CHECK(r.at(0) == -2.f && r.at(HoldRing::RING - 1) == -2.f && r.pushed == 0, "a restart after stop() is flat again");
+}
+
 } // namespace
 
 int main() {
@@ -145,5 +208,6 @@ int main() {
 	live_stage_curve();
 	live_dot_on_line();
 	sustain_zero();
+	hold_ring_time();
 	return rkatest::finish("beacon/test_view");
 }

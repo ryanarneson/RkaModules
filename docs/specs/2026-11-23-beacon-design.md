@@ -159,6 +159,9 @@ one is out of scope.
 - **Attack, Decay and Release:** 1 ms to 60 s on an exponential knob, so
   each decade takes the same share of the turn; noon is about 245 ms. The
   tooltip shows ms or s, and a typed time sets it (as Wake's Time).
+  *Final review:* three digits from 10 ms up ("10.0 ms", "47.3 ms",
+  "245 ms", "1.00 s", "10.0 s"), so the text is within 0.5 % of the
+  time; below 10 ms one decimal ("4.7 ms").
   Defaults: the builder's call, tuned by ear (Listening stop).
 - **CV:** added to the knob, 10 V for the knob's whole travel, no
   attenuverter (as cèis). The result is held between 1 ms and 60 s.
@@ -260,6 +263,9 @@ the slew, so the switch itself never moves the output:
   line of the output, or the input and output levels as two marks; the
   builder proposes which in the test build. *Designer's call* that it
   should show something useful there rather than a stale envelope.
+  *Built:* the scrolling line, sampled at 60 points a second of the UI's
+  frame clock (not once per frame), so it scrolls at the same speed at 60
+  and 144 Hz.
 - **Polyphony:** channel 1.
 - **Hand-off:** the engine publishes channel 1's stage and phase (and
   level, and the running stage's start and goal) for the window,
@@ -281,7 +287,9 @@ the slew, so the switch itself never moves the output:
 ### Bypass and other
 
 - Bypass: Rack's default (outputs silent); there is nothing to pass
-  through. Hold mode's slew has no bypass route either.
+  through. Hold mode's slew has no bypass route either. *Final review:*
+  bypass and un-bypass reset every voice to idle at 0 V and put the
+  lights out, so the window shows idle and no Release runs on un-bypass.
 - Saved state: the switch is a param, so nothing goes through
   `dataToJson` unless the builder adds something.
 - Sample rate changes keep the stage and level; times stay in seconds.
@@ -303,7 +311,13 @@ As every module (CLAUDE.md, TESTING.md "Adding a module"):
   README table, CHANGELOG, roadmap and `docs/future/beacon.md` marked
   built.
 - A three-position switch is a new component in `src/widgets.hpp`;
-  build it from the existing toggle.
+  build it from the existing toggle. *Final review:* it steps by
+  direction, not as a stock switch (which wraps 0 -> 1 -> 2 -> 0, so Trig
+  to Gate would pass through Hold): a click on the upper half moves it one
+  position up (toward Gate), on the lower half one down (toward Hold),
+  held at the ends; a vertical drag moves it too; one gesture is one undo
+  step. The decision is in the Rack-free `src/Toggle3Step.hpp`, tested in
+  `test_switch`.
 - **The window:** a widget in `src/widgets.hpp` (or `src/beacon/`), as
   Eddy's `TapeWindow` and Spindrift's `GrainWindow`; its geometry (stage
   widths on the log axis, the curve's points, where the dot goes) in a

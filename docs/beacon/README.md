@@ -13,7 +13,10 @@ start, and a window that draws the envelope with a dot riding it.
 From the top:
 
 - The **window**: the envelope the knobs make, lettered A D S R.
-- **SHAPE**, and the **GATE / TRIG / HOLD** switch.
+- **SHAPE**, and the **GATE / TRIG / HOLD** switch. Click its upper half
+  to move it up one position, its lower half to move it down one, or drag
+  it; it stops at the ends, so going from Trig to Gate never passes
+  through Hold.
 - **A**, **D**, **S** and **R**, each with its stage light, over its
   **CV** input and its stage **gate** output (on the ivory tiles).
 - **GATE** and **RETRIG**; the push button under GATE.
@@ -31,8 +34,9 @@ From the top:
 - **Hold**: the envelope stops and Beacon is a slew limiter. The
   **Sustain CV** input is the signal; the Sustain knob adds 0 to 10 V.
   OUT follows it, rising at Attack's rate and falling at Decay's (the knob
-  sets the time for a 10 V move). Release, GATE, RETRIG and the button do
-  nothing here.
+  sets the time for a 10 V move). Release, Shape, GATE, RETRIG and the
+  button do nothing here.
+
   In Hold the A, D and S gates mean "rising", "falling" and "caught up";
   an input that moves slower than the slew reads as S.
 
@@ -149,7 +153,9 @@ from a mono one. Every output carries the channel count.
 
 ## Other
 
-- Bypass: the outputs fall silent.
+- Bypass: the outputs fall silent, and every envelope goes to rest at
+  0 V; on un-bypass nothing resumes (a gate still high starts a new
+  Attack from 0 V).
 - Initialize: every envelope at rest at 0 V.
 - A sample rate change keeps every envelope where it is.
 - Saved with the patch: the knobs and the switch.

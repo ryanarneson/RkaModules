@@ -2,9 +2,9 @@
 // Beacon's window geometry: where the four stages sit across the window and
 // the curve drawn through them. Rack-free, allocation-free; the module calls
 // layoutEnvelope on the UI thread each frame (std::log10 is fine here).
-#include "beacon/Curve.hpp"
-#include "beacon/Timing.hpp"
-#include "beacon/Voice.hpp"
+#include "Curve.hpp"
+#include "Timing.hpp"
+#include "Voice.hpp"
 
 #include <cmath>
 
@@ -94,6 +94,54 @@ inline EnvelopeLayout layoutEnvelope(const ViewParams& p) {
 	e.x[4] = 1.f;
 	return e;
 }
+
+// The Hold line: channel 1's output, a point every 1 / POINTS_PER_SECOND of
+// the UI's frame clock (not one per frame), so it scrolls at the same speed
+// at 60 and 144 Hz. sample() is called once a frame with the frame's
+// timestamp; the newest point follows the level until the next is due.
+// A start (or a restart after stop()) fills the ring flat at the level. A
+// stall is held to one ring's worth; a NaN or backward clock adds nothing.
+struct HoldRing {
+	static constexpr int RING = 160;
+	static constexpr double POINTS_PER_SECOND = 60.0;
+
+	float ring[RING] = {};
+	int pos = 0;        // the next point to write; the newest is pos - 1
+	long pushed = 0;    // points written since the start, for tests
+	bool live = false;
+	double last = 0.0, acc = 0.0;
+
+	void sample(float level, double now) {
+		const float v = level == level ? (level < -10.f ? -10.f : level > 10.f ? 10.f : level) : 0.f;
+		if (!live) {
+			for (int i = 0; i < RING; i++)
+				ring[i] = v;
+			pos = 0;
+			pushed = 0;
+			acc = 0.0;
+			last = now;
+			live = now == now;
+			return;
+		}
+		const double dt = now - last;
+		if (!(dt > 0.0))
+			return;      // NaN, or the clock went back: nothing (last kept)
+		last = now;
+		acc += (dt < RING / POINTS_PER_SECOND ? dt : RING / POINTS_PER_SECOND) * POINTS_PER_SECOND;
+		int n = int(acc + 1e-6);   // a frame clock at exactly 60 Hz sums to 0.99999..
+		acc = n <= acc ? acc - n : 0.0;
+		for (; n > 0; n--) {
+			ring[pos] = v;
+			pos = (pos + 1) % RING;
+			pushed++;
+		}
+		ring[(pos + RING - 1) % RING] = v;
+	}
+	void stop() { live = false; }
+
+	// Point i, 0 the oldest, RING - 1 the newest.
+	float at(int i) const { return ring[(pos + i) % RING]; }
+};
 
 } // namespace beacon
 } // namespace rka

@@ -190,7 +190,23 @@ struct Beacon : Module {
 		outputs[INV_OUTPUT].writeVoltages(result.inv);
 	}
 
-	// Bypass: Rack's default (outputs silent); nothing to pass through.
+	// Bypass: Rack's default (outputs silent); nothing to pass through. On
+	// bypass every voice goes idle at 0 V and the lights out (the window
+	// then shows idle), and again on un-bypass, so no envelope resumes or
+	// releases from where it was; a gate still high then starts Attack from
+	// 0 V. Rack calls these with the engine held, never during process().
+	void bypassReset() {
+		engine.reset();
+		lightHold.reset();
+		for (int k = 0; k < 4; k++)
+			lights[ATTACK_LIGHT + k].setBrightness(0.f);
+	}
+	void onBypass(const BypassEvent& e) override {
+		bypassReset();
+	}
+	void onUnBypass(const UnBypassEvent& e) override {
+		bypassReset();
+	}
 
 	// What the window draws, channel 1's: the knobs with channel 1's CVs.
 	// Read on the UI thread (the ports' floats as Rack's own scopes read
@@ -227,19 +243,16 @@ struct EnvelopeWindowView {
 // over its span from its true start to its goal (liveStageHeight), with the
 // dot on it; Sustain running: its span bright (dim at a 0 V sustain, the dot
 // then at the end of the line); A D S R under the spans, the running letter
-// bright. Hold: a scrolling line of channel 1's output (+-10 V), one point
-// per UI frame, its ring kept here (UI thread only). It knows nothing of the
-// engine: `source` fills an EnvelopeWindowView, or returns false to draw
-// nothing. No mouse.
+// bright. Hold: a scrolling line of channel 1's output (+-10 V), 60 points
+// a second of the UI's frame clock (HoldRing), kept here (UI thread only).
+// It knows nothing of the engine: `source` fills an EnvelopeWindowView, or
+// returns false to draw nothing. No mouse.
 struct EnvelopeWindow : widget::Widget {
 	std::function<bool(EnvelopeWindowView&)> source;
 	// Points along the curve per stage.
 	static constexpr int CURVE_POINTS = 48;
-	// The Hold line: one level per UI frame, newest at `ringPos - 1`.
-	static constexpr int RING = 160;
-	float ring[RING] = {};
-	int ringPos = 0;
-	bool ringLive = false;
+	// The Hold line.
+	rka::beacon::HoldRing ring;
 
 	float pad() const {
 		return mm2px(0.8f);
@@ -268,21 +281,13 @@ struct EnvelopeWindow : widget::Widget {
 	}
 
 	void step() override {
-		// The Hold line is sampled once per frame, here, not in draw (which
-		// may run more than once a frame).
+		// The Hold line is sampled here, once per frame, not in draw (which
+		// may run more than once a frame), on the frame's timestamp.
 		EnvelopeWindowView v;
-		if (source && source(v) && v.hold) {
-			const float level = std::isfinite(v.level) ? math::clamp(v.level, -10.f, 10.f) : 0.f;
-			if (!ringLive) {
-				for (int i = 0; i < RING; i++)
-					ring[i] = level;
-				ringLive = true;
-			}
-			ring[ringPos] = level;
-			ringPos = (ringPos + 1) % RING;
-		}
+		if (source && source(v) && v.hold)
+			ring.sample(std::isfinite(v.level) ? v.level : 0.f, APP->window->getFrameTime());
 		else
-			ringLive = false;
+			ring.stop();
 		Widget::step();
 	}
 
@@ -403,8 +408,9 @@ struct EnvelopeWindow : widget::Widget {
 		}
 	}
 
-	// Hold: the output over the last RING frames, +-10 V filling the plot
-	// and the letters' band; 0 V a faint line; the newest point a dot.
+	// Hold: the output over the last HoldRing::RING points (2.7 s), +-10 V
+	// filling the plot and the letters' band; 0 V a faint line; the newest
+	// point a dot.
 	void drawHold(NVGcontext* vg) {
 		const NVGcolor signal = RkaTheme::SIGNAL;
 		const float top = plotTop(), bottom = box.size.y - pad() - mm2px(0.8f);
@@ -412,9 +418,10 @@ struct EnvelopeWindow : widget::Widget {
 		auto yOf = [&](float volts) { return mid - volts * 0.1f * half; };
 		line(vg, plotLeft(), mid, plotRight(), mid, nvgTransRGBAf(signal, 0.18f), 0.6f);
 		nvgBeginPath(vg);
-		for (int i = 0; i < RING; i++) {
-			const float x = plotLeft() + float(i) / (RING - 1) * (plotRight() - plotLeft());
-			const float y = yOf(ring[(ringPos + i) % RING]);
+		const int n = rka::beacon::HoldRing::RING;
+		for (int i = 0; i < n; i++) {
+			const float x = plotLeft() + float(i) / (n - 1) * (plotRight() - plotLeft());
+			const float y = yOf(ring.at(i));
 			if (i == 0)
 				nvgMoveTo(vg, x, y);
 			else
@@ -425,7 +432,7 @@ struct EnvelopeWindow : widget::Widget {
 		nvgLineJoin(vg, NVG_ROUND);
 		nvgStroke(vg);
 		nvgBeginPath(vg);
-		nvgCircle(vg, plotRight(), yOf(ring[(ringPos + RING - 1) % RING]), mm2px(0.75f));
+		nvgCircle(vg, plotRight(), yOf(ring.at(n - 1)), mm2px(0.75f));
 		nvgFillColor(vg, signal);
 		nvgFill(vg);
 		std::shared_ptr<window::Font> f = font();
