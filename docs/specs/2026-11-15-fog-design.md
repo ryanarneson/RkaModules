@@ -119,8 +119,9 @@ before code depends on the ids, as with Sluice.
 ## Controls and behaviour
 
 Every knob defaults to noon (the user's ruling for Mix: "like the other
-knobs"). CV: ±5 V at full attenuverter sweeps the knob's whole range,
-added to the knob and clamped, as on Fathom. Attenuverters default to 0.
+knobs"). CV: at full attenuverter 10 V of CV spans the knob's whole range,
+added to the knob and clamped, as on Fathom (so ±5 V sweeps the whole range
+only from noon). Attenuverters default to 0.
 
 ### Visibility: decay time (the hero)
 
@@ -159,11 +160,13 @@ The character of the space, from close to vast.
 - **Fully left:** a close space whose reflections blur together quickly.
 - **Fully right:** vast, with distinct slow echoes before the wash fills
   in.
-- **Changes:** Size is slewed, over about 100 ms, so that moving it gives
-  the gentle pitch swoop of a delay changing length, as Supermassive's
-  Delay does, rather than clicks. Fast CV on Size is therefore a pitch
+- **Changes:** Size is slewed (a 30 ms one-pole, settling in about
+  100 ms), so that moving it gives the gentle pitch swoop of a delay
+  changing length, as Supermassive's Delay does, rather than clicks. Fast CV on Size is therefore a pitch
   effect, and the manual says so.
 - **Decay:** Size does not change the decay time; Visibility sets that.
+  Ruled acceptable: CLEAR at Size fully right measures about 24 % short
+  of its T60, because its echoes are so sparse.
 
 ### Damp: how dark the tail gets
 
@@ -264,7 +267,7 @@ each knob moves its quantity the right way, by at least a stated amount.
 | **HAAR** | dense, smooth, enormous wash; the default | Supermassive's darker modes | the most lines, deep diffusion, long base lengths |
 | **FRET** | dark and slow-building; the space rises behind the sound | Valhalla Room LV-426 | heavier built-in damping, a slower Bloom curve, low-mid emphasis |
 | **SMOKE** | echo-led: distinct repeats that blur into the wash | Supermassive's echo modes, Greyhole | fewer, longer lines, with diffusion inside the loop after each repeat (as Greyhole puts it) |
-| **ICE** | sparse and glassy, with a faint octave-up shimmer in the tail | shimmer reverbs | brighter damping, and a +12-semitone shimmer in two parts: a small cascade in the feedback, and a fixed feed-forward octave on the wet that is audible at every Visibility |
+| **ICE** | sparse and glassy, with a quiet octave-up shimmer in the tail (about 11 to 13.5 dB under the note) | shimmer reverbs | brighter damping, and a +12-semitone shimmer in two parts: a small cascade in the feedback, and a fixed feed-forward octave on the wet that is audible at every Visibility |
 
 - **Names:** the modes are named for kinds of sea fog (haar, sea fret,
   sea smoke, ice fog). ADVECTION was renamed ICE to keep it short.
@@ -355,8 +358,10 @@ Visibility: full wet matched dry at every Visibility and Size.)
   - Its state starts clean whenever the engine starts clean: on reset, a
     new sample rate, a mode change and a wake from sleep. The sleep test
     reads the wet before it.
-- **The cost:** a short sound (a ping, a pluck) is quieter at DENSE than
-  at CLEAR, because its energy is spread over a much longer tail.
+- **Short sounds:** a short sound (a ping, a pluck) is about 11 dB louder
+  at DENSE than at CLEAR. (Under the old matched level it was quieter at
+  DENSE, its energy spread over a much longer tail; scaling with the decay
+  time reverses that.)
 - **If revisited:** this could later become a menu choice.
 
 ### Safety
@@ -374,6 +379,15 @@ Visibility: full wet matched dry at every Visibility and Size.)
 - **Bad values:** NaN or infinity on an input becomes 0 where it enters,
   and the network can never hold a NaN.
 - **Denormals:** handled so that a decaying tail never slows the CPU.
+
+### Sleep
+
+Once the input and the wet tail have both stayed under 10 µV (the engine's
+QUIET threshold) for a hold of twice the longest delay ring (at least
+0.25 s; about 1.4 s in every mode), Fog stops processing the network and
+wakes on the next sound. The wet is
+silent while it sleeps; the dry still passes at any Mix below full wet. The
+leveller's state starts clean on waking.
 
 ### Bypass
 

@@ -54,7 +54,7 @@ is a close space whose reflections blur at once. Fully right is vast: at
 long Visibility it is a wash, and at CLEAR it gives sparse, separate echoes
 before anything fills in. Size does not change the decay time or the level.
 
-Size is slewed (about 100 ms). **Fast CV on Size is a pitch effect**: the
+Size is slewed: it settles about 100 ms after a change. **Fast CV on Size is a pitch effect**: the
 lines change length, so the tail swoops like a Doppler pass. Use a slow CV
 for movement, or a fast one on purpose.
 
@@ -68,7 +68,7 @@ low-frequency decay. FRET is darker than HAAR at every setting, ICE brighter.
 ### Bloom: how the wash arrives
 
 How slowly the wash swells in after a sound. Bloom shapes the signal fed
-into the network: about under 50 ms fully left, about 1 s at noon and
+into the network: under about 50 ms fully left, about 1 s at noon and
 about 4 s fully right. On the whole output it measures roughly 1.2 to 1.7 s
 at noon, because the network builds up as well, more so at long Visibility.
 The dry sound is never delayed.
@@ -87,8 +87,10 @@ only, as an equal-power crossfade.
 
 ### CV and attenuverters
 
-Each CV is added to its knob, and the attenuverter scales it: at full, +/-5 V
-sweeps the knob's whole range, and the sum is clamped to the range. The
+Each CV is added to its knob, and the attenuverter scales it: at full, 10 V
+of CV is the knob's whole range, and the sum is clamped to the range. So
++/-5 V sweeps the whole range only with the knob at noon; from anywhere else
+one end of the sweep is clipped. The
 attenuverter defaults to 0, so an unpatched or unscaled CV does nothing. A
 polyphonic CV uses its first channel only. (Audio inputs are summed.)
 
@@ -132,8 +134,9 @@ Right-click the panel.
   matched to the dry at noon Visibility and then follows 10 log10(T60 /
   5.66 s) dB: CLEAR is about 11.5 dB quieter than noon, and a long tail is
   louder. Size is level-neutral, and loudness does not dip as Mix goes up.
-- **Cost:** a short sound (a ping, a pluck) is quieter at DENSE than at
-  CLEAR, because its energy is spread over a much longer tail.
+- **Short sounds** (a ping, a pluck) are louder at DENSE than at CLEAR,
+  by about 11 dB: the wet level rises with the decay time, so a long tail
+  is not turned down to match a short one.
 - **A wet leveller** turns loud, building drones down smoothly instead of
   clipping them. At long settings, a loud drone's wet sits near the noon
   level. It acts on the wet only, never touches quiet material, and holds
