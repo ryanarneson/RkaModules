@@ -42,8 +42,17 @@ template <class Fs>
 inline void saveBuffer(const SpindriftEngine& engine, const std::string& path, BufferRecord& rec, Fs& fs) {
 	if (engine.settings.keepFrozen.load(std::memory_order_relaxed)) {
 		const uint32_t seq = engine.ringSeq();
-		if (!(seq & 1u) && rec.stored && seq == rec.seq && fs.exists(path))
-			return;
+		if (!(seq & 1u) && rec.stored && seq == rec.seq) {
+			bool there = false;
+			try {
+				there = fs.exists(path);
+			}
+			catch (std::exception& ex) {
+				fs.warn("Spindrift: cannot look for " + path + " (" + ex.what() + "); writing it again");
+			}
+			if (there)
+				return;
+		}
 		BufferHeader h;
 		std::vector<uint8_t> payload(kBufferPayloadBytes);
 		uint32_t imageSeq = 1;
@@ -57,14 +66,23 @@ inline void saveBuffer(const SpindriftEngine& engine, const std::string& path, B
 			got = engine.bufferImage(h, payload.data(), &imageSeq);
 		}
 		if (got) {
-			fs.makeDir();
+			bool dir = true;
+			try {
+				fs.makeDir();
+			}
+			catch (std::exception& ex) {
+				dir = false;
+				fs.warn("Spindrift: cannot create the patch storage folder for " + path + ": " + ex.what() +
+				        "; the frozen buffer is not stored");
+			}
 			std::string why;
-			if (writeBufferFile(path, h, payload.data(), why)) {
+			if (dir && writeBufferFile(path, h, payload.data(), why)) {
 				rec.stored = true;
 				rec.seq = imageSeq;
 				return;
 			}
-			fs.warn("Spindrift: cannot store the frozen buffer in " + path + ": " + why);
+			if (dir)
+				fs.warn("Spindrift: cannot store the frozen buffer in " + path + ": " + why);
 		}
 		else if (wasFrozen)
 			fs.warn("Spindrift: the frozen buffer changed while saving (the freeze ended); not stored");

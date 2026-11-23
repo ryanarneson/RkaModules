@@ -18,6 +18,8 @@
 //   (BufferSave.hpp's saveBuffer, as onSave runs it) removes buffer.bin and
 //   the patch says not frozen; the same engine frozen in grain mode
 //   afterwards is kept (the test can tell).
+// - save_fs_throws: the filesystem's calls throwing (Rack's system:: calls
+//   do) never fail the save; each failure is warned.
 // - saved_state_*: the JSON fields for the defaults (the golden map), a
 //   round trip of every field away from its default, the golden version 1
 //   map, and every way a field can be wrong.
@@ -27,6 +29,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -373,6 +376,65 @@ void synth_frozen_not_kept() {
 	std::remove(path.c_str());
 }
 
+// Each of the filesystem's calls throwing, in turn.
+struct ThrowFs : TestFs {
+	bool throwExists = false, throwMakeDir = false, throwRemove = false;
+	bool exists(const std::string& path) {
+		if (throwExists)
+			throw std::runtime_error("exists failed");
+		return TestFs::exists(path);
+	}
+	void makeDir() {
+		if (throwMakeDir)
+			throw std::runtime_error("makeDir failed");
+	}
+	void remove(const std::string& path) {
+		if (throwRemove)
+			throw std::runtime_error("remove failed");
+		TestFs::remove(path);
+	}
+};
+
+void save_fs_throws() {
+	std::unique_ptr<SpindriftEngine> e = makeEngine(0x52);
+	e->settings.synth.store(spindrift::SYNTH_NEVER);
+	run(*e, wetKnobs(), stereo(), 0, kRate);
+	e->buttons().freezePress();
+	run(*e, wetKnobs(), stereo(), kRate, kRate / 10);
+	CHECK(e->frozen() && e->ringSeq() % 2 == 0, "frozen, stable");
+	const std::string path = scratch("throws.bin");
+	std::remove(path.c_str());
+	for (int which = 0; which < 3; which++) {
+		ThrowFs fs;
+		spindrift::BufferRecord rec;
+		// The skip test (stored, same number) asks exists(); makeDir before
+		// a write; remove when not kept.
+		if (which == 0) {
+			fs.throwExists = true;
+			rec.stored = true;
+			rec.seq = e->ringSeq();
+		}
+		if (which == 1)
+			fs.throwMakeDir = true;
+		if (which == 2) {
+			fs.throwRemove = true;
+			e->settings.keepFrozen.store(false);
+			writeRaw(path, std::vector<uint8_t>(8, 1));
+		}
+		bool threw = false;
+		try {
+			spindrift::saveBuffer(*e, path, rec, fs);
+		}
+		catch (std::exception&) {
+			threw = true;
+		}
+		CHECK(!threw, "case %d: the save does not throw", which);
+		CHECK(!fs.warnings.empty(), "case %d: the failure is warned", which);
+		e->settings.keepFrozen.store(true);
+		std::remove(path.c_str());
+	}
+}
+
 // Loads `h` (with the frozen image's payload) into a new engine whose patch
 // says `q`: refused, and the engine is an empty, unfrozen one.
 void expectRejected(const BufferHeader& h, const std::vector<uint8_t>& payload, spindrift::Quality q, const char* what) {
@@ -600,6 +662,7 @@ int main() {
 	round_trip();
 	rejects();
 	synth_frozen_not_kept();
+	save_fs_throws();
 	saved_state_defaults();
 	saved_state_round_trip();
 	saved_state_golden_v1();
