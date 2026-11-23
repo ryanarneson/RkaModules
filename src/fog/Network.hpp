@@ -112,9 +112,11 @@
 //   the pitch still swings tens of cents), capped per line at 0.45 of its
 //   shortest length (Size 0) so a read never leaves it. Zero depth is
 //   exactly static. The depth follows its target through a 40 ms one-pole
-//   (per sample while it moves, then not at all), so a Drift step or a rate
-//   switch does not jump the reads (unsmoothed, Drift noon to 0 moved them by
-//   up to 96 samples at once: a 2 V step on a 1 V sine). The rate is not
+//   (per sample while it moves, then not at all: onePoleToward lands it on
+//   the target once within 1e-3 samples or once its step is below float
+//   precision), so a Drift step or a rate switch does not jump the reads
+//   (unsmoothed, Drift noon to 0 moved them by up to 96 samples at once: a
+//   2 V step on a 1 V sine). The rate is not
 //   smoothed: the phase is continuous, so a new rate bends the read's path
 //   but never moves it (test_engine's drift_step_no_click).
 // - Size: scale = 3^(2 Size - 1) (1/3x-3x of the base lengths), slewed by
@@ -147,6 +149,23 @@
 
 namespace rka {
 namespace fog {
+
+// One step of a one-pole from x toward target (coef in (0, 1]). It lands on
+// the target once within tol, or once its step is too small to move x: a
+// float step under half an ulp of x does nothing, so a plain one-pole stalls
+// short of a large target for good (issue #11). The second test is relative,
+// 2^-23 |x|, at least half an ulp of x, so it catches every stall and
+// otherwise leaves the path as it was.
+inline float onePoleToward(float x, float target, float coef, float tol) {
+	const float d = target - x;
+	if (d <= tol && d >= -tol)
+		return target;
+	const float step = d * coef;
+	const float tiny = 1.1920929e-7f * (x < 0.f ? -x : x);
+	if (step <= tiny && step >= -tiny)
+		return target;
+	return x + step;
+}
 
 struct Network {
 	static const int MAX_LINES = 16;
@@ -459,13 +478,8 @@ struct Network {
 		if (depthMoving) {
 			bool moving = false;
 			for (int i = 0; i < n; i++) {
-				const float d = modDepthTarget[i] - modDepth[i];
-				if (d > 1e-3f || d < -1e-3f) {
-					modDepth[i] += d * depthCoef;
-					moving = true;
-				}
-				else
-					modDepth[i] = modDepthTarget[i];
+				modDepth[i] = onePoleToward(modDepth[i], modDepthTarget[i], depthCoef, 1e-3f);
+				moving = moving || modDepth[i] != modDepthTarget[i];
 			}
 			depthMoving = moving;
 		}

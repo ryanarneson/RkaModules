@@ -392,6 +392,53 @@ void driftDepthPerRate() {
 	}
 }
 
+// After a Drift step the swing's 40 ms one-pole lands on its target and
+// reports itself settled (depthMoving false) within a bounded time, at 48
+// and 96 kHz, at both drift rates, up and down and between two nonzero
+// depths. A float one-pole stalls short of a large target once its step is
+// under half an ulp (0.03 to 0.47 samples at 48 kHz, issue #11); it must not
+// run the per-line update for good.
+void driftDepthSettles() {
+	const float rates[] = {48000.f, 96000.f};
+	const float steps[][2] = {{0.f, 1.f}, {1.f, 0.f}, {0.3f, 1.f}, {1.f, 0.55f}};
+	const double bound = 1.0; // s: 25 time constants
+	for (float hz : rates) {
+		for (int rate = 0; rate < 2; rate++) {
+			for (float size : {0.f, 1.f}) {
+				double worst = 0;
+				for (const auto& st : steps) {
+					Network net;
+					net.allocate(hz);
+					net.configure(rka::fog::voicing(rka::fog::HAAR), hz);
+					net.setControls(0.5f, size, 0.f, st[0], rate);
+					float l, r;
+					for (int i = 0; i < 16; i++)
+						net.process(0.f, 0.f, l, r);
+					CHECK(!net.depthMoving, "%g Hz: Drift %g did not start settled", hz, st[0]);
+					net.setControls(0.5f, size, 0.f, st[1], rate);
+					CHECK(net.depthMoving, "%g Hz: the step Drift %g -> %g did not move the swing", hz, st[0], st[1]);
+					const int limit = (int) (bound * hz);
+					int k = 0;
+					while (net.depthMoving && k < limit) {
+						net.process(0.f, 0.f, l, r);
+						k++;
+					}
+					bool onTarget = true;
+					for (int i = 0; i < net.n; i++)
+						onTarget = onTarget && net.modDepth[i] == net.modDepthTarget[i];
+					CHECK(!net.depthMoving && onTarget,
+					      "%g Hz, %s, Size %g: Drift %g -> %g still moving after %g s (line 0 at %.6g of %.6g)", hz,
+					      rate ? "Very slow" : "Slow", size, st[0], st[1], bound, net.modDepth[0], net.modDepthTarget[0]);
+					const double t = (double) k / hz;
+					worst = t > worst ? t : worst;
+				}
+				std::printf("  drift_depth_settles %6.0f Hz %-9s Size %g: settled within %.3f s\n", hz,
+				            rate ? "Very slow" : "Slow", size, worst);
+			}
+		}
+	}
+}
+
 // Every delay line's write position sits in its own L1 cache set (index
 // (pos >> 4) & 63), so the 59 lines (the diffuser's 32, the network's 16,
 // SMOKE's 8 in-loop allpasses and ICE's three shifters) do not evict each other as
@@ -451,6 +498,7 @@ int main() {
 	driftZeroIsStatic();
 	driftMoves();
 	driftDepthPerRate();
+	driftDepthSettles();
 	const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 	std::printf("  test_network ran in %.1f s\n", secs);
 	return rkatest::finish("test_network");

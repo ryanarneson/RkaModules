@@ -350,10 +350,8 @@ struct FogEngine {
 			// samples while it moves.
 			if (makeupSnap)
 				makeupSize = size;
-			else if (makeupSize != size) {
-				const float d = size - makeupSize;
-				makeupSize = (d > 1e-5f || d < -1e-5f) ? makeupSize + d * makeupCoef : size;
-			}
+			else if (makeupSize != size)
+				makeupSize = fog::onePoleToward(makeupSize, size, makeupCoef, 1e-5f); // lands exactly on size
 			const bool sizeDue = makeupSize != makeupSizeUsed && ++makeupCount >= 32;
 			if (makeupSnap || net.visSm != makeupVis || sizeDue) {
 				makeupCount = 0;
