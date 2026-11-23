@@ -148,6 +148,18 @@
         "Delay"
       ],
       "keywords": "tape loop looper sampler sound on sound dub wear varispeed reverse wav ambient"
+    },
+    {
+      "slug": "Spindrift",
+      "name": "Spindrift",
+      "description": "Mutable Instruments Beads, its own code in the Instrument look: a granular cloud, delay mode, four qualities, Beads' reverb and wavetable synth, and a window on the grains; the frozen buffer kept with the patch",
+      "tags": [
+        "Delay",
+        "Reverb",
+        "Oscillator",
+        "Effect"
+      ],
+      "keywords": "granular grains cloud beads mutable instruments clouds freeze delay reverb wavetable texture ambient"
     }
   ]
 }

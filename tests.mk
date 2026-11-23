@@ -7,10 +7,7 @@
 # Set by the Makefile; on its own, every folder of src/ that has tests.
 MODULES ?= $(patsubst src/%/,%,$(sort $(dir $(wildcard src/*/test_*.cpp))))
 
-# Spindrift's tests (its vendored Beads against the reference) run before
-# the module joins the plugin's MODULES; once it has, this is a no-op.
-TEST_MODULES = $(sort $(MODULES) spindrift)
-TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(TEST_MODULES:%=src/%/test_*.cpp)))
+TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_*.cpp)))
 # The ThreadSanitizer tests (Eddy's test_threads) run after the rest. Where
 # the sanitizer cannot start (GCC's runtime on a Linux kernel whose address
 # randomisation is wider than it handles, vm.mmap_rnd_bits over 28, or under

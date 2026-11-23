@@ -29,21 +29,25 @@
 // - Controls (knobs, CVs, the jacks' patched state) are read once a block,
 //   at the Rack sample that completes it; SEED and FREEZE per frame.
 //
-// Threads: the constructor, allocate() and setSampleRate() run off the audio
-// thread, never during process(); everything else on the engine's thread,
-// but for view() and overview(), which any thread may read (GrainView.hpp,
-// Overview.hpp: relaxed atomics) for the window.
-// `settings` is written by the menu (UI thread) and read once a block; the
-// Quality long press writes settings.gain from the engine's thread, as Beads
-// does (word-sized, a torn read is impossible).
+// Threads: the constructor, allocate(), setSampleRate() and
+// loadBufferImage() run off the audio thread, never during process();
+// everything else on the engine's thread, but for view() and overview(),
+// which any thread may read (GrainView.hpp, Overview.hpp: relaxed atomics) for
+// the window, ringSeq() and bufferImage(), which any thread may call (the
+// module's save), and `settings` (relaxed atomics: the menu writes them, the
+// engine reads them once a block, and the Quality long press writes
+// settings.gain from the engine's thread, as Beads does).
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstring>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 
 #include "../Overview.hpp"
 #include "BeadsContext.hpp"
+#include "BufferFile.hpp"
 #include "Controls.hpp"
 #include "EdgeRate.hpp"
 #include "GainControl.hpp"
@@ -75,12 +79,32 @@ struct Jacks {
 enum SynthPolicy { SYNTH_AUTO, SYNTH_ALWAYS, SYNTH_NEVER };
 enum GainMode { GAIN_FIXED, GAIN_AUTO, GAIN_MANUAL };
 
+// The menu's settings. Written by the UI thread (the menu, a patch's data)
+// and, for `gain`, by the engine's (the Quality long press), and read by
+// both: each a relaxed atomic, so neither ever reads a torn or stale-forever
+// value and the audio thread neither locks nor allocates. The engine reads
+// them once a block; a menu change lands at the next block. `gain` and
+// `manualGain` are separate: a block may see a new mode with the old level
+// (the next one sees both).
 struct Settings {
-	SynthPolicy synth = SYNTH_AUTO;
-	GainMode gain = GAIN_FIXED;
-	float manualGain = 1.f;  // GAIN_MANUAL's gain, 1..40 (Beads' range)
-	bool gateOutput = false;
-	bool keepFrozen = true;  // read by the module when saving (Task 8)
+	std::atomic<SynthPolicy> synth{SYNTH_AUTO};
+	std::atomic<GainMode> gain{GAIN_FIXED};
+	std::atomic<float> manualGain{1.f};  // GAIN_MANUAL's gain, 1..40 (Beads' range)
+	std::atomic<bool> gateOutput{false};
+	std::atomic<bool> keepFrozen{true};  // read by the module when saving
+
+	Settings() = default;
+	Settings(const Settings& o) {
+		*this = o;
+	}
+	Settings& operator=(const Settings& o) {
+		synth.store(o.synth.load(std::memory_order_relaxed), std::memory_order_relaxed);
+		gain.store(o.gain.load(std::memory_order_relaxed), std::memory_order_relaxed);
+		manualGain.store(o.manualGain.load(std::memory_order_relaxed), std::memory_order_relaxed);
+		gateOutput.store(o.gateOutput.load(std::memory_order_relaxed), std::memory_order_relaxed);
+		keepFrozen.store(o.keepFrozen.load(std::memory_order_relaxed), std::memory_order_relaxed);
+		return *this;
+	}
 };
 
 struct Out {
@@ -195,6 +219,7 @@ public:
 		}
 		else {
 			BeadsScope scope(ctx_);
+			markRingWritten();
 			processor_->Configure(processor_->media(), processor_->mono());
 			bufferCleared();
 			startCodec(false, false);
@@ -341,6 +366,82 @@ public:
 		return ctx_;
 	}
 
+	// ---- The frozen buffer kept with the patch (BufferFile.hpp).
+
+	// Off the audio thread and never during process() (the module calls it
+	// from onAdd, which Rack runs under its exclusive engine lock, before the
+	// module's first process()). Beads' restore (background_buffer_backup.cc
+	// Load, beads.cc:344-347): Beads configured for the stored quality and
+	// mono, the payload back into its memory (the ring and its interpolation
+	// tail: BufferFile.hpp), the write pointer, and Freeze latched. The header
+	// must be valid for `bytes` of payload (validBuffer) and its quality the
+	// one the patch says (buttons().quality, from the patch's data).
+	// Otherwise nothing is loaded, Freeze is released and false is returned:
+	// the engine is an empty, unfrozen one.
+	bool loadBufferImage(const BufferHeader& h, const uint8_t* payload, size_t bytes) {
+		if (!allocated_ || !payload || !validBuffer(h, kBufferHeaderBytes + bytes) ||
+		    h.quality != unsigned(buttons_.quality)) {
+			buttons_.frozenButton = false;
+			return false;
+		}
+		BeadsScope scope(ctx_);
+		markRingWritten();
+		processor_->Configure(beads::Processor::Media(h.quality), h.mono != 0);
+		std::memcpy(memory_.delay, payload, kBufferPayloadBytes);
+		*processor_->mutable_delay_write_ptr() = int(h.writePos);
+		quality_ = Quality(h.quality);
+		buttons_.quality = buttons_.pending = quality_;
+		buttons_.frozenButton = true;
+		frozenBlock_ = true;
+		restored_ = true;
+		booted_ = false;  // the first process() starts the codec for it
+		rescanOverview();
+		publishStableRing();
+		return true;
+	}
+
+	// Any thread (the module's save): the ring's image, if it holds still
+	// (frozen for a whole block since it was last written): the header and
+	// kBufferPayloadBytes into payload. False if it is not frozen, or if it was
+	// written while being copied (the freeze ended meanwhile: the copy is
+	// discarded). THE ACCEPTED RACE (TESTING.md rule 7): the bytes are plain
+	// memory, so in that second case the copy reads bytes the audio thread
+	// is writing; the sequence count (a seqlock) tells, and nothing torn is
+	// returned. `seq`, if given, is the ringSeq() the image is of.
+	bool bufferImage(BufferHeader& h, uint8_t* payload, uint32_t* seq = nullptr) const {
+		if (!allocated_ || !payload)
+			return false;
+		const uint32_t s1 = ringSeq_.load(std::memory_order_acquire);
+		if (s1 & 1u)
+			return false;
+		h = BufferHeader();
+		h.quality = uint8_t(imageQuality_.load(std::memory_order_relaxed));
+		h.mono = imageMono_.load(std::memory_order_relaxed) ? 1 : 0;
+		h.writePos = uint32_t(imageWritePos_.load(std::memory_order_relaxed));
+		std::memcpy(payload, memory_.delay, kBufferPayloadBytes);
+		std::atomic_thread_fence(std::memory_order_acquire);
+		if (ringSeq_.load(std::memory_order_relaxed) != s1)
+			return false;
+		if (seq)
+			*seq = s1;
+		return true;
+	}
+
+	// Any thread. Odd while the ring may be written; each time it holds
+	// still (a whole block frozen after one that was not, or a load) it
+	// becomes the next even number. Equal even values: the same image.
+	uint32_t ringSeq() const {
+		return ringSeq_.load(std::memory_order_acquire);
+	}
+
+	// The window's waveform, read again over the whole ring (a restored
+	// buffer). The engine's thread, or off it with process() not running.
+	void rescanOverview() {
+		const size_t frames = size_t(processor_->bufferFrames());
+		overview_.clear(frames);
+		overview_.touch(0, frames, frames);
+	}
+
 private:
 	static float audioIn(float volts) {
 		if (!(volts == volts))
@@ -366,9 +467,18 @@ private:
 	void boot(const Jacks& j) {
 		BeadsScope scope(ctx_);
 		quality_ = buttons_.quality;
-		processor_->Configure(beads::Processor::Media(quality_), !j.inLOn || !j.inROn);
-		bufferCleared();
-		const bool synth = settings.synth == SYNTH_ALWAYS;
+		if (restored_) {
+			// loadBufferImage() configured Beads for the stored buffer and
+			// latched Freeze: its quality and mono stand (a mismatch with the
+			// jacks is held back until Freeze is released, as any change).
+			restored_ = false;
+		}
+		else {
+			markRingWritten();
+			processor_->Configure(beads::Processor::Media(quality_), !j.inLOn || !j.inROn);
+			bufferCleared();
+		}
+		const bool synth = settings.synth.load(std::memory_order_relaxed) == SYNTH_ALWAYS;
 		configureCodec(synth, true);
 		transition_ = 0;  // nothing to hide at start
 		booted_ = true;
@@ -411,18 +521,28 @@ private:
 		if (buttons_.autoGainRequest) {
 			// ui.cc:405-411: the long press restores the automatic gain.
 			buttons_.autoGainRequest = false;
-			settings.gain = GAIN_AUTO;
+			settings.gain.store(GAIN_AUTO, std::memory_order_relaxed);
 			gain_.Restart();
 		}
+		// The menu's settings for this block.
+		const GainMode gainMode = settings.gain.load(std::memory_order_relaxed);
+		const float manualGain = settings.manualGain.load(std::memory_order_relaxed);
+		const bool gate = settings.gateOutput.load(std::memory_order_relaxed);
+		const SynthPolicy synthPolicy = settings.synth.load(std::memory_order_relaxed);
 		readControls(k, j);
 
 		bool freeze[kMaxBlock];
-		bool freezeBlock = false;
+		bool freezeBlock = false, allFrozen = true;
 		for (size_t i = 0; i < size; ++i) {
 			freeze[i] = buttons_.frozenButton || freezeEvent_[i];
 			freezeBlock |= freeze[i];
+			allFrozen &= freeze[i];
 		}
 		frozenBlock_ = freezeBlock;
+		// A block with a frame not frozen may write the ring (and a
+		// reconfiguration, which needs one, clears it): the image is unstable.
+		if (!allFrozen)
+			markRingWritten();
 
 		bool seedBlock = false;
 		stmlib::GateFlags seed[kMaxBlock];
@@ -443,12 +563,10 @@ private:
 		seedFlash_ = seedBlock && !transition_;
 
 		beads::FloatFrame gained[kMaxBlock];
-		gain_.Process(!transition_, settings.gain == GAIN_AUTO,
-		              settings.gain == GAIN_MANUAL ? settings.manualGain : 1.f, !j.inLOn, !j.inROn, in_,
-		              gained, size);
+		gain_.Process(!transition_, gainMode == GAIN_AUTO, gainMode == GAIN_MANUAL ? manualGain : 1.f, !j.inLOn,
+		              !j.inROn, in_, gained, size);
 
 		beads::FloatFrame out[kMaxBlock];
-		const bool gate = settings.gateOutput;
 		if (transition_) {
 			--transition_;
 			for (size_t i = 0; i < size; ++i)
@@ -459,7 +577,7 @@ private:
 			beads::ModulatedParameter d;
 			beads::Processor::MixParameters m;
 			buildParameters(j, &p, &d, &m);
-			m.output_gate = gate;
+			m.output_gate = gate;  // beads.cc: the gate output mode
 			const beads::SeedButtonState seedButton =
 			    buttons_.seedLatched ? beads::SEED_BUTTON_STATE_LOCKED
 			                         : (buttons_.seedHeld ? beads::SEED_BUTTON_STATE_ON : beads::SEED_BUTTON_STATE_OFF);
@@ -499,7 +617,11 @@ private:
 			}
 		}
 
-		monitorStateChange(j);
+		monitorStateChange(j, synthPolicy);
+		// A whole block frozen: the ring holds still from here until a block
+		// that is not (the save may copy it).
+		if (allFrozen && (ringSeq_.load(std::memory_order_relaxed) & 1u))
+			publishStableRing();
 		if (!synth_)
 			overview_.serviceFrom(BufferSource{*processor_}, int(kOverviewBudget * size));
 		publishView();
@@ -614,7 +736,6 @@ private:
 		m->feedback = mix(POT_FEEDBACK, CV_FEEDBACK, j.feedbackOn);
 		m->dry_wet = mix(POT_DRY_WET, CV_DRY_WET, j.dryWetOn);
 		m->reverb_amount = mix(POT_REVERB, CV_REVERB, j.reverbOn);
-		m->output_gate = settings.gateOutput;
 	}
 
 	float mix(int pot, int cv, bool patched) const {
@@ -623,7 +744,7 @@ private:
 
 	// MonitorStateChange (beads.cc:352-391), once a block, with the menu's
 	// synth policy.
-	void monitorStateChange(const Jacks& j) {
+	void monitorStateChange(const Jacks& j, SynthPolicy synthPolicy) {
 		if (frozenBlock_ || transition_) {
 			synthTimer_ = -1;
 			return;
@@ -635,7 +756,7 @@ private:
 		const bool noInput = !j.inLOn && !j.inROn;
 		const bool mono = !j.inLOn || !j.inROn;
 
-		if (settings.synth == SYNTH_ALWAYS) {
+		if (synthPolicy == SYNTH_ALWAYS) {
 			if (!synth_)
 				startCodec(true, true);
 			quality_ = q;  // the synth's resolution follows the setting live
@@ -643,14 +764,14 @@ private:
 		}
 		if (noInput) {
 			if (synth_) {
-				if (settings.synth == SYNTH_AUTO) {
+				if (synthPolicy == SYNTH_AUTO) {
 					quality_ = q;
 					return;
 				}
 				// SYNTH_NEVER while in the synth: leave it, below.
 			}
 			else {
-				if (settings.synth == SYNTH_AUTO) {
+				if (synthPolicy == SYNTH_AUTO) {
 					if (synthTimer_ < 0) {
 						synthTimer_ = 0;
 					}
@@ -668,6 +789,7 @@ private:
 		const bool monoChanged = mono != processor_->mono();
 		if (synth_ || mediaChanged || monoChanged) {
 			const bool wasSynth = synth_;
+			markRingWritten();  // (already: the block was not frozen)
 			processor_->Configure(beads::Processor::Media(q), mono);
 			bufferCleared();
 			quality_ = q;
@@ -699,7 +821,7 @@ private:
 	bool freezeEvent_[kMaxBlock] = {};
 	size_t block_ = kBlock48, fill_ = 0;
 
-	bool allocated_ = false, booted_ = false;
+	bool allocated_ = false, booted_ = false, restored_ = false;
 	bool synth_ = false;
 	bool frozenBlock_ = false, seedFlash_ = false;
 	int transition_ = 0;
@@ -710,6 +832,28 @@ private:
 
 	GrainView view_;
 	rka::Overview overview_;
+
+	// The ring's stability for the save (bufferImage): odd while it may be
+	// written; the stored image's header, published as it turns even.
+	std::atomic<uint32_t> ringSeq_{1};
+	std::atomic<int> imageQuality_{DIGITAL}, imageWritePos_{0};
+	std::atomic<bool> imageMono_{false};
+
+	// The engine's thread (or off it, never during process()).
+	void markRingWritten() {
+		const uint32_t s = ringSeq_.load(std::memory_order_relaxed);
+		if (!(s & 1u)) {
+			ringSeq_.store(s + 1, std::memory_order_relaxed);
+			std::atomic_thread_fence(std::memory_order_release);
+		}
+	}
+	void publishStableRing() {
+		imageQuality_.store(int(processor_->media()), std::memory_order_relaxed);
+		imageMono_.store(processor_->mono(), std::memory_order_relaxed);
+		imageWritePos_.store(*processor_->mutable_delay_write_ptr(), std::memory_order_relaxed);
+		const uint32_t s = ringSeq_.load(std::memory_order_relaxed);
+		ringSeq_.store((s | 1u) + 1, std::memory_order_release);
+	}
 };
 
 }  // namespace spindrift

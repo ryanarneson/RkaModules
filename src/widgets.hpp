@@ -312,15 +312,34 @@ struct Cap : app::ParamWidget {
 	}
 };
 
+// The module light that lights a cap (CapButton, CapLatch), if any; filled
+// in by createLightParam().
+struct CapLightRef {
+	engine::Module* module = NULL;
+	int firstLightId = -1;
+};
+
 // Momentary button. Click: down while held. Shift-click: latches down until
-// the next click of either kind (which only releases it). The cap is lit
-// while the param is above 0. Configure the param with configButton() so it
-// is not randomised.
+// the next click of either kind (which only releases it). Configure the param
+// with configButton() so it is not randomised.
+//
+// What lights the cap:
+// - made with createParamCentered: the param, lit while it is above 0;
+// - made with createLightParamCentered(pos, module, paramId, lightId): that
+//   light's brightness, so the module decides (Spindrift's Freeze, Seed and
+//   Quality); dark with no module.
 struct CapButton : Cap {
 	// The press that started this drag latched the button: keep it down on release.
 	bool latching = false;
+	CapLightRef light;
+
+	CapLightRef* getLight() {
+		return &light;
+	}
 
 	float lit() override {
+		if (light.firstLightId >= 0)
+			return light.module ? light.module->lights[light.firstLightId].getBrightness() : 0.f;
 		ParamQuantity* pq = getParamQuantity();
 		return (pq && pq->getValue() > 0.f) ? 1.f : 0.f;
 	}
@@ -345,12 +364,7 @@ struct CapButton : Cap {
 // - made with createLightParamCentered(pos, module, paramId, lightId): that
 //   light's brightness, so the module decides (Sway's 1-SHOT).
 struct CapLatch : Cap {
-	// The module light that lights the cap, if any; filled in by
-	// createLightParam().
-	struct LightRef {
-		engine::Module* module = NULL;
-		int firstLightId = -1;
-	};
+	typedef CapLightRef LightRef;
 	LightRef light;
 	// Lit with no module (the module browser), when the param lights the cap.
 	bool litWithoutModule = false;
@@ -786,7 +800,8 @@ struct GrainWindow : widget::Widget {
 
 	// A caption from x (left-aligned); the font has no arrow, so a "→" in it
 	// is drawn as a stroke and a head, a little narrower than the text's
-	// height.
+	// height, with a clear gap either side (the face's own space is narrow:
+	// in Rack the arrow touched the words).
 	void caption(NVGcontext* vg, float x, float y, const std::string& text, float size, NVGcolor c) {
 		const char* const ARROW = "\xE2\x86\x92";
 		nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
@@ -798,7 +813,8 @@ struct GrainWindow : widget::Widget {
 			x = nvgText(vg, x, y, part.c_str(), NULL);
 			if (at == std::string::npos)
 				return;
-			const float len = 0.9f * size, ay = y + 0.42f * size, head = 0.22f * size;
+			const float len = 0.9f * size, ay = y + 0.42f * size, head = 0.22f * size, gap = 0.22f * size;
+			x += gap;
 			nvgBeginPath(vg);
 			nvgMoveTo(vg, x, ay);
 			nvgLineTo(vg, x + len, ay);
@@ -810,7 +826,7 @@ struct GrainWindow : widget::Widget {
 			nvgLineCap(vg, NVG_ROUND);
 			nvgLineJoin(vg, NVG_ROUND);
 			nvgStroke(vg);
-			x += len;
+			x += len + gap;
 			from = at + std::strlen(ARROW);
 		}
 	}
