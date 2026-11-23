@@ -6,6 +6,7 @@
 #include "testing.hpp"
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <vector>
 
@@ -155,6 +156,20 @@ void clocked() {
 		}
 		CHECK(g.e.clockStep() == step && std::fabs(g.e.seconds(0) / (0.5 * mult[step]) - 1.0) < 1e-3,
 		      "knob step %d on a 0.5 s clock gives step %d, %g s (want %g)", step, g.e.clockStep(), g.e.seconds(0), 0.5 * mult[step]);
+	}
+	// Each multiple typed as the tooltip shows it puts the engine on it.
+	for (int step = 0; step < 10; step++) {
+		char typed[32];
+		std::snprintf(typed, sizeof typed, "%s clock", clockName(step));
+		Rig g;
+		g.f.clockPatched = true;
+		g.f.params[F::TIME] = clockKnob(clockStepNamed(typed));
+		for (int i = 0; i < 24000 * 2 + 100; i++) {
+			g.f.clock = i % 24000 < 480 ? 10.f : 0.f;
+			g.step(0.f);
+		}
+		CHECK(g.e.clockStep() == step && std::fabs(g.e.seconds(0) / (0.5 * mult[step]) - 1.0) < 1e-3,
+		      "typed \"%s\" on a 0.5 s clock gives step %d, %g s", typed, g.e.clockStep(), g.e.seconds(0));
 	}
 	// A CV sweeps the steps and never lands between them.
 	Rig g;
@@ -856,6 +871,48 @@ void stereo() {
 	CHECK(worst < 1e-5, "with R unpatched L is the average of the sides (off by %g)", worst);
 }
 
+// Bypass routes the input as the working module does at Mix fully left
+// (exactly the input there): for every way the jacks can be patched,
+// within the limit's knee, the outputs match.
+void bypass() {
+	const float ins[2][2] = {{3.f, -1.25f}, {-6.5f, 7.f}};
+	double worst = 0;
+	for (int mask = 0; mask < 8; mask++)
+		for (const auto& in : ins) {
+			Rig g;
+			g.f.params[F::MIX] = 0.f;
+			g.f.inLPatched = (mask & 1) != 0;
+			g.f.inRPatched = (mask & 2) != 0;
+			g.f.outRPatched = (mask & 4) != 0;
+			for (int i = 0; i < 64; i++)
+				g.step(in[0], in[1]);
+			F f;
+			f.inLPatched = g.f.inLPatched;
+			f.inRPatched = g.f.inRPatched;
+			f.outRPatched = g.f.outRPatched;
+			f.inL = in[0];
+			f.inR = in[1];
+			rka::WakeResult b;
+			b.frozen = true;
+			rka::WakeEngine::bypass(f, b);
+			const double off = std::max(std::fabs(b.l - g.r.l), std::fabs(b.r - g.r.r));
+			worst = std::max(worst, off);
+			CHECK(off < 1e-5 && !b.frozen, "bypass with jacks %d, in %g / %g gives %g / %g (working, Mix 0: %g / %g)", mask, in[0],
+			      in[1], b.l, b.r, g.r.l, g.r.r);
+		}
+	// Only L out, stereo in: L is the average, not the left input.
+	F f;
+	f.inLPatched = f.inRPatched = true;
+	f.inL = 2.f;
+	f.inR = -1.f;
+	rka::WakeResult b;
+	rka::WakeEngine::bypass(f, b);
+	CHECK(b.l == 0.5f, "bypassed, L alone carries the average (%g, want 0.5)", b.l);
+	f.inL = std::nanf("");
+	rka::WakeEngine::bypass(f, b);
+	CHECK(b.l == b.l && b.r == b.r, "bypass passes no NaN");
+}
+
 void mix_law() {
 	Rig g;
 	g.f.params[F::MIX] = 0.f;
@@ -932,6 +989,7 @@ int main() {
 	frozen_is_what_was_heard();
 	clock_restart();
 	stereo();
+	bypass();
 	mix_law();
 	limit();
 	return rkatest::finish("wake test_engine");

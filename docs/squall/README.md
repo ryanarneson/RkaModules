@@ -90,7 +90,9 @@ piece go from steady to stormy, or from wandering to looping, and back.
   and Swell slows to a stop over about 20 ms (so it never stops with a
   click) and holds. A gate already high ends at its normal time. On
   release, Squall carries on where it stopped. Clock ticks are ignored
-  while frozen.
+  while frozen, and after a release the clock's period is measured afresh
+  from the next two ticks (gates keep the period from before Freeze until
+  then).
 - **GATE:** 0 or 10 V. Each gate lasts a quarter of the average time
   between events, between 5 ms and 4 s: long at Calm, short at Stormy.
   Into a trigger input it strikes; into Sluice or a slow envelope it holds

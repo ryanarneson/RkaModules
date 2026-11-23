@@ -44,7 +44,8 @@ struct Hadal : Module {
 	rka::HadalFrame frame;
 	rka::HadalResult result;
 
-	Hadal() : engine(random::u32()) {
+	// The engine builds its gain tables once, at Rack's rate.
+	Hadal() : engine(random::u32(), APP ? APP->engine->getSampleRate() : 48000.f) {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
 		configParam(DEPTH_PARAM, 0.f, 1.f, 0.5f, "Depth", " km", 0.f, 11.f);
 		configParam(RUMBLE_PARAM, 0.f, 1.f, 0.8f, "Rumble", "%", 0.f, 100.f);
@@ -63,7 +64,6 @@ struct Hadal : Module {
 		configOutput(L_OUTPUT, "Left (the mono sum when R is unpatched)");
 		configOutput(R_OUTPUT, "Right");
 		// No bypass routes: Hadal has no input, so bypass silences it.
-		engine.setSampleRate(APP ? APP->engine->getSampleRate() : 48000.f);
 	}
 
 	void onSampleRateChange(const SampleRateChangeEvent& e) override {

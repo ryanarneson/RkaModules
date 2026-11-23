@@ -82,14 +82,21 @@ public:
 	static constexpr float DRIFT_LEVEL_DB = 4.f, DRIFT_COLOUR_OCT = 1.f / 3.f;
 	static constexpr float DENSITY = 10.f, DRIFT_DENSITY_RATIO = 2.2f;
 
-	explicit HadalEngine(uint32_t seed) : seed_(seed) {
+	// The gain tables are built once, at `sampleRate` (48 kHz if that is
+	// unusable): pass the host's rate here rather than calling
+	// setSampleRate straight after, which would build them twice.
+	explicit HadalEngine(uint32_t seed, float sampleRate = 48000.f) : seed_(seed) {
 		seedAll();
-		setSampleRate(48000.f);
+		setSampleRate(usableRate(sampleRate) ? sampleRate : 48000.f);
+	}
+
+	static bool usableRate(float fs) {
+		return fs > 0.f && fs <= 768000.f;
 	}
 
 	void setSampleRate(float fs) {
-		if (!(fs > 0.f && fs <= 768000.f))
-			return;   // keep the last good rate (48 kHz from construction)
+		if (!usableRate(fs))
+			return;   // keep the last good rate
 		rate_ = fs;
 		rumble_.setRate(fs);
 		hiss_.setRate(fs);

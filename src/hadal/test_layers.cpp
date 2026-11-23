@@ -442,6 +442,54 @@ void wander_seeds_independent() {
 	CHECK(std::fabs(c) < 0.2, "two seeds' wanders correlate at %.3f (want < 0.2)", c);
 }
 
+// A rate change keeps the pending target's hold in seconds (#34): from
+// 768 kHz to 48 kHz a target picked just before must still move on within
+// its 8-30 s, not 16x later, and not before what was left of its hold.
+void wander_hold_survives_rate_change() {
+	for (uint32_t seed = 1; seed <= 8; seed++) {
+		rka::hadal::Wander w;
+		w.setRate(768000.f);
+		w.seed(seed);
+		w.next();   // picks the first target, held 8-30 s
+		const float first = w.target;
+		for (int i = 0; i < 768000; i++)   // 1 s at 768 kHz
+			w.next();
+		CHECK(w.target == first, "seed %u: the wander moved on within 1 s (holds are 8-30 s)", seed);
+		w.setRate(48000.f);
+		int i = 0;
+		for (; i < 31 * 48000 && w.target == first; i++)
+			w.next();
+		const float s = 1.f + (float) i / 48000.f;
+		CHECK(w.target != first, "seed %u: after 768 -> 48 kHz the wander held one target over 32 s", seed);
+		CHECK(s >= 7.9f, "seed %u: after 768 -> 48 kHz the wander moved on at %.2f s (holds are 8-30 s)", seed, s);
+	}
+}
+
+// The same for crackle's clustering wander (holds 0.25-1 s).
+void crackle_hold_survives_rate_change() {
+	for (uint32_t seed = 1; seed <= 8; seed++) {
+		rka::hadal::Crackle c;
+		c.setRate(768000.f);
+		c.seed(seed);
+		c.setDensity(0.f);
+		float l, r;
+		for (int i = 0; i < 32; i++)   // the first control step picks a target
+			c.process(l, r);
+		const float first = c.modTarget;
+		for (int i = 0; i < 7680; i++)   // 10 ms
+			c.process(l, r);
+		CHECK(c.modTarget == first, "seed %u: crackle's wander moved on within 10 ms (holds are 0.25-1 s)", seed);
+		c.setRate(48000.f);
+		int i = 0;
+		for (; i < 48000 && c.modTarget == first; i++)
+			c.process(l, r);
+		const float s = 0.01f + (float) i / 48000.f;
+		CHECK(c.modTarget != first, "seed %u: after 768 -> 48 kHz crackle's wander held one target over 1 s", seed);
+		CHECK(s >= 0.24f, "seed %u: after 768 -> 48 kHz crackle's wander moved on at %.3f s (holds are 0.25-1 s)", seed,
+		      s);
+	}
+}
+
 } // namespace
 
 int main() {
@@ -468,5 +516,7 @@ int main() {
 	wander_slow();
 	wander_not_periodic();
 	wander_seeds_independent();
+	wander_hold_survives_rate_change();
+	crackle_hold_survives_rate_change();
 	return rkatest::finish("hadal test_layers");
 }

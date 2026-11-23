@@ -43,6 +43,10 @@ struct Crackle {
 	float panNow = 0.5f;
 
 	void setRate(float rate) {
+		// The clustering wander's hold counts control steps: rescale it so
+		// the pending target still ends at the same time in seconds.
+		if (fs > 0.f && rate > 0.f)
+			modHold = (int) ((double) modHold * rate / fs);
 		fs = rate;
 		for (int c = 0; c < 2; c++)
 			y1[c] = y2[c] = 0;

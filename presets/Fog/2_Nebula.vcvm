@@ -1,7 +1,6 @@
 {
   "plugin": "rka",
   "model": "Fog",
-  "version": "2.0.1",
   "params": [
     {
       "id": 0,

@@ -487,6 +487,40 @@ void wetMakeupSmooth() {
 	}
 }
 
+// After a Size step the make-up's 30 ms one-pole on Size lands exactly on
+// the knob, and the make-up is refreshed from it, within a bounded time, at
+// 48 and 96 kHz. A float one-pole stalls short of a target near 1 once its
+// step is under half an ulp, above its 1e-5 snap (issue #11).
+void makeupSizeSettles() {
+	const float rates[] = {48000.f, 96000.f};
+	const float steps[][2] = {{0.f, 1.f}, {1.f, 0.f}, {0.2f, 0.9f}, {0.9f, 0.35f}};
+	const double bound = 1.0; // s: 33 time constants
+	for (float hz : rates) {
+		double worst = 0;
+		for (const auto& st : steps) {
+			Rig r(hz);
+			r.f.params[FogFrame::MIX] = 1.f;
+			r.f.params[FogFrame::SIZE] = st[0];
+			for (int i = 0; i < (int) (0.5 * hz); i++)
+				r.step(uniform());
+			CHECK(r.eng.makeupSize == st[0], "%g Hz: Size %g did not start settled (%.8g)", hz, st[0], r.eng.makeupSize);
+			r.f.params[FogFrame::SIZE] = st[1];
+			const int limit = (int) (bound * hz);
+			int k = 0;
+			while ((r.eng.makeupSize != st[1] || r.eng.makeupSizeUsed != st[1]) && k < limit) {
+				r.step(uniform());
+				k++;
+			}
+			CHECK(r.eng.makeupSize == st[1] && r.eng.makeupSizeUsed == st[1],
+			      "%g Hz: Size %g -> %g, the make-up's Size is %.8g (used %.8g) after %g s", hz, st[0], st[1],
+			      r.eng.makeupSize, r.eng.makeupSizeUsed, bound);
+			const double t = (double) k / hz;
+			worst = t > worst ? t : worst;
+		}
+		std::printf("  makeup_size_settles %6.0f Hz: settled within %.3f s\n", hz, worst);
+	}
+}
+
 // ---- Control steps ----
 
 const char* STEP_MODES[4] = {"HAAR", "FRET", "SMOKE", "ICE"};
@@ -1427,6 +1461,7 @@ int main() {
 	lowCut();
 	wetLevelLaw();
 	wetMakeupSmooth();
+	makeupSizeSettles();
 	driftStepNoClick();
 	visibilityStepNoClick();
 	visibilityNoSwell();

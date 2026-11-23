@@ -4,6 +4,7 @@
 #include "testing.hpp"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 namespace {
@@ -39,6 +40,32 @@ void multiples() {
 	CHECK(clockStep(0.9f, 10.f) == 9 && clockStep(0.1f, -10.f) == 0 && clockStep(std::nanf(""), 0.f) == 0, "the sum clamps");
 	CHECK(!std::strcmp(clockName(0), "1/4") && !std::strcmp(clockName(5), "x1") && !std::strcmp(clockName(9), "x4"),
 	      "the names");
+}
+
+// Typing what the tooltip shows (Wake.cpp: "%s clock" of clockName) sets
+// the knob to that step; anything else names none.
+void typed_multiples() {
+	for (int step = 0; step < kMultiples; step++) {
+		char shown[32], upper[32];
+		std::snprintf(shown, sizeof shown, "%s clock", clockName(step));
+		std::snprintf(upper, sizeof upper, "  %s   CLOCK ", clockName(step));
+		for (char* c = upper; *c; c++)
+			*c = (*c >= 'a' && *c <= 'z') ? (char) (*c - 'a' + 'A') : *c;
+		const char* typed[3] = {shown, clockName(step), upper};
+		for (const char* t : typed) {
+			const int got = clockStepNamed(t);
+			CHECK(got == step, "\"%s\" names step %d (want %d)", t, got, step);
+			CHECK(clockStep(clockKnob(got), 0.f) == step, "the knob for \"%s\" is %g, step %d (want %d)", t, clockKnob(got),
+			      clockStep(clockKnob(got), 0.f), step);
+		}
+	}
+	const char* junk[] = {"", " ", "clock", "x", "x5", "1/5", "x1.", "x1.25", "x2 clocks", "x2x", "250", "250 ms", "1.5 s",
+	                      "1/2 clock x", "2", "1 / 2"};
+	for (const char* t : junk)
+		CHECK(clockStepNamed(t) == -1, "\"%s\" names no step (got %d)", t, clockStepNamed(t));
+	CHECK(clockStepNamed(nullptr) == -1, "null names no step");
+	CHECK(clockStepNamed("x1.5") == 6 && clockStepNamed("x1") == 5, "x1.5 is not x1");
+	CHECK(clockKnob(-3) == 0.f && clockKnob(99) == 1.f, "knob steps clamp");
 }
 
 void ratios() {
@@ -128,6 +155,7 @@ void clock_follower() {
 int main() {
 	time_law();
 	multiples();
+	typed_multiples();
 	ratios();
 	fit();
 	clock_follower();

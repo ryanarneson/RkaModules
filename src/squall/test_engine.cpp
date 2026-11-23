@@ -528,6 +528,64 @@ static void freeze_resumes() {
 	CHECK(std::fabs(after - before) < 1e-9, "the wait moved under Freeze: %g -> %g", before, after);
 }
 
+// Issue #47: the first edge after Freeze must not measure a period from the
+// unfrozen samples either side of it; the gate after it keeps the old period.
+static void freeze_discards_period_measurement() {
+	Rig rig(44u, 1000.f);
+	rig.set(1.f, 0.f, 0.f);   // p = 1: an event on every tick
+	rig.f.clockPatched = true;
+	const int per = 100;       // 0.1 s ticks: gate 25 ms
+	int gate = -1;
+	for (int t = 0; t < 16; t++)
+		for (int i = 0; i < per; i++) {
+			rig.f.clock = i < per / 2 ? 10.f : 0.f;
+			// Freeze from 10 ms into tick 10 until 5 ms before tick 13: the
+			// unfrozen samples either side add up to 15 ms, not 100.
+			rig.f.freeze = ((t == 10 && i >= 10) || t == 11 || (t == 12 && i < 95)) ? 10.f : 0.f;
+			const bool ev = rig.step();
+			if (t == 13 && i == 0) {
+				CHECK(ev, "no event on the first tick after Freeze");
+				gate = 0;
+			}
+			if (t == 13 && gate >= 0 && gate == i && rig.r.gate > 5.f)
+				gate++;
+		}
+	CHECK(std::abs(gate - 25) <= 1, "the gate after Freeze is %d ms, want 25 (the period before it)", gate);
+}
+
+// Issue #48: Initialize (reset()) moves Step to the middle at once; Swell
+// glides there from where it was, as it does everywhere else.
+static void reset_swell_glides() {
+	Rig rig(45u, 1000.f);
+	rig.set(0.9f, 0.f, 0.f);
+	for (int i = 0; i < 600000 && std::fabs(rig.r.swell) < 2.f; i++)
+		rig.step();
+	const float before = rig.r.swell;
+	CHECK(std::fabs(before) >= 2.f, "Swell never got 2 V from the middle (%g)", before);
+	rig.e.reset();
+	rig.f.params[F::WEATHER] = 0.f;   // Calm: no event soon after the reset
+	rig.step();
+	CHECK(rig.r.step == 0.f, "Step must be at the middle after reset (got %g)", rig.r.step);
+	CHECK(std::fabs(rig.r.swell - before) < 0.1f, "Swell jumped on reset: %g -> %g", before, rig.r.swell);
+	SquallState s0, s1;
+	rig.e.getState(s0);
+	float prev = rig.r.swell;
+	bool smooth = true;
+	long long ev = 0;
+	for (int i = 0; i < 2000; i++) {
+		if (rig.step())
+			ev++;
+		smooth = smooth && std::fabs(rig.r.swell - prev) < 0.1f;
+		prev = rig.r.swell;
+	}
+	rig.e.getState(s1);
+	CHECK(ev == 0, "%lld events at Calm in 2 s after reset", ev);
+	CHECK(smooth, "Swell must stay continuous after reset");
+	// Swell's first stage heads for the middle (0 V) from where it was.
+	CHECK(std::fabs(s1.swellStage1) < std::fabs(s0.swellStage1) && std::fabs(s0.swellStage1) > 1.f,
+	      "Swell must glide toward the middle after reset (stage 1 %g -> %g)", s0.swellStage1, s1.swellStage1);
+}
+
 // --- CV and state ---------------------------------------------------------
 
 static void weather_cv_audio_rate() {
@@ -611,6 +669,37 @@ static void state_rejects_bad() {
 	for (int i = 0; i < 3; i++)
 		CHECK(std::isfinite(g.history[i].gap) && g.history[i].gap > 0.f && g.history[i].value >= 0.f && g.history[i].value <= 1.f && g.history[i].length > 0.f,
 		      "event %d loads as defaults", i);
+}
+
+// Issue #49: a saved gap far beyond anything the process makes, or a gate
+// length far beyond GATE_FRACTION, loads as the default, so a corrupt patch
+// at Memory 100 % is not silent for days. Plausible values load as saved.
+static void state_caps_gaps_and_lengths() {
+	SquallState s;
+	s.count = 8;
+	for (int i = 0; i < 8; i++) {
+		s.history[i].gap = 1e5f;
+		s.history[i].value = (i + 0.5f) / 8.f;
+		s.history[i].length = 100.f;
+	}
+	s.history[7].gap = 40.f;     // long, but plausible: kept
+	s.history[7].length = 0.5f;  // kept
+	Rig rig(46u, 1000.f);
+	rig.set(0.9f, 0.f, 1.f);     // average gap about 0.3 s; replay every event
+	rig.f.loopLength = 4;
+	rig.e.setState(s);
+	SquallState g;
+	rig.e.getState(g);
+	CHECK(g.count == 8, "count 8 loads (got %d)", g.count);
+	for (int i = 0; i < 7; i++)
+		CHECK(g.history[i].gap == Event().gap && g.history[i].length == Event().length,
+		      "event %d: gap 1e5 and length 100 must load as defaults (got %g, %g)", i, g.history[i].gap, g.history[i].length);
+	CHECK(g.history[7].gap == 40.f && g.history[7].length == 0.5f, "a gap of 40 and a length of 0.5 load as saved (got %g, %g)",
+	      g.history[7].gap, g.history[7].length);
+	std::vector<double> t;
+	rig.events(1, nullptr, &t, 60000);
+	CHECK(t.size() == 1 && t[0] < 20.0, "the first event after loading came %s%g s in, want within 20 s", t.empty() ? "> " : "",
+	      t.empty() ? 60.0 : t[0]);
 }
 
 static void bad_rate_ignored() {
@@ -746,9 +835,12 @@ int main() {
 	fast_clock_gate();
 	freeze_holds();
 	freeze_resumes();
+	freeze_discards_period_measurement();
+	reset_swell_glides();
 	weather_cv_audio_rate();
 	state_round_trip();
 	state_rejects_bad();
+	state_caps_gaps_and_lengths();
 	bad_rate_ignored();
 	seeds_differ_and_repeat();
 	weather_cv_gusty();

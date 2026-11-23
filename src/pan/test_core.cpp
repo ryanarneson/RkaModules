@@ -132,6 +132,8 @@ void mono_law() {
 	CHECK(worst <= 0.05, "mono pan power moves by %.3f dB across the knob (want equal power, 0.05)", worst);
 }
 
+// Under audio-rate CV, constant loudness (law 1) holds equal power; the
+// default no-boost law is pinned separately below.
 void mono_equal_power_under_cv() {
 	TestPan pan;
 	pan.in.panLaw = 1;
@@ -146,6 +148,28 @@ void mono_equal_power_under_cv() {
 		worst = std::max(worst, std::fabs(db((l * l + r * r) / 2.0) / 2.0));
 	}
 	CHECK(worst <= 0.1, "a 1 kHz pan CV moves mono power by %.3f dB (want under 0.1)", worst);
+}
+
+// The default no-boost law (0) under the same 1 kHz CV (#43): mono power
+// dips by design, about 3 dB at the sides against the centre, and never
+// rises above it; the CV sweeps far enough to reach the full dip.
+void mono_no_boost_dip_under_cv() {
+	TestPan pan;
+	pan.in.panLaw = 0;
+	pan.in.att[0] = 1.f;
+	pan.in.cv[0].channels = 1;
+	pan.settle();
+	double lo = 0, hi = -100;
+	for (int i = 0; i < 4800; i++) {
+		pan.cvv[0][0] = 5.f * std::sin(2.f * PI * 1000.f * i / FS);
+		float l = 1.f, r = 1.f;
+		pan.apply(0, l, r, rka::MONO);
+		const double p = db((l * l + r * r) / 2.0) / 2.0;
+		lo = std::min(lo, p);
+		hi = std::max(hi, p);
+	}
+	CHECK(hi <= 0.01, "no boost under a 1 kHz pan CV: mono power rises %.3f dB above the centre", hi);
+	CHECK(lo >= -3.05 && lo <= -2.9, "no boost under a 1 kHz pan CV: deepest dip %.3f dB (want about -3.01)", lo);
 }
 
 float panned(TestPan& pan, float knob, float& l, float& r, rka::BallastSource src) {
@@ -322,6 +346,7 @@ int main() {
 	centre_is_identity();
 	mono_law();
 	mono_equal_power_under_cv();
+	mono_no_boost_dip_under_cv();
 	true_pan();
 	no_boost();
 	balance();

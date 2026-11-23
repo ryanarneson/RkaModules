@@ -36,6 +36,44 @@ inline const char* clockName(int step) {
 	return n[step < 0 ? 0 : step >= kMultiples ? kMultiples - 1 : step];
 }
 
+// The step a typed multiple names, as the tooltip shows it: a name from
+// clockName ("x2", "1/2"), case aside, with " clock" after it or not and
+// spaces around it ("x1.5 clock"). -1 if it names none.
+inline int clockStepNamed(const char* s) {
+	if (!s)
+		return -1;
+	auto lower = [](char c) { return c >= 'A' && c <= 'Z' ? (char) (c - 'A' + 'a') : c; };
+	// Matches word at p (case aside); returns the end, or null.
+	auto match = [&](const char* p, const char* word) -> const char* {
+		for (; *word; p++, word++)
+			if (lower(*p) != *word)
+				return nullptr;
+		return p;
+	};
+	while (*s == ' ')
+		s++;
+	for (int step = 0; step < kMultiples; step++) {
+		const char* p = match(s, clockName(step));
+		if (!p || (*p != '\0' && *p != ' '))
+			continue;
+		while (*p == ' ')
+			p++;
+		if (const char* q = match(p, "clock"))
+			p = q;
+		while (*p == ' ')
+			p++;
+		if (*p == '\0')
+			return step;
+	}
+	return -1;
+}
+
+// The knob for a step (typed multiples): the middle of the step's travel.
+inline float clockKnob(int step) {
+	const int st = step < 0 ? 0 : step >= kMultiples ? kMultiples - 1 : step;
+	return (float) st / (float) (kMultiples - 1);
+}
+
 // The step for the knob plus the CV (volts times the attenuverter; 10 V is
 // the knob's travel). Noon is x1.
 inline int clockStep(float knob, float cvTimesAtt) {

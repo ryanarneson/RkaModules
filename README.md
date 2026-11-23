@@ -146,6 +146,11 @@ tools/cross_build.sh   # Windows + Linux packages via Docker -> packages/
 tools/mac_dist.sh      # (on a Mac) arm64 + x64 packages -> packages/
 ```
 
+`make install` removes any older `rka-*.vcvplugin` from Rack's plugins folder
+first: Rack extracts every package it finds there, in no fixed order, so a
+stale one can win. When installing a package by hand (on Windows, say), keep
+a single rka package in that folder too.
+
 All of these work on Linux and macOS. On a Mac, Windows and Linux builds
 come from Docker, and both Mac CPUs build natively, so one laptop produces
 all four packages.

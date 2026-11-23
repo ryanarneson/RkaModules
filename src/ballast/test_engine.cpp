@@ -429,20 +429,32 @@ void rate_change_keeps_state() {
 	g.inL[0][0] = 2.f;
 	g.run((int) FS);
 	g.f.params[F::LEVEL_1] = 0.3f;
-	float prev = 0.f, steady = 0.f, across = 0.f;
+	// 48 -> 96 kHz mid-glide (#43): the glide carries on from where it is
+	// (no step), and at the new rate's coefficient, so each sample moves
+	// about half as far as the sample before the change did.
+	float prev = 0.f, steady = 0.f, across = 0.f, before = 0.f, after = 0.f;
 	for (int i = 0; i < 400; i++) {
 		if (i == 200)
-			g.e.setSampleRate(48000.f);
+			g.e.setSampleRate(96000.f);
 		g.step();
 		const float d = std::fabs(g.out.l - prev);
 		if (i > 1 && i < 200)
 			steady = std::max(steady, d);
 		if (i >= 200 && i < 205)
 			across = std::max(across, d);
+		if (i == 199)
+			before = d;
+		if (i == 201)
+			after = d;
 		prev = g.out.l;
 	}
 	CHECK(across <= 2.f * steady + 1e-4f, "a rate change mid-glide steps the output by %.5f V (steady %.5f)", across,
 	      steady);
+	CHECK(before > 1e-5f, "the glide must still be moving at the change (%.6f V per sample)", before);
+	const float ratio = after / before;
+	CHECK(ratio > 0.4f && ratio < 0.6f,
+	      "after 48 -> 96 kHz the glide must move about half as far per sample (ratio %.3f): coefficients not recomputed?",
+	      ratio);
 }
 
 // #40: the CLIP light holds at least one sample at any rate.

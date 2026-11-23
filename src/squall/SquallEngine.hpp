@@ -97,7 +97,7 @@ public:
 		pending_ = false;
 		gapAcc_ = 0.0;
 		events_.restartWait();
-		resetSwell_ = true;
+		// Swell keeps its state and glides to the new Step (issue #48).
 	}
 
 	void process(const SquallFrame& f, SquallResult& r) {
@@ -117,6 +117,16 @@ public:
 		const bool wasHigh = clockHigh_;
 		const bool clockNow = clocked ? schmitt(finite(f.clock), clockHigh_) : false;
 		const bool edge = clocked && clockNow && !wasHigh;
+
+		// Freeze stops the count since the last edge, so the first edge after
+		// a release would measure only the unfrozen samples either side of
+		// it: drop that measurement and wait for a fresh pair of edges,
+		// keeping the period already known (issue #47).
+		if (wasFrozen_ && !frozen) {
+			edges_ = 0;
+			sinceEdge_ = 0;
+		}
+		wasFrozen_ = frozen;
 
 		if (!frozen) {
 			if (decide_) {
@@ -188,11 +198,11 @@ public:
 		for (int i = 0; i < count; i++) {
 			squall::Event e = s.history[i];
 			const squall::Event d;
-			if (!(e.gap > 0.f && e.gap <= 1e6f))
+			if (!(e.gap > 0.f && e.gap <= squall::SAVED_GAP_MAX))
 				e.gap = d.gap;
 			if (!(e.value >= 0.f && e.value <= 1.f))
 				e.value = d.value;
-			if (!(e.length > 0.f && e.length <= 1e6f))
+			if (!(e.length > 0.f && e.length <= squall::SAVED_LENGTH_MAX))
 				e.length = d.length;
 			memory_.push(e);
 		}
@@ -351,7 +361,7 @@ private:
 	double rate_ = 0.1, gapAcc_ = 0.0, replayLeft_ = 0.0, period_ = 0.0;
 	long long ticksLeft_ = 0, sinceEdge_ = 0, edges_ = 0, lightLeft_ = 0, lightSamples_ = 4800;
 	int ctl_ = 0;
-	bool clocked_ = false, clockHigh_ = false, freezeHigh_ = false;
+	bool clocked_ = false, clockHigh_ = false, freezeHigh_ = false, wasFrozen_ = false;
 	bool pending_ = false, decide_ = false, resetSwell_ = false;
 	squall::Event pend_;
 };
