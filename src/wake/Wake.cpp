@@ -68,7 +68,17 @@ struct Wake : Module {
 		}
 		// A typed value is milliseconds, or seconds if it ends in "s" alone
 		// ("1.5 s"); "250" and "250 ms" are both a quarter of a second.
+		// Following a clock, a multiple as the tooltip shows it ("x2",
+		// "1/2 clock") sets the knob to that step.
 		void setDisplayValueString(std::string s) override {
+			Wake* wake = static_cast<Wake*>(module);
+			if (wake && wake->engine.clockStep() >= 0) {
+				const int step = rka::wake::clockStepNamed(s.c_str());
+				if (step >= 0) {
+					setValue(rka::wake::clockKnob(step));
+					return;
+				}
+			}
 			char* end = nullptr;
 			const float v = std::strtof(s.c_str(), &end);
 			if (end == s.c_str() || !(v > 0.f))

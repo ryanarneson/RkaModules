@@ -6,6 +6,7 @@
 #include "testing.hpp"
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <vector>
 
@@ -155,6 +156,20 @@ void clocked() {
 		}
 		CHECK(g.e.clockStep() == step && std::fabs(g.e.seconds(0) / (0.5 * mult[step]) - 1.0) < 1e-3,
 		      "knob step %d on a 0.5 s clock gives step %d, %g s (want %g)", step, g.e.clockStep(), g.e.seconds(0), 0.5 * mult[step]);
+	}
+	// Each multiple typed as the tooltip shows it puts the engine on it.
+	for (int step = 0; step < 10; step++) {
+		char typed[32];
+		std::snprintf(typed, sizeof typed, "%s clock", clockName(step));
+		Rig g;
+		g.f.clockPatched = true;
+		g.f.params[F::TIME] = clockKnob(clockStepNamed(typed));
+		for (int i = 0; i < 24000 * 2 + 100; i++) {
+			g.f.clock = i % 24000 < 480 ? 10.f : 0.f;
+			g.step(0.f);
+		}
+		CHECK(g.e.clockStep() == step && std::fabs(g.e.seconds(0) / (0.5 * mult[step]) - 1.0) < 1e-3,
+		      "typed \"%s\" on a 0.5 s clock gives step %d, %g s", typed, g.e.clockStep(), g.e.seconds(0));
 	}
 	// A CV sweeps the steps and never lands between them.
 	Rig g;

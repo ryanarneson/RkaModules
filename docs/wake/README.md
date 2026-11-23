@@ -46,7 +46,8 @@ in ten steps:
 
 **1/4, 1/3, 1/2, 2/3, 3/4, ×1, ×1.5, ×2, ×3, ×4**
 
-Noon is ×1: one echo per clock tick. The tooltip shows the step.
+Noon is ×1: one echo per clock tick. The tooltip shows the step, and you
+can type one in as it shows them ("x2", "1/2", "x1.5 clock").
 
 - The tempo is taken from the time between the last two ticks, so it
   follows a clock that changes.
