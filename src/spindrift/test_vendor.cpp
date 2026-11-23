@@ -21,9 +21,13 @@
 #include "testdata/RefBeads.hpp"
 #include "BeadsContext.hpp"
 
-#include "beads/dsp/processor.h"
-#include "beads/dsp/synth.h"
-#include "stmlib/utils/random.h"
+// The vendored code in angle brackets: found through -isystem src/spindrift
+// (tests.mk, the Makefile), so it is a system header and its warnings stay
+// out of -Wall -Werror. In quotes GCC would find it beside this file first,
+// as a user header (stmlib's STATIC_ASSERT warns: unused local typedef).
+#include <beads/dsp/processor.h>
+#include <beads/dsp/synth.h>
+#include <stmlib/utils/random.h>
 
 namespace {
 

@@ -24,10 +24,14 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "stmlib/stmlib.h"
-#include "stmlib/dsp/dsp.h"
-#include "stmlib/dsp/parameter_interpolator.h"
-#include "beads/dsp/frame.h"
+// The vendored code in angle brackets: found through -isystem src/spindrift
+// (tests.mk, the Makefile), so it is a system header and its warnings stay
+// out of -Wall -Werror. In quotes GCC would find it beside this file first,
+// as a user header (stmlib's STATIC_ASSERT warns: unused local typedef).
+#include <stmlib/stmlib.h>
+#include <stmlib/dsp/dsp.h>
+#include <stmlib/dsp/parameter_interpolator.h>
+#include <beads/dsp/frame.h>
 
 namespace spindrift {
 
