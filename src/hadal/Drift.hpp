@@ -21,7 +21,11 @@ struct Wander {
 	float c1 = 0.f, c2 = 0.f;
 
 	void setRate(float rate) {
+		const float old = fs;
 		fs = rate > 0.f ? rate : 48000.f;
+		// The pending target's hold counts control steps: rescale it so it
+		// still ends at the same time in seconds.
+		hold = (int) ((double) hold * fs / old);
 		// One-pole coefficients per control step: 1 - e^(-STEP / (tau fs)),
 		// as STEP / (tau fs) (tau >> STEP / fs here, so the error is tiny).
 		c1 = (float) STEP / (6.f * fs);
