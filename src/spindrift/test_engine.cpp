@@ -459,6 +459,29 @@ void seedDelay() {
 	}
 }
 
+// mixParameter's constants written out (beads.cc:213-222): the pot times
+// 1.005 (0.5 % headroom), plus (cv - 0.002) when patched, held to [0, 1].
+void mixParameterConstants() {
+	using spindrift::mixParameter;
+	CHECK(mixParameter(0.5f, 0.f, false) == 0.5025f, "pot 0.5: 0.5025 (%.9g)", mixParameter(0.5f, 0.f, false));
+	CHECK(mixParameter(0.2f, 0.f, false) == 0.2f * 1.005f, "pot 0.2: 0.201 (%.9g)", mixParameter(0.2f, 0.f, false));
+	CHECK(std::fabs(mixParameter(0.2f, 0.f, false) - 0.201f) < 1e-7f, "pot 0.2: 0.201");
+	CHECK(mixParameter(1.f, 0.f, false) == 1.f, "pot 1: held to 1 (%.9g)", mixParameter(1.f, 0.f, false));
+	CHECK(mixParameter(0.f, 0.f, false) == 0.f, "pot 0: 0");
+	CHECK(mixParameter(0.4f, 0.3f, false) == mixParameter(0.4f, 0.f, false), "unpatched: the CV is ignored");
+	// Patched: 0.4 * 1.005 + (0.3 - 0.002) = 0.402 + 0.298 = 0.7.
+	CHECK(std::fabs(mixParameter(0.4f, 0.3f, true) - 0.7f) < 1e-6f, "patched: 0.7 (%.9g)",
+	      mixParameter(0.4f, 0.3f, true));
+	// Patched at 0 V: the offset alone, 0.5025 - 0.002 = 0.5005.
+	CHECK(std::fabs(mixParameter(0.5f, 0.f, true) - 0.5005f) < 1e-6f, "patched, 0 V: 0.5005 (%.9g)",
+	      mixParameter(0.5f, 0.f, true));
+	// The offset pulls a closed pot below 0: held to 0.
+	CHECK(mixParameter(0.f, 0.001f, true) == 0.f, "patched, pot 0, cv 0.001: held to 0 (%.9g)",
+	      mixParameter(0.f, 0.001f, true));
+	CHECK(mixParameter(0.9f, 0.5f, true) == 1.f, "patched, over: held to 1");
+	CHECK(mixParameter(0.1f, -0.5f, true) == 0.f, "patched, under: held to 0");
+}
+
 // With fixed CVs, the engine against a reference given the values Beads'
 // calibration targets mean (calibrator.h, settings.cc), not computed from
 // the volts: Pitch 1 V = 12 semitones (attenuverter full clockwise), every
@@ -1050,6 +1073,7 @@ void noAllocation() {
 int main() {
 	matchesRefAtNativeRate();
 	seedDelay();
+	mixParameterConstants();
 	cvScaling();
 	levels();
 	synthAfter10s();
