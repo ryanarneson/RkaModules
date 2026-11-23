@@ -32,9 +32,9 @@ From the top:
   **Sustain CV** input is the signal; the Sustain knob adds 0 to 10 V.
   OUT follows it, rising at Attack's rate and falling at Decay's (the knob
   sets the time for a 10 V move). Release, GATE, RETRIG and the button do
-  nothing here. The A, D and S gates then mean "rising", "falling" and
-  "caught up"; an input that moves slowly, slower than the slew, reads
-  as S.
+  nothing here.
+  In Hold the A, D and S gates mean "rising", "falling" and "caught up";
+  an input that moves slower than the slew reads as S.
 
 ### Gate or Trig with a trigger
 
@@ -101,8 +101,8 @@ while the gate is low.
 ## The window
 
 The envelope drawn from the knobs (with channel 1's CVs) and Shape. It
-is a picture of the envelope, not a meter. Each
-stage's width grows with the log of its time, so a 1 ms Attack stays
+is a picture of the envelope, not a meter.
+Each stage's width grows with the log of its time, so a 1 ms Attack stays
 visible beside a 60 s Release; the window shows shape and position, not a
 ruler. The knobs' shape is drawn dim. The running stage's letter is
 bright, and an Attack, Decay or Release that is running is drawn bright
@@ -126,7 +126,8 @@ line. In Hold the window shows a scrolling line of the output.
   Each gate swells the drone in and lets it fade. Try Shape right.
 - **Events from the stage gates.** The A gate into Rigging's STRUM (a
   strike as Attack starts) and TRIG into Narrows' PING: a long gate gives
-  four pings, at Attack, Decay, Sustain and the return to rest.
+  five pings: the start of Attack, Decay, Sustain and Release, and the
+  return to rest.
 - **Ducking.** INV into Sluice's level CV on an open drone: the drone
   gives way while the envelope rises and comes back as it falls.
 - **Glide.** A sequencer's V/OCT into the Sustain CV, Hold, S fully
