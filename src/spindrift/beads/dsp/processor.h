@@ -215,6 +215,8 @@ class Processor {
         return processor_digital_.write_head(mono_);  // SPINDRIFT:
     }  // SPINDRIFT:
   }  // SPINDRIFT:
+  // SPINDRIFT: Process()'s delay_mode: Size has crossed into delay mode.
+  bool delayMode() const { return delay_mode_transition_ > 0.0f; }  // SPINDRIFT:
  private:
   // SPINDRIFT: max_delay as Configure computes it, for the current media.
   int max_delay_times_ratio() const {  // SPINDRIFT:

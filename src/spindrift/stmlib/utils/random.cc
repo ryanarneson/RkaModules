@@ -27,10 +27,14 @@
 // Random number generator.
 
 #include "stmlib/utils/random.h"
+#include <cassert>  // SPINDRIFT: rng_state_() checks it runs inside a BeadsScope
 
 namespace stmlib {
 
 /* static */
-uint32_t& Random::rng_state_() { return spindrift::current()->rng; }  // SPINDRIFT: per-instance state (BeadsContext; upstream 0x21 is its default)
+uint32_t& Random::rng_state_() {  // SPINDRIFT: per-instance state (BeadsContext; upstream 0x21 is its default)
+  assert(spindrift::current() && "Beads called outside a spindrift::BeadsScope");  // SPINDRIFT:
+  return spindrift::current()->rng;  // SPINDRIFT:
+}  // SPINDRIFT:
 
 }  // namespace stmlib

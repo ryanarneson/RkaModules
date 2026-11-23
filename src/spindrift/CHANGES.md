@@ -30,7 +30,9 @@ holds the vendored Processor and Synth to the reference bit for bit.
   upstream), reached through `rng_state_()` and one thread-local pointer
   (`spindrift::current()`, BeadsFirmware.cpp; set by `BeadsScope`), as
   Shoal's `stmlib_utils_random.h`. Two instances never share a stream
-  (TESTING.md rule 8).
+  (TESTING.md rule 8). `rng_state_()` asserts that a context is current, so
+  a call into Beads outside a `BeadsScope` fails in the tests rather than
+  reading through a null pointer.
 - `beads/resources.h`, `resources.cc`: the four `*_table` pointer arrays are
   `const` (never written), so the object holds no writable globals.
 - `beads/dsp/mu_law.h`, `mu_law.cc`: `lut_ulaw_f` is `const`, likewise.
@@ -47,7 +49,8 @@ holds the vendored Processor and Synth to the reference bit for bit.
   delay or gain).
 - Window accessors (const, no allocation; `GrainSnap`, `TapSnap` in
   `BeadsContext.hpp`):
-  - `beads/dsp/processor.h`: `grains()`, `taps()`, `writeHead()`, and the
+  - `beads/dsp/processor.h`: `grains()`, `taps()`, `writeHead()`,
+    `delayMode()` (Process()'s own test, for the engine's mode), and the
     private `max_delay_times_ratio()` they need.
   - `beads/dsp/granular_processor.h`: `grains(mono, ...)`, `write_head(mono)`.
   - `beads/dsp/synth.h`: `grains()`, `wave()`.
