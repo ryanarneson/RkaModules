@@ -224,7 +224,7 @@ instance, Apple M-series Mac:
 | Spindrift budget | 0.4 | 2.05 | 2.1 |
 | Spindrift measured | 0.245 | 1.347 | 1.385 |
 | Beacon budget | 0.25 | 0.4 | 2.05 |
-| Beacon measured | 0.120 | 0.18 | 1.01 |
+| Beacon measured (most of three runs) | 0.121 | 0.182 | 1.013 |
 
 Narrows' idle and outputs cases are one stereo voice through the ladder and
 its busy case is sixteen voices with everything engaged; it also has a state
@@ -232,7 +232,9 @@ case (one voice through the state core): budget 0.5, measured 0.24.
 
 Beacon's idle case is one voice (nothing patched), its outputs case one
 channel with a 2 Hz gate, and its busy case sixteen channels with staggered
-gates, RETRIG pulses, every CV moving and Shape at 0.8.
+gates, RETRIG pulses, every CV moving and Shape at 0.8. Its busy libm case
+runs with those CVs moving and still requires 0 calls (stricter than Squall's,
+whose busy case only reports).
 
 Eddy's idle has no tape; outputs plays a 10 s tape at the defaults; busy
 is a full tape (5 minutes) at Speed 2 by a moving CV, Dub on, Wear and Smear

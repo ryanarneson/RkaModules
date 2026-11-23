@@ -148,6 +148,10 @@ void recovers_after_nan() {
 	g.f.gate.channels = 16;
 	for (int i = 0; i < 4; i++)
 		g.port(i).channels = 16;
+	// Voices running first (at their sustain), so the NaN arrives mid-state.
+	g.fill(4, 10.f);
+	for (int n = 0; n < 20000; n++)
+		g.e.process(g.f, g.r);
 	for (int p = 0; p < F::PARAMS_LEN; p++)
 		g.f.params[p] = NAN;
 	for (int i = 0; i < 4; i++)
@@ -160,12 +164,24 @@ void recovers_after_nan() {
 		g.f.params[p] = sane.params[p];
 	for (int i = 0; i < 4; i++)
 		g.fill(i, 0.f);
+	// First the gate low: whatever the NaN left running (a Release) must end
+	// at 0 V within 3 s, not stall.
+	g.fill(4, 0.f);
+	for (int n = 0; n < 144000; n++)
+		g.e.process(g.f, g.r);
+	float stuck = 0.f;
+	for (int c = 0; c < 16; c++)
+		stuck = std::fmax(stuck, std::fabs(g.r.out[c]));
+	CHECK(stuck < 0.001f, "after NaN everywhere and 3 s of gate low every channel is back at 0 V (%g)", stuck);
 	g.fill(4, 10.f);
 	float peak = 0.f;
+	bool good = true;
 	for (int n = 0; n < 48000; n++) {
 		g.e.process(g.f, g.r);
+		good = good && ok(g.r);
 		peak = std::fmax(peak, g.r.out[15]);
 	}
+	CHECK(good, "after NaN everywhere every output is finite and in range again at once");
 	CHECK(std::isfinite(g.r.out[0]) && peak > 9.9f && std::fabs(g.r.out[0] - 5.f) < 0.05f,
 	      "after NaN everywhere an ordinary gate must give an ordinary envelope (peak %g, sustain %g)", peak,
 	      g.r.out[0]);
@@ -263,21 +279,67 @@ void rate_changes_mid_stage() {
 	CHECK(good, "rate changes mid-stage in every mode must keep the outputs finite and in range");
 }
 
-// The level is continuous across a rate change: no jump bigger than a
-// stage step could give.
-void rate_change_keeps_level() {
-	Rig g;
-	g.f.gate.channels = 1;
-	g.fill(4, 10.f);
-	g.f.params[F::ATTACK] = 0.8f;   // a few seconds
-	g.e.setSampleRate(48000.f);
-	for (int i = 0; i < 20000; i++)
-		g.e.process(g.f, g.r);
-	const float before = g.r.out[0];
-	g.e.setSampleRate(768000.f);
-	g.e.process(g.f, g.r);
-	CHECK(before > 0.5f && std::fabs(g.r.out[0] - before) < 0.05f,
-	      "a rate change kept the level (was %g, now %g)", before, g.r.out[0]);
+// A rate change in mid-stage keeps the stage, the phase and the level, and
+// the stage still takes the rest of its time (in seconds) at the new rate.
+// For HOLD the slew carries on from the level at 10 V / Attack. A change that
+// restarts or rewinds a stage (phase or level back to 0) must fail this.
+void rate_change_carries_the_stage() {
+	using rka::beacon::stageSeconds;
+	const float knob = 0.6f;
+	const double T = stageSeconds(knob);   // about 0.74 s
+	for (int which = 0; which < 4; which++)   // Attack, Decay, Release, Hold
+		for (float newFs : {8000.f, 24000.f, 96000.f, 768000.f}) {
+			Rig g;
+			g.e.setSampleRate(48000.f);
+			g.f.gate.channels = 1;
+			g.f.params[F::ATTACK] = g.f.params[F::DECAY] = g.f.params[F::RELEASE] = knob;
+			g.f.params[F::SUSTAIN] = 0.2f;
+			const int stageWanted = which == 0 ? 1 : which == 1 ? 2 : which == 2 ? 4 : 0;
+			const rka::BeaconPublished& pub = g.e.published();
+			if (which == 3) {
+				g.f.params[F::MODE] = 2.f;
+				g.f.params[F::SUSTAIN] = 1.f;      // Hold input = CV + 10 V x knob, clamped to 10 V
+				g.f.sustainCv.channels = 1;
+			}
+			g.fill(4, 10.f);
+			bool reached = false;
+			for (long n = 0; n < 4000000 && !reached; n++) {
+				if (which == 2 && pub.stage.load() == 3)
+					g.fill(4, 0.f);                       // gate falls in Sustain
+				g.e.process(g.f, g.r);
+				reached = which == 3 ? g.r.out[0] > 4.f : pub.stage.load() == stageWanted && pub.phase.load() > 0.4f;
+			}
+			if (!reached) {
+				CHECK(false, "stage %d never reached its mid-point", which);
+				continue;
+			}
+			const double p0 = pub.phase.load();
+			const float level0 = g.r.out[0];
+			g.e.setSampleRate(newFs);
+			long count = 0;
+			float level1 = 0.f;
+			double p1 = 0.0;
+			bool still = true;
+			for (; count < 4000000; count++) {
+				g.e.process(g.f, g.r);
+				if (count == 0) {
+					level1 = g.r.out[0];
+					p1 = pub.phase.load();
+				}
+				if (which == 3 ? g.r.out[0] >= 9.999f : pub.stage.load() != stageWanted)
+					break;
+				still = still && ok(g.r);
+			}
+			const double remain = which == 3 ? (10.0 - level0) / 10.0 * T * newFs : (1.0 - p0) * T * newFs;
+			CHECK(std::fabs(level1 - level0) < 0.05f, "stage %d at %g Hz: the level jumped %g -> %g", which, newFs,
+			      level0, level1);
+			if (which != 3)
+				CHECK(std::fabs(p1 - p0) < 2.0 / (T * newFs) + 2.0 / (T * 48000.0) + 1e-5,
+				      "stage %d at %g Hz: the phase went %g -> %g", which, newFs, p0, p1);
+			CHECK(std::fabs(double(count) - remain) <= 3.0 + remain * 2e-4,
+			      "stage %d at %g Hz: %ld samples were left, %.1f expected", which, newFs, count, remain);
+			CHECK(still, "stage %d at %g Hz: an output left its range", which, newFs);
+		}
 }
 
 // GATE and RETRIG toggling every sample, every other sample and at random,
@@ -293,6 +355,7 @@ void audio_rate_gates() {
 			rka::hadal::Random rng;
 			rng.seed(5 + kind);
 			bool good = true;
+			float lastOut[16] = {};
 			for (long n = 0; n < 200000; n++) {
 				for (int c = 0; c < 16; c++) {
 					float gv, rv;
@@ -308,8 +371,15 @@ void audio_rate_gates() {
 				}
 				g.e.process(g.f, g.r);
 				good = good && ok(g.r);
+				// At 48 kHz no stage moves a voice by more than 4 x 10 V / 48
+				// in a sample (1 ms, the steepest curve); a restart must start
+				// from the present level.
+				for (int c = 0; c < g.r.channels; c++)
+					good = good && std::fabs(g.r.out[c] - lastOut[c]) <= 0.9f;
+				for (int c = 0; c < 16; c++)
+					lastOut[c] = g.r.out[c];
 			}
-			CHECK(good, "mode %d, gate pattern %d at audio rate must keep every output finite and in range", mode, kind);
+			CHECK(good, "mode %d, gate pattern %d at audio rate must keep every output finite, in range and continuous", mode, kind);
 		}
 }
 
@@ -421,9 +491,9 @@ void seeded_fuzz() {
 					const float rates[6] = {1.f, 8000.f, 44100.f, 48000.f, 192000.f, 768000.f};
 					g.e.setSampleRate(rates[rng.next() % 6]);
 				}
-				if (n % 100000 == 0)
-					g.e.reset();
 			}
+			if (n % 100003 == 50000)
+				g.e.reset();
 			for (int i = 0; i < 6; i++)
 				for (int c = 0; c < 16; c++) {
 					const float u = rng.unit();
@@ -446,7 +516,7 @@ int main() {
 	mode_out_of_range();
 	extreme_rates();
 	rate_changes_mid_stage();
-	rate_change_keeps_level();
+	rate_change_carries_the_stage();
 	audio_rate_gates();
 	channel_counts_change();
 	no_allocation_in_process();
