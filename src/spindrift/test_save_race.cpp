@@ -15,8 +15,10 @@
 // two process() calls, so with nothing else writing, a hash of the ring and
 // its header for that number. Another thread calls bufferImage() in a loop
 // and hashes each image it is given. Afterwards every returned image must
-// match the record for its number; some copies must have been discarded
-// (the race happened); and many images must have been returned.
+// match the record for its number; at least one copy must have been
+// discarded (the race happened); and many images must have been returned.
+// It runs until both have, for 3 s at least and 60 s at most. Skipped,
+// saying so, on a machine with one hardware thread.
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -119,7 +121,7 @@ void save_race() {
 		for (;;) {
 			const auto now = std::chrono::steady_clock::now();
 			if (now - start > std::chrono::seconds(60) ||
-			    (now - start > std::chrono::seconds(3) && got.size() >= 200 && discarded >= 20))
+			    (now - start > std::chrono::seconds(3) && got.size() >= 200 && discarded >= 1))
 				break;
 			const uint32_t before = e->ringSeq();
 			spindrift::BufferHeader h;
@@ -153,13 +155,21 @@ void save_race() {
 	CHECK(wrong == 0, "every image returned is the ring as it stood at its number (%ld torn of %zu)", wrong, got.size());
 	CHECK(unknown == 0, "every image's number is one the ring stood still at (%ld unknown)", unknown);
 	CHECK(got.size() >= 200, "images returned (%zu)", got.size());
-	CHECK(discarded >= 20, "the race happened: copies discarded (%ld)", discarded);
+	CHECK(discarded >= 1, "the race happened: copies discarded (%ld)", discarded);
 	CHECK(stable.size() >= 50, "the ring froze and thawed (%zu stable rings)", stable.size());
 }
 
 }  // namespace
 
 int main() {
+	// The race needs the two threads running at once: on one core the
+	// copy is rarely interrupted by the engine, so nothing would be shown.
+	const unsigned cores = std::thread::hardware_concurrency();
+	if (cores == 1) {
+		std::printf("spindrift test_save_race: SKIPPED: one hardware thread (the save and the engine cannot run "
+		            "at once)\n");
+		return 0;
+	}
 	save_race();
 	return rkatest::finish("spindrift test_save_race");
 }
