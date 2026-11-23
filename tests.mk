@@ -23,7 +23,7 @@ TSAN_TESTS = $(filter %/test_threads,$(TEST_BINS))
 TSAN_START_FAILED = ThreadSanitizer: unexpected memory mapping
 TSAN_REQUIRED ?=
 .PHONY: test
-test: shoal-globals spindrift-vendor bench-modules engine-globals libm-calls panels-test $(TEST_BINS)
+test: shoal-globals spindrift-globals spindrift-vendor bench-modules engine-globals libm-calls panels-test $(TEST_BINS)
 	@for t in $(filter-out $(TSAN_TESTS),$(TEST_BINS)); do ./$$t || exit 1; done
 	@for t in $(TSAN_TESTS); do \
 		./$$t > $$t.log 2>&1; rc=$$?; \
@@ -69,8 +69,9 @@ SHOAL_DEPS := $(shell find src/shoal -type f \( -name '*.h' -o -name '*.hpp' -o 
 # (TESTING.md rule 9). The Makefile adds these to BeadsFirmware.cpp.o.
 SPINDRIFT_FW_FLAGS = -fwrapv -fno-strict-aliasing -fno-unsafe-math-optimizations -funsigned-char -DTEST
 # The vendored and reference objects are built without -Wall -Wextra
-# (upstream warns: unused parameters), and with -Wno-vla while upstream's
-# variable-length arrays remain (Clang warns on them by default). The tests
+# (upstream warns: unused parameters). The reference keeps upstream's
+# variable-length arrays and so builds with -Wno-vla (Clang warns on them by
+# default); the vendored copy has none left (CHANGES.md) and needs nothing. The tests
 # include the vendored headers through -isystem, so their own code still gets
 # -Wall -Wextra (and -Werror in CI). C++11 for the firmware objects, as the
 # plugin builds them.
@@ -160,7 +161,7 @@ build/test/fog/test_hostile: src/fog/test_hostile.cpp src/testing.hpp $(wildcard
 
 build/test/spindrift/BeadsFirmware.o: src/spindrift/BeadsFirmware.cpp $(SPINDRIFT_FW_DEPS)
 	@mkdir -p $(@D)
-	$(CXX) -std=c++11 $(SPINDRIFT_TEST_FLAGS) -Wno-vla -Isrc/spindrift -c $< -o $@
+	$(CXX) -std=c++11 $(SPINDRIFT_TEST_FLAGS) -Isrc/spindrift -c $< -o $@
 
 # The reference under other namespaces, so it links beside the vendored copy.
 build/test/spindrift/RefBeads.o: src/spindrift/testdata/RefBeads.cpp $(SPINDRIFT_REF_DEPS)
@@ -177,6 +178,13 @@ build/test/spindrift/test_%: src/spindrift/test_%.cpp build/test/spindrift/Beads
 .PHONY: spindrift-vendor
 spindrift-vendor:
 	tools/check_spindrift_vendor.sh
+
+# The vendored Beads object holds no writable global state: Random's lives in
+# each instance's spindrift::BeadsContext, reached through one thread-local
+# pointer (spindrift::current(), BeadsFirmware.cpp), the only one allowed.
+.PHONY: spindrift-globals
+spindrift-globals: build/test/spindrift/BeadsFirmware.o
+	ALLOWED_TLS='^_*ZZN9spindrift7currentEvE7context([$$]tlv[$$]init)?$$' tools/check_shoal_globals.sh $<
 
 build/test/shoal/Firmware.o: src/shoal/Firmware.cpp $(SHOAL_DEPS)
 	@mkdir -p $(@D)

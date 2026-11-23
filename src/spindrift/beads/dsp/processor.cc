@@ -50,6 +50,8 @@ void Processor::Init(
   
   dry_ = 0.0f;
   wet_ = 0.0f;
+  DelayController::Output no_taps = { };  // SPINDRIFT: taps_buffer_ starts empty
+  fill(&taps_buffer_[0], &taps_buffer_[spindrift::kMaxBlock], no_taps);  // SPINDRIFT:
   
   reverb_.Init(reverb_buffer, 48000.0f);
 #ifdef ENABLE_HARDWARE_24K
@@ -121,12 +123,14 @@ void Processor::Process(
   float expo_fm_amount = 20.0f * (fabsf(density.base - 0.5f) - 0.225f);
   CONSTRAIN(expo_fm_amount, 0.0f, 1.0f);
 
-  TriggerGenerator::Output triggers_buffer[size];
-  DelayController::Output taps_buffer[size];
-  bool gate_out[size];
+  assert(size <= spindrift::kMaxBlock);  // SPINDRIFT: fixed-size blocks
+  TriggerGenerator::Output triggers_buffer[spindrift::kMaxBlock];  // SPINDRIFT: was [size]
+  // SPINDRIFT: taps_buffer is now the member taps_buffer_ (processor.h), so
+  // SPINDRIFT: taps() can show the last block's taps.
+  bool gate_out[spindrift::kMaxBlock];  // SPINDRIFT: was [size]
 
   TriggerGenerator::Output* triggers = &triggers_buffer[0];
-  DelayController::Output* taps = &taps_buffer[0];
+  DelayController::Output* taps = &taps_buffer_[0];  // SPINDRIFT: member
   
   // Extract grain triggers.
   if (delay_mode) {
@@ -160,7 +164,7 @@ void Processor::Process(
     }
   }
   
-  FloatFrame dry_signal[size];
+  FloatFrame dry_signal[spindrift::kMaxBlock];  // SPINDRIFT: was [size]
   
   // Granular processing.
   const float feedback = mix_parameters.feedback;

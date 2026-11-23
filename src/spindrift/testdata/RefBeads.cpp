@@ -4,8 +4,14 @@
 // (tests.mk), so its names never meet the vendored copy's.
 #include "RefBeads.hpp"
 
-#include <cstdio>  // printf under TEST (wavetable_granular_player.h); see BeadsFirmware.cpp
+#include <cstdio>  // printf under TEST (wavetable_granular_player.h)
 #include <vector>
+
+// Under TEST, upstream's wavetable_granular_player.h prints a line whenever a
+// synth-mode grain is stolen; the vendored copy marks that out. Here, where
+// the source stays untouched, the driver silences it instead: the arguments
+// have no side effects, so nothing the reference computes changes.
+#define printf(...) ((void)0)
 
 // The reference's .cc files (as BeadsFirmware.cpp includes the vendored ones).
 #include "beads/dsp/delay_clock.cc"

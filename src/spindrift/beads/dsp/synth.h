@@ -68,6 +68,20 @@ class Synth {
       FloatFrame* out,
       size_t size);
   
+  // SPINDRIFT: the window's view (BeadsContext.hpp): const, no allocation.
+  // SPINDRIFT: Sounding grains, at most max; returns the count.
+  int grains(spindrift::GrainSnap* out, int max) const {  // SPINDRIFT:
+    int n = 0;  // SPINDRIFT:
+    for (int i = 0; i < WavetableGranularPlayer::NUM_GRAINS && n < max; ++i) {  // SPINDRIFT:
+      const WavetableGrain& g = wavetable_granular_player_.grain(i);  // SPINDRIFT:
+      if (!g.done()) {  // SPINDRIFT:
+        g.snap(out[n++]);  // SPINDRIFT:
+      }  // SPINDRIFT:
+    }  // SPINDRIFT:
+    return n;  // SPINDRIFT:
+  }  // SPINDRIFT:
+  // SPINDRIFT: The voice's wave, 0..1 across the bank (both neighbours blend).
+  float wave() const { return wavetable_voice_.wave(); }  // SPINDRIFT:
  private:
   TriggerGenerator trigger_generator_;
   

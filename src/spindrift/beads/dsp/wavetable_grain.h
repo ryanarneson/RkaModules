@@ -35,6 +35,7 @@
 #include "stmlib/utils/random.h"
 
 #include "beads/dsp/grain.h"
+#include "BeadsContext.hpp"  // SPINDRIFT: GrainSnap
 
 namespace beads {
 
@@ -150,6 +151,16 @@ class WavetableGrain : public Grain {
         std::min(float(kTableSize) * frequency, 1.0f));
   }
   
+  // SPINDRIFT: the window's view of this grain (BeadsContext.hpp): position
+  // SPINDRIFT: is its wave, 0..1 across the bank; it reads no buffer (span 0).
+  inline void snap(spindrift::GrainSnap& out) const {  // SPINDRIFT:
+    out.position = (float(wave_integral_) + wave_fractional_) /  // SPINDRIFT:
+        float(kNumWavesPerTable - 1);  // SPINDRIFT:
+    out.span = 0.0f;  // SPINDRIFT:
+    out.pan = gain_l_ + gain_r_ > 0.0f  // SPINDRIFT:
+        ? gain_r_ / (gain_l_ + gain_r_) : 0.5f;  // SPINDRIFT:
+    out.env = envelope_sample_;  // SPINDRIFT:
+  }  // SPINDRIFT:
   inline float ReadSample(float phase) const {
     const float p = phase * float(kTableSize);
     MAKE_INTEGRAL_FRACTIONAL(p);

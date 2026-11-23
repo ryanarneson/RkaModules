@@ -127,6 +127,7 @@ class GranularPlayer {
   }
   
   inline T* new_grain() { return grain_priority_list_[0]; }
+  inline const T& grain(int i) const { return grain_[i]; }  // SPINDRIFT: for the window (read only)
   
   inline void Tick() {
     ++grain_interval_;

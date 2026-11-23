@@ -67,7 +67,7 @@ namespace beads {
 // };
 
 /* extern */
-float lut_ulaw_f[256] = {
+const float lut_ulaw_f[256] = {  // SPINDRIFT: const (never written; no writable globals)
   -0.98035f, -0.94910f, -0.91785f, -0.88660f,
   -0.85535f, -0.82410f, -0.79285f, -0.76160f,
   -0.73035f, -0.69910f, -0.66785f, -0.63660f,

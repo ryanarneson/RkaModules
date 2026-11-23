@@ -132,6 +132,20 @@ class GrainEnvelope {
     return stage_ >= STAGE_DONE;
   }
 
+  // SPINDRIFT: the value the next Render() returns, without advancing (for
+  // SPINDRIFT: the window; the same computation as Render()).
+  inline float value() const {  // SPINDRIFT:
+    if (stage_ == STAGE_DONE) {  // SPINDRIFT:
+      return 0.0f;  // SPINDRIFT:
+    }  // SPINDRIFT:
+    if (stage_ == STAGE_SUSTAIN) {  // SPINDRIFT:
+      return 1.0f;  // SPINDRIFT:
+    }  // SPINDRIFT:
+    const bool attack = stage_ == STAGE_ATTACK;  // SPINDRIFT:
+    const float t = attack ? phase_ : 1.0f - phase_;  // SPINDRIFT:
+    const float base = attack ? t : (t * t) * (t * t);  // SPINDRIFT:
+    return base + (stmlib::SmoothStep(t) - base) * smoothness_;  // SPINDRIFT:
+  }  // SPINDRIFT:
  private:
   enum Stage {
     STAGE_ATTACK,

@@ -31,6 +31,6 @@
 namespace stmlib {
 
 /* static */
-uint32_t Random::rng_state_ = 0x21;
+uint32_t& Random::rng_state_() { return spindrift::current()->rng; }  // SPINDRIFT: per-instance state (BeadsContext; upstream 0x21 is its default)
 
 }  // namespace stmlib

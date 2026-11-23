@@ -142,6 +142,7 @@ class WavetableVoice {
     }
   }
   
+  inline float wave() const { return wave_lp_; }  // SPINDRIFT: for the window: 0..1 across the bank
  private:
   float frequency_;
   float phase_;

@@ -41,7 +41,7 @@ namespace beads {
 //   return ((u_val & 0x80) ? (0x84 - t) : (t - 0x84));
 // }
 
-extern float lut_ulaw_f[256];
+extern const float lut_ulaw_f[256];  // SPINDRIFT: const (never written; no writable globals)
 
 inline float MuLaw2Lin(uint8_t u_val) {
   return lut_ulaw_f[u_val];

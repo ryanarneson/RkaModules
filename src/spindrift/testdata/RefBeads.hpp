@@ -29,7 +29,10 @@ public:
 	BeadsRef(const BeadsRef&) = delete;
 	BeadsRef& operator=(const BeadsRef&) = delete;
 
-	void seed(uint32_t s);                  // stmlib::Random::Seed (one state for every BeadsRef)
+	// stmlib::Random::Seed. The reference keeps upstream's one global Random,
+	// so every BeadsRef shares one stream: a comparison seeds one reference
+	// and runs it alone (with no other BeadsRef running in between).
+	void seed(uint32_t s);
 	void configure(int media, bool mono);   // Processor::Configure; media 0 Dirty Tape .. 3 Digital
 	// Processor::Process on one block. seedGateFlags: stmlib::GateFlags per
 	// frame, nullptr when SEED is unpatched. inLR, outLR: interleaved, +-1.

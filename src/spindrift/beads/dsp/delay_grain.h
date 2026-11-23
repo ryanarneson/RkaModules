@@ -36,6 +36,7 @@
 
 #include "beads/dsp/delay_line.h"
 #include "beads/dsp/grain.h"
+#include "BeadsContext.hpp"  // SPINDRIFT: GrainSnap
 
 namespace beads {
 
@@ -130,6 +131,21 @@ class DelayGrain : public Grain {
     voice_stealing_envelope_.ResetAndPause();
   }
   
+  // SPINDRIFT: the window's view of this grain (BeadsContext.hpp); frames is
+  // SPINDRIFT: the delay line's length (its MAX_DELAY). delay_ and speed_ are
+  // SPINDRIFT: in 1/1024 samples.
+  inline void snap(spindrift::GrainSnap& out, int frames) const {  // SPINDRIFT:
+    const float length = 1024.0f * float(frames);  // SPINDRIFT:
+    out.position = std::min(std::max(float(delay_) / length, 0.0f), 1.0f);  // SPINDRIFT:
+    // SPINDRIFT: remaining_samples_ runs below 0 while a release outlasts it.
+    out.span = std::min(  // SPINDRIFT:
+        float(std::max(remaining_samples_, 0)) * fabsf(float(speed_)) / length,  // SPINDRIFT:
+        1.0f);  // SPINDRIFT:
+    const float l = gain_[0][0] + gain_[0][1];  // SPINDRIFT: to the left output
+    const float r = gain_[1][0] + gain_[1][1];  // SPINDRIFT: to the right output
+    out.pan = l + r > 0.0f ? r / (l + r) : 0.5f;  // SPINDRIFT:
+    out.env = envelope_.value() * voice_stealing_envelope_.value();  // SPINDRIFT:
+  }  // SPINDRIFT:
   template<
       HeadCrossingPolicy head_crossing_policy,
       bool fade_out,

@@ -359,18 +359,18 @@ const float lut_sine[] = {
 };
 
 
-const float* lookup_table_table[] = {
+const float* const lookup_table_table[] = {  // SPINDRIFT: const (never written; no writable globals)
   lut_sine,
 };
 
 
 
-const int16_t* lookup_table_i16_table[] = {
+const int16_t* const lookup_table_i16_table[] = {  // SPINDRIFT: const (never written; no writable globals)
 };
 
 
 
-const int8_t* lookup_table_i8_table[] = {
+const int8_t* const lookup_table_i8_table[] = {  // SPINDRIFT: const (never written; no writable globals)
 };
 
 const int16_t wav_integrated_waves[] = {
@@ -12857,7 +12857,7 @@ const int16_t wav_integrated_waves[] = {
 };
 
 
-const int16_t* wavetables_table[] = {
+const int16_t* const wavetables_table[] = {  // SPINDRIFT: const (never written; no writable globals)
   wav_integrated_waves,
 };
 

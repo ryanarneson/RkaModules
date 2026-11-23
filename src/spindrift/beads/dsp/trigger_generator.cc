@@ -29,6 +29,8 @@
 #include "beads/dsp/trigger_generator.h"
 
 #include <algorithm>
+#include <cassert>  // SPINDRIFT: block-size assert
+#include "BeadsContext.hpp"  // SPINDRIFT: kMaxBlock
 
 #include "stmlib/dsp/dsp.h"
 #include "stmlib/dsp/units.h"
@@ -250,7 +252,8 @@ void TriggerGenerator::Render(
     CONSTRAIN(density, 0.0f, 1.0f);
 
     const float fm = SemitonesToRatio(exponential_fm * 60.0f);
-    stmlib::GateFlags merged_gate_flags[size];
+    assert(size <= spindrift::kMaxBlock);  // SPINDRIFT: fixed-size blocks
+    stmlib::GateFlags merged_gate_flags[spindrift::kMaxBlock];  // SPINDRIFT: was [size]
     
     // Merge seed button and external gate input to get a single gate stream.
     for (size_t i = 0; i < size; ++i) {

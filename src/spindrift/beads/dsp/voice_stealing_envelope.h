@@ -64,6 +64,7 @@ class VoiceStealingEnvelope {
     return value_ <= 0.0f;
   }
 
+  inline float value() const { return std::max(value_, 0.0f); }  // SPINDRIFT: for the window (read only)
  private:
   float value_;
   float decrement_;

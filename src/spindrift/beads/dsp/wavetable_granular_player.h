@@ -53,7 +53,7 @@ class WavetableGranularPlayer : public GranularPlayer<WavetableGrain, 32> {
       float amplitude, pan;
       ComputeGrainAmplitudeAndPan(trigger, p, &amplitude, &pan);
       
-#ifdef TEST
+#if 0  // SPINDRIFT: upstream prints here under TEST; nothing prints from the audio path
       if (!new_grain()->done()) {
         printf("stealing, duration = %d\n", new_grain()->remaining_samples());
       }

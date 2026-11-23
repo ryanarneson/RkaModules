@@ -12,6 +12,9 @@
 # would leak between the cores that share a thread.
 #
 # Usage: tools/check_shoal_globals.sh path/to/object.o
+# ALLOWED_TLS (an extended regex on the mangled name) names the one allowed
+# thread-local for another object; the default is Shoal's. Spindrift's
+# vendored Beads (tests.mk, spindrift-globals) allows spindrift::current()'s.
 # The object format follows `uname -s` (Darwin: Mach-O, else ELF); set
 # SHOAL_OBJ_FORMAT=macho or elf to override (tools/test_check_shoal_globals.sh
 # uses it to check ELF objects on a Mac).
@@ -53,8 +56,8 @@ ALLOWED='13storage_size_E$|^DW[.]ref[.]'
 
 # The one allowed thread-local, by its mangled name: the function-local
 # static `context` in shoal::current() (Mach-O adds a $tlv$init symbol for
-# its storage beside the descriptor).
-ALLOWED_TLS='^_*ZZN5shoal7currentEvE7context([$]tlv[$]init)?$'
+# its storage beside the descriptor), unless ALLOWED_TLS is set.
+ALLOWED_TLS=${ALLOWED_TLS:-'^_*ZZN5shoal7currentEvE7context([$]tlv[$]init)?$'}
 
 FORMAT=${SHOAL_OBJ_FORMAT:-}
 if [ -z "$FORMAT" ]; then

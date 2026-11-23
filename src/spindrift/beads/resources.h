@@ -42,13 +42,13 @@ namespace beads {
 
 typedef uint8_t ResourceId;
 
-extern const float* lookup_table_table[];
+extern const float* const lookup_table_table[];  // SPINDRIFT: const (never written; no writable globals)
 
-extern const int16_t* lookup_table_i16_table[];
+extern const int16_t* const lookup_table_i16_table[];  // SPINDRIFT: const (never written; no writable globals)
 
-extern const int8_t* lookup_table_i8_table[];
+extern const int8_t* const lookup_table_i8_table[];  // SPINDRIFT: const (never written; no writable globals)
 
-extern const int16_t* wavetables_table[];
+extern const int16_t* const wavetables_table[];  // SPINDRIFT: const (never written; no writable globals)
 
 extern const float lut_sine[];
 extern const int16_t wav_integrated_waves[];

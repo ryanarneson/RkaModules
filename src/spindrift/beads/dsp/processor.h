@@ -163,7 +163,73 @@ class Processor {
       FloatFrame* out,
       size_t size);
   
+  // SPINDRIFT: the window's view (BeadsContext.hpp): const, no allocation.
+  // SPINDRIFT: Sounding grains (none in delay mode), at most max; returns the count.
+  int grains(spindrift::GrainSnap* out, int max) const {  // SPINDRIFT:
+    if (delay_mode_transition_ > 0.0f) {  // SPINDRIFT: Process()'s delay_mode
+      return 0;  // SPINDRIFT:
+    }  // SPINDRIFT:
+    switch (media_) {  // SPINDRIFT:
+      case MEDIA_DIRTY_TAPE:  // SPINDRIFT:
+        return processor_dirty_tape_.grains(mono_, out, max);  // SPINDRIFT:
+      case MEDIA_CLEAN_TAPE:  // SPINDRIFT:
+        return processor_clean_tape_.grains(mono_, out, max);  // SPINDRIFT:
+      case MEDIA_VINTAGE_DIGITAL:  // SPINDRIFT:
+        return processor_vintage_digital_.grains(mono_, out, max);  // SPINDRIFT:
+      case MEDIA_DIGITAL:  // SPINDRIFT:
+      default:  // SPINDRIFT:
+        return processor_digital_.grains(mono_, out, max);  // SPINDRIFT:
+    }  // SPINDRIFT:
+  }  // SPINDRIFT:
+  // SPINDRIFT: The last block's sounding taps (delay mode only), at most max.
+  int taps(spindrift::TapSnap* out, int max) const {  // SPINDRIFT:
+    if (!(delay_mode_transition_ > 0.0f)) {  // SPINDRIFT:
+      return 0;  // SPINDRIFT:
+    }  // SPINDRIFT:
+    // SPINDRIFT: Tap delays are in 1/1024 samples at sample_rate(), over the
+    // SPINDRIFT: length DelayController was given (Configure).
+    float length = 1024.0f * float(max_delay_times_ratio() * (mono_ ? 2 : 1));  // SPINDRIFT:
+    int n = 0;  // SPINDRIFT:
+    for (int i = 0; i < DelayController::NUM_TAPS && n < max; ++i) {  // SPINDRIFT:
+      const DelayTap& tap = taps_buffer_[0].tap[i];  // SPINDRIFT:
+      if (tap.delay == 0 || !(tap.gain > 0.0f)) {  // SPINDRIFT: Tap::Render skips these
+        continue;  // SPINDRIFT:
+      }  // SPINDRIFT:
+      out[n].position = std::min(float(tap.delay) / length, 1.0f);  // SPINDRIFT:
+      out[n].gain = tap.gain;  // SPINDRIFT:
+      ++n;  // SPINDRIFT:
+    }  // SPINDRIFT:
+    return n;  // SPINDRIFT:
+  }  // SPINDRIFT:
+  // SPINDRIFT: The write head's place in the ring, 0..1, increasing with time.
+  float writeHead() const {  // SPINDRIFT:
+    switch (media_) {  // SPINDRIFT:
+      case MEDIA_DIRTY_TAPE:  // SPINDRIFT:
+        return processor_dirty_tape_.write_head(mono_);  // SPINDRIFT:
+      case MEDIA_CLEAN_TAPE:  // SPINDRIFT:
+        return processor_clean_tape_.write_head(mono_);  // SPINDRIFT:
+      case MEDIA_VINTAGE_DIGITAL:  // SPINDRIFT:
+        return processor_vintage_digital_.write_head(mono_);  // SPINDRIFT:
+      case MEDIA_DIGITAL:  // SPINDRIFT:
+      default:  // SPINDRIFT:
+        return processor_digital_.write_head(mono_);  // SPINDRIFT:
+    }  // SPINDRIFT:
+  }  // SPINDRIFT:
  private:
+  // SPINDRIFT: max_delay as Configure computes it, for the current media.
+  int max_delay_times_ratio() const {  // SPINDRIFT:
+    switch (media_) {  // SPINDRIFT:
+      case MEDIA_DIRTY_TAPE:  // SPINDRIFT:
+        return processor_dirty_tape_.max_delay_times_ratio();  // SPINDRIFT:
+      case MEDIA_CLEAN_TAPE:  // SPINDRIFT:
+        return processor_clean_tape_.max_delay_times_ratio();  // SPINDRIFT:
+      case MEDIA_VINTAGE_DIGITAL:  // SPINDRIFT:
+        return processor_vintage_digital_.max_delay_times_ratio();  // SPINDRIFT:
+      case MEDIA_DIGITAL:  // SPINDRIFT:
+      default:  // SPINDRIFT:
+        return processor_digital_.max_delay_times_ratio();  // SPINDRIFT:
+    }  // SPINDRIFT:
+  }  // SPINDRIFT:
   GranularProcessor<
       RESOLUTION_16_BIT,
       kDelayBufferSizeBits / (16 * 2),
@@ -190,6 +256,9 @@ class Processor {
 
   TriggerGenerator trigger_generator_;
   DelayController delay_controller_;
+  // SPINDRIFT: was the VLA taps_buffer[size] in Process(); a member so taps()
+  // SPINDRIFT: can read the last block's. taps() reads its first frame.
+  DelayController::Output taps_buffer_[spindrift::kMaxBlock];  // SPINDRIFT:
   
   Media media_;
   bool process_dry_;

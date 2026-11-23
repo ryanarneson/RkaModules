@@ -30,19 +30,20 @@
 #define STMLIB_UTILS_RANDOM_H_
 
 #include "stmlib/stmlib.h"
+#include "BeadsContext.hpp"  // SPINDRIFT: the state lives in a spindrift::BeadsContext
 
 namespace stmlib {
 
 class Random {
  public:
-  static inline uint32_t state() { return rng_state_; }
+  static inline uint32_t state() { return rng_state_(); }  // SPINDRIFT: per-instance state
 
   static inline void Seed(uint32_t seed) {
-    rng_state_ = seed;
+    rng_state_() = seed;  // SPINDRIFT: per-instance state
   }
 
   static inline uint32_t GetWord() {
-    rng_state_ = rng_state_ * 1664525L + 1013904223L;
+    rng_state_() = rng_state_() * 1664525L + 1013904223L;  // SPINDRIFT: per-instance state
     return state();
   }
   
@@ -55,7 +56,9 @@ class Random {
   }
 
  private:
-  static uint32_t rng_state_;
+  // SPINDRIFT: rng_state_ lives in the current spindrift::BeadsContext (one per
+  // SPINDRIFT: instance, set by spindrift::BeadsScope); this returns it (random.cc).
+  static uint32_t& rng_state_();  // SPINDRIFT: per-instance state
 
   DISALLOW_COPY_AND_ASSIGN(Random);
 };

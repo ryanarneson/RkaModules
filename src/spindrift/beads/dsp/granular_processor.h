@@ -30,6 +30,8 @@
 #define BEADS_DSP_GRANULAR_PROCESSOR_H_
 
 #include "stmlib/stmlib.h"
+#include <cassert>  // SPINDRIFT: block-size asserts
+#include "BeadsContext.hpp"  // SPINDRIFT: kMaxBlock, GrainSnap
 #include "stmlib/dsp/filter.h"
 #include "stmlib/dsp/parameter_interpolator.h"
 #include "stmlib/dsp/sample_rate_converter.h"
@@ -107,6 +109,28 @@ class GranularProcessor {
         : stereo_delay_line_.remaining();
   }
   
+  // SPINDRIFT: the window's view (BeadsContext.hpp): sounding grains, at most
+  // SPINDRIFT: max, each read against the delay line it plays from.
+  inline int grains(bool mono, spindrift::GrainSnap* out, int max) const {  // SPINDRIFT:
+    const int frames = mono ? max_delay * 2 : max_delay;  // SPINDRIFT: the line's MAX_DELAY
+    int n = 0;  // SPINDRIFT:
+    for (int i = 0; i < DelayGranularPlayer::NUM_GRAINS && n < max; ++i) {  // SPINDRIFT:
+      const DelayGrain& g = granular_player_.grain(i);  // SPINDRIFT:
+      if (!g.done()) {  // SPINDRIFT:
+        g.snap(out[n++], frames);  // SPINDRIFT:
+      }  // SPINDRIFT:
+    }  // SPINDRIFT:
+    return n;  // SPINDRIFT:
+  }  // SPINDRIFT:
+  // SPINDRIFT: The write head's place in the ring, 0..1, increasing with time
+  // SPINDRIFT: (DelayLine::Write moves write_ptr_ down).
+  inline float write_head(bool mono) const {  // SPINDRIFT:
+    const int frames = mono ? max_delay * 2 : max_delay;  // SPINDRIFT:
+    const int w = mono  // SPINDRIFT:
+        ? mono_delay_line_.write_ptr()  // SPINDRIFT:
+        : stereo_delay_line_.write_ptr();  // SPINDRIFT:
+    return float(frames - 1 - w) / float(frames);  // SPINDRIFT:
+  }  // SPINDRIFT:
   inline uint8_t* delay_buffer_raw_bytes(bool mono, size_t offset) {
     // Independently of the stereo/mono setting, we're writing in the same
     // bytes anyway!
@@ -163,13 +187,14 @@ class GranularProcessor {
     } else {
       size_t d_size = size / size_t(ratio);
 
-      bool d_freeze[d_size];
-      TriggerGenerator::Output d_triggers[d_size];
-      DelayController::Output d_taps[d_size];
-      FloatFrame d_in[d_size];
-      FloatFrame d_out[d_size];
-      float downsampled[d_size];
-      float upsampled[size];
+      assert(size <= spindrift::kMaxBlock);  // SPINDRIFT: fixed-size blocks
+      bool d_freeze[spindrift::kMaxBlock];  // SPINDRIFT: was [d_size]
+      TriggerGenerator::Output d_triggers[spindrift::kMaxBlock];  // SPINDRIFT: was [d_size]
+      DelayController::Output d_taps[spindrift::kMaxBlock];  // SPINDRIFT: was [d_size]
+      FloatFrame d_in[spindrift::kMaxBlock];  // SPINDRIFT: was [d_size]
+      FloatFrame d_out[spindrift::kMaxBlock];  // SPINDRIFT: was [d_size]
+      float downsampled[spindrift::kMaxBlock];  // SPINDRIFT: was [d_size]
+      float upsampled[spindrift::kMaxBlock];  // SPINDRIFT: was [size]
 
       DownsampleGate(freeze, d_freeze, size);
       
