@@ -472,6 +472,57 @@ void reset_is_cheap() {
 	      1e3 * tRate);
 }
 
+// The rate given to the constructor (#35): the same engine as one built at
+// 48 kHz and then set to that rate, and an unusable one means 48 kHz.
+void constructed_at_rate() {
+	Rig g;
+	g.levels(1.f, 1.f, 1.f);
+	g.f.params[F::DRIFT] = 1.f;
+	auto same = [&](rka::HadalEngine& a, rka::HadalEngine& b) {
+		rka::HadalResult ra, rb;
+		for (int i = 0; i < 96000; i++) {
+			a.process(g.f, ra);
+			b.process(g.f, rb);
+			if (ra.l != rb.l || ra.r != rb.r || ra.rumble != rb.rumble || ra.hiss != rb.hiss || ra.crackle != rb.crackle)
+				return false;
+		}
+		return true;
+	};
+	{
+		rka::HadalEngine a(3, 96000.f), b(3);
+		b.setSampleRate(96000.f);
+		CHECK(same(a, b), "an engine built at 96 kHz differs from one built at 48 kHz then set to 96 kHz");
+	}
+	{
+		// The difference must be visible: 48 kHz and 96 kHz engines differ.
+		rka::HadalEngine a(3, 96000.f), b(3);
+		CHECK(!same(a, b), "an engine built at 96 kHz runs like one at 48 kHz (rate not honoured)");
+	}
+	for (float bad : {0.f, -1.f, NAN, INFINITY, 1e9f}) {
+		rka::HadalEngine a(3, bad), b(3);
+		CHECK(same(a, b), "an engine built at unusable rate %g must run at 48 kHz", bad);
+	}
+}
+
+// The module passes Rack's rate to the constructor so the gain tables are
+// built once, not at 48 kHz and again at the real rate (#35): building at a
+// rate costs about one setSampleRate, not two.
+void construction_builds_tables_once() {
+	double tBuild = 1e30, tRate = 1e30;
+	for (int k = 0; k < 5; k++) {
+		auto t0 = std::chrono::steady_clock::now();
+		rka::HadalEngine e(1, 96000.f);
+		auto t1 = std::chrono::steady_clock::now();
+		e.setSampleRate(44100.f);
+		auto t2 = std::chrono::steady_clock::now();
+		tBuild = std::min(tBuild, std::chrono::duration<double>(t1 - t0).count());
+		tRate = std::min(tRate, std::chrono::duration<double>(t2 - t1).count());
+	}
+	std::printf("  construct at 96 kHz %.3f ms, setSampleRate %.3f ms\n", 1e3 * tBuild, 1e3 * tRate);
+	CHECK(tBuild < 1.5 * tRate, "constructing at a rate takes %.3f ms against setSampleRate's %.3f ms (want under 1.5x)",
+	      1e3 * tBuild, 1e3 * tRate);
+}
+
 void bad_rate_ignored() {
 	Rig ref, g;
 	ref.levels(0.f, 1.f, 0.f);
@@ -520,6 +571,8 @@ int main() {
 	seeds_differ_and_repeat();
 	reset_matches_fresh();
 	reset_is_cheap();
+	constructed_at_rate();
+	construction_builds_tables_once();
 	bad_rate_ignored();
 	nan_cv_safe();
 	return rkatest::finish("hadal test_engine");
