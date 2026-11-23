@@ -97,7 +97,7 @@ public:
 		pending_ = false;
 		gapAcc_ = 0.0;
 		events_.restartWait();
-		resetSwell_ = true;
+		// Swell keeps its state and glides to the new Step (issue #48).
 	}
 
 	void process(const SquallFrame& f, SquallResult& r) {

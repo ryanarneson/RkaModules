@@ -553,6 +553,39 @@ static void freeze_discards_period_measurement() {
 	CHECK(std::abs(gate - 25) <= 1, "the gate after Freeze is %d ms, want 25 (the period before it)", gate);
 }
 
+// Issue #48: Initialize (reset()) moves Step to the middle at once; Swell
+// glides there from where it was, as it does everywhere else.
+static void reset_swell_glides() {
+	Rig rig(45u, 1000.f);
+	rig.set(0.9f, 0.f, 0.f);
+	for (int i = 0; i < 600000 && std::fabs(rig.r.swell) < 2.f; i++)
+		rig.step();
+	const float before = rig.r.swell;
+	CHECK(std::fabs(before) >= 2.f, "Swell never got 2 V from the middle (%g)", before);
+	rig.e.reset();
+	rig.f.params[F::WEATHER] = 0.f;   // Calm: no event soon after the reset
+	rig.step();
+	CHECK(rig.r.step == 0.f, "Step must be at the middle after reset (got %g)", rig.r.step);
+	CHECK(std::fabs(rig.r.swell - before) < 0.1f, "Swell jumped on reset: %g -> %g", before, rig.r.swell);
+	SquallState s0, s1;
+	rig.e.getState(s0);
+	float prev = rig.r.swell;
+	bool smooth = true;
+	long long ev = 0;
+	for (int i = 0; i < 2000; i++) {
+		if (rig.step())
+			ev++;
+		smooth = smooth && std::fabs(rig.r.swell - prev) < 0.1f;
+		prev = rig.r.swell;
+	}
+	rig.e.getState(s1);
+	CHECK(ev == 0, "%lld events at Calm in 2 s after reset", ev);
+	CHECK(smooth, "Swell must stay continuous after reset");
+	// Swell's first stage heads for the middle (0 V) from where it was.
+	CHECK(std::fabs(s1.swellStage1) < std::fabs(s0.swellStage1) && std::fabs(s0.swellStage1) > 1.f,
+	      "Swell must glide toward the middle after reset (stage 1 %g -> %g)", s0.swellStage1, s1.swellStage1);
+}
+
 // --- CV and state ---------------------------------------------------------
 
 static void weather_cv_audio_rate() {
@@ -772,6 +805,7 @@ int main() {
 	freeze_holds();
 	freeze_resumes();
 	freeze_discards_period_measurement();
+	reset_swell_glides();
 	weather_cv_audio_rate();
 	state_round_trip();
 	state_rejects_bad();
