@@ -35,6 +35,30 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Spindrift**, a 20 HP granular processor: Mutable
+  Instruments Beads' own DSP, vendored with every change marked, in the
+  Instrument look:
+  - Time, Size, Shape and Pitch, each with an attenuverter that sets
+    randomness per grain with nothing patched, or scales its CV; Pitch
+    catches on 0, 1, 3, 4, 7, 12 and 24 semitones.
+  - Density regular left of noon (to 130.8 Hz), random right of it, with
+    a dead centre for single grains; Seed latched at the start, a clock
+    in SEED as divider or probability; Freeze by button or gate.
+  - Feedback, Dry/Wet and Reverb with a CV each (in place of Beads' one
+    assignable CV).
+  - Beads' four qualities: Digital, Vintage Digital, Clean Tape and Dirty
+    Tape, 4 to 16 s of buffer in stereo, twice that in mono.
+  - Delay mode with Size fully clockwise, and the wavetable synth after
+    10 s with nothing patched (or always, or never, from the menu).
+  - A window shows the buffer, the record head and every grain, the
+    delay's taps or the synth's wave, the quality and the grain count.
+  - Beads' hidden settings in the menu: the input gain (fixed, automatic
+    or manual) and the gate output; a frozen buffer is kept with the
+    patch and comes back frozen.
+  - Its output matches Beads' code run unchanged (within a millionth of
+    a volt at 48 kHz in Digital); its aliasing is held to Beads' own.
+  - The manual has dial diagrams drawn from Beads' formulas by
+    `tools/gen_spindrift_dials.py`.
 - New module: **Eddy**, a 16 HP stereo tape loop that also plays files:
   - One tape, up to 5 minutes: filled by recording (REC button or gate)
     or by loading a WAV (the menu, or dropped on the panel), and saved as

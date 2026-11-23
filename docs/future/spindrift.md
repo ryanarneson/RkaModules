@@ -1,6 +1,19 @@
 # Spindrift: granular cloud
 
-Status: idea, 2026-11-15. Not designed. The user singled this one out.
+Status: built (2026-11-22, 20 HP). Design:
+`docs/specs/2026-11-22-spindrift-design.md`; manual:
+`docs/spindrift/README.md`. As built it is Mutable Instruments Beads, its
+own DSP vendored and run unchanged, in the Instrument look: the user chose
+to mimic Beads as closely as possible rather than design a new granular
+engine. Of the sketch: the Beaufort-lettered hero stayed, as Beads'
+Density; the window stayed, showing the buffer, the record head and each
+grain (and the delay's taps and the synth's wave); Freeze takes a gate.
+Wind, Scatter, Position and Mix became Beads' Density, the attenuverters'
+randomness, Time and Dry/Wet; Beads' Feedback, Reverb, Shape, Seed,
+Quality, delay mode and wavetable synth came with it. The open questions
+below are answered by Beads (4 to 16 s of buffer by quality; ±24
+semitones catching on intervals; Beads' grain envelope). The idea as it
+was first written follows.
 
 ![mockup](spindrift-mockup.svg)
 

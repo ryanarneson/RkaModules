@@ -15,6 +15,7 @@ VCV Rack 2 modules.
 | [**Wake**](docs/wake/README.md) | 14 | Stereo echo, 10 ms to 10 s: Tape, Analog and Digital styles, a Ratio between the sides, ping pong, Freeze, Diffuse, Drift, a clock input, CV on Time, Feedback and Mix |
 | [**Narrows**](docs/narrows/README.md) | 14 | Polyphonic stereo filter: a ladder and a state-variable core on a switch, Mode sweeps low-pass, band-pass, high-pass, Drive, Res to a playable sine, a comb tuned to the cutoff, Spread, Ping, CV on FM, Res, Comb and Mode |
 | [**Eddy**](docs/eddy/README.md) | 16 | Stereo tape loop that also loads and saves WAV files, up to 5 minutes: a waveform window you can drag to set Start and Length, Speed -2 to +2 with CV and V/OCT, Dub with Dub Level, Wear, Smear, Play and Loop with a trigger and EOC, Restore to the original; the tape is kept with the patch |
+| [**Spindrift**](docs/spindrift/README.md) | 20 | Granular processor: Mutable Instruments Beads' own code in the Instrument look. Time, Size, Shape and Pitch with randomness or CV, Density regular or random, Seed and Freeze, Feedback, Dry/Wet and Reverb with a CV each, four qualities from Digital to Dirty Tape, delay mode, and the wavetable synth when nothing is patched; a window shows the buffer and every grain, and a frozen buffer is kept with the patch |
 | [**Hadal**](docs/hadal/README.md) | 10 | Rumble and noise bed: Rumble, Hiss and Crackle darkened together by Depth (0 to 11 km), slow Drift, CV on all five, a layer out each and an L/R mix |
 | [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware, with a mouse-driven settings list |
 
@@ -76,10 +77,18 @@ src/narrows/             the Narrows filter: Narrows.cpp, NarrowsEngine.hpp and 
 src/eddy/                the Eddy tape loop: Eddy.cpp (the module and its worker thread),
                          EddyEngine.hpp and the headers it is built from (Laws.hpp, Voices.hpp,
                          Wear.hpp, Select.hpp, TapeJobs.hpp, EddyTuning.hpp), test_*.cpp,
-                         test_rig.hpp, bench.inc, EddyLayout.hpp; shared for Fetch and
-                         Spindrift: src/Tape.hpp, src/BandLimitedRead.hpp, src/Resample.hpp,
+                         test_rig.hpp, bench.inc, EddyLayout.hpp; shared (Spindrift uses
+                         Overview.hpp and the window's approach): src/Tape.hpp, src/BandLimitedRead.hpp, src/Resample.hpp,
                          src/Overview.hpp, src/TapeGesture.hpp, src/WavFile.hpp/.cpp
                          (dr_wav, in src/dep/) and TapeWindow in src/widgets.hpp
+src/spindrift/           the Spindrift granular processor: Spindrift.cpp, SpindriftEngine.hpp
+                         and the Rack-free glue it is built from (Controls.hpp, GainControl.hpp,
+                         EdgeRate.hpp, GrainView.hpp, BufferFile.hpp, SavedState.hpp,
+                         BeadsContext.hpp), test_*.cpp, bench.inc, SpindriftLayout.hpp,
+                         GrainWindow in src/widgets.hpp
+  beads/, stmlib/        vendored Beads DSP (local changes in CHANGES.md); BeadsFirmware.cpp
+                         compiles it once
+  testdata/              the untouched upstream reference (ref/) and the golden buffer image
 src/shoal/               Shoal: the Ornament & Crime v1.3.6 firmware
   Shoal.cpp              module and widget, mapped onto shoal::Host
   FriendlyList.hpp       the friendly-mode list widget on the lower screen
@@ -111,6 +120,8 @@ tools/gen_panels.py      panel layouts for every module: the one source
                          for SVGs and positions
 tools/test_gen_panels.py its tests (geometry, layout checks, stale outputs)
 tools/fonts/             D-DIN Condensed, the panels' one typeface
+tools/gen_spindrift_dials.py  Spindrift's manual diagrams (docs/spindrift/*.svg,
+                         *.png) from Beads' formulas; run it by hand after a change
 packages/                release packages from tools/cross_build.sh and
                          tools/mac_dist.sh
 ```
@@ -312,6 +323,11 @@ GPL-3.0-or-later. See `LICENSE-GPLv3.txt`.
 Attribution), copied unedited from the Fundamental plugin; Eddy uses it to
 read and write WAV files.
 
+`src/spindrift/beads/` and `src/spindrift/stmlib/` are Mutable Instruments'
+Beads DSP and the parts of stmlib it uses, by Emilie Gillet (MIT; see
+`LICENSE-beads.md`), vendored with every change marked; Spindrift runs on
+them.
+
 `tools/fonts/D-DINCondensed.ttf` (SIL Open Font License 1.1, with
 `tools/fonts/OFL-1.1.txt` and `COPYING.txt`) ships in the plugin package:
-Eddy's window letters the tape's length with it.
+Eddy's and Spindrift's windows are lettered with it.

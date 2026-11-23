@@ -8,6 +8,9 @@ from a draft description that is not in the repo (its positions are
 listed under Panel); the window's contents in it are painted in by hand
 as an illustration. Replaces the idea in `docs/future/spindrift.md`.
 
+Built 2026-11-22 (test builds 2.0.29 and 2.0.30, then the manual's
+build); the manual is `docs/spindrift/README.md`.
+
 ## Intent
 
 The roadmap put Spindrift next once Fetch was moved down (2026-11-22).
@@ -364,10 +367,11 @@ grains needs a small marked accessor in `DelayGrain` and
 
 Every parameter, the quality, the menu settings, Seed's latch and the
 Freeze button. With the buffer frozen (by the button or the gate) and
-"keep the frozen buffer" on, the buffer's raw bytes (768,000, what
-Beads' backup saves) are written to the patch's storage folder as
-`buffer.bin` with a small header (quality, mono, write position, format
-version); on load they go back before the first sample is processed,
+"keep the frozen buffer" on, the buffer's raw bytes (768,016: Beads'
+backup saves 768,000, which loses the end of the 12-bit ring and the
+ring's interpolation tail; decided during the build, 2026-11-22) are
+written to the patch's storage folder as `buffer.bin` with a small
+20-byte header (quality, mono, write position, format version); on load they go back before the first sample is processed,
 and the Freeze button is latched on, as Beads does after restoring a
 backup (`beads.cc:344-347`), so a buffer frozen by the gate is not
 overwritten when the gate is low after loading. Without a freeze nothing
@@ -503,6 +507,23 @@ Before the build is called done, the user plays it with Beads in mind:
 Time and Size with wander, Density both ways and in the dead zone with
 Seed, Pitch up two octaves, each quality, delay mode, the synth, Freeze
 saved and reloaded. Notes go into this document.
+
+**As held (2026-11-22).** Test builds 2.0.29 and 2.0.30. The user's
+notes:
+
+- The GRAINS caption in the window shook while the count changed: the
+  caption was drawn right-aligned as one string. Fixed in 2.0.30: the word
+  stands still, the number sits in a fixed slot, and the count shown is
+  the most that sounded in each 0.2 s.
+- The grain count reached only 14 with Density at either end: that was at
+  a middle Size. With Size up it reaches 30 and more. Checked against
+  Beads: grains at once are Density's rate times the grain's length, up
+  to 32, as Beads.
+- "I'm happy enough now": the four verdicts left open at the stop stand
+  as built (the ring fixed on the glass with the head moving across it;
+  defaults that make a cloud, Density 0.65 and Dry/Wet 0.5; the quality
+  lettered in the window; Beads' ±10 V levels). The full list above is
+  still to be gone through.
 
 ## Left to the builder
 
