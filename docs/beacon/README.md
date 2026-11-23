@@ -112,7 +112,9 @@ ruler. The knobs' shape is drawn dim. The running stage's letter is
 bright, and an Attack, Decay or Release that is running is drawn bright
 over its span from where it really started: a gate that rises while
 releasing draws Attack from that level up to 10 V, a gate that falls
-mid-Attack draws Release from that level down to 0 V. A dot rides the
+mid-Attack draws Release from that level down to 0 V. A stage that skipped
+others is drawn from where the last one ended: a gate that falls just as
+Attack completes draws Release from the end of Attack. A dot rides the
 bright line where channel 1 is. Sustain is bright while it runs; with
 Sustain at 0 V its span stays dim and the dot waits at the end of the
 line. In Hold the window shows a scrolling line of the output.

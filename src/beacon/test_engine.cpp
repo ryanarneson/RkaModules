@@ -631,6 +631,99 @@ void published_start_goal() {
 	CHECK(p.start.load() == 0.f && p.goal.load() == 0.f, "reset clears them (%g, %g)", p.start.load(), p.goal.load());
 }
 
+// Channel 1's previous stage: the one that ran before the running one, so
+// the window can draw a stage that skipped others from where the last ended.
+void published_prev_stage() {
+	// Where Attack hands on to Decay with the gate held.
+	long n = 0;
+	{
+		Eng g;
+		g.f.params[F::ATTACK] = stageKnob(0.1f);
+		g.f.gate.channels = 1;
+		g.gate[0] = 5.f;
+		while (g.stage() != DECAY && n < 100000) {
+			g.step();
+			n++;
+		}
+		CHECK(g.stage() == DECAY, "Attack hands on to Decay (sample %ld)", n);
+	}
+	// The gate falls on the last Attack sample, and on the hand-off sample
+	// itself (Attack hands straight on to Release).
+	for (int late = 0; late < 2; late++) {
+		Eng g;
+		g.f.params[F::ATTACK] = stageKnob(0.1f);
+		g.f.gate.channels = 1;
+		g.gate[0] = 5.f;
+		g.run(n - 2 + late);
+		CHECK(g.stage() == ATTACK, "late %d: still in Attack (%s)", late, stageName(g.stage()));
+		g.gate[0] = 0.f;
+		g.step();
+		const rka::BeaconPublished& p = g.e.published();
+		CHECK(g.stage() == RELEASE && p.prevStage.load() == ATTACK,
+		      "late %d: fall as Attack completes: %s after %s (want RELEASE after ATTACK)", late,
+		      stageName(g.stage()), stageName(p.prevStage.load()));
+		CHECK(p.start.load() > 9.f, "late %d: Release starts near the top (%g V)", late, p.start.load());
+	}
+	// Mid-Decay.
+	{
+		Eng g;
+		g.f.params[F::ATTACK] = stageKnob(0.1f);
+		g.f.params[F::DECAY] = stageKnob(0.1f);
+		g.f.gate.channels = 1;
+		g.gate[0] = 5.f;
+		g.run(n + 2400);
+		CHECK(g.stage() == DECAY, "mid-Decay (%s)", stageName(g.stage()));
+		CHECK(g.e.published().prevStage.load() == ATTACK, "Decay after Attack (%s)", stageName(g.e.published().prevStage.load()));
+		g.gate[0] = 0.f;
+		g.step();
+		CHECK(g.stage() == RELEASE && g.e.published().prevStage.load() == DECAY,
+		      "fall mid-Decay: %s after %s (want RELEASE after DECAY)", stageName(g.stage()),
+		      stageName(g.e.published().prevStage.load()));
+	}
+	// A full ADSR: Release after Sustain; then a retrigger: Attack after Release.
+	{
+		Eng g;
+		g.f.params[F::ATTACK] = stageKnob(0.01f);
+		g.f.params[F::DECAY] = stageKnob(0.01f);
+		g.f.params[F::RELEASE] = stageKnob(1.f);
+		g.f.gate.channels = 1;
+		g.gate[0] = 5.f;
+		g.run(4800);
+		CHECK(g.stage() == SUSTAIN && g.e.published().prevStage.load() == DECAY, "Sustain after Decay (%s after %s)",
+		      stageName(g.stage()), stageName(g.e.published().prevStage.load()));
+		g.gate[0] = 0.f;
+		g.run(10);
+		CHECK(g.stage() == RELEASE && g.e.published().prevStage.load() == SUSTAIN,
+		      "Release after Sustain (%s after %s)", stageName(g.stage()), stageName(g.e.published().prevStage.load()));
+		g.gate[0] = 5.f;
+		g.step();
+		CHECK(g.stage() == ATTACK && g.e.published().prevStage.load() == RELEASE,
+		      "retrigger: Attack after Release (%s after %s)", stageName(g.stage()), stageName(g.e.published().prevStage.load()));
+		g.e.reset();
+		CHECK(g.e.published().prevStage.load() == IDLE, "reset clears it (%s)", stageName(g.e.published().prevStage.load()));
+	}
+	// Leaving Hold mid-slew: Hold's stages are no envelope's, so Release
+	// counts as from idle.
+	{
+		Eng g;
+		g.f.params[F::MODE] = 2.f;
+		g.f.params[F::SUSTAIN] = 0.f;
+		g.f.params[F::DECAY] = stageKnob(1.f);
+		g.f.sustainCv.channels = 1;
+		g.scv[0] = 8.f;
+		g.run(9600);                  // settled at 8 V
+		g.scv[0] = 0.f;
+		g.run(100);                   // slewing down: Hold's D
+		CHECK(g.stage() == DECAY, "Hold slewing down (%s)", stageName(g.stage()));
+		g.f.params[F::MODE] = 0.f;
+		g.f.gate.channels = 1;
+		g.step();
+		CHECK(g.stage() == RELEASE && g.e.published().prevStage.load() == IDLE,
+		      "leaving Hold: %s after %s (want RELEASE after IDLE)", stageName(g.stage()),
+		      stageName(g.e.published().prevStage.load()));
+	}
+}
+
 // The stage lights: updated every DIVISION samples, and a stage that lasted
 // one sample keeps its light for the hold (longer than a UI frame).
 void stage_lights() {
@@ -790,6 +883,7 @@ int main() {
 	inv_exact();
 	published();
 	published_start_goal();
+	published_prev_stage();
 	stage_lights();
 	rate_change();
 	shape_smoothing();

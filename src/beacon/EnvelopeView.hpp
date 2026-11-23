@@ -54,17 +54,41 @@ struct EnvelopeLayout {
 		return sustain01 * (1.f - curveFall((u - x[3]) / (x[4] - x[3]), shape));
 	}
 
+	// The span the running Attack, Decay or Release is drawn over, [u0, u1]:
+	// it ends where its own span ends, and starts where the previous stage's
+	// span ended when that stage comes earlier in A, D, S, R (stages were
+	// skipped: Release straight after Attack spans x[1]..x[4]), else at its
+	// own span's start (a retrigger, or from IDLE). Other stages: their own
+	// span (IDLE: 0, 0).
+	void liveSpan(Stage stage, Stage prev, float& u0, float& u1) const {
+		if (stage < ATTACK || stage > RELEASE) {
+			u0 = u1 = 0.f;
+			return;
+		}
+		u1 = x[stage];
+		u0 = prev >= ATTACK && prev < stage ? x[prev] : x[stage - 1];
+	}
+
+	// Point f (0..1) of the running stage's bright line: across liveSpan,
+	// its height liveStageHeight(f, start01, goal01).
+	void livePoint(Stage stage, Stage prev, float f, float start01, float goal01, float& u, float& h) const {
+		float u0, u1;
+		liveSpan(stage, prev, u0, u1);
+		u = u0 + f * (u1 - u0);
+		h = liveStageHeight(f, start01, goal01, shape);
+	}
+
 	// Where the dot goes for a stage and phase. Attack, Decay and Release:
-	// on the running stage's own line (liveStageHeight, from its start to
-	// its goal), so it is on the bright line by construction. Sustain has no
-	// phase worth drawing: mid-span at the real level, or, with the sustain
-	// level at 0, at the end of the line (1, 0). IDLE: x 0, height 0.
-	void dot(Stage stage, float phase, float level01, float start01, float goal01, float& u, float& h) const {
+	// on the running stage's bright line (livePoint), so it is on it by
+	// construction. Sustain has no phase worth drawing: mid-span at the real
+	// level, or, with the sustain level at 0, at the end of the line (1, 0).
+	// IDLE: x 0, height 0.
+	void dot(Stage stage, Stage prev, float phase, float level01, float start01, float goal01, float& u, float& h) const {
 		const float p = detail::clamp01(phase);
 		switch (stage) {
-			case ATTACK: u = x[0] + p * (x[1] - x[0]); break;
-			case DECAY: u = x[1] + p * (x[2] - x[1]); break;
-			case RELEASE: u = x[3] + p * (x[4] - x[3]); break;
+			case ATTACK:
+			case DECAY:
+			case RELEASE: livePoint(stage, prev, p, start01, goal01, u, h); return;
 			case SUSTAIN:
 				if (sustain01 <= 0.f) {
 					u = 1.f;
@@ -76,7 +100,6 @@ struct EnvelopeLayout {
 				return;
 			default: u = 0.f; h = 0.f; return;
 		}
-		h = liveStageHeight(p, start01, goal01, shape);
 	}
 };
 

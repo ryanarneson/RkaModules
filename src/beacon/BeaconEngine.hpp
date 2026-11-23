@@ -11,9 +11,10 @@
 // through a 5 ms one-pole, and the Voice. A polyphonic cable gives each
 // channel its own volts (0 V past its count), a mono one every channel.
 // Channels that appear (the count rising) start idle at 0 V; channels past
-// the count read 0 V. Channel 1's stage, phase, level and the running
-// stage's start and goal levels are published for the window with relaxed
-// stores. BeaconLights (below) turns channel 1's stage gates into lights.
+// the count read 0 V. Channel 1's stage, phase, level, the running
+// stage's start and goal levels and the stage before it are published for
+// the window with relaxed stores. BeaconLights (below) turns channel 1's
+// stage gates into lights.
 //
 // No libm and no allocation in process(). Non-copyable (the atomics).
 #include "FastMath.hpp"
@@ -48,6 +49,7 @@ struct BeaconPublished {
 	std::atomic<float> phase{0.f}, level{0.f};
 	std::atomic<int> mode{0};
 	std::atomic<float> start{0.f}, goal{0.f};   // the running stage's, volts
+	std::atomic<int> prevStage{0};              // the stage that ran before it
 };
 
 // The four stage lights, from channel 1's stage gates: note() every sample,
@@ -125,6 +127,7 @@ public:
 		pub_.level.store(0.f, std::memory_order_relaxed);
 		pub_.start.store(0.f, std::memory_order_relaxed);
 		pub_.goal.store(0.f, std::memory_order_relaxed);
+		pub_.prevStage.store(beacon::IDLE, std::memory_order_relaxed);
 	}
 
 	void process(const BeaconFrame& f, BeaconResult& out) {
@@ -199,6 +202,7 @@ public:
 		pub_.mode.store(int(mode), std::memory_order_relaxed);
 		pub_.start.store(float(v.start()), std::memory_order_relaxed);
 		pub_.goal.store(float(v.goal()), std::memory_order_relaxed);
+		pub_.prevStage.store(int(v.prevStage()), std::memory_order_relaxed);
 	}
 
 	const BeaconPublished& published() const { return pub_; }

@@ -53,7 +53,7 @@ struct Voice {
 
 	// IDLE at 0 V, pulse off, edges forgotten (a gate held high restarts).
 	void reset() {
-		stage_ = IDLE;
+		stage_ = prevStage_ = IDLE;
 		phase_ = 0.0;
 		level_ = start_ = goal_ = 0.0;
 		done_ = false;
@@ -121,9 +121,13 @@ struct Voice {
 	// began; Hold leaves them as they were.
 	double start() const { return start_; }
 	double goal() const { return goal_; }
+	// The stage that ran before the running one (IDLE at first, and on
+	// leaving Hold, whose stages are no envelope's). A gate low as Attack
+	// ends goes straight to Release: Release after Attack.
+	Stage prevStage() const { return prevStage_; }
 
 private:
-	Stage stage_;
+	Stage stage_, prevStage_;
 	double phase_, level_, start_, goal_;
 	double dt_ = 1.0 / 48000.0, sustainCoef_ = 0.0;
 	bool done_;
@@ -144,6 +148,7 @@ private:
 	}
 
 	void begin(Stage s) {
+		prevStage_ = prevMode_ == HOLD_MODE ? IDLE : stage_;
 		stage_ = s;
 		phase_ = 0.0;
 		start_ = level_;

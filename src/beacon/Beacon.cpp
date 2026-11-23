@@ -233,6 +233,7 @@ struct EnvelopeWindowView {
 	int stage = rka::beacon::IDLE;    // rka::beacon::Stage
 	float phase = 0.f, level = 0.f;   // 0..1, volts
 	float start = 0.f, goal = 0.f;    // the running stage's, volts
+	int prevStage = 0;                // the stage that ran before it
 	bool hold = false;
 };
 
@@ -240,10 +241,11 @@ struct EnvelopeWindowView {
 // self-illuminating layer on the glass, in the theme's cyan as TapeWindow.
 // Gate and Trig: the envelope the knobs make (layoutEnvelope), each stage
 // its own stroke, dim; the running Attack, Decay or Release drawn bright
-// over its span from its true start to its goal (liveStageHeight), with the
-// dot on it; Sustain running: its span bright (dim at a 0 V sustain, the dot
-// then at the end of the line); A D S R under the spans, the running letter
-// bright. Hold: a scrolling line of channel 1's output (+-10 V), 60 points
+// from its true start to its goal (liveStageHeight) over its span, widened
+// back to where the last stage ended when stages were skipped (liveSpan),
+// with the dot on it; Sustain running: its span bright (dim at a 0 V
+// sustain, the dot then at the end of the line); A D S R under the spans,
+// the running letter bright. Hold: a scrolling line of channel 1's output (+-10 V), 60 points
 // a second of the UI's frame clock (HoldRing), kept here (UI thread only).
 // It knows nothing of the engine: `source` fills an EnvelopeWindowView, or
 // returns false to draw nothing. No mouse.
@@ -358,20 +360,24 @@ struct EnvelopeWindow : widget::Widget {
 			nvgStroke(vg);
 		}
 
-		// The running Attack, Decay or Release, bright over its span, from
+		// The running Attack, Decay or Release, bright over its live span, from
 		// where it really started to its goal along the curve the voice
 		// follows (drawn with the Shape knob; the voice's own Shape trails
 		// it by a 5 ms smoothing). Start and goal may be a sample apart
 		// from the stage (separate relaxed atomics): clamped, one frame.
 		const float start01 = std::isfinite(v.start) ? v.start * 0.1f : 0.f;
 		const float goal01 = std::isfinite(v.goal) ? v.goal * 0.1f : 0.f;
+		// Stages skipped (Release straight after Attack): drawn from where
+		// the last stage ended (liveSpan). The previous stage may be a
+		// sample apart too: one frame.
+		const int ps = v.prevStage;
+		const Stage prev = (ps >= ATTACK && ps <= RELEASE) ? Stage(ps) : IDLE;
 		if (stage == ATTACK || stage == DECAY || stage == RELEASE) {
-			const int s = running;
-			const float u0 = e.x[s], u1 = e.x[s + 1];
 			nvgBeginPath(vg);
 			for (int i = 0; i <= CURVE_POINTS; i++) {
-				const float f = float(i) / CURVE_POINTS;
-				const float x = xAt(u0 + f * (u1 - u0)), y = yAt(liveStageHeight(f, start01, goal01, e.shape));
+				float u, h;
+				e.livePoint(Stage(stage), prev, float(i) / CURVE_POINTS, start01, goal01, u, h);
+				const float x = xAt(u), y = yAt(h);
 				if (i == 0)
 					nvgMoveTo(vg, x, y);
 				else
@@ -387,7 +393,7 @@ struct EnvelopeWindow : widget::Widget {
 		// line (Sustain: at its level, or at the end at 0 V). Idle: at rest
 		// at the start, dim.
 		float u, h;
-		e.dot(Stage(stage), math::clamp(v.phase, 0.f, 1.f), std::isfinite(v.level) ? v.level * 0.1f : 0.f, start01, goal01, u, h);
+		e.dot(Stage(stage), prev, math::clamp(v.phase, 0.f, 1.f), std::isfinite(v.level) ? v.level * 0.1f : 0.f, start01, goal01, u, h);
 		nvgBeginPath(vg);
 		nvgCircle(vg, xAt(u), yAt(h), mm2px(running >= 0 ? 0.75f : 0.55f));
 		nvgFillColor(vg, running >= 0 ? signal : dim);
@@ -480,6 +486,7 @@ struct BeaconWidget : ModuleWidget {
 			v.level = p.level.load(std::memory_order_relaxed);
 			v.start = p.start.load(std::memory_order_relaxed);
 			v.goal = p.goal.load(std::memory_order_relaxed);
+			v.prevStage = p.prevStage.load(std::memory_order_relaxed);
 			v.hold = p.mode.load(std::memory_order_relaxed) == int(rka::beacon::HOLD_MODE);
 			return true;
 		};

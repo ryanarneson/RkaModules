@@ -255,6 +255,14 @@ the slew, so the switch itself never moves the output:
   goal is the sustain level when Decay began, so a Sustain move during
   Decay makes the bright Decay end at the old level, as the voice really
   does (it then settles to the new level in Sustain).
+- **Skipped stages** (issue #76, test build 2.0.35): when the running
+  stage skipped others, it is drawn bright from where the last stage
+  really ended to the end of its own span, so the path is continuous: a
+  gate falling as Attack completes draws Release from 10 V at the end of
+  Attack across D, S and R to 0 V; falling mid-Decay, from the end of
+  Decay. The engine publishes channel 1's previous stage for this
+  (leaving Hold counts as from idle). A retrigger's Attack stays on its
+  own span.
 - **Sustain at 0 V:** the Sustain span stays dim, and while the envelope
   is in Sustain the dot sits at the end of the line (bottom right) rather
   than mid-span. The S light and gate are unchanged: lit while the gate is
@@ -268,7 +276,8 @@ the slew, so the switch itself never moves the output:
   and 144 Hz.
 - **Polyphony:** channel 1.
 - **Hand-off:** the engine publishes channel 1's stage and phase (and
-  level, and the running stage's start and goal) for the window,
+  level, the running stage's start and goal, and the stage before it)
+  for the window,
   lock-free; nothing per-sample crosses, and the curve is computed on the
   UI side from the params.
 - **Unpatched and idle:** the shape is drawn, no stage is lit, the dot
