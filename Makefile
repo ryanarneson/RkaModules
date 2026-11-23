@@ -58,6 +58,10 @@ include tests.mk
 # plugin's own objects still link to shoal::Core); the tests build without it.
 build/src/shoal/Firmware.cpp.o: FLAGS += $(SHOAL_FW_FLAGS) -fvisibility=hidden
 
+# Spindrift's vendored Beads, the same way (built once Spindrift is in
+# MODULES): SPINDRIFT_FW_FLAGS from tests.mk, its include root, hidden names.
+build/src/spindrift/BeadsFirmware.cpp.o: FLAGS += $(SPINDRIFT_FW_FLAGS) -Isrc/spindrift -fvisibility=hidden
+
 .PHONY: shoal-bench
 shoal-bench:
 	@mkdir -p build/test/shoal

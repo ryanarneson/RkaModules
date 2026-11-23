@@ -7,7 +7,10 @@
 # Set by the Makefile; on its own, every folder of src/ that has tests.
 MODULES ?= $(patsubst src/%/,%,$(sort $(dir $(wildcard src/*/test_*.cpp))))
 
-TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_*.cpp)))
+# Spindrift's tests (its vendored Beads against the reference) run before
+# the module joins the plugin's MODULES; once it has, this is a no-op.
+TEST_MODULES = $(sort $(MODULES) spindrift)
+TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(TEST_MODULES:%=src/%/test_*.cpp)))
 # The ThreadSanitizer tests (Eddy's test_threads) run after the rest. Where
 # the sanitizer cannot start (GCC's runtime on a Linux kernel whose address
 # randomisation is wider than it handles, vm.mmap_rnd_bits over 28, or under
@@ -20,7 +23,7 @@ TSAN_TESTS = $(filter %/test_threads,$(TEST_BINS))
 TSAN_START_FAILED = ThreadSanitizer: unexpected memory mapping
 TSAN_REQUIRED ?=
 .PHONY: test
-test: shoal-globals bench-modules engine-globals libm-calls panels-test $(TEST_BINS)
+test: shoal-globals spindrift-vendor bench-modules engine-globals libm-calls panels-test $(TEST_BINS)
 	@for t in $(filter-out $(TSAN_TESTS),$(TEST_BINS)); do ./$$t || exit 1; done
 	@for t in $(TSAN_TESTS); do \
 		./$$t > $$t.log 2>&1; rc=$$?; \
@@ -57,6 +60,23 @@ SHOAL_FW_FLAGS = -std=c++17 -fwrapv -fno-strict-aliasing -fno-unsafe-math-optimi
 SHOAL_TEST_FLAGS = $(SHOAL_FW_FLAGS) -O1 -g -fsanitize=address,undefined \
 	-fno-sanitize=alignment,shift-base -fno-sanitize-recover=all
 SHOAL_DEPS := $(shell find src/shoal -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.ino' -o -name '*.cpp' \) ! -name 'test_*.cpp' ! -path 'src/shoal/testdata/*')
+
+# Spindrift's vendored Beads (src/spindrift/beads/, stmlib/; BeadsFirmware.cpp)
+# and the untouched reference (testdata/ref/, RefBeads.cpp). -DTEST picks
+# stmlib's portable code over its ARM assembly; -fno-unsafe-math-optimizations
+# undoes compile.mk's fast maths, so the plugin and the tests compute alike;
+# -fwrapv and -funsigned-char give the Cortex-M7's wrapping and unsigned char
+# (TESTING.md rule 9). The Makefile adds these to BeadsFirmware.cpp.o.
+SPINDRIFT_FW_FLAGS = -fwrapv -fno-strict-aliasing -fno-unsafe-math-optimizations -funsigned-char -DTEST
+# The vendored and reference objects are built without -Wall -Wextra
+# (upstream warns: unused parameters), and with -Wno-vla while upstream's
+# variable-length arrays remain (Clang warns on them by default). The tests
+# include the vendored headers through -isystem, so their own code still gets
+# -Wall -Wextra (and -Werror in CI). C++11 for the firmware objects, as the
+# plugin builds them.
+SPINDRIFT_TEST_FLAGS = $(SPINDRIFT_FW_FLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
+SPINDRIFT_FW_DEPS := $(shell find src/spindrift/beads src/spindrift/stmlib -type f 2>/dev/null)
+SPINDRIFT_REF_DEPS := $(shell find src/spindrift/testdata -type f 2>/dev/null)
 
 # Other modules' tests (header-only cores). CI adds -Werror.
 TEST_WERROR ?=
@@ -137,6 +157,26 @@ build/test/narrows/test_hostile: src/narrows/test_hostile.cpp src/testing.hpp $(
 build/test/fog/test_hostile: src/fog/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/fog/*.hpp)
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/fog $< -o $@
+
+build/test/spindrift/BeadsFirmware.o: src/spindrift/BeadsFirmware.cpp $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++11 $(SPINDRIFT_TEST_FLAGS) -Wno-vla -Isrc/spindrift -c $< -o $@
+
+# The reference under other namespaces, so it links beside the vendored copy.
+build/test/spindrift/RefBeads.o: src/spindrift/testdata/RefBeads.cpp $(SPINDRIFT_REF_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++11 $(SPINDRIFT_TEST_FLAGS) -Wno-vla -Dbeads=beadsref -Dstmlib=stmlibref -Isrc/spindrift/testdata/ref -c $< -o $@
+
+build/test/spindrift/test_%: src/spindrift/test_%.cpp build/test/spindrift/BeadsFirmware.o build/test/spindrift/RefBeads.o \
+		src/testing.hpp $(wildcard src/*.hpp src/spindrift/*.hpp) src/spindrift/testdata/RefBeads.hpp $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 $(SPINDRIFT_TEST_FLAGS) -Wall -Wextra $(TEST_WERROR) -Isrc -isystem src/spindrift $(filter %.cpp %.o,$^) -o $@
+
+# The vendored Beads is upstream's but for marked changes, and the reference
+# is upstream's exactly (skipped without ~/ws/plugins/eurorack, as in CI).
+.PHONY: spindrift-vendor
+spindrift-vendor:
+	tools/check_spindrift_vendor.sh
 
 build/test/shoal/Firmware.o: src/shoal/Firmware.cpp $(SHOAL_DEPS)
 	@mkdir -p $(@D)
