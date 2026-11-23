@@ -1,0 +1,54 @@
+diff --git a/tools/gen_panels.py b/tools/gen_panels.py
+index 2ed2b41..d97143c 100755
+--- a/tools/gen_panels.py
++++ b/tools/gen_panels.py
+@@ -227,6 +227,8 @@ _SQ_COLS = ["GUST", "WEATHER", "MEMORY"]
+ 
+ 
+ _WK_X = [7.8, 21.7, 35.56, 49.4, 63.3]
++_BC_X = [8.0, 19.6, 31.2, 42.8]
++_BC_STAGES = ["ATTACK", "DECAY", "SUSTAIN", "RELEASE"]
+ _NR_X = _WK_X   # Narrows lines up with Wake
+ _ED_X = [7.8, 24.22, 40.64, 57.06, 73.48]   # Eddy: 16 HP, the outer columns as Wake's
+ _SD_T = [7.8, 23.5, 50.8, 78.1, 93.8]   # Spindrift top: Time, Size | Density | Shape, Pitch
+@@ -826,6 +828,40 @@ PANELS = {
+                  "PARAM_DRYWET": dict(turn=30), "PARAM_REVERB": dict(turn=-40)},
+         screws=screws_at(20, "tr", "bl"),
+     ),
++    # Beacon, an envelope (docs/specs/2026-11-23-beacon-design.md): a window
++    # that draws the envelope at the top; Shape and the GATE / TRIG / HOLD
++    # switch; the four stage knobs, each with its stage light, over their CVs
++    # and their stage gates; GATE, RETRIG, the push button and the outputs.
++    "Beacon": dict(
++        dir="beacon",
++        hp=10,
++        title="BEACON",
++        subtitle="ENVELOPE",
++        components=[("param", "SHAPE", 13.8, 45.5, "SHAPE"),
++                    ("param", "MODE", 30.0, 45.5, None)]
++        + [("param", n, x, 61.0, s) for n, x, s in zip(_BC_STAGES, _BC_X, "ADSR")]
++        + [("light", n, x + 5.5, 56.0, None) for n, x in zip(_BC_STAGES, _BC_X)]
++        + [("input", n + "_CV", x, 76.5, None) for n, x in zip(_BC_STAGES, _BC_X)]
++        + [("output", n, x, 92.0, s) for n, x, s in zip(_BC_STAGES, _BC_X, "ADSR")]
++        + [("input", "GATE", _BC_X[0], 105.5, "GATE"),
++           ("input", "RETRIG", _BC_X[1], 105.5, "RETRIG"),
++           ("param", "PUSH", _BC_X[0], 115.0, None),
++           ("output", "TRIG", _BC_X[1], 118.0, "TRIG"),
++           ("output", "OUT", _BC_X[2], 118.0, "OUT"),
++           ("output", "INV", _BC_X[3], 118.0, "INV")],
++        sizes={"PARAM_PUSH": "cap", "PARAM_MODE": "toggle"},
++        screens=[("ENVELOPE", 4.4, 19.0, 42.0, 17.0)],
++        tiles=[dict(port=f"OUTPUT_{n}") for n in _BC_STAGES + ["TRIG", "OUT", "INV"]],
++        traces=[[f"INPUT_{n}_CV", f"PARAM_{n}"] for n in _BC_STAGES],
++        notes=[(x, 82.5, "CV", 1.4, "dim") for x in _BC_X]
++        + [(34.2, 41.1, "GATE", 1.3, "dim", "start"), (34.2, 45.9, "TRIG", 1.3, "dim", "start"),
++           (34.2, 50.7, "HOLD", 1.3, "dim", "start")],
++        # MOCKUP: the turns below are the mockup's, not the defaults.
++        preview={"PARAM_ATTACK": dict(turn=-40), "PARAM_DECAY": dict(turn=0), "PARAM_SUSTAIN": dict(turn=20),
++                 "PARAM_RELEASE": dict(turn=45), "PARAM_SHAPE": dict(turn=60), "LIGHT_DECAY": dict(lit=True),
++                 "PARAM_MODE": dict(frame=1)},
++        screws=screws_at(10, "tr", "bl"),
++    ),
+ }
+ 
+ def layout_hpp(name, spec):
