@@ -157,7 +157,9 @@
         "Delay",
         "Reverb",
         "Oscillator",
-        "Effect"
+        "Effect",
+        "Granular",
+        "Hardware clone"
       ],
       "keywords": "granular grains cloud beads mutable instruments clouds freeze delay reverb wavetable texture ambient"
     }
