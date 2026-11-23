@@ -172,10 +172,18 @@ build/test/spindrift/BeadsFirmware.tsan.o: src/spindrift/BeadsFirmware.cpp src/s
 	$(CXX) -std=c++11 $(SPINDRIFT_FW_FLAGS) -O1 -g -fsanitize=thread -Isrc/spindrift -c $< -o $@ || \
 		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Spindrift's thread test needs it" >&2; exit 1; }
 
+# GCC warns (-Wtsan, an error under CI's -Werror) that ThreadSanitizer does
+# not model std::atomic_thread_fence. The engine's only fences are the
+# save's seqlock (markRingWritten, bufferImage), which orders the frozen
+# ring's plain bytes for the copy; this test reads ringSeq() (an atomic
+# load) and never the ring, so nothing it checks rests on a fence. The
+# seqlock itself is test_save_race's (ASan/UBSan, not TSan). Clang has no
+# such warning, so the flag is passed only where the compiler knows it.
+SPINDRIFT_TSAN_NOWARN := $(shell $(CXX) -Werror -Wno-tsan -x c++ -fsyntax-only /dev/null >/dev/null 2>&1 && echo -Wno-tsan)
 build/test/spindrift/test_threads: src/spindrift/test_threads.cpp build/test/spindrift/BeadsFirmware.tsan.o \
 		src/testing.hpp $(wildcard src/*.hpp src/spindrift/*.hpp) $(SPINDRIFT_FW_DEPS)
 	@mkdir -p $(@D)
-	$(CXX) -std=c++17 $(SPINDRIFT_FW_FLAGS) -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=thread -Isrc -isystem src/spindrift \
+	$(CXX) -std=c++17 $(SPINDRIFT_FW_FLAGS) -O1 -g -Wall -Wextra $(TEST_WERROR) $(SPINDRIFT_TSAN_NOWARN) -fsanitize=thread -Isrc -isystem src/spindrift \
 		$(filter %.cpp %.o,$^) -o $@ || \
 		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Spindrift's thread test needs it" >&2; exit 1; }
 
