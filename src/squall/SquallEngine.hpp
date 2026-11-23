@@ -198,11 +198,11 @@ public:
 		for (int i = 0; i < count; i++) {
 			squall::Event e = s.history[i];
 			const squall::Event d;
-			if (!(e.gap > 0.f && e.gap <= 1e6f))
+			if (!(e.gap > 0.f && e.gap <= squall::SAVED_GAP_MAX))
 				e.gap = d.gap;
 			if (!(e.value >= 0.f && e.value <= 1.f))
 				e.value = d.value;
-			if (!(e.length > 0.f && e.length <= 1e6f))
+			if (!(e.length > 0.f && e.length <= squall::SAVED_LENGTH_MAX))
 				e.length = d.length;
 			memory_.push(e);
 		}

@@ -671,6 +671,37 @@ static void state_rejects_bad() {
 		      "event %d loads as defaults", i);
 }
 
+// Issue #49: a saved gap far beyond anything the process makes, or a gate
+// length far beyond GATE_FRACTION, loads as the default, so a corrupt patch
+// at Memory 100 % is not silent for days. Plausible values load as saved.
+static void state_caps_gaps_and_lengths() {
+	SquallState s;
+	s.count = 8;
+	for (int i = 0; i < 8; i++) {
+		s.history[i].gap = 1e5f;
+		s.history[i].value = (i + 0.5f) / 8.f;
+		s.history[i].length = 100.f;
+	}
+	s.history[7].gap = 40.f;     // long, but plausible: kept
+	s.history[7].length = 0.5f;  // kept
+	Rig rig(46u, 1000.f);
+	rig.set(0.9f, 0.f, 1.f);     // average gap about 0.3 s; replay every event
+	rig.f.loopLength = 4;
+	rig.e.setState(s);
+	SquallState g;
+	rig.e.getState(g);
+	CHECK(g.count == 8, "count 8 loads (got %d)", g.count);
+	for (int i = 0; i < 7; i++)
+		CHECK(g.history[i].gap == Event().gap && g.history[i].length == Event().length,
+		      "event %d: gap 1e5 and length 100 must load as defaults (got %g, %g)", i, g.history[i].gap, g.history[i].length);
+	CHECK(g.history[7].gap == 40.f && g.history[7].length == 0.5f, "a gap of 40 and a length of 0.5 load as saved (got %g, %g)",
+	      g.history[7].gap, g.history[7].length);
+	std::vector<double> t;
+	rig.events(1, nullptr, &t, 60000);
+	CHECK(t.size() == 1 && t[0] < 20.0, "the first event after loading came %s%g s in, want within 20 s", t.empty() ? "> " : "",
+	      t.empty() ? 60.0 : t[0]);
+}
+
 static void bad_rate_ignored() {
 	Rig a(30u, 1000.f), b(30u, 1000.f);
 	for (float bad : {0.f, -1.f, NAN, INFINITY, 1e9f})
@@ -809,6 +840,7 @@ int main() {
 	weather_cv_audio_rate();
 	state_round_trip();
 	state_rejects_bad();
+	state_caps_gaps_and_lengths();
 	bad_rate_ignored();
 	seeds_differ_and_repeat();
 	weather_cv_gusty();

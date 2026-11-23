@@ -23,6 +23,12 @@ static const float GATE_MAX_S = 4.f;
 static const float RETRIGGER_S = 0.001f;
 static const float FIRST_CLOCK_GATE_S = 0.01f;
 
+// Saved state: a gap over SAVED_GAP_MAX average gaps (the process makes one
+// over 50 about e^-50 of the time) or a gate length over SAVED_LENGTH_MAX
+// (four times GATE_FRACTION) loads as the default (issue #49).
+static const float SAVED_GAP_MAX = 50.f;
+static const float SAVED_LENGTH_MAX = 4.f * GATE_FRACTION;
+
 // The event light.
 static const float LIGHT_S = 0.1f;
 
