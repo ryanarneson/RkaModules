@@ -288,7 +288,9 @@ in delay mode makes the delay a looper (see "Delay mode").
 While frozen, a change of quality, a change between mono and stereo (a
 cable plugged into or pulled out of IN L or IN R) and the switch into or
 out of the synth all wait until Freeze is released, as on Beads, so the
-frozen buffer is never cleared under you.
+frozen buffer is never cleared under you. A change of Rack's sample rate
+while frozen keeps the buffer too: it holds Beads' rate, not Rack's, so
+nothing needs clearing.
 
 ### Feedback
 
@@ -456,7 +458,7 @@ Digital and Clean Tape) and stop everything above half of it. They add
 **A change of quality clears the buffer and mutes the output for
 250 ms**, as on Beads (nothing is crossfaded); the button is lit for those
 250 ms. So does a change between mono and stereo, and a change of Rack's
-sample rate.
+sample rate (frozen, the buffer is kept across a rate change).
 
 **While frozen**, the button still chooses, but the change waits for
 Freeze to be released: the window shows it waiting, "DIGITAL → DIRTY
