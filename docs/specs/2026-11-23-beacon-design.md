@@ -246,21 +246,23 @@ the slew, so the switch itself never moves the output:
   gets a fixed width. The window shows shape and position, not a ruler.
 - **Part-way starts** (ruled at the listening stop, test build 2.0.34):
   the knobs' shape stays drawn dim as the reference, and the running
-  Attack, Decay or Release is also drawn bright over its own span from
-  where it really started to its goal, along the curve the voice is
-  following; the dot rides that bright line. A gate that rises while
-  releasing draws Attack from, say, 4 V up to 10 V; a gate that falls
-  mid-Attack draws Release from, say, 9.7 V down to 0 V. The engine
-  publishes channel 1's stage start and goal levels for this. Decay's
-  goal is the sustain level when Decay began, so a Sustain move during
-  Decay makes the bright Decay end at the old level, as the voice really
-  does (it then settles to the new level in Sustain).
-- **Skipped stages** (issue #76, test build 2.0.35): when the running
-  stage skipped others, it is drawn bright from where the last stage
-  really ended to the end of its own span, so the path is continuous: a
-  gate falling as Attack completes draws Release from 10 V at the end of
-  Attack across D, S and R to 0 V; falling mid-Decay, from the end of
-  Decay. The engine publishes channel 1's previous stage for this
+  Attack, Decay or Release is also drawn bright from the level where it
+  really started to its goal, along the curve the voice is following;
+  the dot rides that bright line. Where it is drawn across the window is
+  under "Skipped stages" below. A gate that rises while releasing draws
+  Attack over its own span from, say, 4 V up to 10 V; a gate that falls
+  mid-Attack draws Release from, say, 9.7 V at the end of the Attack
+  span down to 0 V at the right edge. The engine publishes channel 1's
+  stage start and goal levels for this. Decay's goal is the sustain level
+  when Decay began, so a Sustain move during Decay makes the bright Decay
+  end at the old level, as the voice really does (it then settles to the
+  new level in Sustain).
+- **Skipped stages** (issue #76, after test build 2.0.35): when the
+  running stage skipped others, it is drawn bright from the end of the
+  last stage's span to the end of its own span, so the path is
+  continuous: a gate falling as Attack completes draws Release from 10 V
+  at the end of Attack across D, S and R to 0 V; falling mid-Decay, from
+  the end of Decay. The engine publishes channel 1's previous stage for this
   (leaving Hold counts as from idle). A retrigger's Attack stays on its
   own span.
 - **Sustain at 0 V:** the Sustain span stays dim, and while the envelope

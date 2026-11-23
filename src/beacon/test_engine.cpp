@@ -722,6 +722,46 @@ void published_prev_stage() {
 		      "leaving Hold: %s after %s (want RELEASE after IDLE)", stageName(g.stage()),
 		      stageName(g.e.published().prevStage.load()));
 	}
+	// Leaving Hold mid-slew with the gate high: Attack, also from idle.
+	{
+		Eng g;
+		g.f.params[F::MODE] = 2.f;
+		g.f.params[F::SUSTAIN] = 0.f;
+		g.f.params[F::DECAY] = stageKnob(1.f);
+		g.f.sustainCv.channels = 1;
+		g.f.gate.channels = 1;
+		g.gate[0] = 5.f;              // high all through: no rise on return
+		g.scv[0] = 8.f;
+		g.run(9600);
+		g.scv[0] = 0.f;
+		g.run(100);
+		CHECK(g.stage() == DECAY, "Hold slewing down (%s)", stageName(g.stage()));
+		g.f.params[F::MODE] = 0.f;
+		g.step();
+		CHECK(g.stage() == ATTACK && g.e.published().prevStage.load() == IDLE,
+		      "leaving Hold, gate high: %s after %s (want ATTACK after IDLE)", stageName(g.stage()),
+		      stageName(g.e.published().prevStage.load()));
+	}
+	// TRIG: a short trigger; Attack runs on, then Release with prevStage ATTACK.
+	{
+		Eng g;
+		g.f.params[F::MODE] = 1.f;
+		g.f.params[F::ATTACK] = stageKnob(0.1f);
+		g.f.gate.channels = 1;
+		g.gate[0] = 5.f;
+		g.run(10);
+		g.gate[0] = 0.f;
+		g.run(100);
+		CHECK(g.stage() == ATTACK, "TRIG: Attack runs on past the trigger (%s)", stageName(g.stage()));
+		long k = 0;
+		while (g.stage() == ATTACK && k < 100000) {
+			g.step();
+			k++;
+		}
+		CHECK(g.stage() == RELEASE && g.e.published().prevStage.load() == ATTACK,
+		      "TRIG: Attack completes into %s after %s (want RELEASE after ATTACK)", stageName(g.stage()),
+		      stageName(g.e.published().prevStage.load()));
+	}
 }
 
 // The stage lights: updated every DIVISION samples, and a stage that lasted

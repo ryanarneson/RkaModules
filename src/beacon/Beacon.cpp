@@ -245,8 +245,9 @@ struct EnvelopeWindowView {
 // back to where the last stage ended when stages were skipped (liveSpan),
 // with the dot on it; Sustain running: its span bright (dim at a 0 V
 // sustain, the dot then at the end of the line); A D S R under the spans,
-// the running letter bright. Hold: a scrolling line of channel 1's output (+-10 V), 60 points
-// a second of the UI's frame clock (HoldRing), kept here (UI thread only).
+// the running letter bright. Hold: a scrolling line of channel 1's output
+// (+-10 V), 60 points a second of the UI's frame clock (HoldRing), kept
+// here (UI thread only).
 // It knows nothing of the engine: `source` fills an EnvelopeWindowView, or
 // returns false to draw nothing. No mouse.
 struct EnvelopeWindow : widget::Widget {
