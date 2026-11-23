@@ -704,11 +704,14 @@ struct GrainWindowView {
 // delay mode each tap a tick as tall as its gain. Synth: the voice's wave
 // and the grains at their wave across the bank. Top left the quality, the
 // channels and the buffer's length (or a quality waiting for the freeze to
-// end, "DIGITAL → DIRTY TAPE"); top right the mode. It knows nothing of the
-// engine: `source` fills a GrainWindowView, or returns false to draw
+// end, "DIGITAL → DIRTY TAPE"); top right the mode, its word fixed and its
+// number in a fixed slot, the grain count held for 0.2 s. It knows nothing
+// of the engine: `source` fills a GrainWindowView, or returns false to draw
 // nothing. No mouse.
 struct GrainWindow : widget::Widget {
 	std::function<bool(GrainWindowView&)> source;
+	// The grain count as shown (UI thread).
+	spindrift::CountHold countHold;
 	// The least spacing of the waveform's strokes, in px at 100 % zoom.
 	static constexpr float STROKE_PX = 1.6f;
 	// Points of the synth's wave.
@@ -880,10 +883,21 @@ struct GrainWindow : widget::Widget {
 			const NVGcolor text = nvgTransRGBAf(signal, 0.85f);
 			nvgFontFaceId(vg, font->handle);
 			nvgFontSize(vg, size);
+			// Top left: left-aligned, so only its tail (the seconds, which
+			// change with the quality or the channels) can change width.
 			caption(vg, mm2px(1.0f), mm2px(0.7f), spindrift::viewCaption(c), size, text);
+			// Top right: the word held in place and the number in a fixed
+			// slot (layoutMode), the grain count calmed (CountHold).
+			spindrift::GrainView::Copy held = c;
+			held.n = countHold.update(c.n, system::getTime());
+			const spindrift::ModeParts parts = spindrift::viewModeParts(held);
+			auto width = [vg](const std::string& t) { return nvgTextBounds(vg, 0.f, 0.f, t.c_str(), NULL, NULL); };
+			const spindrift::ModeLayout l = spindrift::layoutMode(parts, box.size.x - mm2px(1.0f), width(" "), width);
 			nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
 			nvgFillColor(vg, text);
-			nvgText(vg, box.size.x - mm2px(1.0f), mm2px(0.7f), spindrift::viewMode(c).c_str(), NULL);
+			nvgText(vg, l.wordRight, mm2px(0.7f), parts.word.c_str(), NULL);
+			if (!parts.number.empty())
+				nvgText(vg, l.numberRight, mm2px(0.7f), parts.number.c_str(), NULL);
 		}
 		nvgRestore(vg);
 	}

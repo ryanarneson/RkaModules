@@ -264,6 +264,81 @@ void waveform() {
 	}
 }
 
+// The mode caption, top right, stays put (2.0.29: it shook). The word sits
+// at a place fixed by the widest number the mode can show, so the count
+// changing ("GRAINS 1", "GRAINS 28") never moves it, in a face whose digits
+// differ in width (a '1' narrower than the rest, as most faces).
+void modeCaption() {
+	auto width = [](const std::string& t) {
+		float w = 0.f;
+		for (char ch : t)
+			w += ch == '1' ? 1.f : (ch >= '0' && ch <= '9' ? 2.f : 1.5f);
+		return w;
+	};
+	const float right = 100.f, gap = 1.f;
+	GrainView::Copy c = blank();
+	float wordRight = -1.f;
+	for (int n = 0; n <= GrainView::MAX; n++) {
+		c.n = n;
+		const spindrift::ModeParts p = spindrift::viewModeParts(c);
+		CHECK(p.word == "GRAINS", "word (%s)", p.word.c_str());
+		CHECK(p.word + " " + p.number == spindrift::viewMode(c), "the parts are the caption (%d)", n);
+		const spindrift::ModeLayout l = spindrift::layoutMode(p, right, gap, width);
+		if (n == 0)
+			wordRight = l.wordRight;
+		CHECK(l.wordRight == wordRight, "GRAINS %d: the word stays at %g (%g)", n, wordRight, l.wordRight);
+		CHECK(l.numberRight == right, "the number right-aligned in its slot (%g)", l.numberRight);
+		CHECK(right - width(p.number) >= l.wordRight + gap, "GRAINS %d: the number clear of the word", n);
+	}
+	c.mode = spindrift::MODE_SYNTH;
+	for (int bank = 0; bank < 12; bank++) {
+		c.bank = bank;
+		const spindrift::ModeParts p = spindrift::viewModeParts(c);
+		CHECK(p.word == "SYNTH \xC2\xB7 BANK" && p.word + " " + p.number == spindrift::viewMode(c), "synth parts (%s)",
+		      p.word.c_str());
+		const spindrift::ModeLayout l = spindrift::layoutMode(p, right, gap, width);
+		if (bank == 0)
+			wordRight = l.wordRight;
+		CHECK(l.wordRight == wordRight, "BANK %d: the word stays (%g)", bank + 1, l.wordRight);
+		CHECK(right - width(p.number) >= l.wordRight + gap, "BANK %d: the number clear of the word", bank + 1);
+	}
+	c.mode = spindrift::MODE_DELAY;
+	const spindrift::ModeParts p = spindrift::viewModeParts(c);
+	const spindrift::ModeLayout l = spindrift::layoutMode(p, right, gap, width);
+	CHECK(p.word == "DELAY" && p.number.empty() && l.wordRight == right, "delay: the word alone, at the edge");
+}
+
+// The count shown is calm (2.0.29: it changed every frame): the most grains
+// sounding over each 0.2 s, shown from the end of that 0.2 s until the end
+// of the next; the first count at once.
+void countHold() {
+	spindrift::CountHold hold;
+	CHECK(hold.update(5, 10.0) == 5, "the first count at once");
+	// A count that flickers every frame (60 fps) changes what is shown at
+	// most five times a second, and what is shown is each window's peak.
+	int changes = 0, shown = 5;
+	for (int f = 1; f <= 60; f++) {
+		const double t = 10.0 + f / 60.0;
+		const int n = (f % 2) ? 3 : 9 + f % 5;  // 3, 9..13 alternating
+		const int s = hold.update(n, t);
+		changes += s != shown;
+		shown = s;
+	}
+	CHECK(changes <= 5, "at most 5 changes in 1 s (%d)", changes);
+	CHECK(shown >= 9, "shows the peak, not the dip (%d)", shown);
+	// A steady count shows within one period.
+	int s = 0;
+	for (int f = 1; f <= 30; f++)
+		s = hold.update(20, 11.0 + f / 60.0);
+	CHECK(s == 20, "a steady 20 shows (%d)", s);
+	// Back to 0 (nothing sounding) within two periods.
+	for (int f = 1; f <= 30; f++)
+		s = hold.update(0, 11.5 + f / 60.0);
+	CHECK(s == 0, "silence shows 0 (%d)", s);
+	// A clock that steps back (a new session) shows the count at once.
+	CHECK(hold.update(7, 1.0) == 7, "time going back restarts the hold");
+}
+
 }  // namespace
 
 int main() {
@@ -272,5 +347,7 @@ int main() {
 	ticks();
 	synthWave();
 	waveform();
+	modeCaption();
+	countHold();
 	return rkatest::finish("spindrift test_view");
 }

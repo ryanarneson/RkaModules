@@ -164,24 +164,101 @@ inline std::string viewCaption(const GrainView::Copy& c) {
 	return s + (c.mono ? " \xC2\xB7 MONO \xC2\xB7 " : " \xC2\xB7 STEREO \xC2\xB7 ") + buf;
 }
 
-// Top right: "GRAINS 23", "DELAY", "SYNTH · BANK 7". UI thread.
-inline std::string viewMode(const GrainView::Copy& c) {
-	char buf[32];
+// Top right, in two parts: the word ("GRAINS", "SYNTH · BANK", "DELAY") and
+// its number ("23", "7", none), with the widest number the mode can show
+// ("32", "12"), which sets the number's slot (layoutMode). UI thread.
+struct ModeParts {
+	std::string word, number, widest;
+};
+inline ModeParts viewModeParts(const GrainView::Copy& c) {
+	ModeParts p;
+	char buf[16];
 	switch (c.mode) {
-		case MODE_DELAY: return "DELAY";
+		case MODE_DELAY:
+			p.word = "DELAY";
+			break;
 		case MODE_SYNTH: {
 			const int bank = c.bank < 0 ? 0 : (c.bank > 11 ? 11 : c.bank);
-			std::snprintf(buf, sizeof buf, "SYNTH \xC2\xB7 BANK %d", bank + 1);
-			return buf;
+			std::snprintf(buf, sizeof buf, "%d", bank + 1);
+			p.word = "SYNTH \xC2\xB7 BANK";
+			p.number = buf;
+			p.widest = "12";
+			break;
 		}
 		case MODE_GRAIN:
 		default: {
 			const int n = c.n < 0 ? 0 : (c.n > GrainView::MAX ? GrainView::MAX : c.n);
-			std::snprintf(buf, sizeof buf, "GRAINS %d", n);
-			return buf;
+			std::snprintf(buf, sizeof buf, "%d", n);
+			p.word = "GRAINS";
+			p.number = buf;
+			p.widest = "32";
+			break;
 		}
 	}
+	return p;
 }
+
+// "GRAINS 23", "DELAY", "SYNTH · BANK 7". UI thread.
+inline std::string viewMode(const GrainView::Copy& c) {
+	const ModeParts p = viewModeParts(c);
+	return p.number.empty() ? p.word : p.word + " " + p.number;
+}
+
+// Where the mode caption goes, right-aligned at `right`: the number
+// right-aligned in a slot as wide as the mode's widest number, and the word
+// `gap` left of the slot. The word's place depends only on the mode, never
+// on the number, so a count that changes does not move it (2.0.29: the
+// caption, drawn right-aligned as one string, shook with every count).
+// `width(text)` measures text in the face.
+struct ModeLayout {
+	float wordRight, numberRight;
+};
+template <class Width>
+ModeLayout layoutMode(const ModeParts& p, float right, float gap, Width width) {
+	ModeLayout l;
+	l.numberRight = right;
+	if (p.number.empty()) {
+		l.wordRight = right;
+		return l;
+	}
+	float slot = width(p.widest);
+	const float own = width(p.number);  // a face whose digits outdo the widest's
+	if (own > slot)
+		slot = own;
+	l.wordRight = right - slot - gap;
+	return l;
+}
+
+// The grain count as the window shows it, calm enough to read: the most
+// grains sounding over each PERIOD seconds, shown from that period's end
+// to the next's (the count itself changes every block). The first count,
+// and any after the clock steps back, shows at once. UI thread, one per
+// window; `now` in seconds.
+struct CountHold {
+	static float period() {
+		return 0.2f;
+	}
+	int update(int n, double now) {
+		if (shown_ < 0 || now < start_) {
+			shown_ = n;
+			peak_ = -1;
+			start_ = now;
+			return shown_;
+		}
+		if (n > peak_)
+			peak_ = n;
+		if (now - start_ >= period()) {
+			shown_ = peak_;
+			peak_ = -1;
+			start_ = now;
+		}
+		return shown_;
+	}
+
+private:
+	int shown_ = -1, peak_ = -1;
+	double start_ = 0.0;
+};
 
 // A grain's dash in a glass w wide and h high (x from the left, y from the
 // top): x0..x1 at height y, drawn at `alpha` of its colour.
