@@ -3,7 +3,7 @@
 // The per-sample functions use no libm.
 #include "FastMath.hpp"
 
-#include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 
@@ -44,13 +44,13 @@ inline void formatSeconds(float seconds, char* buf, int n) {
 	const float s = seconds > kMinSeconds ? (seconds < kMaxSeconds ? seconds : kMaxSeconds) : kMinSeconds;
 	const float ms = s * 1000.f;
 	if (ms < 9.95f)
-		std::snprintf(buf, (size_t) n, "%.1f ms", (double) ms);
+		std::snprintf(buf, (std::size_t) n, "%.1f ms", (double) ms);
 	else if (ms < 999.5f)
-		std::snprintf(buf, (size_t) n, "%.0f ms", (double) ms);
+		std::snprintf(buf, (std::size_t) n, "%.0f ms", (double) ms);
 	else if (s < 9.995f)
-		std::snprintf(buf, (size_t) n, "%.2f s", (double) s);
+		std::snprintf(buf, (std::size_t) n, "%.2f s", (double) s);
 	else
-		std::snprintf(buf, (size_t) n, "%.1f s", (double) s);
+		std::snprintf(buf, (std::size_t) n, "%.1f s", (double) s);
 }
 
 // A typed value is milliseconds, or seconds if it ends in "s" alone

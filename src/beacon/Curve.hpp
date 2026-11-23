@@ -26,7 +26,8 @@ inline float blend(float p, float shape) {
 }
 } // namespace detail
 
-// Rising stages (goal above start).
+// Rising stages (goal above start). curveRise and curveFall are the same math
+// by design: both give the fraction of the distance to the goal covered.
 inline float curveRise(float p, float shape) {
 	return detail::blend(p, shape);
 }

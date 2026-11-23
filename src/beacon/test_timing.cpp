@@ -38,6 +38,9 @@ void cv() {
 	CHECK(near(stageSecondsCv(1.f, -10.f), 0.001, 1e-4), "-10 V from 1 is %g s", stageSecondsCv(1.f, -10.f));
 	CHECK(stageSecondsCv(0.3f, std::nanf("")) == stageSeconds(0.3f), "NaN volts are ignored");
 	CHECK(near(stageSecondsCv(0.25f, 5.f), stageSeconds(0.75f), 1e-5), "5 V is half the travel");
+	CHECK(near(stageSecondsCv(0.5f, 1.f), stageSeconds(0.6f), 1e-5), "1 V is a tenth of the travel");
+	CHECK(near(stageSecondsCv(0.5f, -2.f), stageSeconds(0.3f), 1e-5), "-2 V is minus a fifth");
+	CHECK(near(stageSecondsCv(0.5f, 99.f), 60.0, 1e-4) && near(stageSecondsCv(0.5f, -99.f), 0.001, 1e-4), "the sum clamps");
 }
 
 void typed() {
@@ -79,11 +82,21 @@ void typed() {
 	CHECK(!std::strcmp(buf, "60.0 s"), "60 s shows \"%s\"", buf);
 	formatSeconds(0.3f, buf, sizeof buf);
 	CHECK(!std::strcmp(buf, "300 ms"), "300 ms shows \"%s\"", buf);
+	struct { float t; const char* want; } fm[] = {
+		{0.0099f, "9.9 ms"}, {0.00996f, "10 ms"}, {0.0105f, "10 ms"}, {0.9994f, "999 ms"}, {0.9996f, "1.00 s"},
+		{9.99f, "9.99 s"}, {9.996f, "10.0 s"}, {59.96f, "60.0 s"}, {0.f, "1.0 ms"}, {100.f, "60.0 s"},
+	};
+	for (auto& c : fm) {
+		formatSeconds(c.t, buf, sizeof buf);
+		CHECK(!std::strcmp(buf, c.want), "%g s shows \"%s\" (want \"%s\")", c.t, buf, c.want);
+	}
 	formatSeconds(0.5f, buf, 4);
 	CHECK(std::strlen(buf) <= 3, "a short buffer is not overrun");
 }
 
 const float kShapes[5] = {0.f, 0.25f, 0.5f, 0.75f, 1.f};
+// Odd shapes (and out-of-range ones) so rounding at the ends shows.
+const float kOddShapes[] = {0.1f, 0.3f, 0.37f, 0.6f, 0.9f, 0.123f, 0.777f, -1.f, 2.f, 7.f};
 
 void curve_ends() {
 	for (float s : kShapes) {
@@ -92,11 +105,36 @@ void curve_ends() {
 	}
 }
 
+void curve_ends_odd() {
+	for (float s : kOddShapes) {
+		CHECK(curveRise(0.f, s) == 0.f && curveRise(1.f, s) == 1.f, "rise ends at shape %g", s);
+		CHECK(curveFall(0.f, s) == 0.f && curveFall(1.f, s) == 1.f, "fall ends at shape %g", s);
+		for (int i = 1; i < 100; i++) {
+			const float r = curveRise(i / 100.f, s);
+			CHECK(r >= 0.f && r <= 1.f, "shape %g p %d/100 leaves 0..1: %g", s, i, r);
+		}
+	}
+	// Every shape in a fine sweep ends exactly, and matches the formula (Global Constraints).
+	for (int j = 0; j <= 997; j++) {
+		const float sh = j / 997.f;
+		CHECK(curveRise(0.f, sh) == 0.f && curveRise(1.f, sh) == 1.f && curveFall(1.f, sh) == 1.f, "ends at shape %g", sh);
+		const double a = std::fabs(2.0 * sh - 1.0);
+		for (double pp : {0.1, 0.5, 0.8}) {
+			const double c = sh >= 0.5 ? 1.0 - std::pow(1.0 - pp, 4) : std::pow(pp, 4);
+			const double want = (1.0 - a) * pp + a * c;
+			CHECK(std::fabs(curveRise(pp, sh) - want) < 1e-6 && std::fabs(curveFall(pp, sh) - want) < 1e-6, "shape %g p %g is %g (want %g)", sh, pp, curveRise(pp, sh), want);
+		}
+	}
+	CHECK(curveRise(-1.f, 0.7f) == 0.f && curveRise(2.f, 0.7f) == 1.f && curveRise(std::nanf(""), 0.7f) == 0.f, "p clamps");
+}
+
 void curve_linear_noon() {
 	for (int i = 0; i <= 20; i++) {
 		const float p = i / 20.f;
 		CHECK(std::fabs(curveRise(p, 0.5f) - p) < 1e-6f && std::fabs(curveFall(p, 0.5f) - p) < 1e-6f, "noon is linear at %g", p);
 	}
+	// A hair either side of noon is already bent.
+	CHECK(curveRise(0.5f, 0.52f) > 0.5f + 1e-4f && curveRise(0.5f, 0.48f) < 0.5f - 1e-4f, "noon is the linear point, not near it");
 }
 
 void curve_bends() {
@@ -123,6 +161,7 @@ int main() {
 	cv();
 	typed();
 	curve_ends();
+	curve_ends_odd();
 	curve_linear_noon();
 	curve_bends();
 	return rkatest::finish("beacon/test_timing");
