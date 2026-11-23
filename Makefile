@@ -31,6 +31,14 @@ DISTRIBUTABLES += tools/fonts/D-DINCondensed.ttf tools/fonts/OFL-1.1.txt tools/f
 include $(RACK_DIR)/plugin.mk
 
 
+# Rack extracts every package in its plugins folder at startup, in no fixed
+# order, so an older rka package left beside the new one can be the one that
+# loads (#45). Remove them before plugin.mk's install copies the new one.
+install: remove-old-packages
+.PHONY: remove-old-packages
+remove-old-packages:
+	rm -f "$(PLUGINS_DIR)"/$(SLUG)-*.vcvplugin
+
 # Regenerate panels: layout -> res-src/<module>/*.svg + src/<module>/*Layout.hpp
 # -> Inkscape text-to-path -> res/<module>/*.svg, and the components in
 # res/components/. Needs Inkscape; the results are committed so plain builds
