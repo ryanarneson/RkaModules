@@ -1,0 +1,129 @@
+// Beacon's time law, typed values and stage curves (src/beacon/Timing.hpp,
+// Curve.hpp), against the numbers in the plan's Global Constraints.
+#include "beacon/Curve.hpp"
+#include "beacon/Timing.hpp"
+#include "testing.hpp"
+
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+
+namespace {
+
+using namespace rka::beacon;
+
+bool near(double a, double want, double rel) {
+	return std::fabs(a / want - 1.0) <= rel;
+}
+
+void time_law() {
+	CHECK(near(stageSeconds(0.f), 0.001, 1e-4), "knob 0 is %g s (want 1 ms)", stageSeconds(0.f));
+	CHECK(near(stageSeconds(1.f), 60.0, 1e-4), "knob 1 is %g s (want 60 s)", stageSeconds(1.f));
+	CHECK(near(stageSeconds(0.5f), 0.2449, 0.005), "noon is %g s (want 244.9 ms)", stageSeconds(0.5f));
+	CHECK(near(stageSeconds(0.2093f), 0.010, 0.005), "Attack default is %g s", stageSeconds(0.2093f));
+	CHECK(near(stageSeconds(0.5184f), 0.300, 0.005), "Decay default is %g s", stageSeconds(0.5184f));
+	CHECK(near(stageSeconds(0.6279f), 1.0, 0.005), "Release default is %g s", stageSeconds(0.6279f));
+	CHECK(stageSeconds(-3.f) == stageSeconds(0.f) && stageSeconds(7.f) == stageSeconds(1.f), "the knob clamps");
+	CHECK(stageSeconds(std::nanf("")) == stageSeconds(0.5f), "a NaN knob reads noon");
+	for (int i = 0; i <= 100; i++) {
+		const float k = i / 100.f;
+		CHECK(std::fabs(stageKnob(stageSeconds(k)) - k) < 1e-4f, "round trip of %.2f is %g", k, stageKnob(stageSeconds(k)));
+	}
+	CHECK(stageKnob(0.f) == 0.f && stageKnob(-1.f) == 0.f && stageKnob(1e9f) == 1.f && stageKnob(std::nanf("")) == 0.f,
+	      "typed times clamp");
+}
+
+void cv() {
+	CHECK(near(stageSecondsCv(0.f, 10.f), 60.0, 1e-4), "+10 V from 0 is %g s", stageSecondsCv(0.f, 10.f));
+	CHECK(near(stageSecondsCv(1.f, -10.f), 0.001, 1e-4), "-10 V from 1 is %g s", stageSecondsCv(1.f, -10.f));
+	CHECK(stageSecondsCv(0.3f, std::nanf("")) == stageSeconds(0.3f), "NaN volts are ignored");
+	CHECK(near(stageSecondsCv(0.25f, 5.f), stageSeconds(0.75f), 1e-5), "5 V is half the travel");
+}
+
+void typed() {
+	struct { const char* s; double want; } ok[] = {
+		{"250", 0.25}, {"250 ms", 0.25}, {"250ms", 0.25}, {"1.5 s", 1.5}, {"1.5s", 1.5}, {"1.5S", 1.5}, {" 2 s ", 2.0},
+	};
+	for (auto& c : ok) {
+		float v = -1.f;
+		const bool good = parseSeconds(c.s, v);
+		CHECK(good && std::fabs(v - c.want) < 1e-6, "\"%s\" parses to %g (want %g)", c.s, v, c.want);
+	}
+	for (const char* bad : {"abc", "", "  ", "ms", "12x", "1.5 sec"}) {
+		float v = 0.f;
+		CHECK(!parseSeconds(bad, v), "\"%s\" must not parse", bad);
+	}
+	{ float v = 0.f; CHECK(!parseSeconds(nullptr, v), "null does not parse"); }
+	struct { const char* s; float knob; } edge[] = {{"0", 0.f}, {"-5", 0.f}, {"1e9", 1.f}, {"90 s", 1.f}};
+	for (auto& c : edge) {
+		float v = 0.f;
+		CHECK(parseSeconds(c.s, v), "\"%s\" parses", c.s);
+		CHECK(stageKnob(v) == c.knob, "\"%s\" clamps to knob %g (got %g)", c.s, c.knob, stageKnob(v));
+	}
+	// The displayed text of every 0.01 knob step reads back within one display digit.
+	for (int i = 0; i <= 100; i++) {
+		const float t = stageSeconds(i / 100.f);
+		char buf[32];
+		formatSeconds(t, buf, sizeof buf);
+		float back = 0.f;
+		const bool good = parseSeconds(buf, back);
+		const double digit = t < 0.01f ? 1e-4 : t < 1.f ? 1e-3 : t < 10.f ? 1e-2 : 1e-1;
+		CHECK(good && std::fabs(back - t) <= digit * 0.5 * 1.01, "knob %.2f: %g s shows \"%s\" reads %g", i / 100.f, t, buf, back);
+	}
+	char buf[32];
+	formatSeconds(0.001f, buf, sizeof buf);
+	CHECK(!std::strcmp(buf, "1.0 ms"), "1 ms shows \"%s\"", buf);
+	formatSeconds(0.9996f, buf, sizeof buf);
+	CHECK(!std::strcmp(buf, "1.00 s"), "999.6 ms shows \"%s\"", buf);
+	formatSeconds(60.f, buf, sizeof buf);
+	CHECK(!std::strcmp(buf, "60.0 s"), "60 s shows \"%s\"", buf);
+	formatSeconds(0.3f, buf, sizeof buf);
+	CHECK(!std::strcmp(buf, "300 ms"), "300 ms shows \"%s\"", buf);
+	formatSeconds(0.5f, buf, 4);
+	CHECK(std::strlen(buf) <= 3, "a short buffer is not overrun");
+}
+
+const float kShapes[5] = {0.f, 0.25f, 0.5f, 0.75f, 1.f};
+
+void curve_ends() {
+	for (float s : kShapes) {
+		CHECK(curveRise(0.f, s) == 0.f && curveRise(1.f, s) == 1.f, "rise ends at shape %g: %g %g", s, curveRise(0.f, s), curveRise(1.f, s));
+		CHECK(curveFall(0.f, s) == 0.f && curveFall(1.f, s) == 1.f, "fall ends at shape %g: %g %g", s, curveFall(0.f, s), curveFall(1.f, s));
+	}
+}
+
+void curve_linear_noon() {
+	for (int i = 0; i <= 20; i++) {
+		const float p = i / 20.f;
+		CHECK(std::fabs(curveRise(p, 0.5f) - p) < 1e-6f && std::fabs(curveFall(p, 0.5f) - p) < 1e-6f, "noon is linear at %g", p);
+	}
+}
+
+void curve_bends() {
+	CHECK(curveRise(0.25f, 1.f) > 0.6f, "classic rise starts fast: %g", curveRise(0.25f, 1.f));
+	CHECK(curveFall(0.25f, 1.f) > 0.6f, "classic fall drops early: %g", curveFall(0.25f, 1.f));
+	CHECK(curveRise(0.25f, 0.f) < 0.01f, "reverse rise starts slow: %g", curveRise(0.25f, 0.f));
+	CHECK(curveFall(0.75f, 0.f) < 0.35f, "reverse fall goes late: %g", curveFall(0.75f, 0.f));
+	for (float s : kShapes) {
+		float r = 0.f, f = 0.f;
+		for (int i = 1; i <= 1000; i++) {
+			const float p = i / 1000.f;
+			const float nr = curveRise(p, s), nf = curveFall(p, s);
+			CHECK(nr >= r && nf >= f, "monotonic at shape %g p %g", s, p);
+			r = nr;
+			f = nf;
+		}
+	}
+}
+
+} // namespace
+
+int main() {
+	time_law();
+	cv();
+	typed();
+	curve_ends();
+	curve_linear_noon();
+	curve_bends();
+	return rkatest::finish("beacon/test_timing");
+}
