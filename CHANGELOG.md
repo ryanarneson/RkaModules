@@ -2,6 +2,10 @@
 
 ## Test builds
 
+- 2.0.37 (2026-11-23): Beacon: running stage starts where the last stage was cut off (#76)
+- 2.0.36 (2026-11-23): Beacon: running stage drawn from where the last stage ended (#76)
+- 2.0.35 (2026-11-23): Beacon: listening-stop and final-review fixes (window from true start, Sustain at 0, lights, switch steps by direction, bypass resets)
+- 2.0.34 (2026-11-23): Beacon: first test build (envelope: Gate/Trig/Hold, stage gates, window)
 - 2.0.33 (2026-11-23): Easy wins: Fog, Hadal, Squall, Wake, Ballast/Pan fixes and docs (PR #73)
 - 2.0.32 (2026-11-22): Spindrift: final review fixes
 - 2.0.31 (2026-11-22): Spindrift: manual and release builds
@@ -38,6 +42,23 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Beacon**, a 10 HP polyphonic envelope in the Instrument look:
+  - Gate, Trig or Hold on a switch (after the Instruō cèis 2): Gate runs
+    Attack, Decay and Sustain while the gate is high and Release when it
+    falls; Trig always completes Attack; Hold is a slew limiter on the
+    Sustain CV, Attack up and Decay down, with A, D and S gates for
+    rising, falling and caught up.
+  - Attack, Decay and Release from 1 ms to 60 s with CV, each stage
+    taking exactly its set time wherever it starts; Sustain 0 to 10 V,
+    moving smoothly under CV; typed times in the tooltips.
+  - Shape from a swelling reverse curve through linear to the classic
+    analog curve, one for every stage.
+  - A gate out for each stage, a 1 ms trigger at every stage start, OUT
+    (0 to 10 V) and INV, RETRIG for legato, a push button for a gate on
+    every channel, stage lights.
+  - A window draws the envelope the knobs make, with the running stage
+    bright and a dot riding it; in Hold, a scrolling line of the output.
+  - Up to 16 voices, one for each channel of GATE.
 - New module: **Spindrift**, a 20 HP granular processor: Mutable
   Instruments Beads' own DSP, vendored with every change marked, in the
   Instrument look:

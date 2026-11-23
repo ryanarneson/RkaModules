@@ -18,7 +18,7 @@ process and a plain panel; **M** needs real DSP work or tuning by ear;
 The existing three are already in the Instrument look
 (`docs/specs/2026-11-15-instrument-look-design.md`): Sway, Fathom and
 Shoal moved to it in PR #7, after Shoal's friendly mode landed in PR #6
-(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging, Wake, Narrows, Eddy and Spindrift were built in it from the start.
+(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging, Wake, Narrows, Eddy, Spindrift and Beacon were built in it from the start.
 
 **Changes since (the user, 2026-11-18):** Squall was built next, ahead of
 Plimsoll and Lull. Plimsoll is skipped for now, since Ballast's soft limit
@@ -70,6 +70,16 @@ each grain, the delay's taps and the synth's wave. At the listening stop
 (test builds 2.0.29 and 2.0.30) the grain count's caption was steadied;
 the window, the defaults that make a cloud, the quality in the window and
 Beads' ±10 V levels stand as built.
+
+**Changes since (2026-11-23):** Beacon was built (10 HP, polyphonic) after
+Spindrift, as the envelope Sluice and Narrows wait on. Against the idea:
+no Loop button (envelopes are the focus), a window that draws the
+envelope in place of the lamp, 10 HP and not 8, a Hold mode (a slew
+limiter, after the Instruō cèis 2) and the inverted output kept. It
+adds a gate for each stage, a trigger at every stage start, RETRIG and
+Shape. At the listening stop (test build 2.0.34) every stage was made to
+take exactly its set time wherever it starts, and the window was made
+to draw the running stage from where it really began.
 
 ## 1. A whole patch from RKA alone
 
@@ -127,7 +137,7 @@ need room made for them.
 | 20 | [Lee](lee.md) | S | Ducker. Lets a ping or a bell clear space in the drone. |
 | 21 | [Squall](squall.md) (built) | M | Random gates and CV with gusts and memory, to trigger the voices above. Built early, after Pan. |
 | 22 | [Foghorn](foghorn.md) | M | A second drone voice. Lower priority than it sounds: Fathom and Rigging already cover much of its ground. |
-| 23 | [Beacon](beacon.md) | S | Envelope. Useful once there are voices to shape and Sluice to shape them with. |
+| 23 | [Beacon](beacon.md) (built) | S | Envelope. Built 2026-11-23 with Gate, Trig and Hold, 10 HP, and a window in place of the lamp. |
 
 ## 5. Colour
 

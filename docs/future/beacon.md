@@ -1,6 +1,16 @@
 # Beacon: envelope and function generator
 
-Status: idea, 2026-11-15. Not designed.
+Status: built, 2026-11-23 (10 HP, polyphonic). The manual is
+[docs/beacon/README.md](../beacon/README.md); the design is
+`docs/specs/2026-11-23-beacon-design.md`. The text below is the original
+idea.
+
+**What changed from the idea.** No Loop button: envelopes are the
+focus, and a slow repeating shape is Sway's job. The lamp became a
+window that draws the envelope with a dot riding it. It is 10 HP, not 8.
+Hold (a slew limiter, after the Instruō cèis 2) was added. The inverted
+output stayed. Added too: a gate for each stage, a trigger at every stage
+start, RETRIG and Shape.
 
 ![mockup](beacon-mockup.svg)
 

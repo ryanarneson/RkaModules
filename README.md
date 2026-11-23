@@ -16,6 +16,7 @@ VCV Rack 2 modules.
 | [**Narrows**](docs/narrows/README.md) | 14 | Polyphonic stereo filter: a ladder and a state-variable core on a switch, Mode sweeps low-pass, band-pass, high-pass, Drive, Res to a playable sine, a comb tuned to the cutoff, Spread, Ping, CV on FM, Res, Comb and Mode |
 | [**Eddy**](docs/eddy/README.md) | 16 | Stereo tape loop that also loads and saves WAV files, up to 5 minutes: a waveform window you can drag to set Start and Length, Speed -2 to +2 with CV and V/OCT, Dub with Dub Level, Wear, Smear, Play and Loop with a trigger and EOC, Restore to the original; the tape is kept with the patch |
 | [**Spindrift**](docs/spindrift/README.md) | 20 | Granular processor: Mutable Instruments Beads' own code in the Instrument look. Time, Size, Shape and Pitch with randomness or CV, Density regular or random, Seed and Freeze, Feedback, Dry/Wet and Reverb with a CV each, four qualities from Digital to Dirty Tape, delay mode, and the wavetable synth when nothing is patched; a window shows the buffer and every grain, and a frozen buffer is kept with the patch |
+| [**Beacon**](docs/beacon/README.md) | 10 | Polyphonic envelope: Gate, Trig or Hold (a slew) on a switch, Attack, Decay and Release from 1 ms to 60 s, Sustain, Shape from a swelling reverse through linear to classic, a gate out for every stage, a trigger at each stage start, OUT and INV, a window that draws the envelope with a dot riding it, RETRIG |
 | [**Hadal**](docs/hadal/README.md) | 10 | Rumble and noise bed: Rumble, Hiss and Crackle darkened together by Depth (0 to 11 km), slow Drift, CV on all five, a layer out each and an L/R mix |
 | [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware, with a mouse-driven settings list |
 
@@ -69,6 +70,9 @@ src/rigging/             the Rigging strings: Rigging.cpp, RiggingEngine.hpp and
 src/wake/                the Wake echo: Wake.cpp, WakeEngine.hpp and the headers it is
                          built from (Timing.hpp, Colour.hpp, Smear.hpp, WakeTuning.hpp;
                          the shared src/DelayTap.hpp), test_*.cpp, bench.inc, WakeLayout.hpp
+src/beacon/              the Beacon envelope: Beacon.cpp, BeaconEngine.hpp and the Rack-free
+                         headers it is built from (Timing.hpp, Curve.hpp, Voice.hpp,
+                         EnvelopeView.hpp), test_*.cpp, bench.inc, BeaconLayout.hpp
 src/narrows/             the Narrows filter: Narrows.cpp, NarrowsEngine.hpp and the
                          headers it is built from (Laws.hpp, StateCore.hpp, Comb.hpp,
                          Ping.hpp, NarrowsTuning.hpp; Fathom's ladder, shared as

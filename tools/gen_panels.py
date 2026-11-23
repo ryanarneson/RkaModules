@@ -44,7 +44,7 @@ KIND_COLOUR = {"param": "#ff0000", "input": "#00ff00", "output": "#0000ff", "lig
 # outside of its knurl. The toggle is a 3.6 x 6.4 mm rectangle; its radius
 # is the circle round it. Used to keep components clear of each other.
 RADII = {"hero": 9.3, "dial": 7.0, "face": 4.8, "limb": 4.3, "atten": 2.8, "enc": 7.25,
-         "port": 4.0, "toggle": 3.7, "cap": 3.2, "jewel": 1.0}
+         "port": 4.0, "toggle": 3.7, "toggle3": 3.7, "cap": 3.2, "jewel": 1.0}
 TOGGLE_W, TOGGLE_H = 3.6, 6.4
 # Clearance a layout must keep between any two components, mm.
 CLEARANCE = 0.3
@@ -227,6 +227,8 @@ _SQ_COLS = ["GUST", "WEATHER", "MEMORY"]
 
 
 _WK_X = [7.8, 21.7, 35.56, 49.4, 63.3]
+_BC_X = [8.0, 19.6, 31.2, 42.8]
+_BC_STAGES = ["ATTACK", "DECAY", "SUSTAIN", "RELEASE"]
 _NR_X = _WK_X   # Narrows lines up with Wake
 _ED_X = [7.8, 24.22, 40.64, 57.06, 73.48]   # Eddy: 16 HP, the outer columns as Wake's
 _SD_T = [7.8, 23.5, 50.8, 78.1, 93.8]   # Spindrift top: Time, Size | Density | Shape, Pitch
@@ -825,6 +827,39 @@ PANELS = {
                  "PARAM_PITCH_ATT": dict(turn=25), "PARAM_FEEDBACK": dict(turn=-80),
                  "PARAM_DRYWET": dict(turn=30), "PARAM_REVERB": dict(turn=-40)},
         screws=screws_at(20, "tr", "bl"),
+    ),
+    # Beacon, an envelope (docs/specs/2026-11-23-beacon-design.md): a window
+    # that draws the envelope at the top; Shape and the GATE / TRIG / HOLD
+    # switch; the four stage knobs, each with its stage light, over their CVs
+    # and their stage gates; GATE, RETRIG, the push button and the outputs.
+    "Beacon": dict(
+        dir="beacon",
+        hp=10,
+        title="BEACON",
+        subtitle="ENVELOPE",
+        components=[("param", "SHAPE", 13.8, 45.5, "SHAPE"),
+                    ("param", "MODE", 30.0, 45.5, None)]
+        + [("param", n, x, 61.0, s) for n, x, s in zip(_BC_STAGES, _BC_X, "ADSR")]
+        + [("light", n, x + 5.5, 56.0, None) for n, x in zip(_BC_STAGES, _BC_X)]
+        + [("input", n + "_CV", x, 76.5, None) for n, x in zip(_BC_STAGES, _BC_X)]
+        + [("output", n, x, 92.0, s) for n, x, s in zip(_BC_STAGES, _BC_X, "ADSR")]
+        + [("input", "GATE", _BC_X[0], 105.5, "GATE"),
+           ("input", "RETRIG", _BC_X[1], 105.5, "RETRIG"),
+           ("param", "PUSH", _BC_X[0], 115.0, None),
+           ("output", "TRIG", _BC_X[1], 118.0, "TRIG"),
+           ("output", "OUT", _BC_X[2], 118.0, "OUT"),
+           ("output", "INV", _BC_X[3], 118.0, "INV")],
+        sizes={"PARAM_PUSH": "cap", "PARAM_MODE": "toggle3"},
+        screens=[("ENVELOPE", 4.4, 19.0, 42.0, 17.0)],
+        tiles=[dict(port=f"OUTPUT_{n}") for n in _BC_STAGES + ["TRIG", "OUT", "INV"]],
+        traces=[[f"INPUT_{n}_CV", f"PARAM_{n}"] for n in _BC_STAGES],
+        notes=[(x, 82.5, "CV", 1.4, "dim") for x in _BC_X]
+        + [(34.2, 41.1, "GATE", 1.3, "dim", "start"), (34.2, 45.9, "TRIG", 1.3, "dim", "start"),
+           (34.2, 50.7, "HOLD", 1.3, "dim", "start")],
+        preview={"PARAM_ATTACK": dict(turn=-78.49), "PARAM_DECAY": dict(turn=4.97),
+                 "PARAM_SUSTAIN": dict(turn=0), "PARAM_RELEASE": dict(turn=34.53),
+                 "PARAM_SHAPE": dict(turn=67.5), "PARAM_MODE": dict(frame=0)},
+        screws=screws_at(10, "tr", "bl"),
     ),
 }
 
@@ -1947,7 +1982,7 @@ KNURL_TICKS = {"Encoder": 55}
 ART_LAYERS = {
     "hero": ("HeroKnob_bg", "HeroKnob"), "dial": ("DialKnob_bg", "DialKnob"), "face": ("FaceKnob_bg", "FaceKnob"),
     "limb": ("LimbKnob_bg", "LimbKnob"), "atten": ("Atten_bg", "Atten"), "enc": ("Encoder_bg", "Encoder"),
-    "port": ("BrassPort",), "toggle": ("Toggle2_1",), "cap": ("Cap",), "jewel": ("JewelSeat",),
+    "port": ("BrassPort",), "toggle": ("Toggle2_1",), "toggle3": ("Toggle3_0",), "cap": ("Cap",), "jewel": ("JewelSeat",),
 }
 # Artwork that is the same on dark panels: it is light, not paint.
 UNTHEMED_ART = ("Cap_lit",)
@@ -1986,6 +2021,14 @@ def component_art(pal):
     # Two-position switch: frame 0 with the handle down, frame 1 up.
     for frame, top in ((0, TOGGLE_H - 0.675 - 2.6), (1, 0.675)):
         art[f"Toggle2_{frame}"] = (TOGGLE_W, TOGGLE_H, [
+            f'<rect x="0.125" y="0.125" width="{num(TOGGLE_W - 0.25)}" height="{num(TOGGLE_H - 0.25)}" rx="0.5" '
+            f'fill="{pal["knob"]}" stroke="{pal["brass"]}" stroke-width="0.25"/>',
+            f'<rect x="{num(TOGGLE_W / 2 - 1.125)}" y="{num(top)}" width="2.25" height="2.6" rx="0.3" '
+            f'fill="{pal["ivory"]}"/>'])
+
+    # Three-position switch: frame 0 handle up, 1 middle, 2 down.
+    for frame, top in ((0, 0.675), (1, (TOGGLE_H - 2.6) / 2), (2, TOGGLE_H - 0.675 - 2.6)):
+        art[f"Toggle3_{frame}"] = (TOGGLE_W, TOGGLE_H, [
             f'<rect x="0.125" y="0.125" width="{num(TOGGLE_W - 0.25)}" height="{num(TOGGLE_H - 0.25)}" rx="0.5" '
             f'fill="{pal["knob"]}" stroke="{pal["brass"]}" stroke-width="0.25"/>',
             f'<rect x="{num(TOGGLE_W / 2 - 1.125)}" y="{num(top)}" width="2.25" height="2.6" rx="0.3" '
@@ -2040,6 +2083,8 @@ def preview_svg(name, spec, suffix):
         layers = list(ART_LAYERS[c.size])
         if c.size == "toggle":
             layers = [f'Toggle2_{state.get("frame", 1)}']
+        if c.size == "toggle3":
+            layers = [f'Toggle3_{state.get("frame", 0)}']
         if c.size == "cap" and state.get("lit"):
             layers.append("Cap_lit")
         for i, layer in enumerate(layers):
@@ -2085,6 +2130,7 @@ SPECIMEN = dict(
         ("param", "PUSH", 89.5, 47.0, "PUSH"),
         ("param", "OFFSET", 53.0, 53.0, "BI/UNI"),
         ("param", "ONESHOT", 64.0, 55.0, "1-SHOT"),
+        ("param", "MODE", 40.0, 53.0, "MODE"),
     ]
     # Three knobs where their columns meet the limb; four attenuverters on
     # the next arc out; their jacks in a row.
@@ -2104,7 +2150,7 @@ SPECIMEN = dict(
         ("output", "B", 89.0, 112.0, "B"),
     ],
     sizes={"PARAM_RATE": "hero", "PARAM_DIAL": "dial", "PARAM_SPREAD": "face", "PARAM_OFFSET": "toggle",
-           "PARAM_ONESHOT": "cap", "PARAM_PUSH": "cap"},
+           "PARAM_ONESHOT": "cap", "PARAM_PUSH": "cap", "PARAM_MODE": "toggle3"},
     origins=[_SP],
     circles=[(_SP[0], _SP[1], r) for r in (78, 90, 102, 114)],
     radii=[(_SP[0], _SP[1], _SP_COL[1], _on(66, _SP_COL[1])), (_SP[0], _SP[1], _SP_COL[3], _on(66, _SP_COL[3]))],

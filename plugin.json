@@ -1,7 +1,7 @@
 {
   "slug": "rka",
   "name": "RKA",
-  "version": "2.0.33",
+  "version": "2.0.37",
   "license": "GPL-3.0-or-later",
   "brand": "RKA",
   "author": "Ryan Arneson",
@@ -162,6 +162,17 @@
         "Hardware clone"
       ],
       "keywords": "granular grains cloud beads mutable instruments clouds freeze delay reverb wavetable texture ambient"
+    },
+    {
+      "slug": "Beacon",
+      "name": "Beacon",
+      "description": "Polyphonic envelope: Gate, Trig and Hold (a slew limiter) on a switch, Attack, Decay and Release from 1 ms to 60 s with CV, Shape from reverse through linear to classic, a gate per stage, a stage trigger, OUT and INV, and a window that draws the envelope",
+      "tags": [
+        "Envelope generator",
+        "Polyphonic",
+        "Slew limiter"
+      ],
+      "keywords": "envelope adsr ar ad eg contour gate trigger retrigger slew lag portamento polyphonic"
     }
   ]
 }

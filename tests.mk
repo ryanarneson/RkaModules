@@ -107,6 +107,11 @@ build/test/squall/test_hostile: src/squall/test_hostile.cpp src/testing.hpp $(wi
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/squall $< -o $@
 
+# Beacon's hostile-input test: the sanitizers, and the counting operator new.
+build/test/beacon/test_hostile: src/beacon/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/beacon/*.hpp src/hadal/Random.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/beacon $< -o $@
+
 # Rigging's hostile-input test: the sanitizers, and the counting operator new.
 build/test/rigging/test_hostile: src/rigging/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/rigging/*.hpp src/hadal/Random.hpp)
 	@mkdir -p $(@D)

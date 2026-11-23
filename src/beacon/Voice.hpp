@@ -1,0 +1,220 @@
+#pragma once
+// One Beacon voice: the stage machine (Gate and Trig modes), Hold's slew,
+// the stage gates and TRIG. Rack-free; no libm and no allocation in
+// process(). Phase, its step and the level are double: a 60 s stage at
+// 768 kHz is 46 M samples, past float's resolution.
+//
+// Each sample: a stage that finished on the last sample hands on to the next
+// one, then edges and mode changes may start a stage, then the stage runs.
+// So every stage, even one that ends at once, holds its gate for at least one
+// sample, and a stage of time T lasts ceil(T fs) samples.
+#include "Curve.hpp"
+#include "FastMath.hpp"
+#include "Timing.hpp"
+
+namespace rka {
+namespace beacon {
+
+enum Stage { IDLE, ATTACK, DECAY, SUSTAIN, RELEASE };
+enum Mode { GATE_MODE, TRIG_MODE, HOLD_MODE };
+
+struct VoiceIn {                  // one channel, one sample
+	float attack, decay, release; // seconds, already through stageSecondsCv
+	float sustain;                // volts 0..10 (GATE/TRIG) or the Hold input, +/-10
+	float shape;                  // 0..1
+	bool gate, retrig;            // after Schmitt (edges are the voice's job)
+	Mode mode;
+};
+
+struct VoiceOut {
+	float level;                  // OUT
+	bool stageGate[4];            // A, D, S, R
+	bool trig;                    // TRIG high this sample
+};
+
+struct Voice {
+	Voice() {
+		setSampleRate(48000.f);
+		reset();
+	}
+
+	// Keeps stage, phase and level; a zero, negative or NaN rate is ignored.
+	void setSampleRate(float fs) {
+		if (!(fs >= 1.f && fs <= 1e8f))
+			return;
+		dt_ = 1.0 / fs;
+		const int len = int(0.001 * fs + 0.5);
+		pulseLen_ = len > 1 ? len : 1;
+		if (pulse_ > pulseLen_)
+			pulse_ = pulseLen_;
+		// 2 ms one-pole: 1 - e^(-1 / (0.002 fs)).
+		sustainCoef_ = 1.0 - fastExp2D(-1.4426950408889634 / (0.002 * fs));
+	}
+
+	// IDLE at 0 V, pulse off, edges forgotten (a gate held high restarts).
+	void reset() {
+		stage_ = prevStage_ = IDLE;
+		phase_ = prevPhase_ = 0.0;
+		level_ = start_ = goal_ = 0.0;
+		done_ = false;
+		pulse_ = 0;
+		prevGate_ = prevRetrig_ = false;
+		prevMode_ = GATE_MODE;
+		time_[0] = 0.01f;
+		time_[1] = 0.3f;
+		time_[2] = 1.f;
+		sustain_ = 0.f;
+		shape_ = 0.75f;
+	}
+
+	void process(const VoiceIn& in, VoiceOut& out) {
+		const Mode mode = in.mode == HOLD_MODE ? HOLD_MODE : in.mode == TRIG_MODE ? TRIG_MODE : GATE_MODE;
+		const double ta = pickTime(in.attack, time_[0]);
+		const double td = pickTime(in.decay, time_[1]);
+		const double tr = pickTime(in.release, time_[2]);
+		if (in.shape >= 0.f)
+			shape_ = in.shape <= 1.f ? in.shape : 1.f;
+		else if (in.shape < 0.f)
+			shape_ = 0.f;                                  // NaN keeps the last
+		const bool rise = in.gate && !prevGate_, fall = !in.gate && prevGate_;
+		const bool retrigRise = in.retrig && !prevRetrig_;
+		prevGate_ = in.gate;
+		prevRetrig_ = in.retrig;
+
+		if (mode == HOLD_MODE) {
+			runHold(in.sustain, ta, td);
+		} else {
+			if (in.sustain >= 0.f)
+				sustain_ = in.sustain <= 10.f ? in.sustain : 10.f;
+			else if (in.sustain < 0.f)
+				sustain_ = 0.f;                            // NaN keeps the last
+			if (prevMode_ == HOLD_MODE) {
+				begin(in.gate ? ATTACK : RELEASE);
+			} else if (done_) {
+				if (stage_ == ATTACK)
+					begin(in.gate ? DECAY : RELEASE);
+				else if (stage_ == DECAY)
+					begin(in.gate ? SUSTAIN : RELEASE);
+				else if (stage_ == RELEASE)
+					begin(IDLE);
+			}
+			if (rise || (retrigRise && in.gate))
+				begin(ATTACK);
+			else if (fall && stage_ != IDLE && stage_ != RELEASE && !(mode == TRIG_MODE && stage_ == ATTACK))
+				begin(RELEASE);
+			runStage(stage_ == ATTACK ? ta : stage_ == DECAY ? td : tr);
+		}
+		prevMode_ = mode;
+
+		out.level = float(level_);
+		for (int i = 0; i < 4; i++)
+			out.stageGate[i] = stage_ == Stage(ATTACK + i);
+		out.trig = pulse_ > 0;
+		if (pulse_ > 0)
+			pulse_--;
+	}
+
+	Stage stage() const { return stage_; }
+	double phase() const { return phase_; }   // 0..1 within the stage; Hold: 0
+	float level() const { return float(level_); }
+	// The running stage's start and goal levels (volts), latched when it
+	// began; Hold leaves them as they were.
+	double start() const { return start_; }
+	double goal() const { return goal_; }
+	// The stage that ran before the running one (IDLE at first, and on
+	// leaving Hold, whose stages are no envelope's). A gate low as Attack
+	// ends goes straight to Release: Release after Attack.
+	Stage prevStage() const { return prevStage_; }
+	// How far that stage had got when it was cut off, 0..1: Attack's or
+	// Decay's phase then (1 when it completed); Sustain, which has no
+	// phase, 1; 0 with prevStage IDLE.
+	double prevPhase() const { return prevPhase_; }
+
+private:
+	Stage stage_, prevStage_;
+	double phase_, prevPhase_, level_, start_, goal_;
+	double dt_ = 1.0 / 48000.0, sustainCoef_ = 0.0;
+	bool done_;
+	int pulse_ = 0, pulseLen_ = 48;
+	bool prevGate_, prevRetrig_;
+	Mode prevMode_;
+	float time_[3];       // the last good Attack, Decay, Release times
+	float sustain_;       // the last good sustain level (GATE/TRIG)
+	float shape_;         // the last good Shape
+
+	// A time in kMinSeconds..kMaxSeconds; NaN keeps the last good one.
+	static double pickTime(float t, float& last) {
+		if (t >= kMinSeconds)
+			last = t <= kMaxSeconds ? t : kMaxSeconds;
+		else if (t < kMinSeconds)
+			last = kMinSeconds;
+		return last;
+	}
+
+	void begin(Stage s) {
+		prevStage_ = prevMode_ == HOLD_MODE ? IDLE : stage_;
+		prevPhase_ = prevStage_ == ATTACK || prevStage_ == DECAY ? phase_ : prevStage_ == IDLE ? 0.0 : 1.0;
+		stage_ = s;
+		phase_ = 0.0;
+		start_ = level_;
+		goal_ = s == ATTACK ? 10.0 : s == DECAY ? double(sustain_) : 0.0;
+		done_ = false;
+		pulse_ = pulseLen_;
+	}
+
+	void runStage(double t) {
+		switch (stage_) {
+		case IDLE:
+			break;
+		case SUSTAIN:
+			level_ += (double(sustain_) - level_) * sustainCoef_;
+			break;
+		default:
+			if (done_)
+				break;
+			// A phase within a thousandth of a sample of 1 counts as 1, so a
+			// time of a whole number of samples (1 ms at 48 kHz: 0.001f is
+			// 5e-8 long) takes that many, not one more.
+			const double step = dt_ / t;
+			phase_ += step;
+			if (phase_ >= 1.0 - 1e-3 * step || start_ == goal_) {
+				phase_ = 1.0;
+				level_ = goal_;
+				done_ = true;
+			} else {
+				const float p = float(phase_);
+				const float c = goal_ > start_ ? curveRise(p, shape_) : curveFall(p, shape_);
+				level_ = start_ + (goal_ - start_) * double(c);
+			}
+		}
+	}
+
+	// Slew toward x at 10 V / Attack up and 10 V / Decay down. A, D or S by
+	// whether it is limiting up, down or settled, with the hysteresis.
+	void runHold(float in, double ta, double td) {
+		double x = in;
+		if (!(x == x))
+			x = level_;                                    // NaN holds the level
+		x = x < -10.0 ? -10.0 : x > 10.0 ? 10.0 : x;
+		const double up = 10.0 * dt_ / ta, down = 10.0 * dt_ / td;
+		const double diff = x - level_;
+		if (diff > up)
+			level_ += up;
+		else if (diff < -down)
+			level_ -= down;
+		else
+			level_ = x;
+		const double err = x > level_ ? x - level_ : level_ - x;
+		// Settled within 1 mV; leaves settled only beyond 2 mV.
+		const bool wasSettled = prevMode_ == HOLD_MODE && stage_ == SUSTAIN;
+		const Stage s = err <= (wasSettled ? 0.002 : 0.001) ? SUSTAIN : x > level_ ? ATTACK : DECAY;
+		if (s != stage_)
+			pulse_ = pulseLen_;
+		stage_ = s;
+		phase_ = 0.0;
+		done_ = false;
+	}
+};
+
+} // namespace beacon
+} // namespace rka

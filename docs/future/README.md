@@ -26,7 +26,7 @@ takes one more instrument and builds its panel geometry from it.
 | [Bearing](bearing.md) | Quantiser | A compass rose | 10 HP |
 | [Squall](squall.md) | Random source (built) | An aneroid barometer | 8 HP |
 | [Knot](knot.md) | Clock, divider, multiplier | Knots counted on a log line | 8 HP |
-| [Beacon](beacon.md) | Envelope and function generator | A lighthouse | 8 HP |
+| [Beacon](beacon.md) | Polyphonic envelope with Gate, Trig and Hold, and a window (built) | A lighthouse | 10 HP |
 | [Ballast](ballast.md) | Four-channel stereo mixer (built) | A clinometer | 12 HP |
 | [Sounding](sounding.md) | Eight-step sequencer | A line of soundings on a chart | 12 HP |
 | [Fog](fog.md) | Reverb (built) | A visibility scale | 10 HP |

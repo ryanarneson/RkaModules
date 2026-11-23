@@ -4,6 +4,7 @@
 #include "Overview.hpp"
 #include "RkaTheme.hpp"
 #include "TapeGesture.hpp"
+#include "Toggle3Step.hpp"
 #include "spindrift/GrainView.hpp"
 #include "plugin.hpp"
 
@@ -40,13 +41,12 @@ inline void holdRelease(ParamQuantity* pq, bool& latching) {
 	latching = false;
 }
 
-// Sets a param the way a click on a stock switch does: Edit > Undo puts it
-// back. Nothing is recorded when the value does not change.
-inline void setParamUndoable(ParamQuantity* pq, float value, const std::string& action) {
+// Records a param's change from oldValue to its value now, as a click on a
+// stock switch does: Edit > Undo puts it back. Nothing is recorded when the
+// value did not change.
+inline void pushParamChange(ParamQuantity* pq, float oldValue, const std::string& action) {
 	if (!pq || !pq->module)
 		return;
-	const float oldValue = pq->getValue();
-	pq->setValue(value);
 	const float newValue = pq->getValue();
 	if (newValue == oldValue)
 		return;
@@ -57,6 +57,15 @@ inline void setParamUndoable(ParamQuantity* pq, float value, const std::string& 
 	h->oldValue = oldValue;
 	h->newValue = newValue;
 	APP->history->push(h);
+}
+
+// Sets a param the way a click on a stock switch does (pushParamChange).
+inline void setParamUndoable(ParamQuantity* pq, float value, const std::string& action) {
+	if (!pq || !pq->module)
+		return;
+	const float oldValue = pq->getValue();
+	pq->setValue(value);
+	pushParamChange(pq, oldValue, action);
 }
 
 // How an endless encoder is turned; KnurlEncoder (below) draws it. Not a
@@ -266,6 +275,85 @@ struct Toggle2 : app::SvgSwitch {
 	void step() override {
 		showTheme();
 		SvgSwitch::step();
+	}
+};
+
+// Three-position switch, 3.6 x 6.4 mm: handle up at the param's minimum
+// (0), middle at 1, down at 2. Configure the param with configSwitch(0, 2).
+// Unlike a stock SvgSwitch it steps by direction and never wraps
+// (Toggle3Step.hpp): a click on the upper half moves it up one, on the
+// lower half down one; a vertical drag moves it too. One gesture is one
+// undo step.
+struct Toggle3 : app::SvgSwitch {
+	int shown = -1;
+	bool pressUpper = false;
+	Toggle3Gesture gesture;
+
+	Toggle3() {
+		shadow->opacity = 0.f;
+		showTheme();
+	}
+
+	void showTheme() {
+		const int dark = settings::preferDarkPanels ? 1 : 0;
+		if (dark == shown)
+			return;
+		shown = dark;
+		frames.clear();
+		frames.push_back(instrumentArt("Toggle3_0", dark));
+		frames.push_back(instrumentArt("Toggle3_1", dark));
+		frames.push_back(instrumentArt("Toggle3_2", dark));
+		// As addFrame() does for a first frame, then the frame for the value.
+		sw->setSvg(frames[0]);
+		box.size = sw->box.size;
+		fb->box.size = sw->box.size;
+		shadow->box.size = sw->box.size;
+		shadow->box.pos = math::Vec(0, sw->box.size.y * 0.10f);
+		fb->setDirty();
+		if (getParamQuantity()) {
+			ChangeEvent e;
+			onChange(e);
+		}
+	}
+
+	void step() override {
+		showTheme();
+		SvgSwitch::step();
+	}
+
+	// Which half the press is on (DragStartEvent has no position).
+	void onButton(const ButtonEvent& e) override {
+		if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS)
+			pressUpper = toggle3UpperHalf(e.pos.y, box.size.y);
+		SvgSwitch::onButton(e);
+	}
+
+	// Not SvgSwitch's: that steps up and wraps.
+	void onDragStart(const DragStartEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		ParamQuantity* pq = getParamQuantity();
+		if (pq)
+			gesture.press(int(std::round(pq->getValue())), pressUpper);
+	}
+
+	void onDragMove(const DragMoveEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		ParamQuantity* pq = getParamQuantity();
+		const int v = gesture.move(e.mouseDelta.y);
+		if (pq && float(v) != pq->getValue())
+			pq->setValue(float(v));
+	}
+
+	void onDragEnd(const DragEndEvent& e) override {
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		ParamQuantity* pq = getParamQuantity();
+		if (pq) {
+			pq->setValue(float(gesture.release()));
+			pushParamChange(pq, float(gesture.start), "move switch");
+		}
 	}
 };
 
