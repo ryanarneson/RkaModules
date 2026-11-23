@@ -20,7 +20,7 @@ TSAN_TESTS = $(filter %/test_threads,$(TEST_BINS))
 TSAN_START_FAILED = ThreadSanitizer: unexpected memory mapping
 TSAN_REQUIRED ?=
 .PHONY: test
-test: shoal-globals bench-modules engine-globals libm-calls panels-test $(TEST_BINS)
+test: shoal-globals spindrift-globals spindrift-vendor bench-modules engine-globals libm-calls panels-test $(TEST_BINS)
 	@for t in $(filter-out $(TSAN_TESTS),$(TEST_BINS)); do ./$$t || exit 1; done
 	@for t in $(TSAN_TESTS); do \
 		./$$t > $$t.log 2>&1; rc=$$?; \
@@ -57,6 +57,24 @@ SHOAL_FW_FLAGS = -std=c++17 -fwrapv -fno-strict-aliasing -fno-unsafe-math-optimi
 SHOAL_TEST_FLAGS = $(SHOAL_FW_FLAGS) -O1 -g -fsanitize=address,undefined \
 	-fno-sanitize=alignment,shift-base -fno-sanitize-recover=all
 SHOAL_DEPS := $(shell find src/shoal -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.ino' -o -name '*.cpp' \) ! -name 'test_*.cpp' ! -path 'src/shoal/testdata/*')
+
+# Spindrift's vendored Beads (src/spindrift/beads/, stmlib/; BeadsFirmware.cpp)
+# and the untouched reference (testdata/ref/, RefBeads.cpp). -DTEST picks
+# stmlib's portable code over its ARM assembly; -fno-unsafe-math-optimizations
+# undoes compile.mk's fast maths, so the plugin and the tests compute alike;
+# -fwrapv and -funsigned-char give the Cortex-M7's wrapping and unsigned char
+# (TESTING.md rule 9). The Makefile adds these to BeadsFirmware.cpp.o.
+SPINDRIFT_FW_FLAGS = -fwrapv -fno-strict-aliasing -fno-unsafe-math-optimizations -funsigned-char -DTEST
+# The vendored and reference objects are built without -Wall -Wextra
+# (upstream warns: unused parameters). The reference keeps upstream's
+# variable-length arrays and so builds with -Wno-vla (Clang warns on them by
+# default); the vendored copy has none left (CHANGES.md) and needs nothing. The tests
+# include the vendored headers through -isystem, so their own code still gets
+# -Wall -Wextra (and -Werror in CI). C++11 for the firmware objects, as the
+# plugin builds them.
+SPINDRIFT_TEST_FLAGS = $(SPINDRIFT_FW_FLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
+SPINDRIFT_FW_DEPS := $(shell find src/spindrift/beads src/spindrift/stmlib -type f 2>/dev/null)
+SPINDRIFT_REF_DEPS := $(shell find src/spindrift/testdata -type f 2>/dev/null)
 
 # Other modules' tests (header-only cores). CI adds -Werror.
 TEST_WERROR ?=
@@ -138,6 +156,70 @@ build/test/fog/test_hostile: src/fog/test_hostile.cpp src/testing.hpp $(wildcard
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/fog $< -o $@
 
+build/test/spindrift/BeadsFirmware.o: src/spindrift/BeadsFirmware.cpp src/spindrift/BeadsContext.hpp $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++11 $(SPINDRIFT_TEST_FLAGS) -Isrc/spindrift -c $< -o $@
+
+# The reference under other namespaces, so it links beside the vendored copy.
+build/test/spindrift/RefBeads.o: src/spindrift/testdata/RefBeads.cpp $(SPINDRIFT_REF_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++11 $(SPINDRIFT_TEST_FLAGS) -Wno-vla -Dbeads=beadsref -Dstmlib=stmlibref -Isrc/spindrift/testdata/ref -c $< -o $@
+
+# Spindrift's thread test (the window's view): ThreadSanitizer, which cannot
+# be combined with ASan, so the vendored Beads is built again with it.
+build/test/spindrift/BeadsFirmware.tsan.o: src/spindrift/BeadsFirmware.cpp src/spindrift/BeadsContext.hpp $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++11 $(SPINDRIFT_FW_FLAGS) -O1 -g -fsanitize=thread -Isrc/spindrift -c $< -o $@ || \
+		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Spindrift's thread test needs it" >&2; exit 1; }
+
+# GCC warns (-Wtsan, an error under CI's -Werror) that ThreadSanitizer does
+# not model std::atomic_thread_fence. The engine's only fences are the
+# save's seqlock (markRingWritten, bufferImage), which orders the frozen
+# ring's plain bytes for the copy; this test reads ringSeq() (an atomic
+# load) and never the ring, so nothing it checks rests on a fence. The
+# seqlock itself is test_save_race's (ASan/UBSan, not TSan). Clang has no
+# such warning, so the flag is passed only where the compiler knows it.
+SPINDRIFT_TSAN_NOWARN := $(shell $(CXX) -Werror -Wno-tsan -x c++ -fsyntax-only /dev/null >/dev/null 2>&1 && echo -Wno-tsan)
+build/test/spindrift/test_threads: src/spindrift/test_threads.cpp build/test/spindrift/BeadsFirmware.tsan.o \
+		src/testing.hpp $(wildcard src/*.hpp src/spindrift/*.hpp) $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 $(SPINDRIFT_FW_FLAGS) -O1 -g -Wall -Wextra $(TEST_WERROR) $(SPINDRIFT_TSAN_NOWARN) -fsanitize=thread -Isrc -isystem src/spindrift \
+		$(filter %.cpp %.o,$^) -o $@ || \
+		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Spindrift's thread test needs it" >&2; exit 1; }
+
+# Spindrift's save against the running engine: two real threads and a
+# deliberate (detected) race on the image's bytes, so the sanitizers ASan and
+# UBSan, not ThreadSanitizer, and -pthread.
+build/test/spindrift/test_save_race: src/spindrift/test_save_race.cpp build/test/spindrift/BeadsFirmware.o \
+		src/testing.hpp $(wildcard src/*.hpp src/spindrift/*.hpp) $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 $(SPINDRIFT_TEST_FLAGS) -Wall -Wextra $(TEST_WERROR) -pthread -Isrc -isystem src/spindrift $(filter %.cpp %.o,$^) -o $@
+
+# Spindrift's hostile-input test: the sanitizers, the counting operator new,
+# and a thread for each mode and quality (-pthread). No reference needed.
+build/test/spindrift/test_hostile: src/spindrift/test_hostile.cpp build/test/spindrift/BeadsFirmware.o \
+		src/testing.hpp $(wildcard src/*.hpp src/spindrift/*.hpp) $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 $(SPINDRIFT_TEST_FLAGS) -Wall -Wextra $(TEST_WERROR) -pthread -Isrc -isystem src/spindrift $(filter %.cpp %.o,$^) -o $@
+
+build/test/spindrift/test_%: src/spindrift/test_%.cpp build/test/spindrift/BeadsFirmware.o build/test/spindrift/RefBeads.o \
+		src/testing.hpp $(wildcard src/*.hpp src/spindrift/*.hpp) src/spindrift/testdata/RefBeads.hpp $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 $(SPINDRIFT_TEST_FLAGS) -Wall -Wextra $(TEST_WERROR) -Isrc -isystem src/spindrift $(filter %.cpp %.o,$^) -o $@
+
+# The vendored Beads is upstream's but for marked changes, and the reference
+# is upstream's exactly (skipped without ~/ws/plugins/eurorack, as in CI).
+.PHONY: spindrift-vendor
+spindrift-vendor:
+	tools/check_spindrift_vendor.sh
+
+# The vendored Beads object holds no writable global state: Random's lives in
+# each instance's spindrift::BeadsContext, reached through one thread-local
+# pointer (spindrift::current(), BeadsFirmware.cpp), the only one allowed.
+.PHONY: spindrift-globals
+spindrift-globals: build/test/spindrift/BeadsFirmware.o
+	ALLOWED_TLS='^_*ZZN9spindrift7currentEvE7context([$$]tlv[$$]init)?$$' tools/check_shoal_globals.sh $<
+
 build/test/shoal/Firmware.o: src/shoal/Firmware.cpp $(SHOAL_DEPS)
 	@mkdir -p $(@D)
 	$(CXX) $(SHOAL_TEST_FLAGS) -Isrc -c $< -o $@
@@ -197,6 +279,32 @@ build/bench/modules.inc: bench-modules-list
 	  for m in $(BENCH_MODULES); do printf ' X(%s)' $$m; done; echo; } > $@.tmp
 	@if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 
+# Spindrift's engine runs the vendored Beads, compiled once in
+# BeadsFirmware.cpp: the tools reach its headers through their include root
+# (-isystem, as the tests do; -DTEST for stmlib's portable code, as the
+# plugin builds it) and link its object, built as the plugin builds it
+# (the tools' flags, then SPINDRIFT_FW_FLAGS, as the Makefile appends them).
+# What is NOT as the plugin builds it: the engine's own code (SpindriftEngine,
+# EdgeRate, GainControl and the Beads and stmlib functions defined inline in
+# the headers) is compiled inside each tool's single translation unit
+# (bench.cpp, libm_calls.cpp, engine_globals.cpp), with every other module,
+# so with the tools' flags: compile.mk's fast maths
+# (-funsafe-math-optimizations) and without SPINDRIFT_FW_FLAGS' -fwrapv,
+# -fno-strict-aliasing, -fno-unsafe-math-optimizations and -funsigned-char,
+# which the plugin gives Spindrift.cpp. They cannot be added here: they would
+# change how every other module in it is compiled and
+# timed. So the bench's timing of that code, and the libm count, are of a
+# fast-maths build of it (an inline function both there and in
+# BeadsFirmware.o may come from either), not to the instruction what the
+# plugin runs; Beads' own processing, in the object, is. test_engine and
+# test_alias check what it computes, built strict.
+BENCH_VENDOR_FLAGS = -isystem src/spindrift -DTEST
+BENCH_VENDOR_OBJS = build/bench/BeadsFirmware.o
+BENCH_DEPS += $(SPINDRIFT_FW_DEPS)
+build/bench/BeadsFirmware.o: src/spindrift/BeadsFirmware.cpp src/spindrift/BeadsContext.hpp src/spindrift/GrainView.hpp $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) $(BENCH_FLAGS) $(SPINDRIFT_FW_FLAGS) -Isrc/spindrift -c $< -o $@
+
 # The guard (in `make test`): a module folder with a *Engine.hpp must have
 # a bench.inc, and every declaration must be complete (idle, outputs and
 # busy cases, both budgets of each case set, a libm case with the knobs
@@ -219,9 +327,9 @@ bench-modules: build/bench/bench
 # case's budget, or if there are no modules.
 BENCH_ARCH = $(if $(filter x86_64 amd64,$(shell uname -m)),-march=nehalem,-march=armv8-a+fp+simd)
 BENCH_FLAGS = -std=c++11 -O3 -funsafe-math-optimizations -fno-omit-frame-pointer -g $(BENCH_ARCH)
-build/bench/bench: src/bench/bench.cpp $(BENCH_DEPS)
+build/bench/bench: src/bench/bench.cpp $(BENCH_DEPS) $(BENCH_VENDOR_OBJS)
 	@mkdir -p $(@D)
-	$(CXX) $(BENCH_FLAGS) -Isrc -Ibuild/bench $< -o $@
+	$(CXX) $(BENCH_FLAGS) -Isrc -Ibuild/bench $(BENCH_VENDOR_FLAGS) $< $(BENCH_VENDOR_OBJS) -o $@
 .PHONY: bench
 bench: build/bench/bench
 	./build/bench/bench
@@ -251,7 +359,7 @@ fog-soak: build/test/fog/soak
 # on an object that reaches every engine entry point.
 build/test/engine_globals.o: src/bench/engine_globals.cpp $(BENCH_DEPS)
 	@mkdir -p $(@D)
-	$(CXX) -std=c++11 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Isrc -Ibuild/bench -c $< -o $@
+	$(CXX) -std=c++11 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Isrc -Ibuild/bench $(BENCH_VENDOR_FLAGS) -c $< -o $@
 .PHONY: engine-globals
 engine-globals: build/test/engine_globals.o
 	tools/check_shoal_globals.sh $<
@@ -263,10 +371,10 @@ engine-globals: build/test/engine_globals.o
 # runs on Linux (CI) and is skipped elsewhere.
 LIBM_WRAP = exp2f exp2 expf exp log2f log2 logf log powf pow sinf sin cosf cos sincosf sincos \
 	tanf tan tanhf tanh fmodf fmod lroundf lround floorf floor fminf fmin fmaxf fmax
-build/test/libm_calls: src/bench/libm_calls.cpp $(BENCH_DEPS)
+build/test/libm_calls: src/bench/libm_calls.cpp $(BENCH_DEPS) $(BENCH_VENDOR_OBJS)
 	@mkdir -p $(@D)
-	$(CXX) -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR) -Isrc -Ibuild/bench $< -o $@ \
-		$(LIBM_WRAP:%=-Wl,--wrap=%) -lm
+	$(CXX) -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR) -Isrc -Ibuild/bench \
+		$(BENCH_VENDOR_FLAGS) $< $(BENCH_VENDOR_OBJS) -o $@ $(LIBM_WRAP:%=-Wl,--wrap=%) -lm
 .PHONY: libm-calls
 ifeq ($(shell uname -s),Linux)
 libm-calls: build/test/libm_calls

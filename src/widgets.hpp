@@ -4,6 +4,7 @@
 #include "Overview.hpp"
 #include "RkaTheme.hpp"
 #include "TapeGesture.hpp"
+#include "spindrift/GrainView.hpp"
 #include "plugin.hpp"
 
 // Components shared by every RKA module, so the plugin keeps one look,
@@ -311,15 +312,34 @@ struct Cap : app::ParamWidget {
 	}
 };
 
+// The module light that lights a cap (CapButton, CapLatch), if any; filled
+// in by createLightParam().
+struct CapLightRef {
+	engine::Module* module = NULL;
+	int firstLightId = -1;
+};
+
 // Momentary button. Click: down while held. Shift-click: latches down until
-// the next click of either kind (which only releases it). The cap is lit
-// while the param is above 0. Configure the param with configButton() so it
-// is not randomised.
+// the next click of either kind (which only releases it). Configure the param
+// with configButton() so it is not randomised.
+//
+// What lights the cap:
+// - made with createParamCentered: the param, lit while it is above 0;
+// - made with createLightParamCentered(pos, module, paramId, lightId): that
+//   light's brightness, so the module decides (Spindrift's Freeze, Seed and
+//   Quality); dark with no module.
 struct CapButton : Cap {
 	// The press that started this drag latched the button: keep it down on release.
 	bool latching = false;
+	CapLightRef light;
+
+	CapLightRef* getLight() {
+		return &light;
+	}
 
 	float lit() override {
+		if (light.firstLightId >= 0)
+			return light.module ? light.module->lights[light.firstLightId].getBrightness() : 0.f;
 		ParamQuantity* pq = getParamQuantity();
 		return (pq && pq->getValue() > 0.f) ? 1.f : 0.f;
 	}
@@ -344,12 +364,7 @@ struct CapButton : Cap {
 // - made with createLightParamCentered(pos, module, paramId, lightId): that
 //   light's brightness, so the module decides (Sway's 1-SHOT).
 struct CapLatch : Cap {
-	// The module light that lights the cap, if any; filled in by
-	// createLightParam().
-	struct LightRef {
-		engine::Module* module = NULL;
-		int firstLightId = -1;
-	};
+	typedef CapLightRef LightRef;
 	LightRef light;
 	// Lit with no module (the module browser), when the param lights the cap.
 	bool litWithoutModule = false;
@@ -667,6 +682,222 @@ struct TapeWindow : widget::Widget {
 			nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
 			nvgFillColor(vg, nvgTransRGBAf(signal, 0.85f));
 			nvgText(vg, box.size.x - mm2px(1.0f), mm2px(0.7f), text.c_str(), NULL);
+		}
+		nvgRestore(vg);
+	}
+};
+
+// What Spindrift's window shows (GrainWindow): the engine's view, copied,
+// and the buffer's waveform (the engine's own overview, which lives as long
+// as the module; null draws none).
+struct GrainWindowView {
+	spindrift::GrainView::Copy copy;
+	const rka::Overview* overview = nullptr;
+};
+
+// Spindrift's window (its spec, "The window"; geometry and captions in
+// src/spindrift/GrainView.hpp), drawn in vectors in the self-illuminating
+// layer on the same glass and in the same cyan as TapeWindow. Grains and
+// delay: the buffer as a faint waveform over the ring, the record head as
+// an ivory line moving across it, each grain a dash (at its read point, as
+// long as its span, as low as its pan, as bright as its envelope) and in
+// delay mode each tap a tick as tall as its gain. Synth: the voice's wave
+// and the grains at their wave across the bank. Top left the quality, the
+// channels and the buffer's length (or a quality waiting for the freeze to
+// end, "DIGITAL → DIRTY TAPE"); top right the mode, its word fixed and its
+// number in a fixed slot, the grain count held for 0.2 s. It knows nothing
+// of the engine: `source` fills a GrainWindowView, or returns false to draw
+// nothing. No mouse.
+struct GrainWindow : widget::Widget {
+	std::function<bool(GrainWindowView&)> source;
+	// The grain count as shown (UI thread).
+	spindrift::CountHold countHold;
+	// The least spacing of the waveform's strokes, in px at 100 % zoom.
+	static constexpr float STROKE_PX = 1.6f;
+	// Points of the synth's wave.
+	static constexpr int WAVE_POINTS = 128;
+
+	void drawLayer(const DrawArgs& args, int layer) override {
+		if (layer == 1 && source) {
+			GrainWindowView v;
+			if (source(v))
+				drawView(args, v);
+		}
+		Widget::drawLayer(args, layer);
+	}
+
+	float pad() const {
+		return mm2px(0.6f);
+	}
+	// The band under the captions that the picture fills.
+	float bandTop() const {
+		return mm2px(3.7f);
+	}
+	float bandBottom() const {
+		return box.size.y - pad();
+	}
+
+	void line(NVGcontext* vg, float x0, float y0, float x1, float y1, NVGcolor c, float width) {
+		nvgBeginPath(vg);
+		nvgMoveTo(vg, x0, y0);
+		nvgLineTo(vg, x1, y1);
+		nvgStrokeColor(vg, c);
+		nvgStrokeWidth(vg, width);
+		nvgStroke(vg);
+	}
+
+	// The waveform's columns as vertical strokes, a few to a stroke where
+	// they are narrower than STROKE_PX (as TapeWindow), Beads' full scale
+	// filling the band.
+	void drawWaveform(NVGcontext* vg, const rka::Overview& o, NVGcolor c) {
+		const int N = rka::Overview::COLS;
+		const float x0 = pad(), w = box.size.x - 2.f * pad();
+		const float mid = 0.5f * (bandTop() + bandBottom()), half = 0.5f * (bandBottom() - bandTop());
+		const float colW = w / N;
+		int group = 1;
+		while (group < N && group * colW < STROKE_PX)
+			group *= 2;
+		nvgBeginPath(vg);
+		for (int c0 = 0; c0 < N; c0 += group) {
+			float lo = o.lo[c0].load(std::memory_order_relaxed), hi = o.hi[c0].load(std::memory_order_relaxed);
+			for (int k = c0 + 1; k < c0 + group && k < N; k++) {
+				lo = std::min(lo, o.lo[k].load(std::memory_order_relaxed));
+				hi = std::max(hi, o.hi[k].load(std::memory_order_relaxed));
+			}
+			lo = math::clamp(lo, -1.f, 1.f);
+			hi = math::clamp(hi, -1.f, 1.f);
+			const float y0 = mid - hi * half, y1 = mid - lo * half;
+			if (!(y1 - y0 > 0.f))
+				continue;
+			const float x = x0 + (c0 + 0.5f * group) * colW;
+			nvgMoveTo(vg, x, y0);
+			nvgLineTo(vg, x, y1);
+		}
+		nvgStrokeColor(vg, c);
+		nvgStrokeWidth(vg, 0.55f * group * colW);
+		nvgStroke(vg);
+	}
+
+	// The synth's wave across the glass, peak to the band's edges.
+	void drawWave(NVGcontext* vg, const spindrift::GrainView::Copy& c, NVGcolor colour) {
+		float y[WAVE_POINTS];
+		const int n = spindrift::synthWave(c.bank, c.wave, y, WAVE_POINTS);
+		if (n < 2)
+			return;
+		const float x0 = pad(), w = box.size.x - 2.f * pad();
+		const float mid = 0.5f * (bandTop() + bandBottom()), half = 0.45f * (bandBottom() - bandTop());
+		nvgBeginPath(vg);
+		for (int i = 0; i <= n; i++) {
+			const float x = x0 + w * float(i) / float(n);
+			const float v = y[i % n];   // one cycle, closed
+			if (i == 0)
+				nvgMoveTo(vg, x, mid - v * half);
+			else
+				nvgLineTo(vg, x, mid - v * half);
+		}
+		nvgStrokeColor(vg, colour);
+		nvgStrokeWidth(vg, 1.f);
+		nvgLineJoin(vg, NVG_ROUND);
+		nvgStroke(vg);
+	}
+
+	// A caption from x (left-aligned); the font has no arrow, so a "→" in it
+	// is drawn as a stroke and a head, a little narrower than the text's
+	// height, with a clear gap either side (the face's own space is narrow:
+	// in Rack the arrow touched the words).
+	void caption(NVGcontext* vg, float x, float y, const std::string& text, float size, NVGcolor c) {
+		const char* const ARROW = "\xE2\x86\x92";
+		nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+		nvgFillColor(vg, c);
+		size_t from = 0;
+		for (;;) {
+			const size_t at = text.find(ARROW, from);
+			const std::string part = text.substr(from, at == std::string::npos ? std::string::npos : at - from);
+			x = nvgText(vg, x, y, part.c_str(), NULL);
+			if (at == std::string::npos)
+				return;
+			const float len = 0.9f * size, ay = y + 0.42f * size, head = 0.22f * size, gap = 0.22f * size;
+			x += gap;
+			nvgBeginPath(vg);
+			nvgMoveTo(vg, x, ay);
+			nvgLineTo(vg, x + len, ay);
+			nvgMoveTo(vg, x + len - head, ay - head);
+			nvgLineTo(vg, x + len, ay);
+			nvgLineTo(vg, x + len - head, ay + head);
+			nvgStrokeColor(vg, c);
+			nvgStrokeWidth(vg, 0.09f * size);
+			nvgLineCap(vg, NVG_ROUND);
+			nvgLineJoin(vg, NVG_ROUND);
+			nvgStroke(vg);
+			x += len + gap;
+			from = at + std::strlen(ARROW);
+		}
+	}
+
+	void drawView(const DrawArgs& args, const GrainWindowView& v) {
+		NVGcontext* vg = args.vg;
+		const spindrift::GrainView::Copy& c = v.copy;
+		const NVGcolor signal = RkaTheme::SIGNAL;
+		const NVGcolor ivory = settings::preferDarkPanels ? RkaTheme::IVORY_DARK : RkaTheme::IVORY;
+		const float x0 = pad(), w = box.size.x - 2.f * pad();
+		const float top = bandTop(), bottom = bandBottom();
+		const bool synth = c.mode == spindrift::MODE_SYNTH;
+		nvgSave(vg);
+		nvgScissor(vg, 0.f, 0.f, box.size.x, box.size.y);
+
+		// The buffer, or the synth's wave.
+		if (synth)
+			drawWave(vg, c, nvgTransRGBAf(signal, 0.4f));
+		else if (v.overview)
+			drawWaveform(vg, *v.overview, nvgTransRGBAf(signal, 0.3f));
+
+		// The taps (delay mode), from the band's foot.
+		spindrift::Tick ticks[spindrift::GrainView::MAX];
+		const int nt = spindrift::tapTicks(c, w, bottom - top, ticks);
+		for (int i = 0; i < nt; i++)
+			line(vg, x0 + ticks[i].x, top + ticks[i].y0, x0 + ticks[i].x, top + ticks[i].y1, nvgTransRGBAf(signal, 0.85f),
+			     mm2px(0.35f));
+
+		// The head.
+		if (!synth) {
+			const float h = x0 + math::clamp(c.head, 0.f, 1.f) * w;
+			line(vg, h, top - mm2px(0.3f), h, bottom, ivory, 1.f);
+		}
+
+		// The grains: inside the band by half a dash's thickness.
+		const float thick = mm2px(0.45f);
+		spindrift::Dash dashes[spindrift::kMaxDashes];
+		const int nd = spindrift::grainDashes(c, w, bottom - top - thick, dashes);
+		nvgLineCap(vg, NVG_ROUND);
+		for (int i = 0; i < nd; i++) {
+			const spindrift::Dash& d = dashes[i];
+			const float y = top + 0.5f * thick + d.y;
+			line(vg, x0 + d.x0, y, x0 + std::max(d.x1, d.x0 + 0.5f), y, nvgTransRGBAf(signal, 0.25f + 0.75f * d.alpha), thick);
+		}
+		nvgLineCap(vg, NVG_BUTT);
+
+		// The captions.
+		std::shared_ptr<window::Font> font = APP->window->loadFont(asset::plugin(pluginInstance, "tools/fonts/D-DINCondensed.ttf"));
+		if (font && font->handle >= 0) {
+			const float size = mm2px(2.6f);
+			const NVGcolor text = nvgTransRGBAf(signal, 0.85f);
+			nvgFontFaceId(vg, font->handle);
+			nvgFontSize(vg, size);
+			// Top left: left-aligned, so only its tail (the seconds, which
+			// change with the quality or the channels) can change width.
+			caption(vg, mm2px(1.0f), mm2px(0.7f), spindrift::viewCaption(c), size, text);
+			// Top right: the word held in place and the number in a fixed
+			// slot (layoutMode), the grain count calmed (CountHold).
+			spindrift::GrainView::Copy held = c;
+			held.n = countHold.update(c.n, system::getTime());
+			const spindrift::ModeParts parts = spindrift::viewModeParts(held);
+			auto width = [vg](const std::string& t) { return nvgTextBounds(vg, 0.f, 0.f, t.c_str(), NULL, NULL); };
+			const spindrift::ModeLayout l = spindrift::layoutMode(parts, box.size.x - mm2px(1.0f), width(" "), width);
+			nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
+			nvgFillColor(vg, text);
+			nvgText(vg, l.wordRight, mm2px(0.7f), parts.word.c_str(), NULL);
+			if (!parts.number.empty())
+				nvgText(vg, l.numberRight, mm2px(0.7f), parts.number.c_str(), NULL);
 		}
 		nvgRestore(vg);
 	}

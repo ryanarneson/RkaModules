@@ -68,6 +68,10 @@ layout.
 - Shoal's core is the vendored O&C firmware in `src/shoal/firmware/`;
   change it only with a `// SHOAL:` mark and a `CHANGES.md` line;
   `make shoal-globals` must stay clean.
+- Spindrift's core is vendored Mutable Instruments Beads in
+  `src/spindrift/beads/` and `src/spindrift/stmlib/`; change it only with a
+  `// SPINDRIFT:` mark and a line in `src/spindrift/CHANGES.md`. `make test`
+  checks both (`spindrift-vendor`, `spindrift-globals`).
 - The Shoal module (`src/shoal/Shoal.cpp`) only maps jacks, buttons,
   lights and the patch data onto `shoal::Host`; only the engine thread
   touches the running core (restore and reset build a new one off it).

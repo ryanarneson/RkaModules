@@ -1,7 +1,7 @@
 {
   "slug": "rka",
   "name": "RKA",
-  "version": "2.0.28",
+  "version": "2.0.32",
   "license": "GPL-3.0-or-later",
   "brand": "RKA",
   "author": "Ryan Arneson",
@@ -148,6 +148,20 @@
         "Delay"
       ],
       "keywords": "tape loop looper sampler sound on sound dub wear varispeed reverse wav ambient"
+    },
+    {
+      "slug": "Spindrift",
+      "name": "Spindrift",
+      "description": "Mutable Instruments Beads, its own code in the Instrument look: a granular cloud, delay mode, four qualities, Beads' reverb and wavetable synth, and a window on the grains; the frozen buffer kept with the patch",
+      "tags": [
+        "Delay",
+        "Reverb",
+        "Oscillator",
+        "Effect",
+        "Granular",
+        "Hardware clone"
+      ],
+      "keywords": "granular grains cloud beads mutable instruments clouds freeze delay reverb wavetable texture ambient"
     }
   ]
 }

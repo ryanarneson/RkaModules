@@ -229,6 +229,8 @@ _SQ_COLS = ["GUST", "WEATHER", "MEMORY"]
 _WK_X = [7.8, 21.7, 35.56, 49.4, 63.3]
 _NR_X = _WK_X   # Narrows lines up with Wake
 _ED_X = [7.8, 24.22, 40.64, 57.06, 73.48]   # Eddy: 16 HP, the outer columns as Wake's
+_SD_T = [7.8, 23.5, 50.8, 78.1, 93.8]   # Spindrift top: Time, Size | Density | Shape, Pitch
+_SD_B = [7.8, 29.3, 50.8, 72.3, 93.8]   # Spindrift bottom: five even columns
 
 
 def _hadal_on(x):
@@ -770,6 +772,59 @@ PANELS = {
                  "PARAM_WEAR": dict(turn=-100), "PARAM_SMEAR": dict(turn=-135), "PARAM_DUB_LEVEL": dict(turn=0),
                  "PARAM_MIX": dict(turn=135), "PARAM_PLAY": dict(lit=True), "PARAM_LOOP": dict(lit=True)},
         screws=screws_at(16, "tr", "bl"),
+    ),
+    # Spindrift, a granular cloud (docs/specs/2026-11-22-spindrift-design.md).
+    # The grains' window across the top over a ruler in tenths; Density, the
+    # hero, between Time and Size on the left and Shape and Pitch on the
+    # right, with REGULAR and RANDOM at the ends of its sweep. Each of the
+    # four knobs has an attenuverter and a CV below it; Density's CV goes
+    # straight to the knob. Below: Freeze, Feedback, Dry/Wet, Reverb and
+    # Seed, then the ins, the three mix CVs and the outs, then IN R, the
+    # freeze gate, Quality, the seed trigger and OUT R.
+    "Spindrift": dict(
+        dir="spindrift",
+        hp=20,
+        title="SPINDRIFT",
+        subtitle="GRANULAR CLOUD",
+        components=[("param", "TIME", _SD_T[0], 48.0, "TIME"), ("param", "SIZE", _SD_T[1], 48.0, "SIZE"),
+                    ("param", "DENSITY", _SD_T[2], 53.0, "DENSITY"),
+                    ("param", "SHAPE", _SD_T[3], 48.0, "SHAPE"), ("param", "PITCH", _SD_T[4], 48.0, "PITCH"),
+                    ("param", "TIME_ATT", _SD_T[0], 61.0, None), ("param", "SIZE_ATT", _SD_T[1], 61.0, None),
+                    ("param", "SHAPE_ATT", _SD_T[3], 61.0, None), ("param", "PITCH_ATT", _SD_T[4], 61.0, None),
+                    ("input", "TIME_CV", _SD_T[0], 73.0, None), ("input", "SIZE_CV", _SD_T[1], 73.0, None),
+                    ("input", "DENSITY_CV", _SD_T[2], 73.0, None),
+                    ("input", "SHAPE_CV", _SD_T[3], 73.0, None), ("input", "PITCH_CV", _SD_T[4], 73.0, "V/OCT"),
+                    ("param", "FREEZE", _SD_B[0], 90.0, "FREEZE"),
+                    ("param", "FEEDBACK", _SD_B[1], 90.0, "FEEDBACK"), ("param", "DRYWET", _SD_B[2], 90.0, "DRY/WET"),
+                    ("param", "REVERB", _SD_B[3], 90.0, "REVERB"), ("param", "SEED", _SD_B[4], 90.0, "SEED"),
+                    ("input", "L", _SD_B[0], 102.0, "IN L"), ("input", "R", _SD_B[0], 116.0, "IN R"),
+                    ("input", "FEEDBACK_CV", _SD_B[1], 102.0, None), ("input", "DRYWET_CV", _SD_B[2], 102.0, None),
+                    ("input", "REVERB_CV", _SD_B[3], 102.0, None),
+                    ("input", "FREEZE", _SD_B[1], 116.0, "GATE"), ("param", "QUALITY", _SD_B[2], 116.0, "QUALITY"),
+                    ("input", "SEED", _SD_B[3], 116.0, "TRIG"),
+                    ("output", "L", _SD_B[4], 102.0, "L"), ("output", "R", _SD_B[4], 116.0, "R")],
+        sizes={"PARAM_DENSITY": "hero", "PARAM_FREEZE": "cap", "PARAM_SEED": "cap", "PARAM_QUALITY": "cap"},
+        faces={"PARAM_DENSITY": dict(r=15.0, ticks=24, major=4, words_size=1.7,
+                                     words=[(-135, "12"), (-90, "8"), (-45, "4"), (0, "0"),
+                                            (45, "4"), (90, "8"), (135, "12")])},
+        tiles=[dict(port="OUTPUT_L"), dict(port="OUTPUT_R")],
+        traces=[["INPUT_TIME_CV", "PARAM_TIME_ATT", "PARAM_TIME"], ["INPUT_SIZE_CV", "PARAM_SIZE_ATT", "PARAM_SIZE"],
+                ["INPUT_SHAPE_CV", "PARAM_SHAPE_ATT", "PARAM_SHAPE"],
+                ["INPUT_PITCH_CV", "PARAM_PITCH_ATT", "PARAM_PITCH"],
+                ["INPUT_DENSITY_CV", "PARAM_DENSITY"], ["INPUT_FEEDBACK_CV", "PARAM_FEEDBACK"],
+                ["INPUT_DRYWET_CV", "PARAM_DRYWET"], ["INPUT_REVERB_CV", "PARAM_REVERB"]],
+        # The module draws the grains in exactly this rectangle; the ruler's px
+        # is a 320th of its width.
+        screens=[("GRAINS", 5.0, 19.5, 91.6, 14.0)],
+        rulers={"GRAINS": dict(px=91.6 / 320, sides="b")},
+        label_at={"PARAM_DENSITY": "face", "INPUT_PITCH_CV": "below"},
+        notes=[(_SD_T[2] - 13.0, 69.5, "REGULAR", 1.3, "dim"), (_SD_T[2] + 13.0, 69.5, "RANDOM", 1.3, "dim")],
+        preview={"PARAM_DENSITY": dict(turn=60), "PARAM_TIME": dict(turn=-30), "PARAM_SIZE": dict(turn=20),
+                 "PARAM_SHAPE": dict(turn=0), "PARAM_PITCH": dict(turn=0),
+                 "PARAM_TIME_ATT": dict(turn=40), "PARAM_SIZE_ATT": dict(turn=0), "PARAM_SHAPE_ATT": dict(turn=0),
+                 "PARAM_PITCH_ATT": dict(turn=25), "PARAM_FEEDBACK": dict(turn=-80),
+                 "PARAM_DRYWET": dict(turn=30), "PARAM_REVERB": dict(turn=-40)},
+        screws=screws_at(20, "tr", "bl"),
     ),
 }
 

@@ -5,7 +5,7 @@ can be picked up later. Each is a concept and a rough panel sketch in the
 Instrument look (`docs/specs/2026-11-15-instrument-look-design.md`), not a
 design: names are working titles and have not been checked against the VCV
 Library, and the control sets are first guesses made to draw the panels.
-Sluice, Fog, Hadal, Ballast (with its Pan expander), Squall, Rigging, Wake, Narrows and Eddy have since been designed and built (their pages point to
+Sluice, Fog, Hadal, Ballast (with its Pan expander), Squall, Rigging, Wake, Narrows, Eddy and Spindrift have since been designed and built (their pages point to
 their specs and manuals); the rest have not been through a design
 conversation yet.
 A design for any of them that makes or bends sound names its aliasing
@@ -32,7 +32,7 @@ takes one more instrument and builds its panel geometry from it.
 | [Fog](fog.md) | Reverb (built) | A visibility scale | 10 HP |
 | [Sextant](sextant.md) | Scanner and crossfader | A sextant | 8 HP |
 | [Tackle](tackle.md) | Four attenuverters with offset | Block and tackle | 8 HP |
-| [Spindrift](spindrift.md) | Granular cloud, with a grain window | An anemometer | 10 HP |
+| [Spindrift](spindrift.md) | Granular cloud, with a grain window (built, as Beads) | An anemometer | 20 HP |
 
 ## Where the nautical thing is the function
 

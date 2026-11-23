@@ -137,6 +137,40 @@ if ! grep -q "Eddy: loaded the stored tape (1.00 s); not as stored" "$log"; then
 fi
 echo "ok: Eddy headless, the stored tape loaded at another rate"
 
+# Spindrift's frozen buffer, from the patch's storage: an autosave whose
+# Spindrift was saved frozen, with buffer.bin the golden version 1 file
+# (src/spindrift/testdata/GoldenBufferV1.hpp: its header's bytes and its
+# payload's formula), so the patch's data reaches the module before onAdd
+# and the file is there when onAdd reads it: restored. Then the same file
+# cut short: not loaded, a warning, no crash.
+for case in whole truncated; do
+	rm -rf "$auto"
+	mkdir -p "$auto/modules/1"
+	jq -n --arg ver "$ver" --arg slug "$slug" '{version: "2.6.6", modules: [{id: 1, plugin: $slug, model: "Spindrift",
+		version: $ver, params: [], data: {version: 1, quality: 2, seedLatched: true, frozen: true, synth: 0, gain: 0,
+		manualGain: 1.0, gateOutput: false, keepFrozen: true}, pos: [0, 0]}], cables: []}' > "$auto/patch.json"
+	python3 - "$auto/modules/1/buffer.bin" "$case" <<'EOF3'
+import sys
+head = bytes([0x53, 0x50, 0x44, 0x52, 1, 0, 0, 0, 2, 1, 0, 0, 0x41, 0xE2, 0x01, 0x00, 0x10, 0xB8, 0x0B, 0x00])
+n = 768016 if sys.argv[2] == "whole" else 700000
+payload = bytes((((i * 2654435761) & 0xFFFFFFFF) >> 24) ^ (i & 0xFF) for i in range(n))
+open(sys.argv[1], "wb").write(head + payload)
+EOF3
+	status=0
+	(cd "$(dirname "$RACK_BIN")" && (sleep 2; echo) | ${limit[@]+"${limit[@]}"} "$RACK_BIN" -u "$user" -h >/dev/null 2>&1) || status=$?
+	cp "$log" "build/smoke/log-headless-spindrift-$case.txt"
+	if [ "$status" != 0 ] || grep -iqE "fatal|crash" "$log"; then
+		echo "FAIL: headless Rack with Spindrift's stored buffer ($case, exit $status)"; grep -iE "fatal|crash|spindrift" "$log" | tail; exit 1
+	fi
+	if [ "$case" = whole ] && ! grep -q "Spindrift: restored the frozen buffer (VINTAGE DIGITAL, mono)" "$log"; then
+		echo "FAIL: Spindrift did not restore its stored buffer"; grep -i spindrift "$log" | tail; exit 1
+	fi
+	if [ "$case" = truncated ] && ! grep -qE "warn.*Spindrift: the frozen buffer .* was not loaded" "$log"; then
+		echo "FAIL: Spindrift did not refuse a truncated buffer with a warning"; grep -i spindrift "$log" | tail; exit 1
+	fi
+	echo "ok: Spindrift headless, a stored buffer ($case)"
+done
+
 mkdir -p build/screenshots
 missing=0
 for m in $(jq -r '.modules[].slug' plugin.json); do

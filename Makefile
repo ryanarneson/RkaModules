@@ -4,7 +4,7 @@ RACK_DIR ?= ../..
 # One folder per module: code and test_*.cpp tests in src/<module>/,
 # panels in res/<module>/ (generated from res-src/<module>/). src/ itself
 # has the shared plugin entry point and widgets.
-MODULES = sway fathom shoal sluice fog hadal ballast pan squall rigging wake narrows eddy
+MODULES = sway fathom shoal sluice fog hadal ballast pan squall rigging wake narrows eddy spindrift
 
 # FLAGS will be passed to both the C and C++ compiler
 FLAGS += -Isrc
@@ -57,6 +57,19 @@ include tests.mk
 # -fvisibility=hidden: the firmware's names stay inside plugin.dylib (the
 # plugin's own objects still link to shoal::Core); the tests build without it.
 build/src/shoal/Firmware.cpp.o: FLAGS += $(SHOAL_FW_FLAGS) -fvisibility=hidden
+
+# Spindrift's vendored Beads, the same way: SPINDRIFT_FW_FLAGS from tests.mk,
+# hidden names, and its include root as a system one (-isystem: upstream's
+# headers warn under the plugin's -Wall -Wextra; the tests reach them the
+# same way). The module compiles the engine and Beads' headers inline, so it
+# gets the same flags (TESTING.md rule 9).
+# Shoal vendors stmlib too (another revision, with its own changes), and
+# both are linked into one plugin: Spindrift's is renamed spindrift_stmlib
+# here, so neither copy's functions (inline ones included) stand in for the
+# other's at link time. The tests link one copy each and need no rename.
+SPINDRIFT_PLUGIN_FLAGS = $(SPINDRIFT_FW_FLAGS) -isystem src/spindrift -Dstmlib=spindrift_stmlib
+build/src/spindrift/BeadsFirmware.cpp.o: FLAGS += $(SPINDRIFT_PLUGIN_FLAGS) -fvisibility=hidden
+build/src/spindrift/Spindrift.cpp.o: FLAGS += $(SPINDRIFT_PLUGIN_FLAGS)
 
 .PHONY: shoal-bench
 shoal-bench:

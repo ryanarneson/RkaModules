@@ -1,6 +1,8 @@
 #pragma once
 // The overview of a tape (Eddy): COLS columns of the tape's peaks, both sides
 // together, which the module's window draws. Rack-free, C++11, header-only.
+// Spindrift keeps one over Beads' ring, at a fixed length, fed through
+// serviceFrom().
 //
 // Column c covers frames [c * frames / COLS, (c + 1) * frames / COLS) of a
 // tape `frames` long; its lo is the least and its hi the greatest sample in
@@ -15,8 +17,8 @@
 // given a different length from the last, every column has changed its
 // meaning and all are marked for a rescan; doubleSpan() needs none.
 //
-// Threads. touch(), doubleSpan() and service() are for the audio thread
-// alone; build() runs off it, on an overview the audio thread is not using;
+// Threads. touch(), doubleSpan(), service() and serviceFrom() are for the
+// audio thread alone; build() runs off it, on an overview the audio thread is not using;
 // clear() is either's (on the audio thread, for the overview it uses). lo and hi
 // are atomics because the UI thread reads them at any time (relaxed: a
 // column's peaks are independent of one another). The bookkeeping (which
@@ -161,6 +163,15 @@ struct Overview {
 	// Audio thread, every sample: rescans at most `budget` frames of touched
 	// columns (the rest wait for the next call).
 	void service(const Tape& tape, int budget) {
+		serviceFrom(TapeSource{tape}, budget);
+	}
+
+	// As service(), from any source of frames that is not a Tape (Spindrift:
+	// Beads' ring, read through its own format): `source.scan(f0, f1, l, h)`
+	// sets l and h to the least and greatest sample over frames [f0, f1), as
+	// scan() below does (l > h if nothing finite; 0, 0 for no frames).
+	template <class Source>
+	void serviceFrom(const Source& source, int budget) {
 		while (budget > 0 || (cur_ >= 0 && pos_ >= end_)) {
 			if (cur_ < 0) {
 				if (!next())
@@ -172,7 +183,7 @@ struct Overview {
 				if (n > (size_t) budget)
 					n = (size_t) budget;
 				float l, h;
-				scan(tape, pos_, pos_ + n, l, h);
+				source.scan(pos_, pos_ + n, l, h);
 				if (l < slo_)
 					slo_ = l;
 				if (h > shi_)
@@ -194,6 +205,13 @@ struct Overview {
 	}
 
 private:
+	struct TapeSource {
+		const Tape& tape;
+		void scan(size_t f0, size_t f1, float& l, float& h) const {
+			Overview::scan(tape, f0, f1, l, h);
+		}
+	};
+
 	static size_t start(int c, size_t frames) {
 		return (size_t) ((unsigned long long) c * frames / COLS);
 	}

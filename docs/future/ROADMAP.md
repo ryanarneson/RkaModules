@@ -18,7 +18,7 @@ process and a plain panel; **M** needs real DSP work or tuning by ear;
 The existing three are already in the Instrument look
 (`docs/specs/2026-11-15-instrument-look-design.md`): Sway, Fathom and
 Shoal moved to it in PR #7, after Shoal's friendly mode landed in PR #6
-(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging, Wake, Narrows and Eddy were built in it from the start.
+(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging, Wake, Narrows, Eddy and Spindrift were built in it from the start.
 
 **Changes since (the user, 2026-11-18):** Squall was built next, ahead of
 Plimsoll and Lull. Plimsoll is skipped for now, since Ballast's soft limit
@@ -60,6 +60,17 @@ others that make or bend sound is issue #67.
 ideas that wait until they are wanted: Eddy's 5 minutes are enough for
 now. Spindrift is next.
 
+**Changes since (2026-11-22, later still):** Spindrift was built (20 HP)
+as Beads: Mutable Instruments' DSP vendored and run unchanged
+(`src/spindrift/beads/`, `src/spindrift/stmlib/`, every change marked), so
+it did not start from Eddy's tape and band-limited read after all, only
+from its window's approach and `src/Overview.hpp`. Its window
+(`GrainWindow`) draws the buffer with the record head moving across it,
+each grain, the delay's taps and the synth's wave. At the listening stop
+(test builds 2.0.29 and 2.0.30) the grain count's caption was steadied;
+the window, the defaults that make a cloud, the quality in the window and
+Beads' ±10 V levels stand as built.
+
 ## 1. A whole patch from RKA alone
 
 With Sway, Fathom and Shoal these six make a complete dark ambient patch:
@@ -77,8 +88,9 @@ sound, space, loudness under control, stereo, and a safe output.
 
 The sounds that define the genre, and the hardest DSP. Wake, Eddy and
 Spindrift all read and write a buffer; Wake came first, but its read point
-did not carry over: Eddy built its own tape, band-limited read and window,
-and Spindrift starts from those.
+did not carry over: Eddy built its own tape, band-limited read and window.
+Spindrift, built as Beads with Beads' own buffer and read, took only the
+window's approach and the waveform overview from Eddy (2026-11-22).
 
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
@@ -86,7 +98,7 @@ and Spindrift starts from those.
 | 8 | [Wake](wake.md) (built) | L | The delay. Built as a stereo echo for struck sounds, with three styles, Ratio, ping pong and Freeze; the taps and the Send and Return of the first sketch were left out. Its moving read point (`src/DelayTap.hpp`) was expected to carry over to Eddy and Spindrift; it did not carry over to Eddy, whose tape stands still while the head moves (2026-11-22). |
 | new | [Narrows](narrows.md) (built) | M | Polyphonic stereo filter: low-pass, band-pass or high-pass on a Mode sweep, with a comb and a ping input. The collection had no filter outside Fathom's voice, and every texture module here wants one after it. Two cores on a switch: Fathom's ladder, now shared code (`src/fathom/LadderCore.hpp`), and a state-variable filter. Its four-wide float type (`src/Float4.hpp`) is there for the next polyphonic module. |
 | 9 | [Eddy](eddy.md) (built) | L | Tape loop that also loads and saves files, up to 5 minutes, with a waveform window (drag in it to set Start and Length), wear in the loop and a Restore to the original. Larger than first guessed: its tape and write head are new code (Wake's read point did not carry over), and it paid for the first drawn window. Built 2026-11-22, 16 HP. |
-| 10 | [Spindrift](spindrift.md) | L | Next. Grain cloud; the user singled it out. Its window starts from Eddy's, and its buffer from Eddy's tape and band-limited read. |
+| 10 | [Spindrift](spindrift.md) (built) | L | Grain cloud; the user singled it out. Built 2026-11-22, 20 HP, as Mutable Instruments Beads (its DSP vendored and run unchanged) with a window showing the buffer and every grain. It took Eddy's window approach and `src/Overview.hpp`, not its tape or read: Beads has its own. |
 | 11 | [Doldrums](doldrums.md) | L | Spectral freeze and stretch. The highest reward and the highest risk here, so it comes last; how a window is drawn is settled already (Eddy's `TapeWindow`). |
 
 ## 3. Slow movement and long form
