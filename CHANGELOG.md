@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.29 (2026-11-22): Spindrift: first test build (Beads in the Instrument look)
 - 2.0.28 (2026-11-22): Eddy: final review fixes: Wear and Dub keep the bass unless the tape clips, Restore no longer swells, a stored tape survives rate changes while loading, saves cannot go quiet
 - 2.0.27 (2026-11-22): Eddy: band-limited tape read at every speed, aliasing tests; drag in the window to set Start and Length; a quick double tap on REC leaves the tape alone
 - 2.0.26 (2026-11-21): Eddy: the window fits the tape while recording; Mix has input and tape both at full at noon, and starts there
