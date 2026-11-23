@@ -62,20 +62,78 @@ void heights() {
 void dots() {
 	const EnvelopeLayout e = layoutEnvelope({0.01f, 0.3f, 0.4f, 1.f, 0.75f});
 	float u = -1.f, h = -1.f;
-	e.dot(DECAY, 0.5f, 0.7f, u, h);
-	CHECK(std::fabs(u - 0.5f * (e.x[1] + e.x[2])) < 1e-6f && h == 0.7f, "decay dot at %g, %g", u, h);
-	e.dot(ATTACK, 0.25f, 0.1f, u, h);
-	CHECK(std::fabs(u - (e.x[0] + 0.25f * (e.x[1] - e.x[0]))) < 1e-6f && h == 0.1f, "attack dot at %g, %g", u, h);
-	e.dot(RELEASE, 0.5f, 0.2f, u, h);
-	CHECK(std::fabs(u - 0.5f * (e.x[3] + e.x[4])) < 1e-6f && h == 0.2f, "release dot at %g, %g", u, h);
-	e.dot(SUSTAIN, 0.f, 0.4f, u, h);
+	e.dot(DECAY, 0.5f, 0.7f, 1.f, 0.4f, u, h);
+	CHECK(std::fabs(u - 0.5f * (e.x[1] + e.x[2])) < 1e-6f, "decay dot at %g, %g", u, h);
+	e.dot(ATTACK, 0.25f, 0.1f, 0.f, 1.f, u, h);
+	CHECK(std::fabs(u - (e.x[0] + 0.25f * (e.x[1] - e.x[0]))) < 1e-6f, "attack dot at %g, %g", u, h);
+	e.dot(RELEASE, 0.5f, 0.2f, 0.4f, 0.f, u, h);
+	CHECK(std::fabs(u - 0.5f * (e.x[3] + e.x[4])) < 1e-6f, "release dot at %g, %g", u, h);
+	e.dot(SUSTAIN, 0.f, 0.4f, 1.f, 0.4f, u, h);
 	CHECK(std::fabs(u - 0.5f * (e.x[2] + e.x[3])) < 1e-6f && h == 0.4f, "sustain dot at %g, %g", u, h);
-	e.dot(IDLE, 0.7f, 0.9f, u, h);
+	e.dot(IDLE, 0.7f, 0.9f, 0.3f, 0.6f, u, h);
 	CHECK(u == 0.f && h == 0.f, "idle dot at %g, %g", u, h);
-	e.dot(DECAY, std::nanf(""), 0.7f, u, h);
-	CHECK(u >= e.x[1] && u <= e.x[2], "NaN phase stays in the stage: %g", u);
-	e.dot(DECAY, 3.f, 7.f, u, h);
-	CHECK(u == e.x[2] && h == 1.f, "phase and level clamp: %g, %g", u, h);
+	e.dot(DECAY, std::nanf(""), 0.7f, 1.f, 0.4f, u, h);
+	CHECK(u >= e.x[1] && u <= e.x[2] && h >= 0.f && h <= 1.f, "NaN phase stays in the stage: %g, %g", u, h);
+	e.dot(DECAY, 3.f, 7.f, 1.f, 0.4f, u, h);
+	CHECK(u == e.x[2] && h == 0.4f, "phase clamps to the stage's end: %g, %g", u, h);
+	e.dot(RELEASE, 0.5f, 0.5f, std::nanf(""), 9.f, u, h);
+	CHECK(h >= 0.f && h <= 1.f, "garbage start and goal clamp: %g", h);
+}
+
+// The running stage drawn from its true start: start01 at p = 0, goal01 at
+// p = 1, the voice's curve between (Curve.hpp, the independent path).
+void live_stage_curve() {
+	const float shapes[3] = {0.f, 0.5f, 1.f};
+	const float ends[2][2] = {{0.4f, 1.f}, {0.97f, 0.f}};   // a rise from 4 V, a fall from 9.7 V
+	for (float shape : shapes) {
+		for (int k = 0; k < 2; k++) {
+			const float s0 = ends[k][0], g0 = ends[k][1];
+			const float h0 = liveStageHeight(0.f, s0, g0, shape), h1 = liveStageHeight(1.f, s0, g0, shape);
+			CHECK(h0 == s0 && h1 == g0, "shape %g %s: ends %g, %g (want %g, %g)", shape, k ? "fall" : "rise", h0, h1, s0, g0);
+			long bad = 0;
+			for (int i = 1; i < 40; i++) {
+				const float p = i / 40.f;
+				const float c = g0 > s0 ? curveRise(p, shape) : curveFall(p, shape);
+				const float want = s0 + (g0 - s0) * c;
+				bad += std::fabs(liveStageHeight(p, s0, g0, shape) - want) > 1e-6f;
+			}
+			CHECK(bad == 0, "shape %g %s: %ld of 39 points off the curve", shape, k ? "fall" : "rise", bad);
+		}
+	}
+	// Garbage clamps to the window.
+	const float nan = std::nanf("");
+	const float g = liveStageHeight(nan, 2.f, -1.f, nan);
+	CHECK(g >= 0.f && g <= 1.f, "garbage reads inside the window: %g", g);
+}
+
+// The dot for a running stage lies on that curve exactly, whatever level
+// was published beside it (a torn read costs the dot nothing).
+void live_dot_on_line() {
+	const EnvelopeLayout e = layoutEnvelope({0.01f, 0.3f, 0.4f, 1.f, 0.75f});
+	const Stage stages[3] = {ATTACK, DECAY, RELEASE};
+	const float ends[3][2] = {{0.4f, 1.f}, {1.f, 0.4f}, {0.97f, 0.f}};
+	for (int k = 0; k < 3; k++) {
+		const float a = e.x[k == 2 ? 3 : k], b = e.x[k == 2 ? 4 : k + 1];
+		for (int i = 0; i <= 10; i++) {
+			const float p = i / 10.f;
+			float u = -1.f, h = -1.f;
+			e.dot(stages[k], p, 0.123f, ends[k][0], ends[k][1], u, h);
+			const float want = liveStageHeight(p, ends[k][0], ends[k][1], e.shape);
+			CHECK(h == want, "stage %d p %g: dot height %g, line %g", int(stages[k]), p, h, want);
+			CHECK(std::fabs(u - (a + p * (b - a))) < 1e-6f, "stage %d p %g: dot at u %g", int(stages[k]), p, u);
+		}
+	}
+}
+
+// Sustain at 0: the dot at the end of the line; above 0, mid-span at the level.
+void sustain_zero() {
+	const EnvelopeLayout z = layoutEnvelope({0.01f, 0.3f, 0.f, 1.f, 0.75f});
+	float u = -1.f, h = -1.f;
+	z.dot(SUSTAIN, 0.f, 0.f, 1.f, 0.f, u, h);
+	CHECK(u == 1.f && h == 0.f, "sustain 0: dot at %g, %g (want 1, 0)", u, h);
+	const EnvelopeLayout e = layoutEnvelope({0.01f, 0.3f, 0.3f, 1.f, 0.75f});
+	e.dot(SUSTAIN, 0.f, 0.3f, 1.f, 0.3f, u, h);
+	CHECK(std::fabs(u - 0.5f * (e.x[2] + e.x[3])) < 1e-6f && h == 0.3f, "sustain 0.3: dot at %g, %g (mid-span)", u, h);
 }
 
 } // namespace
@@ -84,5 +142,8 @@ int main() {
 	widths();
 	heights();
 	dots();
+	live_stage_curve();
+	live_dot_on_line();
+	sustain_zero();
 	return rkatest::finish("beacon/test_view");
 }

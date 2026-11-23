@@ -69,15 +69,22 @@ low.
   D while falling, S when settled.
 - **TRIG**: a 1 ms, 10 V trigger at the start of every stage, including
   the return to rest at the end of Release.
-- The stage lights show channel 1's stage.
+- The stage lights show channel 1's stage; a stage too short to see
+  keeps its light for a moment (40 ms).
 
 ## The window
 
 The envelope drawn from the knobs (with channel 1's CVs) and Shape. Each
 stage's width grows with the log of its time, so a 1 ms Attack stays
 visible beside a 60 s Release; the window shows shape and position, not a
-ruler. The running stage and its letter are bright, and a dot shows where
-channel 1 is. In Hold the window shows a scrolling line of the output.
+ruler. The knobs' shape is drawn dim. The running stage's letter is
+bright, and an Attack, Decay or Release that is running is drawn bright
+over its span from where it really started: a gate that rises while
+releasing draws Attack from that level up to 10 V, a gate that falls
+mid-Attack draws Release from that level down to 0 V. A dot rides the
+bright line where channel 1 is. Sustain is bright while it runs; with
+Sustain at 0 V its span stays dim and the dot waits at the end of the
+line. In Hold the window shows a scrolling line of the output.
 
 ## Polyphony
 

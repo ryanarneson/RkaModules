@@ -117,6 +117,10 @@ struct Voice {
 	Stage stage() const { return stage_; }
 	double phase() const { return phase_; }   // 0..1 within the stage; Hold: 0
 	float level() const { return float(level_); }
+	// The running stage's start and goal levels (volts), latched when it
+	// began; Hold leaves them as they were.
+	double start() const { return start_; }
+	double goal() const { return goal_; }
 
 private:
 	Stage stage_;

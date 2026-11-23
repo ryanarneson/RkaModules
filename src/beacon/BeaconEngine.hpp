@@ -11,8 +11,9 @@
 // through a 5 ms one-pole, and the Voice. A polyphonic cable gives each
 // channel its own volts (0 V past its count), a mono one every channel.
 // Channels that appear (the count rising) start idle at 0 V; channels past
-// the count read 0 V. Channel 1's stage, phase and level are published for
-// the window and lights with relaxed stores.
+// the count read 0 V. Channel 1's stage, phase, level and the running
+// stage's start and goal levels are published for the window with relaxed
+// stores. BeaconLights (below) turns channel 1's stage gates into lights.
 //
 // No libm and no allocation in process(). Non-copyable (the atomics).
 #include "FastMath.hpp"
@@ -46,6 +47,42 @@ struct BeaconPublished {
 	std::atomic<int> stage{0};
 	std::atomic<float> phase{0.f}, level{0.f};
 	std::atomic<int> mode{0};
+	std::atomic<float> start{0.f}, goal{0.f};   // the running stage's, volts
+};
+
+// The four stage lights, from channel 1's stage gates: note() every sample,
+// update() every DIVISION samples (the module's clock divider). A stage seen
+// lit since the last update lights its light, and keeps it for at least
+// HOLD_SECONDS, so a stage of one sample still shows for a UI frame.
+struct BeaconLights {
+	static const int DIVISION = 16;
+	static constexpr float HOLD_SECONDS = 0.04f;   // over a 30 Hz frame
+
+	BeaconLights() { reset(); }
+	void reset() {
+		for (int k = 0; k < 4; k++) {
+			seen_[k] = false;
+			left_[k] = 0.f;
+		}
+	}
+	void note(int k, bool on) {
+		seen_[k] = seen_[k] || on;
+	}
+	// `seconds`: the time since the last update. Brightness 0 or 1.
+	void update(float seconds, float bright[4]) {
+		for (int k = 0; k < 4; k++) {
+			if (seen_[k])
+				left_[k] = HOLD_SECONDS;
+			else
+				left_[k] -= seconds;
+			bright[k] = seen_[k] || left_[k] > 0.f ? 1.f : 0.f;
+			seen_[k] = false;
+		}
+	}
+
+private:
+	bool seen_[4];
+	float left_[4];   // seconds of hold left
 };
 
 class BeaconEngine {
@@ -82,6 +119,8 @@ public:
 		pub_.stage.store(beacon::IDLE, std::memory_order_relaxed);
 		pub_.phase.store(0.f, std::memory_order_relaxed);
 		pub_.level.store(0.f, std::memory_order_relaxed);
+		pub_.start.store(0.f, std::memory_order_relaxed);
+		pub_.goal.store(0.f, std::memory_order_relaxed);
 	}
 
 	void process(const BeaconFrame& f, BeaconResult& out) {
@@ -154,6 +193,8 @@ public:
 		pub_.phase.store(float(v.phase()), std::memory_order_relaxed);
 		pub_.level.store(v.level(), std::memory_order_relaxed);
 		pub_.mode.store(int(mode), std::memory_order_relaxed);
+		pub_.start.store(float(v.start()), std::memory_order_relaxed);
+		pub_.goal.store(float(v.goal()), std::memory_order_relaxed);
 	}
 
 	const BeaconPublished& published() const { return pub_; }

@@ -542,6 +542,75 @@ void published() {
 	CHECK(std::fabs(ph - want2) < 1e-4, "published phase mid-Attack %g (want %g)", ph, want2);
 }
 
+// Channel 1's stage start and goal (volts), latched when the stage began.
+void published_start_goal() {
+	Eng g;
+	g.f.params[F::ATTACK] = stageKnob(0.1f);
+	g.f.params[F::RELEASE] = stageKnob(1.f);
+	g.f.gate.channels = 1;
+	g.gate[0] = 5.f;
+	g.run(2400);                      // half way up the Attack
+	const rka::BeaconPublished& p = g.e.published();
+	CHECK(g.stage() == ATTACK && p.start.load() == 0.f && p.goal.load() == 10.f,
+	      "Attack from 0 V to 10 V (%s, %g, %g)", stageName(g.stage()), p.start.load(), p.goal.load());
+	const float atFall = g.r.out[0];
+	g.gate[0] = 0.f;
+	g.step();
+	CHECK(atFall > 1.f && atFall < 9.9f, "the fall is mid-Attack (%g V)", atFall);
+	CHECK(g.stage() == RELEASE, "the fall starts Release (%s)", stageName(g.stage()));
+	CHECK(p.start.load() == atFall, "Release starts at the level at the fall: %g (want %g)", p.start.load(), atFall);
+	CHECK(p.goal.load() == 0.f, "Release's goal 0 V (%g)", p.goal.load());
+	g.run(12000);                     // a quarter into the Release
+	const float atRise = g.r.out[0];
+	g.gate[0] = 5.f;
+	g.step();
+	CHECK(atRise > 0.1f && atRise < atFall, "the retrigger is mid-Release (%g V)", atRise);
+	CHECK(g.stage() == ATTACK, "the retrigger starts Attack (%s)", stageName(g.stage()));
+	CHECK(p.start.load() == atRise, "Attack starts at the level then: %g (want %g)", p.start.load(), atRise);
+	CHECK(p.goal.load() == 10.f, "Attack's goal 10 V (%g)", p.goal.load());
+	// Reset: back to 0 and 0.
+	g.e.reset();
+	CHECK(p.start.load() == 0.f && p.goal.load() == 0.f, "reset clears them (%g, %g)", p.start.load(), p.goal.load());
+}
+
+// The stage lights: updated every DIVISION samples, and a stage that lasted
+// one sample keeps its light for the hold (longer than a UI frame).
+void stage_lights() {
+	rka::BeaconLights L;
+	float b[4] = {-1.f, -1.f, -1.f, -1.f};
+	const float tick = float(rka::BeaconLights::DIVISION) / 48000.f;
+	// Decay lit for one sample at the start of a division, then off.
+	for (int i = 0; i < rka::BeaconLights::DIVISION; i++)
+		for (int k = 0; k < 4; k++)
+			L.note(k, k == 1 && i == 0);
+	L.update(tick, b);
+	CHECK(b[1] == 1.f && b[0] == 0.f && b[2] == 0.f && b[3] == 0.f, "one sample of Decay lights D (%g %g %g %g)", b[0], b[1], b[2], b[3]);
+	// Nothing lit since: D stays on through the hold, then goes out.
+	int on = 1;
+	for (int u = 0; u < 200 && b[1] > 0.f; u++) {
+		for (int i = 0; i < rka::BeaconLights::DIVISION; i++)
+			for (int k = 0; k < 4; k++)
+				L.note(k, false);
+		L.update(tick, b);
+		on += b[1] > 0.f;
+	}
+	const float shown = on * tick;
+	CHECK(shown >= rka::BeaconLights::HOLD_SECONDS && shown < rka::BeaconLights::HOLD_SECONDS + 2.f * tick,
+	      "D shown %g s (hold %g s)", shown, rka::BeaconLights::HOLD_SECONDS);
+	CHECK(rka::BeaconLights::HOLD_SECONDS >= 1.f / 30.f, "the hold covers a 30 Hz frame (%g s)", rka::BeaconLights::HOLD_SECONDS);
+	CHECK(b[1] == 0.f, "then out (%g)", b[1]);
+	// A stage held on stays on; reset puts every light out.
+	for (int u = 0; u < 100; u++) {
+		for (int i = 0; i < rka::BeaconLights::DIVISION; i++)
+			L.note(2, true);
+		L.update(tick, b);
+	}
+	CHECK(b[2] == 1.f, "S held on (%g)", b[2]);
+	L.reset();
+	L.update(tick, b);
+	CHECK(b[0] == 0.f && b[1] == 0.f && b[2] == 0.f && b[3] == 0.f, "reset: all out");
+}
+
 // 48 -> 96 kHz mid-Attack: no step, and Attack ends at its time in seconds.
 void rate_change() {
 	Eng g(48000.f);
@@ -632,6 +701,8 @@ int main() {
 	mode_switch();
 	inv_exact();
 	published();
+	published_start_goal();
+	stage_lights();
 	rate_change();
 	shape_smoothing();
 	return rkatest::finish("test_engine");

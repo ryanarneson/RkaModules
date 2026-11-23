@@ -26,6 +26,18 @@ inline float timeWeight(float seconds) {
 }
 } // namespace detail
 
+// The running stage drawn from its true start: the height at fraction p of
+// the stage, from start01 to goal01 along the voice's curve (rising when the
+// goal is above the start). start01 at p = 0 and goal01 at p = 1 exactly.
+// Each value is clamped to the window, NaN to 0.
+inline float liveStageHeight(float p, float start01, float goal01, float shape) {
+	const float s = detail::clamp01(start01), g = detail::clamp01(goal01), sh = detail::clamp01(shape);
+	const float c = g > s ? curveRise(p, sh) : curveFall(p, sh);
+	if (c >= 1.f)
+		return g;
+	return s + (g - s) * c;
+}
+
 struct EnvelopeLayout {
 	float x[5];   // stage edges in 0..1 of the inner width: A starts at x[0] = 0, R ends at x[4] = 1
 	float shape, sustain01;
@@ -42,19 +54,29 @@ struct EnvelopeLayout {
 		return sustain01 * (1.f - curveFall((u - x[3]) / (x[4] - x[3]), shape));
 	}
 
-	// Where the dot goes for a stage and phase (IDLE: x 0, height 0). Sustain
-	// has no phase worth drawing, so its dot sits at the middle of the span.
-	// The height is the real level, which may be off the line.
-	void dot(Stage stage, float phase, float level01, float& u, float& h) const {
+	// Where the dot goes for a stage and phase. Attack, Decay and Release:
+	// on the running stage's own line (liveStageHeight, from its start to
+	// its goal), so it is on the bright line by construction. Sustain has no
+	// phase worth drawing: mid-span at the real level, or, with the sustain
+	// level at 0, at the end of the line (1, 0). IDLE: x 0, height 0.
+	void dot(Stage stage, float phase, float level01, float start01, float goal01, float& u, float& h) const {
 		const float p = detail::clamp01(phase);
-		h = detail::clamp01(level01);
 		switch (stage) {
 			case ATTACK: u = x[0] + p * (x[1] - x[0]); break;
 			case DECAY: u = x[1] + p * (x[2] - x[1]); break;
-			case SUSTAIN: u = 0.5f * (x[2] + x[3]); break;
 			case RELEASE: u = x[3] + p * (x[4] - x[3]); break;
-			default: u = 0.f; h = 0.f; break;
+			case SUSTAIN:
+				if (sustain01 <= 0.f) {
+					u = 1.f;
+					h = 0.f;
+				} else {
+					u = 0.5f * (x[2] + x[3]);
+					h = detail::clamp01(level01);
+				}
+				return;
+			default: u = 0.f; h = 0.f; return;
 		}
+		h = liveStageHeight(p, start01, goal01, shape);
 	}
 };
 

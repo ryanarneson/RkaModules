@@ -225,7 +225,9 @@ the slew, so the switch itself never moves the output:
   Rack's `PulseGenerator`), so stage starts under 1 ms apart give one
   longer pulse. A stage gate is high for at least one sample even when its
   stage ends at once.
-- Stage lights mirror the gates (channel 1).
+- Stage lights mirror the gates (channel 1), updated every 16 samples;
+  a stage lit even for one sample keeps its light at least 40 ms, so it
+  shows for a UI frame.
 
 ### The window
 
@@ -238,17 +240,25 @@ the slew, so the switch itself never moves the output:
 - **Time axis:** not to scale. Each stage's width grows with the log of
   its time, so a 1 ms Attack stays visible beside a 60 s Release; Sustain
   gets a fixed width. The window shows shape and position, not a ruler.
-- **Part-way starts:** a stage that started part-way (a retrigger from
-  8 V) is drawn as the knobs' shape; the dot shows the real level, so it
-  may sit off the line until the next idle. *Designer's call*; the
-  builder may redraw the running stage from its true start instead.
+- **Part-way starts** (ruled at the listening stop, test build 2.0.34):
+  the knobs' shape stays drawn dim as the reference, and the running
+  Attack, Decay or Release is also drawn bright over its own span from
+  where it really started to its goal, along the curve the voice is
+  following; the dot rides that bright line. A gate that rises while
+  releasing draws Attack from, say, 4 V up to 10 V; a gate that falls
+  mid-Attack draws Release from, say, 9.7 V down to 0 V. The engine
+  publishes channel 1's stage start and goal levels for this.
+- **Sustain at 0 V:** the Sustain span stays dim, and while the envelope
+  is in Sustain the dot sits at the end of the line (bottom right) rather
+  than mid-span. The S light and gate are unchanged: lit while the gate is
+  high, as on cèis.
 - **Hold mode:** the window shows the slew instead: a short scrolling
   line of the output, or the input and output levels as two marks; the
   builder proposes which in the test build. *Designer's call* that it
   should show something useful there rather than a stale envelope.
 - **Polyphony:** channel 1.
 - **Hand-off:** the engine publishes channel 1's stage and phase (and
-  level) for the window, lock-free; nothing per-sample crosses, and the
+  level, and the running stage's start and goal) for the window, lock-free; nothing per-sample crosses, and the
   curve is computed on the UI side from the params.
 - **Unpatched and idle:** the shape is drawn, no stage is lit, the dot
   rests at the start.

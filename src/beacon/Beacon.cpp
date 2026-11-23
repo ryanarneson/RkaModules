@@ -12,10 +12,11 @@
 #include <atomic>
 #include <cmath>
 
-// The window reads channel 1's stage, phase and level from the audio thread
-// through relaxed atomics; they must not take a lock. C++11 has a macro for
-// int only; float's lock-freedom is asserted at compile time in
-// test_engine.cpp (C++17, is_always_lock_free), on the same targets.
+// The window reads channel 1's stage, phase, level, start and goal from the
+// audio thread through relaxed atomics; they must not take a lock. C++11 has
+// a macro for int only; float's lock-freedom is asserted at compile time in
+// test_engine.cpp (C++17, is_always_lock_free), and checked in the shipped
+// binary at construction (a WARN in Rack's log if not).
 static_assert(ATOMIC_INT_LOCK_FREE == 2, "std::atomic<int> is lock-free");
 
 
@@ -60,6 +61,9 @@ struct Beacon : Module {
 	rka::BeaconEngine engine;
 	rka::BeaconFrame frame;
 	rka::BeaconResult result;
+	// The stage lights: noted every sample, set every DIVISION samples.
+	dsp::ClockDivider lightDivider;
+	rka::BeaconLights lightHold;
 
 	// Attack, Decay and Release show ms or s; a typed value is milliseconds,
 	// or seconds if it ends in "s" ("1.5 s"); out of range it is held to
@@ -126,6 +130,9 @@ struct Beacon : Module {
 		configLight(SUSTAIN_LIGHT, "Sustain");
 		configLight(RELEASE_LIGHT, "Release");
 		engine.setSampleRate(APP ? APP->engine->getSampleRate() : 48000.f);
+		lightDivider.setDivision(rka::BeaconLights::DIVISION);
+		if (!engine.published().phase.is_lock_free())
+			WARN("Beacon: std::atomic<float> is not lock-free here; the window's reads may take a lock");
 	}
 
 	void onSampleRateChange(const SampleRateChangeEvent& e) override {
@@ -134,6 +141,7 @@ struct Beacon : Module {
 
 	void onReset() override {
 		engine.reset();
+		lightHold.reset();
 	}
 
 	// The engine reads the cable's own voltages (16 floats, always there);
@@ -143,7 +151,7 @@ struct Beacon : Module {
 		port.v = in.getVoltages();
 	}
 
-	void process(const ProcessArgs&) override {
+	void process(const ProcessArgs& args) override {
 		typedef rka::BeaconFrame F;
 		static_assert(int(SHAPE_PARAM) == int(F::SHAPE) && int(MODE_PARAM) == int(F::MODE)
 			&& int(ATTACK_PARAM) == int(F::ATTACK) && int(DECAY_PARAM) == int(F::DECAY)
@@ -165,8 +173,14 @@ struct Beacon : Module {
 		for (int k = 0; k < 4; k++) {
 			outputs[ATTACK_OUTPUT + k].setChannels(n);
 			outputs[ATTACK_OUTPUT + k].writeVoltages(result.stageGate[k]);
-			// The lights mirror channel 1's stage gates.
-			lights[ATTACK_LIGHT + k].setBrightness(result.stageGate[k][0] > 0.f ? 1.f : 0.f);
+			// The lights follow channel 1's stage gates (BeaconLights).
+			lightHold.note(k, result.stageGate[k][0] > 0.f);
+		}
+		if (lightDivider.process()) {
+			float b[4];
+			lightHold.update(args.sampleTime * float(rka::BeaconLights::DIVISION), b);
+			for (int k = 0; k < 4; k++)
+				lights[ATTACK_LIGHT + k].setBrightness(b[k]);
 		}
 		outputs[TRIG_OUTPUT].setChannels(n);
 		outputs[TRIG_OUTPUT].writeVoltages(result.trig);
@@ -202,14 +216,18 @@ struct EnvelopeWindowView {
 	rka::beacon::ViewParams params;
 	int stage = rka::beacon::IDLE;    // rka::beacon::Stage
 	float phase = 0.f, level = 0.f;   // 0..1, volts
+	float start = 0.f, goal = 0.f;    // the running stage's, volts
 	bool hold = false;
 };
 
 // Beacon's window (its spec, "The window"), drawn in vectors in the
 // self-illuminating layer on the glass, in the theme's cyan as TapeWindow.
 // Gate and Trig: the envelope the knobs make (layoutEnvelope), each stage
-// its own stroke, the running one bright and the rest dim; A D S R under
-// the spans, the running letter bright; a dot where channel 1 is. Hold: a
+// its own stroke, dim; the running Attack, Decay or Release drawn bright
+// over its span from its true start to its goal (liveStageHeight), with the
+// dot on it; Sustain running: its span bright (dim at a 0 V sustain, the dot
+// then at the end of the line); A D S R under the spans, the running letter
+// bright. Hold: a
 // scrolling line of channel 1's output (+-10 V), one point per UI frame,
 // its ring kept here (UI thread only). It knows nothing of the engine:
 // `source` fills an EnvelopeWindowView, or returns false to draw nothing.
@@ -312,7 +330,9 @@ struct EnvelopeWindow : widget::Widget {
 		// The baseline, faint, under the whole envelope.
 		line(vg, xAt(0.f), yAt(0.f), xAt(1.f), yAt(0.f), nvgTransRGBAf(signal, 0.18f), 0.6f);
 
-		// Each stage its own stroke, so the running one can be bright.
+		// Each stage its own stroke, the knobs' shape: dim, except a running
+		// Sustain above 0 V.
+		const bool sustainLit = stage == SUSTAIN && e.sustain01 > 0.f;
 		for (int s = 0; s < 4; s++) {
 			const float u0 = e.x[s], u1 = e.x[s + 1];
 			nvgBeginPath(vg);
@@ -327,18 +347,43 @@ struct EnvelopeWindow : widget::Widget {
 				else
 					nvgLineTo(vg, x, y);
 			}
-			const bool lit = s == running;
+			const bool lit = s == 2 && sustainLit;
 			nvgStrokeColor(vg, lit ? signal : dim);
 			nvgStrokeWidth(vg, lit ? 1.6f : 1.1f);
 			nvgLineJoin(vg, NVG_ROUND);
 			nvgStroke(vg);
 		}
 
-		// The dot: channel 1's stage and how far through it, at its real
-		// level (it may sit off the line after a part-way start). Idle: at
-		// rest at the start, dim.
+		// The running Attack, Decay or Release, bright over its span, from
+		// where it really started to its goal along the curve the voice
+		// follows (drawn with the Shape knob; the voice's own Shape trails
+		// it by a 5 ms smoothing). Start and goal may be a sample apart
+		// from the stage (separate relaxed atomics): clamped, one frame.
+		const float start01 = std::isfinite(v.start) ? v.start * 0.1f : 0.f;
+		const float goal01 = std::isfinite(v.goal) ? v.goal * 0.1f : 0.f;
+		if (stage == ATTACK || stage == DECAY || stage == RELEASE) {
+			const int s = running;
+			const float u0 = e.x[s], u1 = e.x[s + 1];
+			nvgBeginPath(vg);
+			for (int i = 0; i <= CURVE_POINTS; i++) {
+				const float f = float(i) / CURVE_POINTS;
+				const float x = xAt(u0 + f * (u1 - u0)), y = yAt(liveStageHeight(f, start01, goal01, e.shape));
+				if (i == 0)
+					nvgMoveTo(vg, x, y);
+				else
+					nvgLineTo(vg, x, y);
+			}
+			nvgStrokeColor(vg, signal);
+			nvgStrokeWidth(vg, 1.6f);
+			nvgLineJoin(vg, NVG_ROUND);
+			nvgStroke(vg);
+		}
+
+		// The dot: channel 1's stage and how far through it, on the bright
+		// line (Sustain: at its level, or at the end at 0 V). Idle: at rest
+		// at the start, dim.
 		float u, h;
-		e.dot(Stage(stage), math::clamp(v.phase, 0.f, 1.f), std::isfinite(v.level) ? v.level * 0.1f : 0.f, u, h);
+		e.dot(Stage(stage), math::clamp(v.phase, 0.f, 1.f), std::isfinite(v.level) ? v.level * 0.1f : 0.f, start01, goal01, u, h);
 		nvgBeginPath(vg);
 		nvgCircle(vg, xAt(u), yAt(h), mm2px(running >= 0 ? 0.75f : 0.55f));
 		nvgFillColor(vg, running >= 0 ? signal : dim);
@@ -427,6 +472,8 @@ struct BeaconWidget : ModuleWidget {
 			v.stage = p.stage.load(std::memory_order_relaxed);
 			v.phase = p.phase.load(std::memory_order_relaxed);
 			v.level = p.level.load(std::memory_order_relaxed);
+			v.start = p.start.load(std::memory_order_relaxed);
+			v.goal = p.goal.load(std::memory_order_relaxed);
 			v.hold = p.mode.load(std::memory_order_relaxed) == int(rka::beacon::HOLD_MODE);
 			return true;
 		};
