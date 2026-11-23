@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.31 (2026-11-22): Spindrift: manual and release builds
 - 2.0.30 (2026-11-22): Spindrift: the window's GRAINS caption stays still
 - 2.0.29 (2026-11-22): Spindrift: first test build (Beads in the Instrument look)
 - 2.0.28 (2026-11-22): Eddy: final review fixes: Wear and Dub keep the bass unless the tape clips, Restore no longer swells, a stored tape survives rate changes while loading, saves cannot go quiet
