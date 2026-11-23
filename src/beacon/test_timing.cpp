@@ -23,7 +23,10 @@ void time_law() {
 	CHECK(near(stageSeconds(0.2093f), 0.010, 0.005), "Attack default is %g s", stageSeconds(0.2093f));
 	CHECK(near(stageSeconds(0.5184f), 0.300, 0.005), "Decay default is %g s", stageSeconds(0.5184f));
 	CHECK(near(stageSeconds(0.6279f), 1.0, 0.005), "Release default is %g s", stageSeconds(0.6279f));
-	CHECK(stageSeconds(-3.f) == stageSeconds(0.f) && stageSeconds(7.f) == stageSeconds(1.f), "the knob clamps");
+	// Equal to a few ulps, not bit for bit: with arguments known at compile time
+	// GCC on arm64 folds one call exactly and fuses the other's multiply-add.
+	CHECK(near(stageSeconds(-3.f), stageSeconds(0.f), 1e-6) && near(stageSeconds(7.f), stageSeconds(1.f), 1e-6),
+	      "the knob clamps");
 	CHECK(stageSeconds(std::nanf("")) == stageSeconds(0.5f), "a NaN knob reads noon");
 	for (int i = 0; i <= 100; i++) {
 		const float k = i / 100.f;
