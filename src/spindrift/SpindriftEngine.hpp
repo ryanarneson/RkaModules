@@ -619,8 +619,10 @@ private:
 
 		monitorStateChange(j, synthPolicy);
 		// A whole block frozen: the ring holds still from here until a block
-		// that is not (the save may copy it).
-		if (allFrozen && (ringSeq_.load(std::memory_order_relaxed) & 1u))
+		// that is not (the save may copy it). Not in the synth: Beads backs
+		// the buffer up only outside the synth mode (beads.cc:403-404), so a
+		// buffer frozen there is not kept with the patch.
+		if (allFrozen && !synth_ && (ringSeq_.load(std::memory_order_relaxed) & 1u))
 			publishStableRing();
 		if (!synth_)
 			overview_.serviceFrom(BufferSource{*processor_}, int(kOverviewBudget * size));

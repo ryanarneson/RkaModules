@@ -13,6 +13,11 @@
 //   pointer) plays, for 2 s; an engine with nothing restored plays silence.
 // - rejects_*, missing_file: a file that does not fit loads nothing, and
 //   the engine is an empty, unfrozen one: it plays what a fresh engine plays.
+// - synth_frozen_not_kept: frozen in the synth, there is no image (Beads
+//   backs up only outside the synth mode, beads.cc:403-404), and the save
+//   (BufferSave.hpp's saveBuffer, as onSave runs it) removes buffer.bin and
+//   the patch says not frozen; the same engine frozen in grain mode
+//   afterwards is kept (the test can tell).
 // - saved_state_*: the JSON fields for the defaults (the golden map), a
 //   round trip of every field away from its default, the golden version 1
 //   map, and every way a field can be wrong.
@@ -27,6 +32,7 @@
 
 #include "testing.hpp"
 #include "BufferFile.hpp"
+#include "BufferSave.hpp"
 #include "SavedState.hpp"
 #include "SpindriftEngine.hpp"
 #include "testdata/GoldenBufferV1.hpp"
@@ -293,6 +299,80 @@ void round_trip() {
 	CHECK(rms(od) == 0.0, "with nothing restored, silence (rms %g)", rms(od));
 }
 
+// The real filesystem, for saveBuffer, collecting its warnings.
+struct TestFs {
+	std::vector<std::string> warnings;
+	bool exists(const std::string& path) {
+		FILE* f = std::fopen(path.c_str(), "rb");
+		if (f)
+			std::fclose(f);
+		return f != nullptr;
+	}
+	void makeDir() {}  // build/test/spindrift/ exists
+	void remove(const std::string& path) {
+		std::remove(path.c_str());
+	}
+	void warn(const std::string& m) {
+		warnings.push_back(m);
+	}
+};
+
+bool savedFrozenField(const SpindriftEngine& e, const spindrift::BufferRecord& rec) {
+	spindrift::SavedState s;
+	s.frozen = spindrift::savedFrozen(e, rec);
+	const spindrift::SavedMap m = spindrift::savedToMap(s);
+	return m.at("frozen").value != 0.0;
+}
+
+void synth_frozen_not_kept() {
+	std::unique_ptr<SpindriftEngine> e = makeEngine(0x51);
+	e->settings.synth.store(spindrift::SYNTH_NEVER);
+	long t = 0;
+	run(*e, wetKnobs(), stereo(), t, kRate);  // grains, hearing the signal
+	t += kRate;
+	e->settings.synth.store(spindrift::SYNTH_ALWAYS);
+	run(*e, wetKnobs(), stereo(), t, kRate / 2);
+	t += kRate / 2;
+	CHECK(e->mode() == spindrift::MODE_SYNTH, "in the synth (mode %d)", int(e->mode()));
+	e->buttons().freezePress();
+	run(*e, wetKnobs(), stereo(), t, kRate / 10);
+	t += kRate / 10;
+	CHECK(e->frozen() && e->mode() == spindrift::MODE_SYNTH, "frozen in the synth");
+	CHECK(e->ringSeq() % 2 == 1, "frozen in the synth, the ring is not stable for the save (seq %u)", e->ringSeq());
+	BufferHeader h;
+	std::vector<uint8_t> payload(spindrift::kBufferPayloadBytes);
+	CHECK(!e->bufferImage(h, payload.data()), "frozen in the synth: no image");
+
+	// The save, with a buffer.bin left from an earlier save there.
+	const std::string path = scratch("synth-frozen.bin");
+	writeRaw(path, std::vector<uint8_t>(64, 7));
+	spindrift::BufferRecord rec;
+	rec.stored = true;  // stored earlier, at another number
+	rec.seq = 2;
+	TestFs fs;
+	CHECK(fs.exists(path), "buffer.bin there before the save");
+	spindrift::saveBuffer(*e, path, rec, fs);
+	CHECK(!fs.exists(path), "frozen in the synth: the save removes buffer.bin");
+	CHECK(!rec.stored && !savedFrozenField(*e, rec), "frozen in the synth: the patch says not frozen");
+	CHECK(fs.warnings.empty(), "nothing warned (%zu)", fs.warnings.size());
+
+	// Out of the synth and frozen in grain mode: kept, so the checks above
+	// can tell.
+	e->buttons().freezePress();
+	e->settings.synth.store(spindrift::SYNTH_NEVER);
+	run(*e, wetKnobs(), stereo(), t, kRate);
+	t += kRate;
+	CHECK(e->mode() == spindrift::MODE_GRAIN && !e->frozen(), "grain mode, not frozen (mode %d)", int(e->mode()));
+	e->buttons().freezePress();
+	run(*e, wetKnobs(), stereo(), t, kRate / 10);
+	spindrift::saveBuffer(*e, path, rec, fs);
+	CHECK(fs.exists(path) && rec.stored && savedFrozenField(*e, rec), "frozen in grain mode: kept");
+	std::string why;
+	CHECK(spindrift::readBufferFile(path, h, payload, why), "the kept file reads back (%s)", why.c_str());
+	CHECK(payload == ring(*e), "the kept file is the ring");
+	std::remove(path.c_str());
+}
+
 // Loads `h` (with the frozen image's payload) into a new engine whose patch
 // says `q`: refused, and the engine is an empty, unfrozen one.
 void expectRejected(const BufferHeader& h, const std::vector<uint8_t>& payload, spindrift::Quality q, const char* what) {
@@ -519,6 +599,7 @@ int main() {
 	golden_buffer_v1();
 	round_trip();
 	rejects();
+	synth_frozen_not_kept();
 	saved_state_defaults();
 	saved_state_round_trip();
 	saved_state_golden_v1();

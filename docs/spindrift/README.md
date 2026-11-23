@@ -531,7 +531,8 @@ When the patch opens, the buffer is back before the first sample, and
 buffer frozen by the gate is not overwritten when the gate is low. Press
 Freeze to let it record again.
 
-Not frozen, nothing is stored (and an old `buffer.bin` is removed): the
+Not frozen, or frozen in the synth (see "Freezing the synth" below),
+nothing is stored (and an old `buffer.bin` is removed): the
 buffer is a moment of input, not a recording. Freeze itself is not kept
 apart from the buffer: a patch reopens frozen only when its buffer comes
 back with it.
@@ -585,12 +586,12 @@ Bypassed, IN L passes to L and IN R to R.
   pulse shorter than one (about 42 µs in Dirty Tape) can be missed.
   Rack's usual 1 ms triggers are always seen.
 - **Freezing the synth.** Freeze in the synth holds the synth; it does not
-  put the synth's sound in the buffer. Saved frozen in the synth with
-  Keep the frozen buffer on, `buffer.bin` holds the grain buffer from
-  before the synth came in (usually the silence it waited through), and
-  the patch reopens frozen in grain mode. If Quality was changed while in
-  the synth, that stored buffer does not load at all: the patch reopens
-  empty and unfrozen, and the log says the qualities differ.
+  put the synth's sound in the buffer. In synth mode the buffer is not
+  kept with the patch, as on Beads (which backs its buffer up only outside
+  the synth): saved frozen in the synth, no `buffer.bin` is written (an
+  old one is removed), and the patch reopens unfrozen with an empty
+  buffer. (A buffer the patch brought back, frozen ever since, is kept as
+  it came, whatever mode the module is in.)
 - **Initialize** puts the knobs back to their defaults (Density 0.65 and
   Dry/Wet 0.5, so a new module makes a cloud; the rest at noon or 0),
   Seed latched, Digital, Freeze off, and the menu to its defaults.

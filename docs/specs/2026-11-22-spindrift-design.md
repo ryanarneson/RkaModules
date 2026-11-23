@@ -375,7 +375,9 @@ written to the patch's storage folder as `buffer.bin` with a small
 and the Freeze button is latched on, as Beads does after restoring a
 backup (`beads.cc:344-347`), so a buffer frozen by the gate is not
 overwritten when the gate is low after loading. Without a freeze nothing
-is stored: Beads' buffer is a moment of input, not a recording.
+is stored: Beads' buffer is a moment of input, not a recording. Nor is a
+buffer frozen in synth mode: Beads backs up only outside the synth
+(`beads.cc:403-404`).
 
 ### Bypass
 

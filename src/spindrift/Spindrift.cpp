@@ -18,6 +18,7 @@
 //   onAdd), which set the engine's buttons directly.
 #include "plugin.hpp"
 #include "BufferFile.hpp"
+#include "BufferSave.hpp"
 #include "SavedState.hpp"
 #include "SpindriftEngine.hpp"
 #include "SpindriftLayout.hpp"
@@ -66,9 +67,9 @@ struct Spindrift : Module {
 	std::atomic<bool> savedSeedLatched_{true};
 
 	// The UI thread's: added to the engine; a stored buffer to load in onAdd;
-	// buffer.bin holds the image the engine's ring had at storedSeq_.
-	bool added_ = false, restoreWanted_ = false, stored_ = false;
-	uint32_t storedSeq_ = 1;
+	// what buffer.bin holds (BufferSave.hpp).
+	bool added_ = false, restoreWanted_ = false;
+	spindrift::BufferRecord stored_;
 
 	// Pitch: Beads' detune law, in semitones (snapping to 0, 1, 3, 4, 7, 12
 	// and 24 either way).
@@ -216,60 +217,37 @@ struct Spindrift : Module {
 			     spindrift::qualityName(engine.buttons().quality));
 			return;
 		}
-		stored_ = true;
-		storedSeq_ = engine.ringSeq();
+		stored_.stored = true;
+		stored_.seq = engine.ringSeq();
 		INFO("Spindrift: restored the frozen buffer (%s, %s)", spindrift::qualityName(spindrift::Quality(h.quality)),
 		     h.mono ? "mono" : "stereo");
 	}
 
-	// The frozen buffer is written here, synchronously (Rack archives the
-	// folder as soon as this returns), when it is frozen, by the button or
-	// the gate, and "Keep the frozen buffer" is on; otherwise buffer.bin is
-	// removed. A buffer already stored and frozen since is not written again.
+	// Rack's filesystem, for spindrift::saveBuffer (BufferSave.hpp).
+	struct RackFs {
+		Spindrift* m;
+		bool exists(const std::string& path) {
+			return system::exists(path);
+		}
+		void makeDir() {
+			m->createPatchStorageDirectory();
+		}
+		void remove(const std::string& path) {
+			system::remove(path);
+		}
+		void warn(const std::string& message) {
+			WARN("%s", message.c_str());
+		}
+	};
+
+	// BufferSave.hpp: buffer.bin written when the buffer is frozen (outside
+	// the synth) and "Keep the frozen buffer" is on, else removed.
 	void onSave(const SaveEvent& e) override {
 		const std::string dir = getPatchStorageDirectory();
 		if (dir.empty())
 			return;
-		const std::string path = system::join(dir, BUFFER_FILE);
-		if (engine.settings.keepFrozen.load(std::memory_order_relaxed)) {
-			const uint32_t seq = engine.ringSeq();
-			if (!(seq & 1u) && stored_ && seq == storedSeq_ && system::exists(path))
-				return;
-			spindrift::BufferHeader h;
-			std::vector<uint8_t> payload(spindrift::kBufferPayloadBytes);
-			uint32_t imageSeq = 1;
-			// Frozen when asked but written during the copy (the freeze
-			// ended meanwhile, or ended and began again): the copy is
-			// discarded (SpindriftEngine::bufferImage). Try again while it is
-			// frozen anew; say so if it never holds still.
-			bool wasFrozen = false, got = false;
-			for (int attempt = 0; attempt < 3 && !got; attempt++) {
-				wasFrozen |= !(engine.ringSeq() & 1u);
-				got = engine.bufferImage(h, payload.data(), &imageSeq);
-			}
-			if (got) {
-				createPatchStorageDirectory();
-				std::string why;
-				if (spindrift::writeBufferFile(path, h, payload.data(), why)) {
-					stored_ = true;
-					storedSeq_ = imageSeq;
-					return;
-				}
-				WARN("Spindrift: cannot store the frozen buffer in %s: %s", path.c_str(), why.c_str());
-			}
-			else if (wasFrozen)
-				WARN("Spindrift: the frozen buffer changed while saving (the freeze ended); not stored");
-		}
-		stored_ = false;
-		// Rack's filesystem calls throw on failure (a file held open
-		// elsewhere, on Windows): that must not fail the patch's save.
-		try {
-			if (system::exists(path))
-				system::remove(path);
-		}
-		catch (std::exception& ex) {
-			WARN("Spindrift: cannot remove %s: %s", path.c_str(), ex.what());
-		}
+		RackFs fs{this};
+		spindrift::saveBuffer(engine, system::join(dir, BUFFER_FILE), stored_, fs);
 	}
 
 	spindrift::SavedState savedState() {
@@ -277,7 +255,7 @@ struct Spindrift : Module {
 		s.quality = spindrift::Quality(savedQuality_.load() & 3);
 		s.seedLatched = savedSeedLatched_.load();
 		// Frozen as stored: buffer.bin holds the ring as it is now.
-		s.frozen = stored_ && engine.ringSeq() == storedSeq_;
+		s.frozen = spindrift::savedFrozen(engine, stored_);
 		s.synth = engine.settings.synth.load();
 		s.gain = engine.settings.gain.load();
 		s.manualGain = engine.settings.manualGain.load();
