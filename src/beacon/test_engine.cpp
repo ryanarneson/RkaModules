@@ -11,6 +11,11 @@
 #include <cstdio>
 #include <cstring>
 
+// Beacon.cpp (C++11) can only assert int's lock-freedom; the window's
+// float reads are asserted here, on the same targets.
+static_assert(std::atomic<float>::is_always_lock_free && std::atomic<int>::is_always_lock_free,
+              "the published channel-1 state is lock-free");
+
 namespace {
 
 using namespace rka::beacon;
@@ -339,6 +344,21 @@ void schmitt() {
 	g.gate[0] = 0.09f;
 	g.step();
 	CHECK(g.stage() == RELEASE, "GATE 0.09 V: low (%s)", stageName(g.stage()));
+
+	// Unpatched, GATE reads 0 V through its Schmitt: a cable plugged back
+	// in at 0.5 V (inside the hysteresis) is low, not a new edge.
+	Eng h;
+	h.f.gate.channels = 1;
+	h.gate[0] = 5.f;
+	h.run(48000);
+	CHECK(h.stage() == SUSTAIN, "GATE 5 V: high (%s)", stageName(h.stage()));
+	h.f.gate.channels = 0;
+	h.run(10);
+	CHECK(h.stage() == RELEASE, "GATE unpatched: low (%s)", stageName(h.stage()));
+	h.gate[0] = 0.5f;
+	h.f.gate.channels = 1;
+	h.run(10);
+	CHECK(h.stage() == RELEASE, "GATE replugged at 0.5 V: still low, no edge (%s)", stageName(h.stage()));
 }
 
 // Review Focus 1: GATE -> HOLD -> TRIG -> GATE every 7 ms for 2 s, gate

@@ -111,7 +111,6 @@ public:
 		channels_ = n;
 
 		const bool push = f.params[F::PUSH] >= 0.5f;
-		const bool gatePatched = f.gate.channels > 0;
 		const float sKnob = f.params[F::SUSTAIN];
 		for (int c = 0; c < n; c++) {
 			beacon::VoiceIn in;
@@ -129,7 +128,9 @@ public:
 			double& y = shape_[c];
 			y += (double(shapeTarget_) - y) * shapeCoef_;
 			in.shape = float(y);
-			const bool g = gatePatched && schmitt(read(f.gate, c), gateHigh_[c]);
+			// Unpatched GATE reads 0 V, so its Schmitt falls and a replug
+			// inside the hysteresis is no edge.
+			const bool g = schmitt(read(f.gate, c), gateHigh_[c]);
 			in.gate = g || push;
 			in.retrig = schmitt(read(f.retrig, c), retrigHigh_[c]);
 			in.mode = mode;
