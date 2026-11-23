@@ -276,6 +276,20 @@ build/bench/modules.inc: bench-modules-list
 # (-isystem, as the tests do; -DTEST for stmlib's portable code, as the
 # plugin builds it) and link its object, built as the plugin builds it
 # (the tools' flags, then SPINDRIFT_FW_FLAGS, as the Makefile appends them).
+# What is NOT as the plugin builds it: the engine's own code (SpindriftEngine,
+# EdgeRate, GainControl and the Beads and stmlib functions defined inline in
+# the headers) is compiled inside each tool's single translation unit
+# (bench.cpp, libm_calls.cpp, engine_globals.cpp), with every other module,
+# so with the tools' flags: compile.mk's fast maths
+# (-funsafe-math-optimizations) and without SPINDRIFT_FW_FLAGS' -fwrapv,
+# -fno-strict-aliasing, -fno-unsafe-math-optimizations and -funsigned-char,
+# which the plugin gives Spindrift.cpp. They cannot be added here: they would
+# change how every other module in it is compiled and
+# timed. So the bench's timing of that code, and the libm count, are of a
+# fast-maths build of it (an inline function both there and in
+# BeadsFirmware.o may come from either), not to the instruction what the
+# plugin runs; Beads' own processing, in the object, is. test_engine and
+# test_alias check what it computes, built strict.
 BENCH_VENDOR_FLAGS = -isystem src/spindrift -DTEST
 BENCH_VENDOR_OBJS = build/bench/BeadsFirmware.o
 BENCH_DEPS += $(SPINDRIFT_FW_DEPS)
