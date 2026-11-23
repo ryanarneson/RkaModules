@@ -6,8 +6,6 @@ and Release from 1 ms to 60 s, Shape from a slow swell through linear to
 the classic analog curve, a gate for every stage, a trigger at each stage
 start, and a window that draws the envelope with a dot riding it.
 
-*First draft: the defaults and Shape's ends are to be tuned by ear.*
-
 ![Beacon panel](Beacon.png)
 
 ## The panel
@@ -25,7 +23,8 @@ From the top:
 
 - **Gate** (switch up, the default): a rising edge starts Attack; Attack
   and Decay run while the gate is high, then Sustain holds. When the gate
-  falls, Release runs from wherever the envelope is.
+  falls, Release runs from wherever the envelope is, even in the middle of
+  Attack.
 - **Trig**: Attack always runs to the end. If the gate is still high,
   Decay and Sustain follow; if not, Release starts from the top. A trigger
   gives an AR (AD) envelope, a long gate the full ADSR.
@@ -33,12 +32,28 @@ From the top:
   **Sustain CV** input is the signal; the Sustain knob adds 0 to 10 V.
   OUT follows it, rising at Attack's rate and falling at Decay's (the knob
   sets the time for a 10 V move). Release, GATE, RETRIG and the button do
-  nothing here.
+  nothing here. The A, D and S gates then mean "rising", "falling" and
+  "caught up"; an input that moves slowly, slower than the slew, reads
+  as S.
+
+### Gate or Trig with a trigger
+
+Patch a short trigger into GATE and the two modes part. In **Gate** a
+trigger shorter than Attack gives only a blip: the gate falls, and
+Release starts from wherever Attack had got to. In **Trig** Attack runs
+to the top, then Release. For an AR envelope from triggers, use Trig.
+
+The gate matters in Trig too. If it is still high when Attack ends,
+Decay and Sustain follow; so for an AR, the gate must fall before Attack
+ends. A Sway square wave with an 11.3 s cycle holds the gate for about
+5.7 s: with a 6 s Attack the gate falls during Attack, so Decay and
+Sustain never run; with a 4 s Attack the gate outlasts it and they do.
 
 In Gate and Trig, a new rising edge while the envelope runs restarts
 Attack from where the envelope is, and **RETRIG** does the same without a
 new gate (only while the gate is high). Every stage takes exactly its set
-time, wherever it starts.
+time, wherever it starts: an Attack begun from half way up takes as long
+as one from the bottom, so it covers less level in the same time.
 
 Moving the switch never moves the output: from Hold back to Gate or Trig,
 Attack starts from the present level with the gate high, Release with it
@@ -62,19 +77,31 @@ low.
 - **GATE, RETRIG**: gates at the plugin's usual thresholds (high at 1 V,
   low below 0.1 V).
 
+### RETRIG for legato
+
+With notes played legato (the next key down before the last is up) the
+gate never falls, so there is no new rising edge and the envelope stays
+in Sustain. Patch the sequencer's or MIDI-CV's trigger to **RETRIG**: each
+trigger sends the envelope back up through Attack from its present level,
+so it never jumps and the held notes stay connected. RETRIG does nothing
+while the gate is low.
+
 ## Outputs
 
 - **OUT**: 0 to 10 V (Hold: ±10 V). **INV**: OUT upside down.
-- **A, D, S, R**: 10 V while that stage runs. In Hold: A while rising,
-  D while falling, S when settled.
+- **A, D, S, R**: 10 V while that stage runs. In Hold: A while the slew
+  is limiting upward, D while limiting downward, S when OUT has caught
+  the input. With Sustain at 0, the S gate still goes high while the gate is
+  high; the output sits at 0 V.
 - **TRIG**: a 1 ms, 10 V trigger at the start of every stage, including
   the return to rest at the end of Release.
-- The stage lights show channel 1's stage; a stage too short to see
-  still lights for a moment (40 ms).
+- The stage lights are lit while that stage runs, on channel 1; a stage
+  too short to see still lights for 40 ms.
 
 ## The window
 
-The envelope drawn from the knobs (with channel 1's CVs) and Shape. Each
+The envelope drawn from the knobs (with channel 1's CVs) and Shape. It
+is a picture of the envelope, not a meter. Each
 stage's width grows with the log of its time, so a 1 ms Attack stays
 visible beside a 60 s Release; the window shows shape and position, not a
 ruler. The knobs' shape is drawn dim. The running stage's letter is
@@ -85,6 +112,32 @@ mid-Attack draws Release from that level down to 0 V. A dot rides the
 bright line where channel 1 is. Sustain is bright while it runs; with
 Sustain at 0 V its span stays dim and the dot waits at the end of the
 line. In Hold the window shows a scrolling line of the output.
+
+## Patches to try
+
+- **A plain voice.** MIDI-CV GATE into GATE and V/OCT into Fathom; OUT
+  into a Sluice level CV, and again into Narrows' cutoff. Play notes,
+  turn A, D, S and R in turn, then Shape fully left, at noon and fully
+  right on the same times.
+- **Legato.** MIDI-CV's trigger into RETRIG as well as its gate into
+  GATE. Overlapping notes each climb from where the envelope is.
+- **Slow swells.** Squall's GATE into GATE, Trig, A about 8 s, R 20 s,
+  Shape left; OUT into Sluice's level CV on a Fathom drone, into Fog.
+  Each gate swells the drone in and lets it fade. Try Shape right.
+- **Events from the stage gates.** The A gate into Rigging's STRUM (a
+  strike as Attack starts) and TRIG into Narrows' PING: a long gate gives
+  four pings, at Attack, Decay, Sustain and the return to rest.
+- **Ducking.** INV into Sluice's level CV on an open drone: the drone
+  gives way while the envelope rises and comes back as it falls.
+- **Glide.** A sequencer's V/OCT into the Sustain CV, Hold, S fully
+  left; OUT into Fathom's V/OCT. A sets the glide up, D the glide down.
+  Watch the A, D and S gates.
+- **Chords.** MIDI-CV with four voices: GATE into GATE, OUT into a
+  polyphonic Sluice. Each voice has its own envelope; the window and
+  lights follow voice 1.
+- **Pulses on a held sound.** Hold the push button (or send a long gate)
+  and put Squall's GATE or a clock into RETRIG: the envelope re-swells
+  from where it is. D and S set how far each pulse falls back.
 
 ## Polyphony
 
@@ -98,3 +151,4 @@ from a mono one. Every output carries the channel count.
 - Bypass: the outputs fall silent.
 - Initialize: every envelope at rest at 0 V.
 - A sample rate change keeps every envelope where it is.
+- Saved with the patch: the knobs and the switch.
