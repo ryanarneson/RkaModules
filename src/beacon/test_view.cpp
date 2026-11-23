@@ -63,21 +63,21 @@ void heights() {
 void dots() {
 	const EnvelopeLayout e = layoutEnvelope({0.01f, 0.3f, 0.4f, 1.f, 0.75f});
 	float u = -1.f, h = -1.f;
-	e.dot(DECAY, IDLE, 0.5f, 0.7f, 1.f, 0.4f, u, h);
+	e.dot(DECAY, IDLE, 1.f, 0.5f, 0.7f, 1.f, 0.4f, u, h);
 	CHECK(std::fabs(u - 0.5f * (e.x[1] + e.x[2])) < 1e-6f, "decay dot at %g, %g", u, h);
-	e.dot(ATTACK, IDLE, 0.25f, 0.1f, 0.f, 1.f, u, h);
+	e.dot(ATTACK, IDLE, 1.f, 0.25f, 0.1f, 0.f, 1.f, u, h);
 	CHECK(std::fabs(u - (e.x[0] + 0.25f * (e.x[1] - e.x[0]))) < 1e-6f, "attack dot at %g, %g", u, h);
-	e.dot(RELEASE, SUSTAIN, 0.5f, 0.2f, 0.4f, 0.f, u, h);
+	e.dot(RELEASE, SUSTAIN, 1.f, 0.5f, 0.2f, 0.4f, 0.f, u, h);
 	CHECK(std::fabs(u - 0.5f * (e.x[3] + e.x[4])) < 1e-6f, "release dot at %g, %g", u, h);
-	e.dot(SUSTAIN, IDLE, 0.f, 0.4f, 1.f, 0.4f, u, h);
+	e.dot(SUSTAIN, IDLE, 1.f, 0.f, 0.4f, 1.f, 0.4f, u, h);
 	CHECK(std::fabs(u - 0.5f * (e.x[2] + e.x[3])) < 1e-6f && h == 0.4f, "sustain dot at %g, %g", u, h);
-	e.dot(IDLE, IDLE, 0.7f, 0.9f, 0.3f, 0.6f, u, h);
+	e.dot(IDLE, IDLE, 1.f, 0.7f, 0.9f, 0.3f, 0.6f, u, h);
 	CHECK(u == 0.f && h == 0.f, "idle dot at %g, %g", u, h);
-	e.dot(DECAY, IDLE, std::nanf(""), 0.7f, 1.f, 0.4f, u, h);
+	e.dot(DECAY, IDLE, 1.f, std::nanf(""), 0.7f, 1.f, 0.4f, u, h);
 	CHECK(u >= e.x[1] && u <= e.x[2] && h >= 0.f && h <= 1.f, "NaN phase stays in the stage: %g, %g", u, h);
-	e.dot(DECAY, IDLE, 3.f, 7.f, 1.f, 0.4f, u, h);
+	e.dot(DECAY, IDLE, 1.f, 3.f, 7.f, 1.f, 0.4f, u, h);
 	CHECK(u == e.x[2] && h == 0.4f, "phase clamps to the stage's end: %g, %g", u, h);
-	e.dot(RELEASE, SUSTAIN, 0.5f, 0.5f, std::nanf(""), 9.f, u, h);
+	e.dot(RELEASE, SUSTAIN, 1.f, 0.5f, 0.5f, std::nanf(""), 9.f, u, h);
 	CHECK(h >= 0.f && h <= 1.f, "garbage start and goal clamp: %g", h);
 }
 
@@ -118,7 +118,7 @@ void live_dot_on_line() {
 		for (int i = 0; i <= 10; i++) {
 			const float p = i / 10.f;
 			float u = -1.f, h = -1.f;
-			e.dot(stages[k], stages[k] == RELEASE ? SUSTAIN : stages[k] == DECAY ? ATTACK : IDLE, p, 0.123f, ends[k][0], ends[k][1], u, h);
+			e.dot(stages[k], stages[k] == RELEASE ? SUSTAIN : stages[k] == DECAY ? ATTACK : IDLE, 1.f, p, 0.123f, ends[k][0], ends[k][1], u, h);
 			const float want = liveStageHeight(p, ends[k][0], ends[k][1], e.shape);
 			CHECK(h == want, "stage %d p %g: dot height %g, line %g", int(stages[k]), p, h, want);
 			CHECK(std::fabs(u - (a + p * (b - a))) < 1e-6f, "stage %d p %g: dot at u %g", int(stages[k]), p, u);
@@ -126,38 +126,57 @@ void live_dot_on_line() {
 	}
 }
 
-// A stage that skipped others is drawn from where the last stage ended to
-// the end of its own span (issue #76); otherwise over its own span.
+// A stage that skipped others is drawn from where the last stage was cut
+// off (its phase then, across its span) to the end of its own span (issue
+// #76); a cut-off Sustain counts as its span's end; otherwise the stage's
+// own span.
 void live_span_after_skip() {
 	const EnvelopeLayout e = layoutEnvelope({0.01f, 0.3f, 0.4f, 1.f, 0.75f});
-	struct Case { Stage s, prev; float u0, u1; } cases[] = {
-		{RELEASE, ATTACK, e.x[1], 1.f}, {RELEASE, DECAY, e.x[2], 1.f}, {RELEASE, SUSTAIN, e.x[3], 1.f},
-		{RELEASE, RELEASE, e.x[3], 1.f}, {RELEASE, IDLE, e.x[3], 1.f},
-		{ATTACK, RELEASE, e.x[0], e.x[1]}, {ATTACK, IDLE, e.x[0], e.x[1]}, {ATTACK, DECAY, e.x[0], e.x[1]},
-		{DECAY, ATTACK, e.x[1], e.x[2]}, {DECAY, RELEASE, e.x[1], e.x[2]},
+	const float midA = e.x[0] + 0.5f * (e.x[1] - e.x[0]), midD = e.x[1] + 0.5f * (e.x[2] - e.x[1]);
+	struct Case { Stage s, prev; float prevPhase, u0, u1; } cases[] = {
+		{RELEASE, ATTACK, 1.f, e.x[1], 1.f}, {RELEASE, DECAY, 1.f, e.x[2], 1.f},
+		{RELEASE, ATTACK, 0.5f, midA, 1.f}, {RELEASE, DECAY, 0.5f, midD, 1.f},
+		{RELEASE, DECAY, 0.f, e.x[1], 1.f},
+		{RELEASE, SUSTAIN, 1.f, e.x[3], 1.f}, {RELEASE, SUSTAIN, 0.3f, e.x[3], 1.f}, {RELEASE, SUSTAIN, 0.f, e.x[3], 1.f},
+		{RELEASE, RELEASE, 0.5f, e.x[3], 1.f}, {RELEASE, IDLE, 0.5f, e.x[3], 1.f},
+		{ATTACK, RELEASE, 0.5f, e.x[0], e.x[1]}, {ATTACK, IDLE, 0.f, e.x[0], e.x[1]}, {ATTACK, DECAY, 0.5f, e.x[0], e.x[1]},
+		{DECAY, ATTACK, 1.f, e.x[1], e.x[2]}, {DECAY, RELEASE, 0.5f, e.x[1], e.x[2]},
 	};
 	for (const Case& c : cases) {
 		float u0 = -1.f, u1 = -1.f;
-		e.liveSpan(c.s, c.prev, u0, u1);
-		CHECK(u0 == c.u0 && u1 == c.u1, "%d after %d: span %g..%g (want %g..%g)", int(c.s), int(c.prev), u0, u1, c.u0, c.u1);
+		e.liveSpan(c.s, c.prev, c.prevPhase, u0, u1);
+		CHECK(std::fabs(u0 - c.u0) < 1e-6f && u1 == c.u1, "%d after %d at %g: span %g..%g (want %g..%g)", int(c.s),
+		      int(c.prev), c.prevPhase, u0, u1, c.u0, c.u1);
 	}
-	// The user's case: A 4.64 s, D 0.3 s, S 5 V, R 6 s, the gate falling as
-	// Attack completes: Release from 10 V, drawn from the end of Attack.
+	// A garbage phase stays inside the cut-off stage's span.
+	const float bad[3] = {std::nanf(""), -2.f, 7.f};
+	for (float b : bad) {
+		float u0 = -1.f, u1 = -1.f;
+		e.liveSpan(RELEASE, DECAY, b, u0, u1);
+		CHECK(u0 >= e.x[1] && u0 <= e.x[2] && u1 == 1.f, "prevPhase %g: span %g..%g", b, u0, u1);
+	}
+	// The user's case (build 2.0.36): A 4.64 s, D 0.3 s, S 5 V, R 6 s, the
+	// gate falling 1.3 ms into Decay (phase 0.0043, ~9.95 V): Release drawn
+	// from just after the end of Attack, not from the end of the D span.
 	const EnvelopeLayout l = layoutEnvelope({4.64f, 0.3f, 0.5f, 6.f, 0.75f});
-	const float start01 = 0.9999f, goal01 = 0.f;
+	const float start01 = 0.995f, goal01 = 0.f, cut = 0.0043f;
+	const float dSpan = l.x[2] - l.x[1];
 	float u = -1.f, h = -1.f;
-	l.livePoint(RELEASE, ATTACK, 0.f, start01, goal01, u, h);
-	CHECK(u == l.x[1] && h == liveStageHeight(0.f, start01, goal01, l.shape) && std::fabs(h - 1.f) < 1e-3f,
-	      "bright Release starts at the end of Attack: %g, %g (want %g, ~1)", u, h, l.x[1]);
-	l.livePoint(RELEASE, ATTACK, 1.f, start01, goal01, u, h);
+	l.livePoint(RELEASE, DECAY, cut, 0.f, start01, goal01, u, h);
+	CHECK(u >= l.x[1] && u - l.x[1] < 0.005f * dSpan && h == liveStageHeight(0.f, start01, goal01, l.shape) &&
+	          std::fabs(h - start01) < 1e-6f,
+	      "bright Release starts just after Attack's end: u %g (x[1] %g, D span %g), h %g (want ~%g)", u, l.x[1], dSpan, h,
+	      start01);
+	l.livePoint(RELEASE, DECAY, cut, 1.f, start01, goal01, u, h);
 	CHECK(u == 1.f && h == 0.f, "and ends at the right edge at 0: %g, %g", u, h);
+	const float u0 = l.x[1] + cut * dSpan;
 	for (int i = 0; i <= 20; i++) {
 		const float p = i / 20.f;
 		float du, dh, lu, lh;
-		l.dot(RELEASE, ATTACK, p, 0.123f, start01, goal01, du, dh);
-		l.livePoint(RELEASE, ATTACK, p, start01, goal01, lu, lh);
+		l.dot(RELEASE, DECAY, cut, p, 0.123f, start01, goal01, du, dh);
+		l.livePoint(RELEASE, DECAY, cut, p, start01, goal01, lu, lh);
 		CHECK(du == lu && dh == lh, "p %g: dot %g, %g on the line %g, %g", p, du, dh, lu, lh);
-		CHECK(std::fabs(lu - (l.x[1] + p * (1.f - l.x[1]))) < 1e-6f, "p %g: u %g across the widened span", p, lu);
+		CHECK(std::fabs(lu - (u0 + p * (1.f - u0))) < 1e-6f, "p %g: u %g across the widened span", p, lu);
 	}
 }
 
@@ -165,10 +184,10 @@ void live_span_after_skip() {
 void sustain_zero() {
 	const EnvelopeLayout z = layoutEnvelope({0.01f, 0.3f, 0.f, 1.f, 0.75f});
 	float u = -1.f, h = -1.f;
-	z.dot(SUSTAIN, IDLE, 0.f, 0.f, 1.f, 0.f, u, h);
+	z.dot(SUSTAIN, IDLE, 1.f, 0.f, 0.f, 1.f, 0.f, u, h);
 	CHECK(u == 1.f && h == 0.f, "sustain 0: dot at %g, %g (want 1, 0)", u, h);
 	const EnvelopeLayout e = layoutEnvelope({0.01f, 0.3f, 0.3f, 1.f, 0.75f});
-	e.dot(SUSTAIN, IDLE, 0.f, 0.3f, 1.f, 0.3f, u, h);
+	e.dot(SUSTAIN, IDLE, 1.f, 0.f, 0.3f, 1.f, 0.3f, u, h);
 	CHECK(std::fabs(u - 0.5f * (e.x[2] + e.x[3])) < 1e-6f && h == 0.3f, "sustain 0.3: dot at %g, %g (mid-span)", u, h);
 }
 

@@ -656,6 +656,7 @@ void published_prev_stage() {
 		g.gate[0] = 5.f;
 		g.run(n - 2 + late);
 		CHECK(g.stage() == ATTACK, "late %d: still in Attack (%s)", late, stageName(g.stage()));
+		const float ph = g.e.published().phase.load();
 		g.gate[0] = 0.f;
 		g.step();
 		const rka::BeaconPublished& p = g.e.published();
@@ -663,6 +664,8 @@ void published_prev_stage() {
 		      "late %d: fall as Attack completes: %s after %s (want RELEASE after ATTACK)", late,
 		      stageName(g.stage()), stageName(p.prevStage.load()));
 		CHECK(p.start.load() > 9.f, "late %d: Release starts near the top (%g V)", late, p.start.load());
+		CHECK(p.prevPhase.load() == ph && ph > 0.999f && (late == 0 || ph == 1.f),
+		      "late %d: Attack cut off at %g (want its phase then, %g)", late, p.prevPhase.load(), ph);
 	}
 	// Mid-Decay.
 	{
@@ -673,12 +676,15 @@ void published_prev_stage() {
 		g.gate[0] = 5.f;
 		g.run(n + 2400);
 		CHECK(g.stage() == DECAY, "mid-Decay (%s)", stageName(g.stage()));
+		const float ph = g.e.published().phase.load();
 		CHECK(g.e.published().prevStage.load() == ATTACK, "Decay after Attack (%s)", stageName(g.e.published().prevStage.load()));
 		g.gate[0] = 0.f;
 		g.step();
 		CHECK(g.stage() == RELEASE && g.e.published().prevStage.load() == DECAY,
 		      "fall mid-Decay: %s after %s (want RELEASE after DECAY)", stageName(g.stage()),
 		      stageName(g.e.published().prevStage.load()));
+		CHECK(ph > 0.4f && ph < 0.6f && g.e.published().prevPhase.load() == ph,
+		      "Decay cut off at its phase then: %g (want %g)", g.e.published().prevPhase.load(), ph);
 	}
 	// A full ADSR: Release after Sustain; then a retrigger: Attack after Release.
 	{
@@ -695,12 +701,15 @@ void published_prev_stage() {
 		g.run(10);
 		CHECK(g.stage() == RELEASE && g.e.published().prevStage.load() == SUSTAIN,
 		      "Release after Sustain (%s after %s)", stageName(g.stage()), stageName(g.e.published().prevStage.load()));
+		CHECK(g.e.published().prevPhase.load() == 1.f, "a cut-off Sustain counts as complete (%g)",
+		      g.e.published().prevPhase.load());
 		g.gate[0] = 5.f;
 		g.step();
 		CHECK(g.stage() == ATTACK && g.e.published().prevStage.load() == RELEASE,
 		      "retrigger: Attack after Release (%s after %s)", stageName(g.stage()), stageName(g.e.published().prevStage.load()));
 		g.e.reset();
-		CHECK(g.e.published().prevStage.load() == IDLE, "reset clears it (%s)", stageName(g.e.published().prevStage.load()));
+		CHECK(g.e.published().prevStage.load() == IDLE && g.e.published().prevPhase.load() == 0.f,
+		      "reset clears them (%s, %g)", stageName(g.e.published().prevStage.load()), g.e.published().prevPhase.load());
 	}
 	// Leaving Hold mid-slew: Hold's stages are no envelope's, so Release
 	// counts as from idle.
@@ -761,6 +770,45 @@ void published_prev_stage() {
 		CHECK(g.stage() == RELEASE && g.e.published().prevStage.load() == ATTACK,
 		      "TRIG: Attack completes into %s after %s (want RELEASE after ATTACK)", stageName(g.stage()),
 		      stageName(g.e.published().prevStage.load()));
+	}
+	// A fall half-way up Attack: Release after Attack, cut off at ~0.5.
+	{
+		Eng g;
+		g.f.params[F::ATTACK] = stageKnob(0.1f);
+		g.f.gate.channels = 1;
+		g.gate[0] = 5.f;
+		g.run(2400);
+		const float ph = g.e.published().phase.load();
+		g.gate[0] = 0.f;
+		g.step();
+		const rka::BeaconPublished& p = g.e.published();
+		CHECK(g.stage() == RELEASE && p.prevStage.load() == ATTACK && p.prevPhase.load() == ph && ph > 0.45f && ph < 0.55f,
+		      "fall mid-Attack: %s after %s at %g (want ATTACK at %g)", stageName(g.stage()),
+		      stageName(p.prevStage.load()), p.prevPhase.load(), ph);
+	}
+	// The user's case (build 2.0.36): GATE, A 4.64 s, D 300 ms, S 5 V, R 6 s,
+	// the gate high 39.4 s x 11.78 % = 4.6413 s at 48 kHz: Attack ends at
+	// 4.640 s, Decay runs ~1.3 ms, then Release, after Decay at ~0.0043.
+	{
+		Eng g;
+		g.f.params[F::ATTACK] = stageKnob(4.64f);
+		g.f.params[F::DECAY] = stageKnob(0.3f);
+		g.f.params[F::SUSTAIN] = 0.5f;
+		g.f.params[F::RELEASE] = stageKnob(6.f);
+		g.f.gate.channels = 1;
+		g.gate[0] = 5.f;
+		const long high = long(39.4 * 0.1178 * 48000.0 + 0.5);
+		g.run(high);
+		const float ph = g.e.published().phase.load();
+		CHECK(g.stage() == DECAY, "user's case: in Decay when the gate falls (%s)", stageName(g.stage()));
+		g.gate[0] = 0.f;
+		g.step();
+		const rka::BeaconPublished& p = g.e.published();
+		const float pp = p.prevPhase.load();
+		CHECK(g.stage() == RELEASE && p.prevStage.load() == DECAY, "user's case: %s after %s (want RELEASE after DECAY)",
+		      stageName(g.stage()), stageName(p.prevStage.load()));
+		CHECK(pp == ph && std::fabs(pp - 0.0043f) < 0.0005f, "user's case: Decay cut off at %g (want %g, ~0.0043)", pp, ph);
+		CHECK(p.start.load() > 9.9f && p.start.load() < 10.f, "user's case: Release from %g V (~9.95)", p.start.load());
 	}
 }
 

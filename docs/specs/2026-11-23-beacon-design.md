@@ -251,20 +251,21 @@ the slew, so the switch itself never moves the output:
   the dot rides that bright line. Where it is drawn across the window is
   under "Skipped stages" below. A gate that rises while releasing draws
   Attack over its own span from, say, 4 V up to 10 V; a gate that falls
-  mid-Attack draws Release from, say, 9.7 V at the end of the Attack
-  span down to 0 V at the right edge. The engine publishes channel 1's
+  mid-Attack draws Release from, say, 9.7 V where Attack was cut off in
+  the Attack span down to 0 V at the right edge. The engine publishes channel 1's
   stage start and goal levels for this. Decay's goal is the sustain level
   when Decay began, so a Sustain move during Decay makes the bright Decay
   end at the old level, as the voice really does (it then settles to the
   new level in Sustain).
-- **Skipped stages** (issue #76, after test build 2.0.35): when the
-  running stage skipped others, it is drawn bright from the end of the
-  last stage's span to the end of its own span, so the path is
-  continuous: a gate falling as Attack completes draws Release from 10 V
-  at the end of Attack across D, S and R to 0 V; falling mid-Decay, from
-  the end of Decay. The engine publishes channel 1's previous stage for this
-  (leaving Hold counts as from idle). A retrigger's Attack stays on its
-  own span.
+- **Skipped stages** (issue #76, after test builds 2.0.35 and 2.0.36):
+  when the running stage skipped others, it is drawn bright from where
+  the last stage was cut off (its phase then, across its span; a cut-off
+  Sustain counts as its span's end) to the end of its own span, so the
+  path is continuous: a gate falling half-way up Attack draws Release
+  from mid-Attack span; falling 1.3 ms into a 300 ms Decay, from just
+  after the end of Attack. The engine publishes channel 1's previous
+  stage and how far it had got for this (leaving Hold counts as from
+  idle). A retrigger's Attack stays on its own span.
 - **Sustain at 0 V:** the Sustain span stays dim, and while the envelope
   is in Sustain the dot sits at the end of the line (bottom right) rather
   than mid-span. The S light and gate are unchanged: lit while the gate is
@@ -278,8 +279,8 @@ the slew, so the switch itself never moves the output:
   and 144 Hz.
 - **Polyphony:** channel 1.
 - **Hand-off:** the engine publishes channel 1's stage and phase (and
-  level, the running stage's start and goal, and the stage before it)
-  for the window,
+  level, the running stage's start and goal, and the stage before it and
+  how far it got) for the window,
   lock-free; nothing per-sample crosses, and the curve is computed on the
   UI side from the params.
 - **Unpatched and idle:** the shape is drawn, no stage is lit, the dot

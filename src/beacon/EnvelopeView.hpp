@@ -55,25 +55,31 @@ struct EnvelopeLayout {
 	}
 
 	// The span the running Attack, Decay or Release is drawn over, [u0, u1]:
-	// it ends where its own span ends, and starts where the previous stage's
-	// span ended when that stage comes earlier in A, D, S, R (stages were
-	// skipped: Release straight after Attack spans x[1]..x[4]), else at its
-	// own span's start (a retrigger, or from IDLE). Other stages: their own
-	// span (IDLE: 0, 0).
-	void liveSpan(Stage stage, Stage prev, float& u0, float& u1) const {
+	// it ends where its own span ends. When the previous stage comes earlier
+	// in A, D, S, R (stages were skipped), it starts where that stage was cut
+	// off: prevPhase (0..1, NaN 0) of the way across an Attack or Decay span,
+	// the end of the Sustain span (a gate falling half-way up Attack draws
+	// Release from mid-Attack span to x[4]). Otherwise at its own span's
+	// start (a retrigger, or from IDLE). Other stages: (0, 0).
+	void liveSpan(Stage stage, Stage prev, float prevPhase, float& u0, float& u1) const {
 		if (stage < ATTACK || stage > RELEASE) {
 			u0 = u1 = 0.f;
 			return;
 		}
 		u1 = x[stage];
-		u0 = prev >= ATTACK && prev < stage ? x[prev] : x[stage - 1];
+		if (prev >= ATTACK && prev < stage) {
+			const float f = prev == SUSTAIN ? 1.f : detail::clamp01(prevPhase);
+			u0 = x[prev - 1] + f * (x[prev] - x[prev - 1]);
+		} else {
+			u0 = x[stage - 1];
+		}
 	}
 
 	// Point f (0..1) of the running stage's bright line: across liveSpan,
 	// its height liveStageHeight(f, start01, goal01).
-	void livePoint(Stage stage, Stage prev, float f, float start01, float goal01, float& u, float& h) const {
+	void livePoint(Stage stage, Stage prev, float prevPhase, float f, float start01, float goal01, float& u, float& h) const {
 		float u0, u1;
-		liveSpan(stage, prev, u0, u1);
+		liveSpan(stage, prev, prevPhase, u0, u1);
 		u = u0 + f * (u1 - u0);
 		h = liveStageHeight(f, start01, goal01, shape);
 	}
@@ -83,12 +89,12 @@ struct EnvelopeLayout {
 	// construction. Sustain has no phase worth drawing: mid-span at the real
 	// level, or, with the sustain level at 0, at the end of the line (1, 0).
 	// IDLE: x 0, height 0.
-	void dot(Stage stage, Stage prev, float phase, float level01, float start01, float goal01, float& u, float& h) const {
+	void dot(Stage stage, Stage prev, float prevPhase, float phase, float level01, float start01, float goal01, float& u, float& h) const {
 		const float p = detail::clamp01(phase);
 		switch (stage) {
 			case ATTACK:
 			case DECAY:
-			case RELEASE: livePoint(stage, prev, p, start01, goal01, u, h); return;
+			case RELEASE: livePoint(stage, prev, prevPhase, p, start01, goal01, u, h); return;
 			case SUSTAIN:
 				if (sustain01 <= 0.f) {
 					u = 1.f;

@@ -12,8 +12,8 @@
 // channel its own volts (0 V past its count), a mono one every channel.
 // Channels that appear (the count rising) start idle at 0 V; channels past
 // the count read 0 V. Channel 1's stage, phase, level, the running
-// stage's start and goal levels and the stage before it are published for
-// the window with relaxed stores. BeaconLights (below) turns channel 1's
+// stage's start and goal levels, and the stage before it and how far it
+// got, are published for the window with relaxed stores. BeaconLights (below) turns channel 1's
 // stage gates into lights.
 //
 // No libm and no allocation in process(). Non-copyable (the atomics).
@@ -50,6 +50,7 @@ struct BeaconPublished {
 	std::atomic<int> mode{0};
 	std::atomic<float> start{0.f}, goal{0.f};   // the running stage's, volts
 	std::atomic<int> prevStage{0};              // the stage that ran before it
+	std::atomic<float> prevPhase{0.f};          // how far it had got, 0..1
 };
 
 // The four stage lights, from channel 1's stage gates: note() every sample,
@@ -128,6 +129,7 @@ public:
 		pub_.start.store(0.f, std::memory_order_relaxed);
 		pub_.goal.store(0.f, std::memory_order_relaxed);
 		pub_.prevStage.store(beacon::IDLE, std::memory_order_relaxed);
+		pub_.prevPhase.store(0.f, std::memory_order_relaxed);
 	}
 
 	void process(const BeaconFrame& f, BeaconResult& out) {
@@ -203,6 +205,7 @@ public:
 		pub_.start.store(float(v.start()), std::memory_order_relaxed);
 		pub_.goal.store(float(v.goal()), std::memory_order_relaxed);
 		pub_.prevStage.store(int(v.prevStage()), std::memory_order_relaxed);
+		pub_.prevPhase.store(float(v.prevPhase()), std::memory_order_relaxed);
 	}
 
 	const BeaconPublished& published() const { return pub_; }
