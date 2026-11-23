@@ -342,7 +342,8 @@ right, the mode and the number of grains sounding ("GRAINS 23", "DELAY",
 "SYNTH · BANK 7").
 
 - **Grains**: the buffer as a faint waveform (an `Overview` over the
-  ring, oldest at left), the record head as an ivory line, and each
+  ring, fixed on the glass as in the mockup, the record head moving
+  across it as an ivory line; decided during the build, 2026-11-22), and each
   sounding grain as a short bright dash at its read point, its length
   the grain's span in the buffer, its height its pan (left at the top),
   its brightness its envelope. Frozen, the head stops and the waveform
