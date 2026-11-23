@@ -70,7 +70,7 @@ low.
 - **TRIG**: a 1 ms, 10 V trigger at the start of every stage, including
   the return to rest at the end of Release.
 - The stage lights show channel 1's stage; a stage too short to see
-  keeps its light for a moment (40 ms).
+  still lights for a moment (40 ms).
 
 ## The window
 

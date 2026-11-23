@@ -606,6 +606,35 @@ void stage_lights() {
 		L.update(tick, b);
 	}
 	CHECK(b[2] == 1.f, "S held on (%g)", b[2]);
+	// A stage longer than the hold goes out by the first update after it
+	// ends (one light at a time at a change); one shorter than the hold
+	// stays lit for the hold counted from its start, no longer.
+	{
+		const int lens[2] = {4000, 1000};   // 83 ms and 21 ms at 48 kHz
+		for (int len : lens) {
+			rka::BeaconLights M;
+			float m[4] = {};
+			long i = 0, offAt = -1;
+			for (; i < len; i++) {
+				M.note(0, true);
+				if ((i + 1) % rka::BeaconLights::DIVISION == 0)
+					M.update(tick, m);
+			}
+			for (; i < 48000; i++) {
+				M.note(0, false);
+				if ((i + 1) % rka::BeaconLights::DIVISION == 0) {
+					M.update(tick, m);
+					if (m[0] == 0.f && offAt < 0)
+						offAt = i + 1;
+				}
+			}
+			const long holdEnd = long(rka::BeaconLights::HOLD_SECONDS * 48000.f);
+			const long wantOff = len > holdEnd ? (len / rka::BeaconLights::DIVISION + 2) * rka::BeaconLights::DIVISION
+			                                   : holdEnd + 2 * rka::BeaconLights::DIVISION;
+			CHECK(offAt > 0 && offAt <= wantOff, "A lit for %d samples: out at sample %ld (by %ld)", len, offAt, wantOff);
+			CHECK(offAt >= (len < holdEnd ? holdEnd : len), "A lit for %d samples: on to sample %ld at least", len, offAt);
+		}
+	}
 	L.reset();
 	L.update(tick, b);
 	CHECK(b[0] == 0.f && b[1] == 0.f && b[2] == 0.f && b[3] == 0.f, "reset: all out");

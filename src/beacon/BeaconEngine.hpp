@@ -52,8 +52,10 @@ struct BeaconPublished {
 
 // The four stage lights, from channel 1's stage gates: note() every sample,
 // update() every DIVISION samples (the module's clock divider). A stage seen
-// lit since the last update lights its light, and keeps it for at least
-// HOLD_SECONDS, so a stage of one sample still shows for a UI frame.
+// lit since the last update lights its light. A hold of HOLD_SECONDS starts
+// on the stage's first update and counts down from there, so a stage of one
+// sample still shows for a UI frame, while a longer one goes out by the
+// first update after it ends (one light at a time at a stage change).
 struct BeaconLights {
 	static const int DIVISION = 16;
 	static constexpr float HOLD_SECONDS = 0.04f;   // over a 30 Hz frame
@@ -61,7 +63,7 @@ struct BeaconLights {
 	BeaconLights() { reset(); }
 	void reset() {
 		for (int k = 0; k < 4; k++) {
-			seen_[k] = false;
+			seen_[k] = wasSeen_[k] = false;
 			left_[k] = 0.f;
 		}
 	}
@@ -71,18 +73,20 @@ struct BeaconLights {
 	// `seconds`: the time since the last update. Brightness 0 or 1.
 	void update(float seconds, float bright[4]) {
 		for (int k = 0; k < 4; k++) {
-			if (seen_[k])
-				left_[k] = HOLD_SECONDS;
-			else
+			if (seen_[k] && !wasSeen_[k])
+				left_[k] = HOLD_SECONDS;      // the stage's first update
+			else if (left_[k] > 0.f)
 				left_[k] -= seconds;
 			bright[k] = seen_[k] || left_[k] > 0.f ? 1.f : 0.f;
+			wasSeen_[k] = seen_[k];
 			seen_[k] = false;
 		}
 	}
 
 private:
-	bool seen_[4];
-	float left_[4];   // seconds of hold left
+	bool seen_[4];      // lit since the last update
+	bool wasSeen_[4];   // lit in the division before
+	float left_[4];     // seconds of hold left
 };
 
 class BeaconEngine {

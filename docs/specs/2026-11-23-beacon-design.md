@@ -226,8 +226,9 @@ the slew, so the switch itself never moves the output:
   longer pulse. A stage gate is high for at least one sample even when its
   stage ends at once.
 - Stage lights mirror the gates (channel 1), updated every 16 samples;
-  a stage lit even for one sample keeps its light at least 40 ms, so it
-  shows for a UI frame.
+  a stage lit even for one sample shows for at least 40 ms (a UI frame),
+  the hold counted from the stage's start, so a longer stage's light goes
+  out as it ends.
 
 ### The window
 
@@ -247,7 +248,10 @@ the slew, so the switch itself never moves the output:
   following; the dot rides that bright line. A gate that rises while
   releasing draws Attack from, say, 4 V up to 10 V; a gate that falls
   mid-Attack draws Release from, say, 9.7 V down to 0 V. The engine
-  publishes channel 1's stage start and goal levels for this.
+  publishes channel 1's stage start and goal levels for this. Decay's
+  goal is the sustain level when Decay began, so a Sustain move during
+  Decay makes the bright Decay end at the old level, as the voice really
+  does (it then settles to the new level in Sustain).
 - **Sustain at 0 V:** the Sustain span stays dim, and while the envelope
   is in Sustain the dot sits at the end of the line (bottom right) rather
   than mid-span. The S light and gate are unchanged: lit while the gate is
@@ -258,8 +262,9 @@ the slew, so the switch itself never moves the output:
   should show something useful there rather than a stale envelope.
 - **Polyphony:** channel 1.
 - **Hand-off:** the engine publishes channel 1's stage and phase (and
-  level, and the running stage's start and goal) for the window, lock-free; nothing per-sample crosses, and the
-  curve is computed on the UI side from the params.
+  level, and the running stage's start and goal) for the window,
+  lock-free; nothing per-sample crosses, and the curve is computed on the
+  UI side from the params.
 - **Unpatched and idle:** the shape is drawn, no stage is lit, the dot
   rests at the start.
 

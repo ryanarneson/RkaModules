@@ -227,11 +227,10 @@ struct EnvelopeWindowView {
 // over its span from its true start to its goal (liveStageHeight), with the
 // dot on it; Sustain running: its span bright (dim at a 0 V sustain, the dot
 // then at the end of the line); A D S R under the spans, the running letter
-// bright. Hold: a
-// scrolling line of channel 1's output (+-10 V), one point per UI frame,
-// its ring kept here (UI thread only). It knows nothing of the engine:
-// `source` fills an EnvelopeWindowView, or returns false to draw nothing.
-// No mouse.
+// bright. Hold: a scrolling line of channel 1's output (+-10 V), one point
+// per UI frame, its ring kept here (UI thread only). It knows nothing of the
+// engine: `source` fills an EnvelopeWindowView, or returns false to draw
+// nothing. No mouse.
 struct EnvelopeWindow : widget::Widget {
 	std::function<bool(EnvelopeWindowView&)> source;
 	// Points along the curve per stage.
