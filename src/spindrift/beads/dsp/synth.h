@@ -82,6 +82,8 @@ class Synth {
   }  // SPINDRIFT:
   // SPINDRIFT: The voice's wave, 0..1 across the bank (both neighbours blend).
   float wave() const { return wavetable_voice_.wave(); }  // SPINDRIFT:
+  // SPINDRIFT: The bank Feedback chose in the last Render(), 0..kNumBanks - 1.
+  int bank() const { return bank_quantizer_.quantized_value(); }  // SPINDRIFT:
  private:
   TriggerGenerator trigger_generator_;
   

@@ -242,6 +242,7 @@ class DelayLine {
   
   inline int* mutable_write_ptr() { return &write_ptr_; }
   inline int write_ptr() const { return write_ptr_; }  // SPINDRIFT: for the window (read only)
+  inline FloatFrame value(int i) const { return Load(i); }  // SPINDRIFT: for the window (read only)
   
   inline void Reset(bool clear) {
     write_ptr_ = 0;

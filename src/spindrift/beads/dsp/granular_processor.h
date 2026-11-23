@@ -131,6 +131,25 @@ class GranularProcessor {
         : stereo_delay_line_.write_ptr();  // SPINDRIFT:
     return float(frames - 1 - w) / float(frames);  // SPINDRIFT:
   }  // SPINDRIFT:
+  // SPINDRIFT: The window's waveform. The line's frames numbered in the
+  // SPINDRIFT: order they are written, f = frames - 1 - index (write_head's
+  // SPINDRIFT: place times frames): how many, the one written next, and the
+  // SPINDRIFT: least and greatest sample of either side over [f0, f1).
+  inline int ring_frames(bool mono) const {  // SPINDRIFT:
+    return mono ? max_delay * 2 : max_delay;  // SPINDRIFT:
+  }  // SPINDRIFT:
+  inline int ring_frame(bool mono) const {  // SPINDRIFT:
+    return ring_frames(mono) - 1 - (mono  // SPINDRIFT:
+        ? mono_delay_line_.write_ptr()  // SPINDRIFT:
+        : stereo_delay_line_.write_ptr());  // SPINDRIFT:
+  }  // SPINDRIFT:
+  inline void ring_peaks(bool mono, int f0, int f1, float* lo, float* hi) const {  // SPINDRIFT:
+    if (mono) {  // SPINDRIFT:
+      LinePeaks(mono_delay_line_, max_delay * 2, f0, f1, lo, hi);  // SPINDRIFT:
+    } else {  // SPINDRIFT:
+      LinePeaks(stereo_delay_line_, max_delay, f0, f1, lo, hi);  // SPINDRIFT:
+    }  // SPINDRIFT:
+  }  // SPINDRIFT:
   inline uint8_t* delay_buffer_raw_bytes(bool mono, size_t offset) {
     // Independently of the stereo/mono setting, we're writing in the same
     // bytes anyway!
@@ -235,6 +254,17 @@ class GranularProcessor {
   }
   
  private:
+  template<typename Line>  // SPINDRIFT: ring_peaks over one line
+  static void LinePeaks(const Line& line, int frames, int f0, int f1, float* lo, float* hi) {  // SPINDRIFT:
+    float l = *lo, h = *hi;  // SPINDRIFT:
+    for (int f = f0; f < f1; ++f) {  // SPINDRIFT:
+      const FloatFrame v = line.value(frames - 1 - f);  // SPINDRIFT:
+      l = std::min(l, std::min(v.l, v.r));  // SPINDRIFT:
+      h = std::max(h, std::max(v.l, v.r));  // SPINDRIFT:
+    }  // SPINDRIFT:
+    *lo = l;  // SPINDRIFT:
+    *hi = h;  // SPINDRIFT:
+  }  // SPINDRIFT:
   inline void DownsampleGate(const bool* in, bool* out, size_t size) {
     for (size_t i = 0; i < size / ratio; ++i) {
       bool output = false;

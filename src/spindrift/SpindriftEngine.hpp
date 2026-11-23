@@ -30,7 +30,9 @@
 //   at the Rack sample that completes it; SEED and FREEZE per frame.
 //
 // Threads: the constructor, allocate() and setSampleRate() run off the audio
-// thread, never during process(); everything else on the engine's thread.
+// thread, never during process(); everything else on the engine's thread,
+// but for view() and overview(), which any thread may read (GrainView.hpp,
+// Overview.hpp: relaxed atomics) for the window.
 // `settings` is written by the menu (UI thread) and read once a block; the
 // Quality long press writes settings.gain from the engine's thread, as Beads
 // does (word-sized, a torn read is impossible).
@@ -40,10 +42,12 @@
 #include <cstdint>
 #include <memory>
 
+#include "../Overview.hpp"
 #include "BeadsContext.hpp"
 #include "Controls.hpp"
 #include "EdgeRate.hpp"
 #include "GainControl.hpp"
+#include "GrainView.hpp"
 
 #include "beads/dsp/processor.h"
 #include "beads/dsp/synth.h"
@@ -79,8 +83,6 @@ struct Settings {
 	bool keepFrozen = true;  // read by the module when saving (Task 8)
 };
 
-enum Mode { MODE_GRAIN, MODE_DELAY, MODE_SYNTH };
-
 struct Out {
 	float l, r;
 };
@@ -93,7 +95,12 @@ struct EngineConstants {
 		kSynthBlocks = 10 * kBlockRate,   // 10 s with no input before the synth
 		kBlock48 = 48000 / kBlockRate,    // 12 frames: Digital, Clean Tape, synth
 		kSeedDelayBlocks = 10,            // event_delay.Read(size * 10): 2.5 ms
-		kSeedDelayLength = 256            // DelayLine<Codec::Event, 256>
+		kSeedDelayLength = 256,           // DelayLine<Codec::Event, 256>
+		// Ring frames the waveform's overview may read per frame Beads runs.
+		// Beads writes at most one, so 8 keeps the column under the head
+		// within a few blocks of the audio, and rereads a whole ring (a
+		// restored buffer: 192,000 to 768,000 frames) in 0.5 to 4 s.
+		kOverviewBudget = 8
 	};
 };
 static_assert(EngineConstants::kBlock48 <= (int) kMaxBlock, "Beads' largest block fits kMaxBlock");
@@ -189,6 +196,7 @@ public:
 		else {
 			BeadsScope scope(ctx_);
 			processor_->Configure(processor_->media(), processor_->mono());
+			bufferCleared();
 			startCodec(false, false);
 		}
 	}
@@ -305,6 +313,18 @@ public:
 		return edge_.underruns() + edge_.overruns();
 	}
 
+	// The window's view, published once a block (GrainView.hpp), and the
+	// buffer's waveform: an Overview whose frames are the ring's, numbered in
+	// the order Beads writes them (Processor::bufferFrame()), so its columns
+	// left to right are the ring and the head moves across them. Read by any
+	// thread; they live as long as the engine.
+	const GrainView& view() const {
+		return view_;
+	}
+	const rka::Overview& overview() const {
+		return overview_;
+	}
+
 	beads::Processor& processor() {
 		return *processor_;
 	}
@@ -347,6 +367,7 @@ private:
 		BeadsScope scope(ctx_);
 		quality_ = buttons_.quality;
 		processor_->Configure(beads::Processor::Media(quality_), !j.inLOn || !j.inROn);
+		bufferCleared();
 		const bool synth = settings.synth == SYNTH_ALWAYS;
 		configureCodec(synth, true);
 		transition_ = 0;  // nothing to hide at start
@@ -447,7 +468,9 @@ private:
 				               size);
 			}
 			else {
+				const int before = processor_->bufferFrame();
 				processor_->Process(seedButton, seedInput, freeze, d, p, m, gained, out, size);
+				touchWritten(before, processor_->bufferFrame());
 			}
 			for (size_t i = 0; i < size; ++i) {
 				float l = out[i].l, r = out[i].r;
@@ -477,6 +500,59 @@ private:
 		}
 
 		monitorStateChange(j);
+		if (!synth_)
+			overview_.serviceFrom(BufferSource{*processor_}, int(kOverviewBudget * size));
+		publishView();
+	}
+
+	// The overview's source: Beads' ring read back through its own format
+	// (the samples as Beads stored them: quantised, mu-law, after feedback
+	// and the freeze tail's crossfade), via the marked Processor::bufferPeaks.
+	struct BufferSource {
+		const beads::Processor& p;
+		void scan(size_t f0, size_t f1, float& l, float& h) const {
+			if (f1 <= f0) {
+				l = h = 0.f;
+				return;
+			}
+			l = 1e30f;
+			h = -1e30f;
+			p.bufferPeaks(int(f0), int(f1), &l, &h);
+		}
+	};
+
+	// Configure() cleared the ring (DelayLine::Reset), perhaps to a new
+	// length: the waveform is silence over the new length at once.
+	void bufferCleared() {
+		overview_.clear(size_t(processor_->bufferFrames()));
+	}
+
+	// Beads wrote frames [a, b) of the ring this block (b < a: it wrapped).
+	void touchWritten(int a, int b) {
+		const size_t frames = size_t(processor_->bufferFrames());
+		if (a == b)
+			return;
+		if (a < b) {
+			overview_.touch(size_t(a), size_t(b), frames);
+		}
+		else {
+			overview_.touch(size_t(a), frames, frames);
+			overview_.touch(0, size_t(b), frames);
+		}
+	}
+
+	// Once a block, after any reconfiguration: what the window shows. Muted
+	// (the 250 ms after a reconfiguration) nothing sounds, so no grains.
+	void publishView() {
+		GrainSnap g[GrainView::MAX];
+		TapSnap t[GrainView::MAX];
+		int n = 0, nt = 0;
+		if (!transition_) {
+			n = synth_ ? synthVoice_->grains(g, GrainView::MAX) : processor_->grains(g, GrainView::MAX);
+			nt = synth_ ? 0 : processor_->taps(t, GrainView::MAX);
+		}
+		view_.publish(g, n, t, nt, processor_->writeHead(), mode(), quality_, mono(), bufferSeconds(),
+		              synthVoice_->bank(), frozenBlock_, buttons_.hasPending(), buttons_.pending, synthVoice_->wave());
 	}
 
 	// cv_reader.cc and beads.cc:176-238. Calibration (settings.cc): Time,
@@ -593,6 +669,7 @@ private:
 		if (synth_ || mediaChanged || monoChanged) {
 			const bool wasSynth = synth_;
 			processor_->Configure(beads::Processor::Media(q), mono);
+			bufferCleared();
 			quality_ = q;
 			startCodec(false, monoChanged || wasSynth);
 		}
@@ -630,6 +707,9 @@ private:
 	Quality quality_ = DIGITAL;
 	uint32_t ticks_ = 0;
 	uint32_t restarts_ = 0;  // converter restarts (selectRate), to spot one inside process()
+
+	GrainView view_;
+	rka::Overview overview_;
 };
 
 }  // namespace spindrift

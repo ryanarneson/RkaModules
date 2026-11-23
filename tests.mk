@@ -168,6 +168,20 @@ build/test/spindrift/RefBeads.o: src/spindrift/testdata/RefBeads.cpp $(SPINDRIFT
 	@mkdir -p $(@D)
 	$(CXX) -std=c++11 $(SPINDRIFT_TEST_FLAGS) -Wno-vla -Dbeads=beadsref -Dstmlib=stmlibref -Isrc/spindrift/testdata/ref -c $< -o $@
 
+# Spindrift's thread test (the window's view): ThreadSanitizer, which cannot
+# be combined with ASan, so the vendored Beads is built again with it.
+build/test/spindrift/BeadsFirmware.tsan.o: src/spindrift/BeadsFirmware.cpp src/spindrift/BeadsContext.hpp $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++11 $(SPINDRIFT_FW_FLAGS) -O1 -g -fsanitize=thread -Isrc/spindrift -c $< -o $@ || \
+		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Spindrift's thread test needs it" >&2; exit 1; }
+
+build/test/spindrift/test_threads: src/spindrift/test_threads.cpp build/test/spindrift/BeadsFirmware.tsan.o \
+		src/testing.hpp $(wildcard src/*.hpp src/spindrift/*.hpp) $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 $(SPINDRIFT_FW_FLAGS) -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=thread -Isrc -isystem src/spindrift \
+		$(filter %.cpp %.o,$^) -o $@ || \
+		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Spindrift's thread test needs it" >&2; exit 1; }
+
 build/test/spindrift/test_%: src/spindrift/test_%.cpp build/test/spindrift/BeadsFirmware.o build/test/spindrift/RefBeads.o \
 		src/testing.hpp $(wildcard src/*.hpp src/spindrift/*.hpp) src/spindrift/testdata/RefBeads.hpp $(SPINDRIFT_FW_DEPS)
 	@mkdir -p $(@D)

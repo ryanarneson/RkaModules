@@ -215,6 +215,36 @@ class Processor {
         return processor_digital_.write_head(mono_);  // SPINDRIFT:
     }  // SPINDRIFT:
   }  // SPINDRIFT:
+  // SPINDRIFT: The buffer for the window's waveform (GranularProcessor::ring_*):
+  // SPINDRIFT: its frames, the one written next, and its peaks over [f0, f1),
+  // SPINDRIFT: folded into *lo and *hi.
+  int bufferFrames() const {  // SPINDRIFT:
+    switch (media_) {  // SPINDRIFT:
+      case MEDIA_DIRTY_TAPE: return processor_dirty_tape_.ring_frames(mono_);  // SPINDRIFT:
+      case MEDIA_CLEAN_TAPE: return processor_clean_tape_.ring_frames(mono_);  // SPINDRIFT:
+      case MEDIA_VINTAGE_DIGITAL: return processor_vintage_digital_.ring_frames(mono_);  // SPINDRIFT:
+      case MEDIA_DIGITAL:  // SPINDRIFT:
+      default: return processor_digital_.ring_frames(mono_);  // SPINDRIFT:
+    }  // SPINDRIFT:
+  }  // SPINDRIFT:
+  int bufferFrame() const {  // SPINDRIFT:
+    switch (media_) {  // SPINDRIFT:
+      case MEDIA_DIRTY_TAPE: return processor_dirty_tape_.ring_frame(mono_);  // SPINDRIFT:
+      case MEDIA_CLEAN_TAPE: return processor_clean_tape_.ring_frame(mono_);  // SPINDRIFT:
+      case MEDIA_VINTAGE_DIGITAL: return processor_vintage_digital_.ring_frame(mono_);  // SPINDRIFT:
+      case MEDIA_DIGITAL:  // SPINDRIFT:
+      default: return processor_digital_.ring_frame(mono_);  // SPINDRIFT:
+    }  // SPINDRIFT:
+  }  // SPINDRIFT:
+  void bufferPeaks(int f0, int f1, float* lo, float* hi) const {  // SPINDRIFT:
+    switch (media_) {  // SPINDRIFT:
+      case MEDIA_DIRTY_TAPE: processor_dirty_tape_.ring_peaks(mono_, f0, f1, lo, hi); break;  // SPINDRIFT:
+      case MEDIA_CLEAN_TAPE: processor_clean_tape_.ring_peaks(mono_, f0, f1, lo, hi); break;  // SPINDRIFT:
+      case MEDIA_VINTAGE_DIGITAL: processor_vintage_digital_.ring_peaks(mono_, f0, f1, lo, hi); break;  // SPINDRIFT:
+      case MEDIA_DIGITAL:  // SPINDRIFT:
+      default: processor_digital_.ring_peaks(mono_, f0, f1, lo, hi); break;  // SPINDRIFT:
+    }  // SPINDRIFT:
+  }  // SPINDRIFT:
   // SPINDRIFT: Process()'s delay_mode: Size has crossed into delay mode.
   bool delayMode() const { return delay_mode_transition_ > 0.0f; }  // SPINDRIFT:
  private:

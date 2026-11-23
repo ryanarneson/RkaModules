@@ -63,6 +63,15 @@ holds the vendored Processor and Synth to the reference bit for bit.
     returns, without advancing.
   - `beads/dsp/voice_stealing_envelope.h`: `value()`.
   - `beads/dsp/wavetable_voice.h`: `wave()`.
+  - `beads/dsp/synth.h`: `bank()`, the bank Feedback chose in the last
+    `Render()` (the window's "SYNTH · BANK 7").
+  - `beads/dsp/delay_line.h`: `value(i)`, `Load(i)` read-only (the window's
+    waveform reads the ring back in Beads' own format).
+  - `beads/dsp/granular_processor.h`: `ring_frames()`, `ring_frame()`,
+    `ring_peaks()` (and the private `LinePeaks`), the ring's frames in the
+    order written, for the waveform's `rka::Overview`.
+  - `beads/dsp/processor.h`: `bufferFrames()`, `bufferFrame()`,
+    `bufferPeaks()`, the same for the current media.
 - `beads/dsp/wavetable_granular_player.h`: the `printf` upstream makes under
   `TEST` when a synth grain is stolen is compiled out (`#if 0`): nothing
   prints from the audio path. `TEST` stays defined: stmlib needs it for its
