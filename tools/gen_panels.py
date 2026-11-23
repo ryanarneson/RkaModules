@@ -856,8 +856,8 @@ PANELS = {
         notes=[(x, 82.5, "CV", 1.4, "dim") for x in _BC_X]
         + [(34.2, 41.1, "GATE", 1.3, "dim", "start"), (34.2, 45.9, "TRIG", 1.3, "dim", "start"),
            (34.2, 50.7, "HOLD", 1.3, "dim", "start")],
-        preview={"PARAM_ATTACK": dict(turn=-78.9), "PARAM_DECAY": dict(turn=4.97),
-                 "PARAM_SUSTAIN": dict(turn=0), "PARAM_RELEASE": dict(turn=34.8),
+        preview={"PARAM_ATTACK": dict(turn=-78.49), "PARAM_DECAY": dict(turn=4.97),
+                 "PARAM_SUSTAIN": dict(turn=0), "PARAM_RELEASE": dict(turn=34.53),
                  "PARAM_SHAPE": dict(turn=67.5), "PARAM_MODE": dict(frame=0)},
         screws=screws_at(10, "tr", "bl"),
     ),
