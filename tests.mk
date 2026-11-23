@@ -182,6 +182,13 @@ build/test/spindrift/test_threads: src/spindrift/test_threads.cpp build/test/spi
 		$(filter %.cpp %.o,$^) -o $@ || \
 		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Spindrift's thread test needs it" >&2; exit 1; }
 
+# Spindrift's hostile-input test: the sanitizers, the counting operator new,
+# and a thread for each mode and quality (-pthread). No reference needed.
+build/test/spindrift/test_hostile: src/spindrift/test_hostile.cpp build/test/spindrift/BeadsFirmware.o \
+		src/testing.hpp $(wildcard src/*.hpp src/spindrift/*.hpp) $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 $(SPINDRIFT_TEST_FLAGS) -Wall -Wextra $(TEST_WERROR) -pthread -Isrc -isystem src/spindrift $(filter %.cpp %.o,$^) -o $@
+
 build/test/spindrift/test_%: src/spindrift/test_%.cpp build/test/spindrift/BeadsFirmware.o build/test/spindrift/RefBeads.o \
 		src/testing.hpp $(wildcard src/*.hpp src/spindrift/*.hpp) src/spindrift/testdata/RefBeads.hpp $(SPINDRIFT_FW_DEPS)
 	@mkdir -p $(@D)
@@ -259,16 +266,25 @@ build/bench/modules.inc: bench-modules-list
 	  for m in $(BENCH_MODULES); do printf ' X(%s)' $$m; done; echo; } > $@.tmp
 	@if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 
+# Spindrift's engine runs the vendored Beads, compiled once in
+# BeadsFirmware.cpp: the tools reach its headers through their include root
+# (-isystem, as the tests do; -DTEST for stmlib's portable code, as the
+# plugin builds it) and link its object, built as the plugin builds it
+# (the tools' flags, then SPINDRIFT_FW_FLAGS, as the Makefile appends them).
+BENCH_VENDOR_FLAGS = -isystem src/spindrift -DTEST
+BENCH_VENDOR_OBJS = build/bench/BeadsFirmware.o
+BENCH_DEPS += $(SPINDRIFT_FW_DEPS)
+build/bench/BeadsFirmware.o: src/spindrift/BeadsFirmware.cpp src/spindrift/BeadsContext.hpp src/spindrift/GrainView.hpp $(SPINDRIFT_FW_DEPS)
+	@mkdir -p $(@D)
+	$(CXX) $(BENCH_FLAGS) $(SPINDRIFT_FW_FLAGS) -Isrc/spindrift -c $< -o $@
+
 # The guard (in `make test`): a module folder with a *Engine.hpp must have
 # a bench.inc, and every declaration must be complete (idle, outputs and
 # busy cases, both budgets of each case set, a libm case with the knobs
-# still: `bench --check`). BENCH_PENDING names folders whose engine is
-# being built and whose bench.inc lands in a later commit on the same
-# branch (Spindrift: plan Task 7); a branch merges with it empty.
-BENCH_PENDING = spindrift
+# still: `bench --check`).
 .PHONY: bench-modules
 bench-modules: build/bench/bench
-	@ok=1; for e in $(filter-out $(BENCH_PENDING:%=src/%/%),$(wildcard src/*/*Engine.hpp)); do \
+	@ok=1; for e in $(wildcard src/*/*Engine.hpp); do \
 		d=$$(dirname $$e); \
 		if [ ! -f $$d/bench.inc ]; then \
 			echo "bench-modules: module $$(basename $$d) has $$(basename $$e) but no $$d/bench.inc" \
@@ -284,9 +300,9 @@ bench-modules: build/bench/bench
 # case's budget, or if there are no modules.
 BENCH_ARCH = $(if $(filter x86_64 amd64,$(shell uname -m)),-march=nehalem,-march=armv8-a+fp+simd)
 BENCH_FLAGS = -std=c++11 -O3 -funsafe-math-optimizations -fno-omit-frame-pointer -g $(BENCH_ARCH)
-build/bench/bench: src/bench/bench.cpp $(BENCH_DEPS)
+build/bench/bench: src/bench/bench.cpp $(BENCH_DEPS) $(BENCH_VENDOR_OBJS)
 	@mkdir -p $(@D)
-	$(CXX) $(BENCH_FLAGS) -Isrc -Ibuild/bench $< -o $@
+	$(CXX) $(BENCH_FLAGS) -Isrc -Ibuild/bench $(BENCH_VENDOR_FLAGS) $< $(BENCH_VENDOR_OBJS) -o $@
 .PHONY: bench
 bench: build/bench/bench
 	./build/bench/bench
@@ -316,7 +332,7 @@ fog-soak: build/test/fog/soak
 # on an object that reaches every engine entry point.
 build/test/engine_globals.o: src/bench/engine_globals.cpp $(BENCH_DEPS)
 	@mkdir -p $(@D)
-	$(CXX) -std=c++11 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Isrc -Ibuild/bench -c $< -o $@
+	$(CXX) -std=c++11 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Isrc -Ibuild/bench $(BENCH_VENDOR_FLAGS) -c $< -o $@
 .PHONY: engine-globals
 engine-globals: build/test/engine_globals.o
 	tools/check_shoal_globals.sh $<
@@ -328,10 +344,10 @@ engine-globals: build/test/engine_globals.o
 # runs on Linux (CI) and is skipped elsewhere.
 LIBM_WRAP = exp2f exp2 expf exp log2f log2 logf log powf pow sinf sin cosf cos sincosf sincos \
 	tanf tan tanhf tanh fmodf fmod lroundf lround floorf floor fminf fmin fmaxf fmax
-build/test/libm_calls: src/bench/libm_calls.cpp $(BENCH_DEPS)
+build/test/libm_calls: src/bench/libm_calls.cpp $(BENCH_DEPS) $(BENCH_VENDOR_OBJS)
 	@mkdir -p $(@D)
-	$(CXX) -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR) -Isrc -Ibuild/bench $< -o $@ \
-		$(LIBM_WRAP:%=-Wl,--wrap=%) -lm
+	$(CXX) -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR) -Isrc -Ibuild/bench \
+		$(BENCH_VENDOR_FLAGS) $< $(BENCH_VENDOR_OBJS) -o $@ $(LIBM_WRAP:%=-Wl,--wrap=%) -lm
 .PHONY: libm-calls
 ifeq ($(shell uname -s),Linux)
 libm-calls: build/test/libm_calls
