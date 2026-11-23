@@ -1,6 +1,7 @@
 #include "plugin.hpp"
 #include "FogEngine.hpp"
 #include "FogLayout.hpp"
+#include "SavedState.hpp"
 #include "widgets.hpp"
 
 
@@ -93,16 +94,16 @@ struct Fog : Module {
 	}
 
 	void dataFromJson(json_t* root) override {
-		json_t* j = json_object_get(root, "mode");
-		if (j)
-			mode = clamp(int(json_integer_value(j)), 0, 3);
-		j = json_object_get(root, "driftRate");
-		if (j)
-			driftRate = clamp(int(json_integer_value(j)), 0, 1);
-		j = json_object_get(root, "lowCut");
-		if (j)
-			lowCut = clamp(int(json_integer_value(j)), 0, 2);
-		j = json_object_get(root, "dryKill");
+		// The rule (clamp before narrowing, reals accepted): SavedState.hpp.
+		auto setting = [root](const char* key, int lo, int hi, int current) {
+			json_t* v = json_object_get(root, key);
+			const bool isNumber = v && json_is_number(v);
+			return rka::fog::savedSetting(isNumber, isNumber ? json_number_value(v) : 0.0, lo, hi, current);
+		};
+		mode = setting("mode", 0, 3, mode);
+		driftRate = setting("driftRate", 0, 1, driftRate);
+		lowCut = setting("lowCut", 0, 2, lowCut);
+		json_t* j = json_object_get(root, "dryKill");
 		if (j)
 			dryKill = json_boolean_value(j);
 	}
