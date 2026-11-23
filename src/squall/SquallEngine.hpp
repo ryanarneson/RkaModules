@@ -118,6 +118,16 @@ public:
 		const bool clockNow = clocked ? schmitt(finite(f.clock), clockHigh_) : false;
 		const bool edge = clocked && clockNow && !wasHigh;
 
+		// Freeze stops the count since the last edge, so the first edge after
+		// a release would measure only the unfrozen samples either side of
+		// it: drop that measurement and wait for a fresh pair of edges,
+		// keeping the period already known (issue #47).
+		if (wasFrozen_ && !frozen) {
+			edges_ = 0;
+			sinceEdge_ = 0;
+		}
+		wasFrozen_ = frozen;
+
 		if (!frozen) {
 			if (decide_) {
 				decide_ = false;
@@ -351,7 +361,7 @@ private:
 	double rate_ = 0.1, gapAcc_ = 0.0, replayLeft_ = 0.0, period_ = 0.0;
 	long long ticksLeft_ = 0, sinceEdge_ = 0, edges_ = 0, lightLeft_ = 0, lightSamples_ = 4800;
 	int ctl_ = 0;
-	bool clocked_ = false, clockHigh_ = false, freezeHigh_ = false;
+	bool clocked_ = false, clockHigh_ = false, freezeHigh_ = false, wasFrozen_ = false;
 	bool pending_ = false, decide_ = false, resetSwell_ = false;
 	squall::Event pend_;
 };

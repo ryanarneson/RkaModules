@@ -528,6 +528,31 @@ static void freeze_resumes() {
 	CHECK(std::fabs(after - before) < 1e-9, "the wait moved under Freeze: %g -> %g", before, after);
 }
 
+// Issue #47: the first edge after Freeze must not measure a period from the
+// unfrozen samples either side of it; the gate after it keeps the old period.
+static void freeze_discards_period_measurement() {
+	Rig rig(44u, 1000.f);
+	rig.set(1.f, 0.f, 0.f);   // p = 1: an event on every tick
+	rig.f.clockPatched = true;
+	const int per = 100;       // 0.1 s ticks: gate 25 ms
+	int gate = -1;
+	for (int t = 0; t < 16; t++)
+		for (int i = 0; i < per; i++) {
+			rig.f.clock = i < per / 2 ? 10.f : 0.f;
+			// Freeze from 10 ms into tick 10 until 5 ms before tick 13: the
+			// unfrozen samples either side add up to 15 ms, not 100.
+			rig.f.freeze = ((t == 10 && i >= 10) || t == 11 || (t == 12 && i < 95)) ? 10.f : 0.f;
+			const bool ev = rig.step();
+			if (t == 13 && i == 0) {
+				CHECK(ev, "no event on the first tick after Freeze");
+				gate = 0;
+			}
+			if (t == 13 && gate >= 0 && gate == i && rig.r.gate > 5.f)
+				gate++;
+		}
+	CHECK(std::abs(gate - 25) <= 1, "the gate after Freeze is %d ms, want 25 (the period before it)", gate);
+}
+
 // --- CV and state ---------------------------------------------------------
 
 static void weather_cv_audio_rate() {
@@ -746,6 +771,7 @@ int main() {
 	fast_clock_gate();
 	freeze_holds();
 	freeze_resumes();
+	freeze_discards_period_measurement();
 	weather_cv_audio_rate();
 	state_round_trip();
 	state_rejects_bad();
