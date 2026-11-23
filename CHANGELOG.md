@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.36 (2026-11-23): Beacon: running stage drawn from where the last stage ended (#76)
 - 2.0.35 (2026-11-23): Beacon: listening-stop and final-review fixes (window from true start, Sustain at 0, lights, switch steps by direction, bypass resets)
 - 2.0.34 (2026-11-23): Beacon: first test build (envelope: Gate/Trig/Hold, stage gates, window)
 - 2.0.33 (2026-11-23): Easy wins: Fog, Hadal, Squall, Wake, Ballast/Pan fixes and docs (PR #73)
