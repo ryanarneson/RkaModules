@@ -210,8 +210,8 @@ void bad_sample_times() {
 	}
 }
 
-// Wave, Level and Drift toggled every few samples, on every period from 1 to
-// 97: the crossfade stays inside +-1, Level changes only the offset.
+// Wave, Level and Drift toggled every few samples, on periods from 1 to
+// 481: the crossfade stays inside +-1, Level changes only the offset.
 void toggles() {
 	for (int period : {1, 2, 3, 7, 48, 97, 481}) {
 		NeapEngine e;

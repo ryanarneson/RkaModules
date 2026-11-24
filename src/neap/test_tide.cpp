@@ -57,8 +57,9 @@ void bounded_24h() {
 	CHECK(peak > 1.5f, "the tide actually moves: peak %g", peak);
 	// Informational, not a gate: the spec's target at Weight 0 is roughly a
 	// quarter of the time past 2.5 V; kTideGain is tuned by ear.
-	std::printf("info: |TIDE| > 2.5 V for %.1f %% of 24 h at noon, Drift off (Weight 0; -1 .. 1: %.1f %.1f %.1f %.1f %.1f)\n",
-	            100.0 * double(over[2]) / double(n), 100.0 * double(over[0]) / double(n), 100.0 * double(over[1]) / double(n),
+	std::printf("info: |TIDE| > 2.5 V for %.1f %% of 24 h at noon, Drift off, Weight 0 (Weight -1 .. 1: %.1f %.1f %.1f %.1f %.1f)\n",
+	            100.0 * double(over[2]) / double(n),
+	            100.0 * double(over[0]) / double(n), 100.0 * double(over[1]) / double(n),
 	            100.0 * double(over[2]) / double(n), 100.0 * double(over[3]) / double(n), 100.0 * double(over[4]) / double(n));
 }
 
@@ -149,6 +150,15 @@ void weight_glide() {
 			for (long k = 0; k < long(2 * fs); k++) g.step(x, to, d);
 			CHECK(g.weight() == to, "fs %g: glide to %g ends at %.9g", fs, to, g.weight());
 		}
+	// A bad sample time freezes the glide mid-way: the weight stays put.
+	for (float bad : {std::nanf(""), -dt, 0.f, -INFINITY}) {
+		Tide g;
+		for (int k = 0; k < 600; k++) g.step(x, 1.f, dt);   // partway to 1
+		const float w0 = g.weight();
+		CHECK(w0 > 0.05f && w0 < 0.9f, "mid-glide at %g", w0);
+		for (int k = 0; k < 50; k++) g.step(x, 1.f, bad);
+		CHECK(g.weight() == w0, "dt %g mid-glide: weight %g -> %g", bad, w0, g.weight());
+	}
 	// NaN target keeps the previous target.
 	Tide n;
 	for (int k = 0; k < 48000; k++) n.step(x, 1.f, dt);
