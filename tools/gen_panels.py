@@ -235,6 +235,51 @@ _SD_T = [7.8, 23.5, 50.8, 78.1, 93.8]   # Spindrift top: Time, Size | Density | 
 _SD_B = [7.8, 29.3, 50.8, 72.3, 93.8]   # Spindrift bottom: five even columns
 
 
+# Neap, eight slow cycles (8 HP): the outputs in a 3-column grid at the
+# bottom, the eight cycle lights staggered in a row above the weight/mark
+# knobs, joined by a rope from the left edge.
+_NP_CX = [7.6, 20.3, 33.0]
+_NP_ROWS = [79.0, 92.0, 105.0, 118.0]
+_NP_GRID = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "ALL"], [None, "TIDE", "HIGH"]]
+_NP_OUTS = [(n, _NP_CX[c], _NP_ROWS[r]) for r, row in enumerate(_NP_GRID) for c, n in enumerate(row) if n]
+_NP_PX = [round(5.0 + i * 4.37, 2) for i in range(8)]
+_NP_PY = [49.6 if i % 2 == 0 else 54.6 for i in range(8)]
+
+
+def _np_id(n):
+    return "C" + n if n.isdigit() else n
+
+
+# Spring, Neap's expander (6 HP): sixteen outputs in four labelled blocks,
+# staggered between two columns, after the layout of Pan's family.
+_SP_HP = 6
+_SP_W = _SP_HP * HP
+_SP_XL, _SP_XR = 16.2, 25.4
+_SP_Y0, _SP_PITCH, _SP_GAP = 25.0, 5.7, 1.8
+_SP_BLOCKS = [("FOLD", ["F1", "F3", "F5", "F7"], ["1", "3", "5", "7"]),
+              ("MIN/MAX", ["MIN23", "MAX23", "MIN67", "MAX67"], ["MIN 2-3", "MAX 2-3", "MIN 6-7", "MAX 6-7"]),
+              ("TRIG", ["T2", "T4", "T6", "T8"], ["2", "4", "6", "8"]),
+              ("STEPS", ["S14", "S58", "SODD", "SEVEN"], ["1-4", "5-8", "ODD", "EVEN"])]
+
+
+def _spring_parts():
+    """The output components and the block headings, in panel order."""
+    comps, notes = [], []
+    k = 0
+    for b, (head, ids, labels) in enumerate(_SP_BLOCKS):
+        ys = []
+        for i, l in zip(ids, labels):
+            y = _SP_Y0 + k * _SP_PITCH + b * _SP_GAP
+            comps.append(("output", i, _SP_XL if k % 2 == 0 else _SP_XR, round(y, 2), l))
+            ys.append(y)
+            k += 1
+        notes.append((6.0, (ys[0] + ys[-1]) / 2 + 0.6, head, 1.6, "ivory"))
+    return comps, notes
+
+
+_SP_COMPS, _SP_NOTES = _spring_parts()
+
+
 def _hadal_on(x):
     return round(column_on_arc(*_HD_O, _HD_LIMB, x), 2)   # below the dial
 
@@ -860,6 +905,39 @@ PANELS = {
                  "PARAM_SUSTAIN": dict(turn=0), "PARAM_RELEASE": dict(turn=34.53),
                  "PARAM_SHAPE": dict(turn=67.5), "PARAM_MODE": dict(frame=0)},
         screws=screws_at(10, "tr", "bl"),
+    ),
+    "Neap": dict(
+        dir="neap", hp=8, title="NEAP", subtitle="TIDE PREDICTOR",
+        components=[("param", "RATE", 14.4, 33.0, "RATE"),
+                    ("param", "RATE_ATT", 33.6, 27.0, None),
+                    ("input", "RATE_CV", 33.6, 39.0, None),
+                    ("param", "WEIGHT", 8.0, 66.0, "WEIGHT"),
+                    ("input", "WEIGHT_CV", 20.3, 66.0, None),
+                    ("param", "MARK", 32.6, 66.0, "MARK"),
+                    ("input", "RESET", _NP_CX[0], _NP_ROWS[3], "RESET")]
+        + [("output", _np_id(n), x, y, n) for n, x, y in _NP_OUTS]
+        + [("light", f"P{i+1}", x, y, None) for i, (x, y) in enumerate(zip(_NP_PX, _NP_PY))]
+        + [("light", "HIGH", _NP_CX[2] + 3.1, _NP_ROWS[3] - 4.9, None)],
+        sizes={"PARAM_RATE": "dial", "PARAM_WEIGHT": "limb", "PARAM_MARK": "limb"},
+        faces={"PARAM_RATE": dict(r=12.8, ticks=48, major=8, numerals=list(range(0, 13, 2)))},
+        label_at={"PARAM_RATE": "face"},
+        tiles=[dict(port=f"OUTPUT_{_np_id(n)}",
+                    **({"light": "LIGHT_HIGH", "name_at": (-1.3, -4.7)} if n == "HIGH" else {}))
+               for n, _, _ in _NP_OUTS],
+        traces=[["INPUT_RATE_CV", "PARAM_RATE_ATT", "PARAM_RATE"], ["INPUT_WEIGHT_CV", "PARAM_WEIGHT"]],
+        ropes=[[(0.8, 47.0)] + [f"LIGHT_P{i+1}" for i in range(8)]],
+        notes=[(20.3, 71.6, "CV", 1.4, "dim"), (33.6, 44.6, "CV", 1.4, "dim")],
+        preview={"PARAM_RATE": dict(turn=0), "PARAM_WEIGHT": dict(turn=0), "PARAM_MARK": dict(turn=54)},
+        screws=screws_at(8, "tr", "bl"),
+    ),
+    "Spring": dict(
+        dir="spring", hp=_SP_HP, mark="R K A", title="SPRING", subtitle="EXPANDER",
+        components=_SP_COMPS + [("light", "LINK", _SP_W - 4.0, 19.5, None)],
+        tiles=[dict(port=f"OUTPUT_{c[1]}", top=6.5, bottom=4.5,
+                    **({"name_size": 1.3} if c[4].startswith("M") else {})) for c in _SP_COMPS],
+        notes=_SP_NOTES + [(_SP_W - 5.6, 20.1, "LINK", 1.3, "dim", "end")],
+        preview={},
+        screws=screws_at(_SP_HP, "tr", "bl"),
     ),
 }
 
