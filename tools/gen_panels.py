@@ -251,7 +251,7 @@ def _np_id(n):
 
 
 # Spring, Neap's expander (6 HP): sixteen outputs in four labelled blocks,
-# staggered between two columns, after the layout of Pan's family.
+# staggered between two columns, after øchd's expander.
 _SP_HP = 6
 _SP_W = _SP_HP * HP
 _SP_XL, _SP_XR = 16.2, 25.4
