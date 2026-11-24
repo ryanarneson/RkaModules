@@ -30,7 +30,7 @@ struct Neap : Module {
 	// Menu state (the frame's defaults), saved with the patch.
 	bool drift = true;
 	int wave = int(rka::neap::WAVE_TRIANGLE);
-	bool unipolar = false;
+	int level = 0;   // 0: +-5 V, 1: 0-10 V
 
 	// RATE shows the periods of cycles 1 and 8 at the knob, with the
 	// attenuverter and the RATE CV input as they are now.
@@ -74,7 +74,7 @@ struct Neap : Module {
 	void onReset() override {
 		drift = true;
 		wave = int(rka::neap::WAVE_TRIANGLE);
-		unipolar = false;
+		level = 0;
 		engine.reset();
 	}
 
@@ -82,7 +82,7 @@ struct Neap : Module {
 		json_t* root = json_object();
 		json_object_set_new(root, "drift", json_boolean(drift));
 		json_object_set_new(root, "wave", json_integer(wave));
-		json_object_set_new(root, "level", json_integer(unipolar ? 1 : 0));
+		json_object_set_new(root, "level", json_integer(level));
 		return root;
 	}
 
@@ -92,7 +92,7 @@ struct Neap : Module {
 		j = json_object_get(root, "wave");
 		wave = (j && json_is_integer(j) && json_integer_value(j) == 1) ? 1 : 0;
 		j = json_object_get(root, "level");
-		unipolar = j && json_is_integer(j) && json_integer_value(j) == 1;
+		level = (j && json_is_integer(j) && json_integer_value(j) == 1) ? 1 : 0;
 	}
 
 	static float cv(Input& in) {
@@ -109,7 +109,7 @@ struct Neap : Module {
 		frame.mark = params[MARK_PARAM].getValue();
 		frame.reset = cv(inputs[RESET_INPUT]);
 		frame.drift = drift;
-		frame.unipolar = unipolar;
+		frame.unipolar = level == 1;
 		frame.wave = wave == 1 ? rka::neap::WAVE_SINE : rka::neap::WAVE_TRIANGLE;
 
 		engine.process(frame, result);
@@ -171,8 +171,7 @@ struct NeapWidget : ModuleWidget {
 		menu->addChild(new MenuSeparator);
 		menu->addChild(createBoolPtrMenuItem("Drift (slow random wander of each rate)", "", &module->drift));
 		menu->addChild(createIndexPtrSubmenuItem("Wave", {"Triangle", "Sine"}, &module->wave));
-		menu->addChild(createBoolMenuItem("Level: 0-10 V (off: \xC2\xB1" "5 V)", "",
-			[module]() { return module->unipolar; }, [module](bool on) { module->unipolar = on; }));
+		menu->addChild(createIndexPtrSubmenuItem("Level", {"\xC2\xB1" "5 V", "0\xE2\x80\x93" "10 V"}, &module->level));
 	}
 };
 
