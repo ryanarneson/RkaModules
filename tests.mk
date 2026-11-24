@@ -112,6 +112,17 @@ build/test/beacon/test_hostile: src/beacon/test_hostile.cpp src/testing.hpp $(wi
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/beacon $< -o $@
 
+# Neap's hostile-input test: the sanitizers, and the counting operator new.
+build/test/neap/test_hostile: src/neap/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/neap/*.hpp src/sway/*.hpp src/hadal/Random.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/neap $< -o $@
+
+# Spring's hostile-input test (Neap's engine feeds its core in the chained
+# fuzz): the sanitizers, and the counting operator new.
+build/test/spring/test_hostile: src/spring/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/spring/*.hpp src/neap/*.hpp src/sway/*.hpp src/hadal/Random.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/spring $< -o $@
+
 # Rigging's hostile-input test: the sanitizers, and the counting operator new.
 build/test/rigging/test_hostile: src/rigging/test_hostile.cpp src/testing.hpp $(wildcard src/*.hpp src/rigging/*.hpp src/hadal/Random.hpp)
 	@mkdir -p $(@D)

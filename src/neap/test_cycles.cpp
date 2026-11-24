@@ -216,7 +216,6 @@ void wave_crossfade_no_jump() {
 	c.step(e1, false, dt, prev);
 	Wave w = WAVE_TRIANGLE;
 	long next = 100;
-	double worst = 0;
 	for (long k = 0; k < 200000; k++) {
 		if (k == next) {
 			w = (w == WAVE_TRIANGLE) ? WAVE_SINE : WAVE_TRIANGLE;
@@ -239,7 +238,6 @@ void wave_crossfade_no_jump() {
 				k = 200000;
 				break;
 			}
-			if (step / bound > worst) worst = step / bound;
 			CHECK(std::fabs(x[i]) <= 1.f + 1e-6f, "out of range %g", x[i]);
 			prev[i] = x[i];
 		}
@@ -323,6 +321,69 @@ void cache_follows_e1_and_nan_is_safe() {
 		CHECK(x[i] == x[i] && std::fabs(x[i]) <= 1.f + 1e-6f, "bad value %g", x[i]);
 }
 
+// A NaN, infinite or negative sample time advances nothing and poisons
+// nothing: not the phases, not the wave crossfade.
+void bad_sample_time_is_harmless() {
+	const float dt = float(1.0 / 48000.0);
+	const float nan = std::nanf("");
+	const float bads[4] = {nan, INFINITY, -INFINITY, -dt};
+	for (int b = 0; b < 4; b++) {
+		Cycles c;
+		float x[kCycles];
+		c.step(kNoonE1 + 4.f, true, dt, x);
+		c.setWave(WAVE_SINE);
+		const double p0 = c.phase(0);
+		c.step(kNoonE1 + 4.f, true, bads[b], x);
+		CHECK(c.phase(0) == p0, "bad dt %d moved the phase", b);
+		for (int k = 0; k < 600; k++) c.step(kNoonE1 + 4.f, true, dt, x);
+		for (int i = 0; i < kCycles; i++) {
+			const double want = std::sin(kTwoPi * c.phase(i));
+			CHECK(x[i] == x[i] && std::fabs(x[i] - want) < 1e-4, "bad dt %d: cycle %d reads %g, sine is %g", b, i, x[i], want);
+		}
+	}
+}
+
+// Drift off leaves the drift state alone: off for N samples, then on, is the
+// same as a fresh object turned on.
+void drift_off_leaves_drift_state() {
+	const float dt = float(1.0 / 1000.0);
+	const float e1 = kNoonE1 + 3.f;
+	Cycles a, b;
+	float xa[kCycles], xb[kCycles];
+	for (int k = 0; k < 50000; k++) a.step(e1, false, dt, xa);
+	a.reset();  // phases only; drift state is the thing under test
+	b.reset();
+	for (int k = 0; k < 20000; k++) {
+		a.step(e1, true, dt, xa);
+		b.step(e1, true, dt, xb);
+		for (int i = 0; i < kCycles; i++)
+			if (xa[i] != xb[i] || a.phase(i) != b.phase(i)) {
+				CHECK(false, "step %d cycle %d: drift state moved while off (%g vs %g)", k, i, xa[i], xb[i]);
+				return;
+			}
+	}
+}
+
+// A NaN e1 keeps the last rate: the phase advance equals the previous step's.
+void nan_e1_keeps_last_rate() {
+	const float dt = float(1.0 / 48000.0);
+	Cycles c;
+	float x[kCycles];
+	const float e1 = kNoonE1 + 5.f;
+	c.step(e1, false, dt, x);
+	double p = c.phase(0);
+	c.step(e1, false, dt, x);
+	const double adv = c.phase(0) - p;
+	p = c.phase(0);
+	c.step(std::nanf(""), false, dt, x);
+	const double advNan = c.phase(0) - p;
+	CHECK(adv > 0.0 && std::fabs(advNan / adv - 1.0) < 1e-12, "NaN e1 advanced %g, last step %g", advNan, adv);
+	// And for a NaN before any rate was set: nothing moves, nothing breaks.
+	Cycles fresh;
+	fresh.step(std::nanf(""), false, dt, x);
+	CHECK(fresh.phase(0) == 0.0 && x[0] == 0.f, "NaN first e1");
+}
+
 } // namespace
 
 int main() {
@@ -335,5 +396,8 @@ int main() {
 	crossfade_takes_ten_ms();
 	reset_puts_all_at_zero_rising();
 	cache_follows_e1_and_nan_is_safe();
+	bad_sample_time_is_harmless();
+	drift_off_leaves_drift_state();
+	nan_e1_keeps_last_rate();
 	return rkatest::finish("neap/test_cycles");
 }

@@ -52,7 +52,9 @@ struct Cycles {
 				x[i] = 0.f;
 			return;
 		}
-		const double dt = double(sampleTime);
+		// A NaN, infinite or negative step would poison the phases and the
+		// crossfade for good: such a sample advances nothing.
+		const double dt = (sampleTime > 0.f && sampleTime < 1e9f) ? double(sampleTime) : 0.0;
 
 		const float fade = float(dt / kFadeSeconds);
 		if (mix < target) {

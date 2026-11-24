@@ -42,8 +42,12 @@ struct Tide {
 			coefDt = sampleTime;
 		}
 		float nw = w + (target - w) * coef;
-		if (nw - target < 1e-7f && target - nw < 1e-7f)
-			nw = target;  // settled: stop recomputing the weights
+		// Settled: stop recomputing the weights. The one-pole stalls short of
+		// its target once the step is under half a float's spacing (about 7e-5
+		// away at 48 kHz, 1e-3 at 768 kHz), so a threshold alone never fires
+		// there: snap when within 1e-4 or when the step changed nothing.
+		if ((nw - target < 1e-4f && target - nw < 1e-4f) || nw == w)
+			nw = target;
 		if (nw != w || !haveWeights) {
 			w = nw;
 			float sum = 0.f;

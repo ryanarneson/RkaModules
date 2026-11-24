@@ -40,11 +40,13 @@ void bounded_24h() {
 	Tide t[5];
 	float peak = 0.f;
 	float x[kCycles];
+	long over[5] = {0, 0, 0, 0, 0};   // samples with |TIDE| > 2.5 V
 	for (long k = 0; k < n; k++) {
 		c.step(kNoonE1, false, dt, x);
 		for (int j = 0; j < 5; j++) {
 			const float v = t[j].step(x, ws[j], dt);
 			const float a = std::fabs(v);
+			if (a > 2.5f) over[j]++;
 			if (!(a <= 5.f)) {
 				CHECK(false, "w=%g: |TIDE| = %g at sample %ld", ws[j], v, k);
 				return;
@@ -53,6 +55,11 @@ void bounded_24h() {
 		}
 	}
 	CHECK(peak > 1.5f, "the tide actually moves: peak %g", peak);
+	// Informational, not a gate: the spec's target at Weight 0 is roughly a
+	// quarter of the time past 2.5 V; kTideGain is tuned by ear.
+	std::printf("info: |TIDE| > 2.5 V for %.1f %% of 24 h at noon, Drift off (Weight 0; -1 .. 1: %.1f %.1f %.1f %.1f %.1f)\n",
+	            100.0 * double(over[2]) / double(n), 100.0 * double(over[0]) / double(n), 100.0 * double(over[1]) / double(n),
+	            100.0 * double(over[2]) / double(n), 100.0 * double(over[3]) / double(n), 100.0 * double(over[4]) / double(n));
 }
 
 // Pearson correlation of two series.
@@ -132,6 +139,16 @@ void weight_glide() {
 	CHECK(std::fabs(after - before) > 0.1f, "weight really changes TIDE (%g vs %g)", after, before);
 	CHECK(std::fabs(fresh.weight() - 1.f) < 1e-4f, "settles at the target: %g", fresh.weight());
 
+	// The glide ends exactly on its target, from either side, at any rate
+	// (the one-pole alone stalls ~7e-5 short at 48 kHz, ~1e-3 at 768 kHz).
+	for (float fs : {8000.f, 48000.f, 768000.f})
+		for (float to : {1.f, 0.5f, -1.f, 0.f}) {
+			Tide g;
+			const float d = 1.f / fs;
+			for (long k = 0; k < long(fs); k++) g.step(x, 0.7f, d);   // start away from 0 and the ends
+			for (long k = 0; k < long(2 * fs); k++) g.step(x, to, d);
+			CHECK(g.weight() == to, "fs %g: glide to %g ends at %.9g", fs, to, g.weight());
+		}
 	// NaN target keeps the previous target.
 	Tide n;
 	for (int k = 0; k < 48000; k++) n.step(x, 1.f, dt);

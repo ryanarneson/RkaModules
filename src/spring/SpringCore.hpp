@@ -99,12 +99,17 @@ private:
 		const float a = 2.f * (v < 0.f ? -v : v);
 		return a > 10.f ? 10.f : a;
 	}
+	// Neap's values are within +-5 V; whatever else arrives (an infinity, 1e30)
+	// stays inside a jack's +-10 V.
 	static float pick(float a, float b, bool wantMax) {
+		float v;
 		if (a != a)
-			return b != b ? 0.f : b;
-		if (b != b)
-			return a;
-		return wantMax ? (a > b ? a : b) : (a < b ? a : b);
+			v = b != b ? 0.f : b;
+		else if (b != b)
+			v = a;
+		else
+			v = wantMax ? (a > b ? a : b) : (a < b ? a : b);
+		return v > 10.f ? 10.f : v < -10.f ? -10.f : v;
 	}
 	static float code(float a, float b, float c, float d) {
 		const int n = 8 * (a > 0.f) + 4 * (b > 0.f) + 2 * (c > 0.f) + (d > 0.f);

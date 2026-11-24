@@ -77,7 +77,8 @@ void reset_edges() {
 	f.reset = 1.f;
 	e.process(f, r);
 	CHECK(std::fabs(r.shaped[0]) < 0.02f, "1 V resets: %g", r.shaped[0]);
-	// Held high: no repeat.
+	// Held high: no repeat. (A RESET already held high when the module loads
+	// resets once, since reset() clears the trigger's state: intended.)
 	float prev = r.shaped[0];
 	for (int k = 0; k < 100; k++) e.process(f, r);
 	CHECK(r.shaped[0] > prev && r.shaped[0] > 0.05f, "held high runs on: %g", r.shaped[0]);
@@ -97,7 +98,6 @@ void reset_edges() {
 	// Noise between 0.1 and 1 V never resets.
 	f.reset = 0.f;
 	for (int k = 0; k < 10; k++) e.process(f, r);
-	float minAbs = 1e9f;
 	unsigned s = 12345;
 	for (int k = 0; k < 20000; k++) {
 		s = s * 1664525u + 1013904223u;
@@ -106,7 +106,6 @@ void reset_edges() {
 		e.process(f, r);
 		if (k > 100) {
 			CHECK(std::fabs(r.shaped[0] - before2) < 0.1f, "noise reset at %d", k);
-			minAbs = std::fmin(minAbs, std::fabs(r.shaped[0]));
 		}
 	}
 }
@@ -249,6 +248,76 @@ void sample_rate_change() {
 	CHECK(b >= 39 && b <= 41, "96 kHz: %d crossings", b);
 }
 
+// WEIGHT and WEIGHT_CV add (5 V = 1.0) and clamp to +-1: the same TIDE as the
+// equal knob alone, run in lockstep from identical state.
+void weight_cv_adds_and_clamps() {
+	struct Case { float weight, cv, equivWeight; const char* name; };
+	const Case cases[] = {
+		{0.5f, 2.5f, 1.f, "0.5 + 2.5 V = 1"},
+		{0.f, 10.f, 1.f, "+10 V clamps to 1"},
+		{-0.5f, -2.5f, -1.f, "-0.5 - 2.5 V = -1"},
+		{0.3f, -10.f, -1.f, "-10 V clamps to -1"},
+	};
+	for (const Case& c : cases) {
+		NeapEngine a, b;
+		a.reset();
+		b.reset();
+		NeapFrame fa, fb;
+		fa.rate = fb.rate = 1.f;
+		fa.weight = c.weight;
+		fa.weightCv = c.cv;
+		fb.weight = c.equivWeight;
+		NeapResult ra, rb;
+		float worst = 0.f, spread = 0.f;
+		for (int k = 0; k < 48000; k++) {
+			a.process(fa, ra);
+			b.process(fb, rb);
+			if (k > 12000) {   // past the glide (50 ms) and its settle
+				worst = std::fmax(worst, std::fabs(ra.tide - rb.tide));
+				spread = std::fmax(spread, std::fabs(rb.tide));
+			}
+		}
+		CHECK(worst < 1e-4f, "%s: TIDE differs from the knob alone by %g", c.name, worst);
+		CHECK(spread > 0.5f, "%s: the comparison is not trivial (peak %g)", c.name, spread);
+	}
+	// Control: a different weight really gives a different TIDE.
+	NeapEngine a, b;
+	NeapFrame fa, fb;
+	fa.rate = fb.rate = 1.f;
+	fa.weight = 0.5f;
+	fb.weight = 1.f;
+	NeapResult ra, rb;
+	float diff = 0.f;
+	for (int k = 0; k < 48000; k++) {
+		a.process(fa, ra);
+		b.process(fb, rb);
+		diff = std::fmax(diff, std::fabs(ra.tide - rb.tide));
+	}
+	CHECK(diff > 0.05f, "WEIGHT 0.5 and 1 differ (%g)", diff);
+}
+
+// The Wave setting reaches the cycles: from identical state, Sine and
+// Triangle give different outputs, and each matches its own wave.
+void wave_is_wired() {
+	NeapEngine a, b;
+	a.reset();
+	b.reset();
+	NeapFrame fa, fb;
+	fa.rate = fb.rate = 1.f;
+	fa.drift = fb.drift = false;
+	fa.wave = rka::neap::WAVE_SINE;
+	fb.wave = rka::neap::WAVE_TRIANGLE;
+	NeapResult ra, rb;
+	float diff = 0.f;
+	for (int k = 0; k < 4800; k++) {   // past the 10 ms crossfade
+		a.process(fa, ra);
+		b.process(fb, rb);
+		if (k > 1000)
+			diff = std::fmax(diff, std::fabs(ra.shaped[0] - rb.shaped[0]));
+	}
+	CHECK(diff > 0.3f, "Sine and Triangle differ (cycle 1, max %g)", diff);
+}
+
 } // namespace
 
 int main() {
@@ -258,5 +327,7 @@ int main() {
 	hostile_inputs();
 	nan_cv_reads_zero();
 	sample_rate_change();
+	weight_cv_adds_and_clamps();
+	wave_is_wired();
 	return rkatest::finish("test_engine");
 }
