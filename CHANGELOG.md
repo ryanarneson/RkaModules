@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.41 (2026-11-25): Fix waves: Wake clock and Freeze (#90-#93), Squall merged gates (#78), Beacon Shape breakpoint (#83), Rigging Damp glide (#85), Fathom SUB smoothing and +-5 V limit (#87, #88), Fog bypass and Visibility rise (#13, #22), Shoal negative Mod range (#81), test fixes (#74, #84, #36)
 - 2.0.40 (2026-11-25): Neap/Spring review fixes from PR #103: Spring resets its triggers on bypass and un-bypass; stricter loading of Neap's saved menu settings
 - 2.0.39 (2026-11-24): Neap: Add Spring expander menu item
 - 2.0.38 (2026-11-24): Neap and Spring: first test build
