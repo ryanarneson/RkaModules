@@ -709,9 +709,9 @@ void visibilityStepNoClick() {
 //   held to the largest of its last second plus 1 dB: the law raises the
 //   total gain 11 dB (0.295 to 1.06), so the level rises by design, and at
 //   Drift 0 a held tone's wet beats by several dB from one 10 ms window to
-//   the next, so a single window is no measure of where it ends. (For the
-//   same reason there is no 0 -> 1 case in a tail: the echoes of a stopped
-//   tone are lifted by that 11 dB, as they must be to reach the law.)
+//   the next, so a single window is no measure of where it ends. (A tone's
+//   tail is no measure either: at Drift 0 its echoes beat as they decay;
+//   visibility_rise_in_tail takes 0 -> 1 in a tail on noise.)
 // With the make-up following the network's smoothed Visibility through a 30
 // ms one-pole of its own (a second pole, so it lagged sqrt(1 - g^2)), the
 // total gain rose 8 dB over its start on a 1 -> 0 jump and the wet swelled
@@ -773,6 +773,66 @@ void visibilityNoSwell() {
 			            STEP_MODES[m], from, to, how, overG, over, start, end);
 		}
 	std::printf("  visibility_no_swell: worst %+.2f dB (total gain), %+.2f dB (envelope)\n", worstG, worstEnv);
+}
+
+// A Visibility rise in a tail does not lift the echoes already in the
+// network: nothing new comes in, so they go on from their level, decaying at
+// the new rate. Noise (+/-0.3 V, quiet, so the leveller stays out of it) for
+// 3 s at Visibility 0, Mix 1, every mode, Drift 0 and noon, stopped 50 ms or
+// 150 ms before a jump to 1; over the 2 s after, the 10 ms RMS envelope
+// never goes over its level just before the jump plus 1.5 dB. Noise, not a
+// tone: a tone's echoes beat by several dB as they decay, whatever the gain
+// does. With the whole make-up on the network's output, the 11 dB the law
+// adds (0.295 to 1.06) lifted them: 4-13 dB over their level (issue #22; a
+// slower rise of the make-up did not help, and lagging it behind the network
+// dipped the wet 17 dB). The rise now goes on the network's input, so it
+// reaches new sound only (FogEngine::splitGain).
+void visibilityRiseInTail() {
+	const int W = 480;
+	double worst = -99;
+	for (int m = 0; m < 4; m++)
+		for (float drift : {0.f, 0.5f})
+			for (double gap : {0.05, 0.15}) {
+				Rig* r = new Rig;
+				r->f.mode = m;
+				r->eng.mode = (rka::fog::Mode) m;
+				r->eng.reset();
+				r->f.params[FogFrame::MIX] = 1.f;
+				r->f.params[FogFrame::VISIBILITY] = 0.f;
+				r->f.params[FogFrame::DRIFT] = drift;
+				const long at = (long) (3 * RATE) + (long) (gap * RATE), N = at + (long) (2 * RATE);
+				const long stopAt = at - (long) (gap * RATE);
+				std::vector<double> env;
+				double acc = 0;
+				for (long i = 0; i < N; i++) {
+					if (i == at)
+						r->f.params[FogFrame::VISIBILITY] = 1.f;
+					const FogResult o = r->step(i < stopAt ? 0.3f * uniform() : 0.f);
+					acc += 0.5 * ((double) o.outL * o.outL + (double) o.outR * o.outR);
+					if (i % W == W - 1) {
+						env.push_back(std::sqrt(acc / W));
+						acc = 0;
+					}
+				}
+				delete r;
+				const size_t k0 = (size_t) (at / W);
+				const double start = env[k0 - 1];
+				double top = 0;
+				size_t kTop = k0;
+				for (size_t k = k0; k < env.size(); k++)
+					if (env[k] > top) {
+						top = env[k];
+						kTop = k;
+					}
+				const double over = 20.0 * std::log10(top / start);
+				CHECK(start > 1e-3, "%s Drift %g, %g ms: no wet before the jump (%g V)", STEP_MODES[m], drift, 1e3 * gap, start);
+				CHECK(over <= 1.5, "%s Drift %g, Visibility 0 -> 1 %g ms into a tail: the envelope reaches %+.2f dB over its level before the jump, want <= 1.5",
+				      STEP_MODES[m], drift, 1e3 * gap, over);
+				worst = std::fmax(worst, over);
+				std::printf("  visibility_rise_in_tail %-5s Drift %.1f, %3.0f ms: peak %+.2f dB over the level before (%.4f V RMS), %.0f ms after\n",
+				            STEP_MODES[m], drift, 1e3 * gap, over, start, (double) (kTop - k0 + 1) * W * 1e3 / RATE);
+			}
+	std::printf("  visibility_rise_in_tail: worst %+.2f dB\n", worst);
 }
 
 // Damp steps do not click: a 1 V sine at 220 Hz, Mix 1, Visibility noon,
@@ -1502,6 +1562,7 @@ int main() {
 	driftStepNoClick();
 	visibilityStepNoClick();
 	visibilityNoSwell();
+	visibilityRiseInTail();
 	dampStepNoClick();
 	levelAcrossMix();
 	outputCeiling();

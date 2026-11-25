@@ -122,8 +122,12 @@
 // - Size: scale = 3^(2 Size - 1) (1/3x-3x of the base lengths), slewed by
 //   a one-pole of 30 ms time constant (about 100 ms to settle).
 // - Wet level: steady-state power through the loop grows as 1 / (1 - g^2)
-//   for the mean loop gain g, so the wet is scaled by sqrt(1 - g^2) and a
-//   constant calibrated by measurement (test_network's even_wet_level).
+//   for the mean loop gain g, so the input is scaled by sqrt(1 - g^2)
+//   (wetGain) and a constant calibrated by measurement (test_network's
+//   even_wet_level). On the input, not on the taps: in steady state the two
+//   are the same, but a change of wetGain (Visibility, Size) then scales only
+//   what comes in after it, not the echoes already in the lines. The engine
+//   splits its make-up the same way (FogEngine::splitGain, issue #22).
 // - Visibility reaches the gains through a 30 ms one-pole, a step each 32
 //   samples (the gains' own refresh): the T60 is there within about 100 ms.
 //   Applied at once, a Visibility jump stepped sqrt(1 - g^2) (0.985 at 0,
@@ -458,9 +462,14 @@ struct Network {
 	}
 
 	void process(float inL, float inR, float& wetL, float& wetR) {
-		inL = (inL > -1e9f && inL < 1e9f) ? inL : 0.f;
-		inR = (inR > -1e9f && inR < 1e9f) ? inR : 0.f;
+		advance();
+		run(inL, inR, wetL, wetR);
+	}
 
+	// process() in two halves, for the engine, which works its make-up out
+	// from visSm between them (FogEngine): the controls' step for this
+	// sample (Size's slew, the gains' refresh), then the audio.
+	void advance() {
 		if (scaleOffset != 0.f) {
 			scaleOffset *= 1.f - slewCoeff;
 			if (scaleOffset < 1e-6f && scaleOffset > -1e-6f)
@@ -472,6 +481,11 @@ struct Network {
 			stepDecay();
 			requestGains();
 		}
+	}
+
+	void run(float inL, float inR, float& wetL, float& wetR) {
+		inL = (inL > -1e9f && inL < 1e9f) ? inL * wetGain : 0.f;
+		inR = (inR > -1e9f && inR < 1e9f) ? inR * wetGain : 0.f;
 
 		// Drift's swing follows its target through a 40 ms one-pole (see the
 		// top), and stops once there.
@@ -521,8 +535,8 @@ struct Network {
 			la = allpass(0, k, la);
 			lb = allpass(1, k, lb);
 		}
-		wetL = (float) (hl + la) * wetGain;
-		wetR = (float) (hr + lb) * wetGain;
+		wetL = (float) (hl + la);
+		wetR = (float) (hr + lb);
 		if (shimOut > 0.f) {
 			// ICE: the feed-forward octave, shifted once, never fed back.
 			wetL += shimOut * octL.process(wetL);
