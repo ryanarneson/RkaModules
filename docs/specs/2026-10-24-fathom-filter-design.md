@@ -196,7 +196,9 @@ spread, giving `left`, `right`, `sub`):
    The exponent is tunable by ear.
 4. **Mix out.** Add `SUB · subGain · sub` if "Sub through filter" is off.
 5. **Output stage** as phase 1: `tanh(CLIP_DRIVE · v)`, DC block at 2 Hz,
-   × 5 V. `CLIP_DRIVE` is retuned so the defaults still peak near 4 V
+   output limit, × 5 V. The limit (issue #88) is the identity below 0.95
+   and a tanh knee into ±1 above it: the DC blocker on its own pushed the
+   clip's ±1 to 1.05 held (asymmetric clipping) and 1.45 after a CV step. `CLIP_DRIVE` is retuned so the defaults still peak near 4 V
    (the ladder's 24 dB slope takes more of the saws' harmonics than the
    12 dB SVF did). SUB OUT is unchanged: the raw sub before everything.
 

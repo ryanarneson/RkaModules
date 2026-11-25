@@ -89,6 +89,14 @@ struct Diff {
 
 const char* outName[F::OUTPUTS_LEN] = {"LEFT", "RIGHT", "SUB"};
 
+// The output limit added after the DC blocker for issue #88, applied to the
+// reference's L and R. It is memoryless and the last step, so this is the
+// reference with the limit, and the frozen copy stays untouched.
+void limitRef(float* b) {
+	for (int o : {F::LEFT, F::RIGHT})
+		b[o] = 5.f * rka::OutputStage::limit(b[o] / 5.f);
+}
+
 // Renders `seconds` (at the starting rate) through both engines;
 // `change(f, i, rng, fs)` edits the frame, and may change the sample rate,
 // before sample i.
@@ -116,6 +124,7 @@ Diff render(const char* name, float fs, double seconds, Change change, double pe
 		float a[F::OUTPUTS_LEN], b[F::OUTPUTS_LEN];
 		opt.process(f, rate, a);
 		ref.process(g, rate, b);
+		limitRef(b);
 		d.add(a, b);
 	}
 	for (int o = 0; o < F::OUTPUTS_LEN; o++) {
@@ -245,6 +254,7 @@ void testUnpatchedBody(float laterFs) {
 		float a[F::OUTPUTS_LEN], b[F::OUTPUTS_LEN];
 		opt.process(f, rate, a);
 		ref.process(g, rate, b);
+		limitRef(b);
 		subPeak = std::fmax(subPeak, std::fabs(double(a[F::SUB_OUT]) - b[F::SUB_OUT]));
 		finite = finite && std::isfinite(a[F::LEFT]) && std::isfinite(a[F::RIGHT]);
 		if (!patched)

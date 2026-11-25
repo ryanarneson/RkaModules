@@ -188,7 +188,8 @@ static const float DRIVE_OCTAVES = 4.f;
 static const float MAKEUP_EXP = 0.75f;
 
 // Ladder filter per side with the sub joining before or after it, drive
-// makeup, tanh soft clip (FastMath.hpp's, within 1.5e-7 of libm's), DC block at ~2 Hz; in and out +/-1.
+// makeup, tanh soft clip (FastMath.hpp's, within 1.5e-7 of libm's), DC block at ~2 Hz, output
+// limit (limit()); in and out +/-1.
 struct OutputStage {
 	struct Params {
 		float cutoffHz = 1200.f;
@@ -200,6 +201,24 @@ struct OutputStage {
 		// The sub goes through the ladder (true) or joins after it.
 		bool subThroughFilter = false;
 	};
+
+	// The output limit after the DC blocker, Ballast's curve: the blocker
+	// takes the clip's asymmetry (up to about 0.05) and the DC of a step
+	// back out, so on its own it pushed the clip's +/-1 to 1.05 held and
+	// 1.45 after a CV step (issue #88). Below KNEE it passes the signal
+	// untouched (the defaults peak near 0.8); above, a tanh knee bends it
+	// into +/-1, which it never passes.
+	static constexpr float KNEE = 0.95f;
+
+	static float limit(float x) {
+		const float a = std::fabs(x);
+		if (a <= KNEE)
+			return x;
+		// 1 - KNEE is exact, so the knee's ceiling is exactly 1.
+		const float room = 1.f - KNEE;
+		const float y = KNEE + room * fastTanh((a - KNEE) * (1.f / room));
+		return x < 0.f ? -y : y;
+	}
 
 	Ladder ladderLeft, ladderRight;
 	DcBlock dcLeft, dcRight;
@@ -268,8 +287,8 @@ struct OutputStage {
 		const float subOut = subMix - subIn;
 		float l = ladderLeft.process(driveGain * (left + subIn)) * makeup + subOut;
 		float r = ladderRight.process(driveGain * (right + subIn)) * makeup + subOut;
-		left = dcLeft.process(fastTanh(CLIP_DRIVE * l), dcCoef);
-		right = dcRight.process(fastTanh(CLIP_DRIVE * r), dcCoef);
+		left = limit(dcLeft.process(fastTanh(CLIP_DRIVE * l), dcCoef));
+		right = limit(dcRight.process(fastTanh(CLIP_DRIVE * r), dcCoef));
 	}
 
 private:
