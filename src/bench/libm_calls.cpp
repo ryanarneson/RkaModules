@@ -1,20 +1,30 @@
 // Counts the C maths library calls every module's engine makes per sample,
-// with every libm entry point it could reach wrapped by the linker
-// (-Wl,--wrap=<name>, GNU ld, so Linux only: `make libm-calls`, run by
-// `make test`, skips it elsewhere with a message). It renders the cases
-// each module's declaration file (src/<module>/bench.inc, found by
-// tests.mk) lists for it: with the knobs still, after a warm-up, the count
-// must be zero; with a knob moving, calls are allowed (some coefficients
-// are worked out again on a change) and only reported. MinGW's libm is
-// slow, so a libm call creeping back into a per-sample path is the
-// regression issue #8 was about, and timing on macOS or Linux cannot see
-// it. (Not named test_*.cpp: tests.mk's generic test rule would build it
-// without the wrap flags.)
+// with every libm entry point it could reach intercepted at link time
+// (`make libm-calls`, run by `make test`, on Linux and on macOS). On Linux,
+// GNU ld's -Wl,--wrap=<name> sends every call from the executable's own
+// objects to __wrap_<name>, which counts it and calls __real_<name>.
+// macOS's ld has no --wrap, so there this file defines <name> itself: ld
+// binds the objects' references to a definition in an object before it
+// looks in libSystem, and the definition counts the call and forwards to
+// libSystem's through dlsym(RTLD_NEXT). On both, that is every call from
+// the engine code and BeadsFirmware.o, and none made inside the C or C++
+// library. It renders the cases each module's declaration file
+// (src/<module>/bench.inc, found by tests.mk) lists for it: with the knobs
+// still, after a warm-up, the count must be zero; with a knob moving, calls
+// are allowed (some coefficients are worked out again on a change) and only
+// reported. MinGW's libm is slow, so a libm call creeping back into a
+// per-sample path is the regression issue #8 was about, and timing on
+// macOS or Linux cannot see it. (Not named test_*.cpp: tests.mk's generic
+// test rule would build it without the wrap flags.)
 #include "bench/BenchModule.hpp"
 #include "modules.inc"
 #include "testing.hpp"
 
+#include <cmath>
 #include <cstring>
+#if defined(__APPLE__)
+#include <dlfcn.h>
+#endif
 #include <memory>
 #include <string>
 
@@ -48,25 +58,35 @@ static const char* callName[CALLS_LEN] = {
 static long calls[CALLS_LEN];
 
 extern "C" {
-#define X(ret, name, params, args) \
+#if defined(__APPLE__)
+// <name> itself, forwarding to the next image's (libSystem's) <name>.
+#define RKA_LIBM_WRAP(ret, name, params, args, counter) \
+	ret name params { \
+		static ret(*real) params = reinterpret_cast<ret(*) params>(dlsym(RTLD_NEXT, #name)); \
+		calls[counter]++; \
+		return real args; \
+	}
+#else
+#define RKA_LIBM_WRAP(ret, name, params, args, counter) \
 	ret __real_##name params; \
 	ret __wrap_##name params { \
-		calls[CALL_##name]++; \
+		calls[counter]++; \
 		return __real_##name args; \
 	}
+#endif
+#define X(ret, name, params, args) RKA_LIBM_WRAP(ret, name, params, args, CALL_##name)
 RKA_LIBM_FUNCS(X)
 #undef X
+#if defined(__APPLE__)
+// Clang fuses a sin and a cos of one argument into __sincos(f)_stret.
+RKA_LIBM_WRAP(__float2, __sincosf_stret, (float a), (a), CALL_sinf)
+RKA_LIBM_WRAP(__double2, __sincos_stret, (double a), (a), CALL_sin)
+#else
 // sincos/sincosf: GCC may fuse a sin and a cos of one argument.
-void __real_sincosf(float, float*, float*);
-void __wrap_sincosf(float a, float* s, float* c) {
-	calls[CALL_sinf]++;
-	__real_sincosf(a, s, c);
-}
-void __real_sincos(double, double*, double*);
-void __wrap_sincos(double a, double* s, double* c) {
-	calls[CALL_sin]++;
-	__real_sincos(a, s, c);
-}
+RKA_LIBM_WRAP(void, sincosf, (float a, float* s, float* c), (a, s, c), CALL_sinf)
+RKA_LIBM_WRAP(void, sincos, (double a, double* s, double* c), (a, s, c), CALL_sin)
+#endif
+#undef RKA_LIBM_WRAP
 }
 
 namespace {
