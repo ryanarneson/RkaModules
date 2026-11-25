@@ -37,8 +37,14 @@ layout.
   changed>"` bumps REVISION in `plugin.json`, logs it under "Test builds" in
   `CHANGELOG.md` and commits, so one version = one commit. Mac and Windows
   packages from the same commit share it. Decided 2026-11-16.
-- The repo holds unit tests only. Test results beyond unit testing
-  (testbed runs, recordings, measurement reports, QA docs) live on the share,
+- Each module's listening guide (`docs/<folder>/listening.html`) and QA
+  technical reference (`docs/<folder>/technical-reference.md`) are kept in
+  the repo, and a copy of each, with its version in the name
+  (`<module>-<version>-listening.html`,
+  `<Module>-<version>-Technical-Reference.md`), goes on the share,
+  `/Volumes/share1/VCVRACK/`. Update both together. Decided 2026-11-24.
+- Otherwise the repo holds unit tests only. Other test results (testbed
+  runs, recordings, measurement reports) live on the share,
   `/Volumes/share1/VCVRACK/`, never in the repo; audio is git-ignored
   (`*.wav`, `*.flac`, ...) as a backstop. The Fog-vs-LV-426 testbed is
   `/Volumes/share1/VCVRACK/fog-testbed/` (`run_all.py <version>` writes

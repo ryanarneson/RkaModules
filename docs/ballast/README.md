@@ -20,7 +20,7 @@ Ballast is drawn as a clinometer. From the top:
   up to Master, and the **CLIP** light; then **CHAIN L** and **CHAIN R**;
   then the **L** and **R** outputs on ivory tiles in the lower right corner.
 
-The right-click menu has one setting: the DC blocker.
+The right-click menu has two items: **DC blocker** and **Add Pan expander**.
 
 ## Controls
 

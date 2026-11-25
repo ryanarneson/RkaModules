@@ -139,8 +139,10 @@ head stays where it is, and Play goes on from there.
 
 A trigger at the **PLAY** jack plays the tape from Start (from the
 window's end when the speed is backwards), running or not: a retrigger
-while it plays fades from the old place to the new. It is ignored while
-recording.
+while it plays fades from the old place to the new. During a recording
+it is not ignored: it turns Play on (the PLAY light comes on) but does not
+jump to Start. When the recording ends Play comes on anyway, so the sound
+is the same.
 
 **LOOP** on (the default): the head comes round the window for ever. Off:
 it plays to the window's end, fades out through the join, and Play goes
@@ -236,6 +238,10 @@ kept at 1 - d² and the input is added at min(1, 2d):
 | 50 % (default) | 75 % | 100 % |
 | 75 % | 44 % | 100 % |
 | 100 % | nothing (it replaces) | 100 % |
+
+One more corner: Wear switched hard between 0 and about 30 % at 2 Hz or
+faster (a square-wave CV on Wear), with lopsided input in time with the
+loop, can rebuild 0.36 to 1.1 V of DC on the tape.
 
 The input a dub adds passes a DC blocker (5 Hz), and what is written
 passes a soft bound (exact up to 8 V, never past 10 V), so layers settle
