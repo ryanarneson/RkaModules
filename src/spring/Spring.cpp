@@ -8,8 +8,6 @@
 #include "SpringLayout.hpp"
 #include "widgets.hpp"
 
-#include <atomic>
-
 struct Spring : Module, rka::NeapExpander {
 	enum ParamId { PARAMS_LEN };
 	enum InputId { INPUTS_LEN };
@@ -22,11 +20,9 @@ struct Spring : Module, rka::NeapExpander {
 	};
 	enum LightId { LINK_LIGHT, LIGHTS_LEN };
 
-	rka::SpringCore core;
-	rka::SpringLink link;
-	std::atomic<bool> resetPending;
+	rka::SpringRun run;
 
-	Spring() : resetPending(true) {
+	Spring() {
 		static_assert(int(OUTPUTS_LEN) == int(rka::SpringCore::N_OUT), "output ids");
 		static_assert(int(T4_OUTPUT) - int(T2_OUTPUT) == 1 && int(T8_OUTPUT) - int(T2_OUTPUT) == 3, "T outputs");
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
@@ -41,30 +37,36 @@ struct Spring : Module, rka::NeapExpander {
 	}
 
 	void onReset() override {
-		resetPending = true;
+		run.requestReset();
+	}
+	// While bypassed neither process() nor fromNeap runs, so the trigger
+	// history would resume stale: ask for a reset on the next fromNeap.
+	void onBypass(const BypassEvent& e) override {
+		run.requestReset();
+	}
+	void onUnBypass(const UnBypassEvent& e) override {
+		run.requestReset();
 	}
 
 	// Neap's thread: all per-sample work on the core.
 	void fromNeap(const float x[8], float sampleTime) override {
-		link.neapCalled();
+		bool patched[4];
 		for (int k = 0; k < 4; k++)
-			core.setPatched(k, outputs[T2_OUTPUT + k].isConnected());
-		if (resetPending.exchange(false))
-			core.reset();
-		core.step(x, sampleTime);
+			patched[k] = outputs[T2_OUTPUT + k].isConnected();
+		run.fromNeap(x, sampleTime, patched);
 	}
 
 	void process(const ProcessArgs& args) override {
-		if (link.linkedAfterProcess()) {
+		if (run.link.linkedAfterProcess()) {
 			for (int i = 0; i < OUTPUTS_LEN; i++)
-				outputs[i].setVoltage(core.out[i]);
+				outputs[i].setVoltage(run.core.out[i]);
 			lights[LINK_LIGHT].setBrightness(1.f);
 		}
 		else {
 			for (int i = 0; i < OUTPUTS_LEN; i++)
 				outputs[i].setVoltage(0.f);
 			lights[LINK_LIGHT].setBrightness(0.f);
-			resetPending = true;
+			run.requestReset();
 		}
 	}
 };

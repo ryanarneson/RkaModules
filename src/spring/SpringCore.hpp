@@ -113,7 +113,7 @@ private:
 	}
 	static float code(float a, float b, float c, float d) {
 		const int n = 8 * (a > 0.f) + 4 * (b > 0.f) + 2 * (c > 0.f) + (d > 0.f);
-		return n == 15 ? 10.f : n * 10.f / 15.f;
+		return n == 15 ? 10.f : n * (2.f / 3.f);
 	}
 
 	bool patched_[4];
@@ -151,6 +151,32 @@ private:
 	uint32_t seen_ = 0;
 	uint32_t idle_ = kTimeout;
 	bool linked_ = false;
+};
+
+// The module's whole Neap-thread contract, Rack-free: the core, the link
+// counter and a reset latch. request() may come from any thread (a reset, a
+// bypass or un-bypass from the UI, an unlink seen by Spring's process());
+// the core itself is only touched in fromNeap(), where the latch is taken
+// and the core reset before the next step, so a bypassed stretch never
+// leaves old trigger history to resume.
+struct SpringRun {
+	SpringCore core;
+	SpringLink link;
+
+	void requestReset() {
+		resetPending_.store(true, std::memory_order_relaxed);
+	}
+	void fromNeap(const float x[8], float sampleTime, const bool patched[4]) {
+		link.neapCalled();
+		for (int k = 0; k < 4; k++)
+			core.setPatched(k, patched[k]);
+		if (resetPending_.exchange(false, std::memory_order_relaxed))
+			core.reset();
+		core.step(x, sampleTime);
+	}
+
+private:
+	std::atomic<bool> resetPending_{true};
 };
 
 } // namespace rka

@@ -4,6 +4,7 @@
 // NeapExpander (Spring) on its right.
 #include "plugin.hpp"
 #include "NeapEngine.hpp"
+#include "NeapState.hpp"
 #include "NeapExpander.hpp"
 #include "NeapLayout.hpp"
 #include "NeapRate.hpp"
@@ -86,13 +87,23 @@ struct Neap : Module {
 		return root;
 	}
 
+	static rka::neap::JsonValue jv(json_t* j) {
+		if (!j)
+			return rka::neap::JsonValue::missing();
+		if (json_is_boolean(j))
+			return rka::neap::JsonValue::boolean(json_is_true(j));
+		if (json_is_integer(j))
+			return rka::neap::JsonValue::integer(json_integer_value(j));
+		return rka::neap::JsonValue::other();
+	}
+
 	void dataFromJson(json_t* root) override {
-		json_t* j = json_object_get(root, "drift");
-		drift = !(j && json_is_false(j));
-		j = json_object_get(root, "wave");
-		wave = (j && json_is_integer(j) && json_integer_value(j) == 1) ? 1 : 0;
-		j = json_object_get(root, "level");
-		level = (j && json_is_integer(j) && json_integer_value(j) == 1) ? 1 : 0;
+		const rka::neap::MenuState m = rka::neap::parseMenu(
+			jv(json_object_get(root, "drift")), jv(json_object_get(root, "wave")),
+			jv(json_object_get(root, "level")));
+		drift = m.drift;
+		wave = m.wave;
+		level = m.level;
 	}
 
 	static float cv(Input& in) {

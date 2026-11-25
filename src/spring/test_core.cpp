@@ -345,9 +345,48 @@ void link_timeout() {
 		CHECK(c.out[i] == 0.f, "reset zeroes output %d", i);
 }
 
+// A bypass (Spring skipped, so no fromNeap) must not leave trigger history to
+// resume: requestReset() makes the next fromNeap reset the core first, once.
+void run_reset_latch() {
+	const bool all[4] = {true, true, true, true};
+	float x[8];
+	zeros(x);
+	rka::SpringRun r;
+	x[1] = -1.f;
+	r.fromNeap(x, kDt, all);
+	r.fromNeap(x, kDt, all);
+	// Without a reset request, the crossing fires (the baseline).
+	x[1] = 1.f;
+	r.fromNeap(x, kDt, all);
+	CHECK(r.core.out[SpringCore::T2] == 10.f, "baseline: a crossing fires");
+	for (int i = 0; i < 2000; i++)
+		r.fromNeap(x, kDt, all); // pulse over
+	CHECK(r.core.out[SpringCore::T2] == 0.f, "pulse over");
+	x[1] = -1.f;
+	r.fromNeap(x, kDt, all);
+	// Bypass here: history says -1; un-bypass sees +1. Must not fire.
+	r.requestReset();
+	r.requestReset(); // bypass then un-bypass: one reset, not two
+	x[1] = 1.f;
+	r.fromNeap(x, kDt, all);
+	CHECK(r.core.out[SpringCore::T2] == 0.f, "no late trigger after a bypass");
+	// The latch is taken: history now counts, and a real crossing fires.
+	x[1] = -1.f;
+	r.fromNeap(x, kDt, all);
+	x[1] = 1.f;
+	r.fromNeap(x, kDt, all);
+	CHECK(r.core.out[SpringCore::T2] == 10.f, "reset happens once, then triggers work");
+	// Patched mask follows the call.
+	const bool none[4] = {false, false, false, false};
+	r.fromNeap(x, kDt, none);
+	CHECK(r.core.out[SpringCore::T2] == 0.f, "unpatched T2 reads 0");
+	CHECK(r.link.linkedAfterProcess(), "fromNeap counts as a call");
+}
+
 } // namespace
 
 int main() {
+	run_reset_latch();
 	fold();
 	min_max();
 	trigger_once_per_rise();

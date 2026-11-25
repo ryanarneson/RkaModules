@@ -70,7 +70,7 @@ lock into a pattern and the combined shape takes a very long time to repeat.
 ## Reset
 
 A rising edge on **RESET** (above 1 V; it re-arms below 0.1 V) puts all
-eight cycles at the start of their cycle, at 0 V and rising. After a Reset
+eight cycles at the start of their cycle, at the middle of the swing (0 V, or 5 V in 0-10 V Level), rising. After a Reset
 the cycles start together (a spring tide) and then part. A held gate does not
 keep resetting. A reloaded patch also starts from Reset: the cycles' phases
 are not saved.
@@ -102,7 +102,8 @@ high.
 - TIDE peaks at about 4.9 V, so **MARK near +5 V never fires**.
 - **With Level at 0-10 V, MARK still compares against the ±5 V tide**: the
   Level setting changes the voltage that comes out of the jacks, not what
-  MARK is measured against.
+  MARK is measured against. In 0-10 V Level, HIGH goes high when the TIDE
+  jack reads above MARK + 5 V, which is the same moments as in ±5 V mode.
 
 ## Outputs
 
@@ -197,6 +198,3 @@ that was below 0 V at the time. Neap's own outputs are unaffected.
 - Initialize: Drift on, Triangle, ±5 V, and every cycle at its start.
 - Saved with the patch: the knobs and the three menu settings (Drift,
   Wave, Level). Spring has nothing of its own to save.
-- No aliasing measure was needed: cycle 1 tops out at 160 Hz, and the
-  triangle and fold corners are far below the first alias at normal sample
-  rates.

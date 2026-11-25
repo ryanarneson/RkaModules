@@ -42,7 +42,7 @@ const float RATES[] = {8000.f, 44100.f, 48000.f, 96000.f, 192000.f, 384000.f, 76
 
 bool isCode(float v) {
 	for (int n = 0; n <= 15; n++)
-		if (v == (n == 15 ? 10.f : n * 10.f / 15.f))
+		if (v == (n == 15 ? 10.f : n * (2.f / 3.f)))
 			return true;
 	return false;
 }

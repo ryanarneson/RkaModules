@@ -397,13 +397,13 @@ Light id 0: LINK ("Link (Neap at the left)"). The output count and the three T i
 
 | Item | Choices | Default | JSON key | Stored value | On load |
 |---|---|---|---|---|---|
-| Drift | on / off | on | `"drift"` | JSON boolean | **only a JSON `false` turns it off**; a missing key, `0`, a string or anything else leaves it on |
+| Drift | on / off | on | `"drift"` | JSON boolean | **only a JSON boolean is read** (`false` turns it off, `true` leaves it on); a missing key, `0`, `1`, a string or anything else keeps the default, on |
 | Wave | Triangle, Sine | Triangle | `"wave"` | integer 0 or 1 | integer value 1 gives Sine; anything else (missing, 0, 2, a real such as `1.0`, a string, `true`) gives Triangle |
 | Level | ±5 V, 0–10 V | ±5 V | `"level"` | integer 0 or 1 | the same rule: only integer 1 gives 0–10 V |
 
 A saved module's `"data"` object looks like `{"drift": true, "wave": 0, "level": 0}`. The knobs are saved by Rack as ordinary params (ids 0–3). **A missing key sets the default**, unlike Fog (where a missing key keeps the current setting). **The cycles' phases are not saved**: a patch loads with every cycle at phase 0, and Drift starts from its seeds [code, spec "(call)"].
 
-JSON values that do not fit cannot corrupt anything; the code never narrows an integer (it compares `json_integer_value(j) == 1`), so Fog's issue #12 does not apply. The keys are not pinned by a test: there is no golden saved-state image for either module [TESTING.md].
+JSON values that do not fit cannot corrupt anything; the code never narrows an integer (it compares the 64-bit value with 1), so Fog's issue #12 does not apply. The parsing is in the Rack-free `NeapState.hpp` (`parseMenu`; `Neap.cpp` only converts each `json_t*` to a `JsonValue`), tested in `test_state`: good values, missing keys, wrong types, and out-of-range integers such as 2, -1 and 2^32+1 [test]. There is still no golden saved-state image for either module [TESTING.md].
 
 **Initialize** (`onReset`) sets Drift on, Wave Triangle, Level ±5 V, and resets the engine: phases to 0, the Weight glide to 0, HIGH low, the RESET trigger to "not yet seen"; the Drift state is kept [code: `NeapEngine::reset`]. Rack resets the knobs.
 
@@ -425,7 +425,7 @@ Spring has no params and saves no data. Initialize sets a flag so that the next 
 Neither module configures bypass routes, so Rack's default applies (nothing is routed) [code; Rack behaviour unverified].
 
 - A bypassed Neap's `process()` does not run: the cycles freeze where they are, outputs go to whatever Rack's default bypass gives (0 V is expected, [unverified]) and the call to Spring stops. Spring goes unlinked 64 process calls later (section 6.2): outputs 0 V, LINK dark. When bypass ends the cycles resume from where they were.
-- A bypassed Spring is skipped by Neap (`!m->isBypassed()`), and its own `process()` does not run either.
+- A bypassed Spring is skipped by Neap (`!m->isBypassed()`), and its own `process()` does not run either. Spring's `onBypass` and `onUnBypass` ask for a reset, which the next `fromNeap` carries out (on Neap's thread, with every other core access), so the trigger history from before the bypass is never resumed: no late trigger on un-bypass [test `run_reset_latch`, the `SpringRun` helper in `SpringCore.hpp`].
 
 ---
 
@@ -505,7 +505,7 @@ Each sample, Neap's `process()` finds `rightExpander.module`, skips it if bypass
 - Spring starts unlinked and becomes linked on the first process call that sees a change.
 - [meas `m_spring`]: after Neap's last call, **63 further process calls still read as linked, and the 64th reads unlinked**. 64 calls last 1.451 ms at 44.1 kHz, 1.333 ms at 48 kHz, 0.667 ms at 96 kHz and 0.333 ms at 192 kHz. During the 63 linked calls the outputs hold their last values (a trigger that was high stays 10 V for up to 63 samples).
 - Steady callers stay linked (a thousand double calls per process call [test]). The count restarts after any change [test].
-- Re-linking: the first `fromNeap` after an unlink clears the core and **only records** the cycle values, so no trigger fires on re-link, whatever the cycles were doing [test `reset_no_burst`, `relink_has_no_burst`].
+- Re-linking: the first `fromNeap` after an unlink (or after a bypass or un-bypass of Spring) clears the core and **only records** the cycle values, so no trigger fires on re-link, whatever the cycles were doing [test `reset_no_burst`, `relink_has_no_burst`].
 - The same timeout covers: Spring removed (nothing to link), Neap bypassed, Neap deleted, and Spring moved away from Neap's right side. In a multi-threaded Rack, Neap's thread and Spring's can run in either order within a frame, so Spring may read the outputs one sample behind (the spec allows a one-sample delay). The timeout of 64 is far above that skew [unverified in a live Rack].
 - `core.out` is written by Neap's thread and read by Spring's `process()` without a lock, by ruling: aligned 32-bit floats (TESTING.md). A read may mix two successive samples' outputs; each value is one valid sample [code].
 
@@ -727,7 +727,7 @@ All seven test programs passed in my run. The repository builds the Neap and Spr
 ### 9.8 Not covered by the automated suite
 
 - Anything in Rack itself: the panels, the menus (including **Add Spring expander**), tooltips (RATE's text, the Weight and MARK displays), lights (P1..P8, HIGH, LINK), save and load through Rack, bypass, polyphony as Rack delivers it, Rack's expander linking (`rightExpander`) and the threading order.
-- No golden saved-state image: the `drift`, `wave` and `level` keys are not pinned by a test and the JSON edge cases are not tested.
+- No golden saved-state image: the `drift`, `wave` and `level` keys are not pinned by a stored file; the parsing of their values and its edge cases are tested (`test_state`).
 - Windows and Linux builds; CPU on x86-64 or Windows; the libm check on this machine.
 - Aliasing against a bound (TESTING.md: not needed).
 - Listening: whether any pair locks by ear, whether Drift is worth having, Weight's feel, TIDE's gain, HIGH's rate at MARK +2 V, triangle against sine, and Spring's outputs on a scope and into a quantiser (the listening stop).
@@ -837,7 +837,7 @@ Defaults: 48 kHz, RATE noon, attenuverter 0, WEIGHT noon (0), MARK +2 V, Drift o
 |---|---|
 | save a patch with each Drift, Wave and Level setting; reopen | settings restored; JSON `data` holds `drift` (boolean), `wave` (0 or 1), `level` (0 or 1) |
 | reopen a patch with Neap and Spring | the link is there; the cycles start at phase 0 and Drift from its seeds |
-| hand-edit JSON: missing keys, `"wave": 2`, `"wave": 1.0`, `"drift": 0`, `"level": "x"` | loads without a crash; missing keys give the defaults; `wave`/`level` other than integer 1 give Triangle/±5 V; `drift` anything but `false` is on |
+| hand-edit JSON: missing keys, `"wave": 2`, `"wave": 1.0`, `"drift": 0`, `"level": "x"` | loads without a crash; missing keys give the defaults; `wave`/`level` other than integer 1 give Triangle/±5 V; `drift` is read only if it is a boolean, so `0` leaves it on |
 | Initialize on Neap | Drift on, Wave Triangle, Level ±5 V, knobs to defaults, cycles restart at 0 |
 | duplicate the module | copy carries all settings; both drift identically (seeds are the same) |
 | module preset (.vcvm) | knobs and menu restored. There are no factory presets |
