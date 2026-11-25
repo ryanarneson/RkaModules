@@ -91,8 +91,8 @@ Anti-goals:
 As the mockup. Rows at 64, 83, 102 and 116 mm and five columns, the same
 as the Narrows sketch, so the two line up.
 
-- **Time**, the hero, on an enamel face lettered 10, 30, 100, 300 (MS),
-  1S, 3S, 10S. Under it, in the middle column, its attenuverter and CV.
+- **Time**, the hero, on an enamel face lettered 10, 32, 100, 316 (MS),
+  1S, 3.16S, 10S, each at its true place on the scale. Under it, in the middle column, its attenuverter and CV.
 - **Style**, a button to the right of the dial, and three lights under it
   lettered TAPE, ANALOG, DIGITAL. Each press steps to the next.
 - Row of knobs: **Feedback**, **Tone**, (Time's attenuverter), **Ratio**,
@@ -123,7 +123,7 @@ unpatched L carries the average of the two sides.
 
 ### Time: the echo time
 
-- 10 ms to 10 s on a log scale; default 300 ms. The tooltip shows
+- 10 ms to 10 s on a log scale; default noon, 316 ms. The tooltip shows
   milliseconds or seconds.
 - This is the left side's time. The right side's is set by Ratio.
 - **CV:** added in octaves. At full attenuverter 1 V doubles the time, so
@@ -186,6 +186,9 @@ A change of style crossfades over a few tens of milliseconds.
 - **Tape.**
   - When Time moves, the read point glides to its new place, so pitch
     bends up or down and settles, as a tape machine changing speed.
+    The bend is at most two octaves, held there at most about 1 s
+    (BEND_MAX_S); a bigger change crossfades the rest of the way, so
+    the new echo arrives within a second.
   - Each pass through the loop is gently saturated, loses a little top
     (about 6 kHz) and a little bottom.
 - **Analog.**

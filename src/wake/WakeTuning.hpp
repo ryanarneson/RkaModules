@@ -7,6 +7,9 @@ namespace wake {
 
 // Time: 10 ms to 10 s, log.
 constexpr float TIME_MIN_S = 0.01f, TIME_MAX_S = 10.f;
+// The longest Tape or Analog bends at its two-octave limit before it
+// crossfades the rest of the way to a new time.
+constexpr float BEND_MAX_S = 1.f;
 // The buffer holds TIME_MAX_S up to this many samples a side; above that
 // rate the longest time is shorter.
 constexpr int BUFFER_MAX_SAMPLES = 1 << 21;

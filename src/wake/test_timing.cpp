@@ -14,7 +14,7 @@ using namespace rka::wake;
 void time_law() {
 	CHECK(std::fabs(timeSeconds(0.f) - 0.01f) < 1e-6f, "knob 0 is %g s (want 10 ms)", timeSeconds(0.f));
 	CHECK(std::fabs(timeSeconds(1.f) / 10.f - 1.f) < 1e-4f, "knob 1 is %g s (want 10 s)", timeSeconds(1.f));
-	CHECK(std::fabs(timeSeconds(0.4924f) / 0.3f - 1.f) < 0.01f, "the default knob is %g s (want 300 ms)", timeSeconds(0.4924f));
+	CHECK(std::fabs(timeSeconds(0.5f) / 0.316228f - 1.f) < 0.01f, "noon is %g s (want 316 ms)", timeSeconds(0.5f));
 	for (float k = 0.f; k <= 1.f; k += 0.05f) {
 		const double want = 0.01 * std::pow(1000.0, (double) k);
 		CHECK(std::fabs(timeSeconds(k) / want - 1.0) < 1e-4, "knob %.2f is %g s (want %g)", k, timeSeconds(k), want);
@@ -31,7 +31,7 @@ void multiples() {
 		CHECK(std::fabs(clockMultiple(i) - want[i]) < 1e-6, "multiple %d is %g (want %g)", i, clockMultiple(i), want[i]);
 	CHECK(clockMultiple(-1) == 0.25f && clockMultiple(99) == 4.f, "steps clamp");
 	CHECK(clockStep(0.5f, 0.f) == 5 && clockMultiple(5) == 1.f, "noon is x1 (step %d)", clockStep(0.5f, 0.f));
-	CHECK(clockStep(0.4924f, 0.f) == 5, "the default knob (300 ms) is x1 on a clock (step %d)", clockStep(0.4924f, 0.f));
+	CHECK(clockStep(0.5f, 0.f) == 5, "the default knob (noon) is x1 on a clock (step %d)", clockStep(0.5f, 0.f));
 	CHECK(clockStep(0.f, 0.f) == 0 && clockStep(1.f, 0.f) == 9, "the knob's ends are 1/4 and x4");
 	// x1 is centred on noon, 0.45 to 0.55: a knob set to noon by eye is
 	// x1. Below it the five slower steps share 0 to 0.45 (0.1 each, half

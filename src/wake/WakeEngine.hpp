@@ -36,9 +36,9 @@ namespace rka {
 struct WakeFrame {
 	enum { TIME, TIME_ATT, FEEDBACK, TONE, RATIO, MIX, DIFFUSE, DRIFT, PARAMS_LEN };
 	// Time, Feedback, Tone, Mix, Diffuse, Drift 0..1; the attenuverter
-	// -1..1; Ratio 0..6. Defaults: 300 ms, 40 %, flat, equal sides, 35 %
+	// -1..1; Ratio 0..6. Defaults: 316 ms (noon), 40 %, flat, equal sides, 35 %
 	// wet, no Diffuse, Drift 15 %.
-	float params[PARAMS_LEN] = {0.4924f, 0.f, 0.3636f, 0.5f, 3.f, 0.35f, 0.f, 0.15f};
+	float params[PARAMS_LEN] = {0.5f, 0.f, 0.3636f, 0.5f, 3.f, 0.35f, 0.f, 0.15f};
 	float timeCv = 0.f, feedbackCv = 0.f, mixCv = 0.f, clock = 0.f, freezeGate = 0.f;
 	float inL = 0.f, inR = 0.f;
 	bool inLPatched = false, inRPatched = false, clockPatched = false, outRPatched = false;
@@ -75,6 +75,7 @@ public:
 			tap_[s].setSampleRate(fs);
 			tap_[s].setRange(1.f, (float) maxSamples_);
 			tap_[s].setCrossfade(CROSSFADE_S);
+			tap_[s].setGlideLimit(BEND_MAX_S);
 			colour_[s].setSampleRate(fs);
 			smear_[s].setSampleRate(fs, (uint32_t) s);
 			// The wander: Hadal's, run fast (a new heading every half second
@@ -421,7 +422,7 @@ private:
 	wake::StyleConstants style_ = wake::STYLES[0], styleFrom_ = wake::STYLES[0];
 	int styleTo_ = 0, clockStep_ = -1;
 	float styleT_ = 1.f, styleStep_ = 1.f, glideSeconds_ = -1.f, glideOctaves_ = -1.f;
-	float seconds_[2] = {0.3f, 0.3f};
+	float seconds_[2] = {0.316f, 0.316f};
 	float feedback_ = 0.f, feedbackTarget_ = 0.f, dry_ = 1.f, dryTarget_ = 1.f, wet_ = 0.f, wetTarget_ = 0.f;
 	float pp_ = 0.f, ppTarget_ = 0.f, mono_ = 0.f, writeGain_ = 1.f;
 	int switchSamples_ = 480, written_ = 0;

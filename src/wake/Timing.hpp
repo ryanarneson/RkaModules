@@ -69,7 +69,7 @@ inline int clockStepNamed(const char* s) {
 }
 
 // The clock's steps on the knob. x1 is centred on noon, 0.45 to 0.55, so a
-// knob set to noon by eye, and the default (300 ms, 0.4924), are x1. The
+// knob set to noon by eye, and the default (noon, 316 ms), are x1. The
 // five slower steps share 0 to 0.45 (0.1 each, half that for 1/4 at the
 // end); the four faster share 0.55 to 1 (0.1286 each, half for x4).
 // stepPosition is the knob as a position along the steps: step n is

@@ -27,7 +27,7 @@ From the top:
 ### Time: the echo time
 
 Time runs from **10 ms to 10 s**. The scale is logarithmic, so the useful
-100 ms to 3 s takes up the middle of the travel. It opens at 300 ms. The
+100 ms to 3 s takes up the middle of the travel. It opens at noon, the exact middle: 316 ms. The
 tooltip shows the time; you can type one in ("250", "250 ms" or "1.5 s").
 
 The **CV** adds to the knob in octaves: with the attenuverter fully right,
@@ -119,7 +119,9 @@ change is smooth, with no click. It opens on Tape.
 | **Analog** | Pitch bends, a little faster than Tape | Darker, and darker still as Time gets longer (about 5 kHz at short times, 1.5 kHz at a second and beyond); driven harder, so repeats turn gritty |
 | **Digital** | The echo crossfades to the new time: no bend | Clean and full; only Tone changes them |
 
-A pitch bend never goes further than two octaves either way. In Digital a
+A pitch bend never goes further than two octaves either way, and never
+holds there for more than about a second: a big turn of Time (300 ms to
+10 s, say) dips, then crossfades the rest of the way to the new echo. In Digital a
 very small change of time (a few samples, as from a slow, shallow CV) is
 slid, not crossfaded, which bends pitch by a hair.
 
