@@ -31,7 +31,7 @@ Four rows, one per Ballast channel, numbered 1 to 4: the **PAN** knob, its
 ## Controls
 
 - **Pan:** hard left to hard right, centre at noon (the default). Rack's
-  tooltip shows -100 % to +100 %. Turning it is smoothed (about 10 ms).
+  tooltip shows -100 % to +100 %. Turning it is smoothed (a 10 ms time constant).
 - **CV:** added to the knob, scaled by the attenuverter: at full, +-5 V from
   centre sweeps hard left to hard right; fully anticlockwise inverts. The
   attenuverter defaults to 0. The CV is not smoothed, so audio-rate
@@ -75,7 +75,8 @@ Balance never boosts, under either law.
 ## Attaching and removing
 
 Attaching a Pan whose knobs are already turned glides each channel in from
-centre over about 10 ms, so it does not click. Removing or bypassing Pan is
+centre, settling in about 85 ms (a 10 ms time constant), so it does not
+click. Removing or bypassing Pan is
 a step back to centre (as unpatching a cable would be): do it with the
 channel quiet if that matters.
 

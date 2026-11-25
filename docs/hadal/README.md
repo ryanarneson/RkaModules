@@ -62,7 +62,9 @@ the L/R mix alike.
 - **Crackle at full:** about 0.14 V RMS long-term on its own output, at
   Drift 0 and noon Depth. It is sparse, so its average is low while its
   ticks are loud. Each tick is soft-clipped, which brings the small and mid
-  ticks up and rounds the biggest; at Drift 0 no tick peaks above ±5 V.
+  ticks up and rounds the biggest; at Drift 0 no tick peaks above ±5 V on either side of the mix. The
+  CRACKLE jack is the sum of both sides and can peak higher: 6.8 V at
+  Drift 0 and 0 km, 5.8 V at 5.5 km, and under 5 V only from 8.25 km up.
   Drift's level wander (up to +4 dB) can push the odd tick past that, to
   about 5.3 V at the default Drift and 7.6 V at full.
 - **Defaults:** Rumble 80 % (about 1.6 V RMS at its own output, half that

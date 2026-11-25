@@ -94,8 +94,10 @@ The window is only a picture: it has no mouse actions.
 
 Every control here is Beads' and does what it does on Beads, through
 Beads' own code. The knobs pass through Beads' own smoothing (a one-pole
-low-pass at its 4 kHz control rate, so a jump in a knob or a CV takes a
-few milliseconds to land).
+low-pass at its 4 kHz control rate, so a jump in a knob takes a few
+milliseconds to land: a 5 ms time constant, 22 ms to settle). The CVs
+differ: Time, Size and Shape 0.5 ms; Feedback, Dry/Wet and Reverb 2.5 ms;
+Density and Pitch are not smoothed and land at the next 0.25 ms block).
 
 ### Time
 
@@ -160,7 +162,7 @@ centre.
   its own. With Seed unlatched, each press of Seed or trigger at SEED
   starts one (see Seed).
 
-**Density's CV** (±5 V for the knob's whole travel) moves the knob,
+**Density's CV** (±5 V covers the knob's whole travel from noon, then the sum is clamped) moves the knob,
 linearly, while the knob is near noon (between 0.275 and 0.725 of the
 travel). Further out it becomes exponential, a volt an octave on the
 grains' rate (fully so beyond 0.225 and 0.775), so a CV there speeds the
@@ -258,7 +260,7 @@ anticlockwise slow (4 times or a quarter of Beads' rate).
 direction:
 
 - **Clockwise** scales the CV: fully clockwise, ±5 V moves the control
-  over its whole travel (Pitch: 12 semitones a volt).
+  over its whole travel from noon (Pitch: 12 semitones a volt).
 - **Anticlockwise** does not invert: the CV's **positive** half sets how
   much randomness is added, so a positive envelope or gate can make the
   grains wilder while it is up. Negative voltages do nothing.
@@ -318,8 +320,9 @@ little longer in those.
 ### Feedback, Dry/Wet and Reverb CVs
 
 Beads has one CV input and an Assign button to choose its destination;
-Spindrift has a CV jack for each instead. Each adds ±5 V for the knob's
-whole travel, and does nothing unpatched.
+Spindrift has a CV jack for each instead. Each adds to the knob, ±5 V
+covering its whole travel from noon (the sum is then clamped), and does
+nothing unpatched.
 
 ### Quality
 
@@ -450,8 +453,9 @@ holds twice as long. The grains are still panned in stereo.
 Spindrift converts Rack's rate to the rate Beads runs at on the way in
 and back on the way out. At 48 kHz in Digital nothing is converted;
 otherwise the converters pass the band up to 0.41 of the lower rate (to
-about 9.8 kHz in Dirty Tape, 13 kHz in Vintage Digital, 19.7 kHz in
-Digital and Clean Tape) and stop everything above half of it. They add
+about 9.8 kHz in Dirty Tape and 13 kHz in Vintage Digital, at every Rack
+rate; in Digital and Clean Tape 18.1 kHz at 44.1 kHz and 19.7 kHz at 96 kHz
+or more) and stop everything above half of it. They add
 0.25 ms of delay at 48 kHz in Digital, about 1.9 ms at 44.1 kHz, about
 2.5 ms in Vintage Digital and about 3.3 ms in Dirty Tape.
 
@@ -476,7 +480,9 @@ the input gain to Automatic and starts it learning again, as on Beads
   Beads runs mono (above); with neither, the synth may take over.
   Polyphonic cables are summed.
 - **L, R**: up to ±10 V. Fully dry (Dry/Wet at 0) the input comes out at
-  0.75 of its level, as on Beads; the synth's voice alone is ±5 V. With
+  0.75 of its level, as on Beads (Digital, Clean Tape up to about 5 V
+  peak, Vintage Digital 0.747 to 0.75). Dirty Tape is lower and depends on
+  the level: 0.74 at 0.5 V peak, 0.69 at 5 V, 0.57 at 10 V; the synth's voice alone is ±5 V. With
   **Gate output** on (the menu), L is the mono mix and R a 0/10 V gate
   that rises as each grain starts and stays high for the first half of
   the gap to the next (in delay mode, with each repeat).
@@ -598,7 +604,8 @@ Bypassed, IN L passes to L and IN R to R.
   **Randomize** moves the knobs only.
 - **Instances** each have their own random stream, so two Spindrifts with
   the same settings and input make different clouds.
-- **Memory**: about 850 kB per Spindrift, set aside when it is added.
+- **Memory**: about 0.89 MB per Spindrift at 48 kHz and 1.31 MB at 44.1 kHz (the
+  converter tables are larger), set aside when it is added.
 - **Aliasing.** Beads' grains read faster than 1 through a Hermite
   interpolator with no low-pass, its envelopes are audio-rate, and its
   qualities decimate and quantise on purpose: all part of its sound, and

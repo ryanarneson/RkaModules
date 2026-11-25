@@ -49,7 +49,7 @@ not infinite, and Fog has no freeze). Visibility follows the knob through a
 
 ### Size: the space
 
-From close to vast, about 0.3x to 3x the mode's delay lengths. Fully left
+From close to vast, 1/3x to 3x the mode's delay lengths. Fully left
 is a close space whose reflections blur at once. Fully right is vast: at
 long Visibility it is a wash, and at CLEAR it gives sparse, separate echoes
 before anything fills in. Size does not change the decay time or the level.
@@ -68,9 +68,10 @@ low-frequency decay. FRET is darker than HAAR at every setting, ICE brighter.
 ### Bloom: how the wash arrives
 
 How slowly the wash swells in after a sound. Bloom shapes the signal fed
-into the network: under about 50 ms fully left, about 1 s at noon and
-about 4 s fully right. On the whole output it measures roughly 1.2 to 1.7 s
-at noon, because the network builds up as well, more so at long Visibility.
+into the network: fully left it reaches −3 dB in about 12 ms (24.6 ms in
+FRET), about 1 s at noon and about 4 s fully right. On the whole output it
+measures 1.25 to 1.34 s at noon in HAAR, SMOKE and ICE and 2.2 s in FRET
+(at a T60 of 6.3 s), because the network builds up as well, more so at long Visibility.
 The dry sound is never delayed.
 
 ### Drift: modulation in the tail

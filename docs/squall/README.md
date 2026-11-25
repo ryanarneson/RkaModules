@@ -39,7 +39,7 @@ number of events, on a smooth scale between the words:
 | RAIN | about one a second | 1 in 4 |
 | STORMY (fully right) | 8 a second | every tick |
 
-Rack's tooltip shows the free-running rate ("1 per 9.0 s"). At Calm,
+Rack's tooltip shows the free-running rate ("1 per 8.7 s" at noon). At Calm,
 minutes can pass with nothing happening: **the light flashes on every
 event**, so you can see Squall is working.
 
@@ -53,7 +53,9 @@ the amount**: over a long stretch, the average is what Weather says. A
 burst at Calm lasts minutes; at Stormy, a moment. The default is 30 %, a
 little gusty.
 
-With a clock at Stormy and Gust up, the odd tick is skipped: a short lull.
+With a clock at Stormy every tick fires. Only for the first moments after
+start-up (or after Weather rises from a lower setting) a few ticks can be
+skipped while Gust builds: a short lull.
 
 ### Memory: whether the weather repeats
 
@@ -76,8 +78,10 @@ the patch**, and carries on when a clock is patched or unpatched.
 ### CV and attenuverters
 
 Weather, Gust and Memory each have a CV input and an attenuverter:
-control = knob + CV / 10 V × attenuverter. With the attenuverter fully
-clockwise, ±5 V from noon sweeps the whole range; fully anticlockwise
+control = knob + CV / 10 V × attenuverter. CV adds to the
+knob, then the sum is clamped. With the attenuverter fully clockwise, ±5 V
+sweeps the whole range of Weather from noon (Gust, default 30 %, and Memory,
+default 0, reach less: +5 V on Memory gives 50 %); fully anticlockwise
 inverts. The attenuverters default to 0. A polyphonic CV uses its first
 channel. A slow LFO or a ramp on **Gust** or **Memory** is the way to let a
 piece go from steady to stormy, or from wandering to looping, and back.
@@ -102,8 +106,8 @@ piece go from steady to stormy, or from wandering to looping, and back.
 - **STEP:** a new random value at each event, held until the next. New
   values are spread evenly across the range.
 - **SWELL:** a smooth drift through the same values as Step, never
-  overshooting and never with a corner. It reaches a new value in about the
-  average time between events, so its pace follows Weather: tens of minutes
+  overshooting and never with a corner. It takes about two average gaps
+  between events to get 95 % of the way to a new value (17 s at noon), so its pace follows Weather: tens of minutes
   per swing at Calm, a fraction of a second at Stormy. In a burst it smooths
   through the quick changes; in a lull it arrives and rests.
 - **Range** (right-click menu, for Step and Swell together): **±5 V**
