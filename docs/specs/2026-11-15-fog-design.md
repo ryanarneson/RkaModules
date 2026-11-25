@@ -317,7 +317,12 @@ Visibility: full wet matched dry at every Visibility and Size.)
   (a second smoother here once lagged the network and swelled a 1 → 0 jump
   5–8 dB for 50–70 ms); Size goes through a 30 ms smoother. Moving
   Visibility or Size does not step the level. The earlier −6 dB trim is
-  gone.
+  gone. The total wet gain is split between the network's input and its
+  output (the same in steady state): a fall goes on the output, so the
+  echoes in the network fall with it; a rise goes on the input, so it
+  reaches new sound only and a ringing tail is not lifted (all on the
+  output, Visibility 0 → 1 within 150 ms of a note's end lifted the tail
+  4–13 dB on noise; issue #22). The input's share is capped at 18 dB.
 - **Loud drones are levelled:** a held tonal drone (a saw, a sine) builds
   up in the network to 4–8 dB over noise, with peaks to 20–50 V at Damp 0.
   The user's ruling: these are turned down, not clipped. A wet leveller, a
@@ -391,7 +396,9 @@ leveller's state starts clean on waking.
 
 ### Bypass
 
-IN L passes to OUT L and IN R to OUT R.
+IN L passes to OUT L and IN R to OUT R, every channel. IN R normals to IN
+L, as when running, so a mono source on IN L alone reaches both outputs
+(a `processBypass` override: `configBypass` cannot express a normal).
 
 ### Presets
 

@@ -45,7 +45,10 @@ Fully left is 0.4 s and fully right 80 s. Noon is about 5.7 s, just past
 MIST. Rack's tooltip shows the time in seconds. The time holds at any Size.
 It always decays: even fully right the tail dies away (DENSE is very long,
 not infinite, and Fog has no freeze). Visibility follows the knob through a
-30 ms smoother, so a jump does not step the wet.
+30 ms smoother, so a jump does not step the wet. Turning Visibility up while
+a tail rings does not make that tail louder: it rings on from where it is,
+for longer. The louder level of a longer decay (see Level) comes with the
+sound that follows. Turning it down turns the tail down with it.
 
 ### Size: the space
 
@@ -174,7 +177,9 @@ To keep your own, save from the same menu (Save preset).
 
 ## Bypass
 
-IN L passes straight to OUT L and IN R to OUT R.
+IN L passes straight to OUT L and IN R to OUT R, every channel of a
+polyphonic cable. With only IN L patched, it reaches both outputs, as IN R
+normals to IN L when Fog is running.
 
 ## Other details
 
