@@ -41,19 +41,21 @@ inline float liveStageHeight(float p, float start01, float goal01, float shape) 
 struct EnvelopeLayout {
 	float x[5];   // stage edges in 0..1 of the inner width: A starts at x[0] = 0, R ends at x[4] = 1
 	float shape, sustain01;
-	bool ar;      // AR mode: no D or S span (x[1] = x[2] = x[3]); Release falls from the top
+	bool ad;      // AD mode: no S or R span (x[2] = x[3] = x[4] = 1); Decay falls from the top to 0
 
 	// Point on the drawn envelope at fraction u of the inner width, as height 0..1.
 	float heightAt(float u) const {
 		u = detail::clamp01(u);
+		const float floor = ad ? 0.f : sustain01;   // where Decay ends
 		if (u < x[1])
 			return curveRise((u - x[0]) / (x[1] - x[0]), shape);
 		if (u < x[2])
-			return 1.f + (sustain01 - 1.f) * curveFall((u - x[1]) / (x[2] - x[1]), shape);
+			return 1.f + (floor - 1.f) * curveFall((u - x[1]) / (x[2] - x[1]), shape);
 		if (u < x[3])
 			return sustain01;
-		const float top = ar ? 1.f : sustain01;
-		return top * (1.f - curveFall((u - x[3]) / (x[4] - x[3]), shape));
+		if (!(x[4] > x[3]))
+			return floor;   // AD: no Release span; the end of the line is Decay's end
+		return sustain01 * (1.f - curveFall((u - x[3]) / (x[4] - x[3]), shape));
 	}
 
 	// The span the running Attack, Decay or Release is drawn over, [u0, u1]:
@@ -112,15 +114,15 @@ struct EnvelopeLayout {
 };
 
 // The stages' spans, widths growing with the log of their times (Sustain a
-// fixed share). AR mode (`ar`): only Attack and Release, as the voice runs
-// there; Decay and Sustain get no width.
-inline EnvelopeLayout layoutEnvelope(const ViewParams& p, bool ar = false) {
+// fixed share). AD mode (`ad`): only Attack and Decay, as the voice runs
+// there; Sustain and Release get no width.
+inline EnvelopeLayout layoutEnvelope(const ViewParams& p, bool ad = false) {
 	EnvelopeLayout e;
 	e.shape = detail::clamp01(p.shape);
 	e.sustain01 = detail::clamp01(p.sustain01);
-	e.ar = ar;
-	const float w[4] = {detail::timeWeight(p.attack), ar ? 0.f : detail::timeWeight(p.decay), ar ? 0.f : 2.5f,
-	                    detail::timeWeight(p.release)};
+	e.ad = ad;
+	const float w[4] = {detail::timeWeight(p.attack), detail::timeWeight(p.decay), ad ? 0.f : 2.5f,
+	                    ad ? 0.f : detail::timeWeight(p.release)};
 	const float total = w[0] + w[1] + w[2] + w[3];
 	float acc = 0.f;
 	for (int i = 0; i < 4; i++) {

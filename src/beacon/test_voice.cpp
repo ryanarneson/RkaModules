@@ -1,5 +1,5 @@
 // One Beacon voice (src/beacon/Voice.hpp): stage times, levels, part-way
-// starts, ADSR / AR / Hold, RETRIG, the stage gates and TRIG, mode
+// starts, ADSR / AD / Hold, RETRIG, the stage gates and TRIG, mode
 // switches and hostile input, against the plan's Global Constraints.
 #include "beacon/Voice.hpp"
 #include "testing.hpp"
@@ -322,44 +322,49 @@ struct Trail {
 	}
 };
 
-// AR mode is a one-shot: any gate, from one sample to many times Attack,
-// gives Attack to 10 V and then Release, and nothing else. (It replaced
-// Trig mode, where a gate that outlasted Attack ran Decay and Sustain.)
-void ar_mode() {
-	const float fs = 48000.f, A = 0.05f, R = 0.03f;
-	const long nA = 2400, nR = 1440;
+// AD mode is a one-shot, as Maths' trigger: any gate, from one sample to
+// many times Attack, gives Attack to 10 V and then a fall to 0 V over the
+// Decay time, and nothing else. Release and Sustain take no part. (It
+// replaced Trig mode, where a gate that outlasted Attack ran Decay to
+// Sustain and held; and, briefly, an AD mode whose fall was Release.)
+void ad_mode() {
+	const float fs = 48000.f, A = 0.05f, D = 0.03f, R = 0.2f;
+	const long nA = 2400, nD = 1440;
 	for (long width : {1L, 48L, nA / 2, nA - 1, nA, nA + 1, 2 * nA, 10 * nA, 1000000L}) {
-		Rig r(fs, A, 0.1f, 5.f, R, 0.75f, AR_MODE);
+		Rig r(fs, A, D, 5.f, R, 0.75f, AD_MODE);
 		Trail t;
-		bool dsGate = false, releaseFromTop = true;
-		long attack = 0, release = 0;
-		float peak = 0.f;
+		bool srGate = false, fallFromTop = true;
+		long attack = 0, decay = 0;
+		float peak = 0.f, end = -1.f;
 		Stage last = IDLE;
-		for (long i = 0; i < nA + nR + 4800; i++) {
+		for (long i = 0; i < nA + nD + 9600; i++) {
 			r.in.gate = i < width;
 			r.step();
 			const Stage st = r.v.stage();
 			t.see(st);
-			dsGate |= r.out.stageGate[1] || r.out.stageGate[2];
+			srGate |= r.out.stageGate[2] || r.out.stageGate[3];
 			attack += st == ATTACK;
-			release += st == RELEASE;
-			if (st == RELEASE && last == ATTACK)
-				releaseFromTop = r.out.level <= 10.f && r.out.level > 9.9f;
+			decay += st == DECAY;
+			if (st == DECAY && last == ATTACK)
+				fallFromTop = r.out.level <= 10.f && r.out.level > 9.9f;
+			if (st == DECAY)
+				end = r.out.level;
 			last = st;
 			peak = std::max(peak, r.out.level);
 		}
-		CHECK(t.is({ATTACK, RELEASE, IDLE}), "AR, a %ld-sample gate: Attack, Release, idle", width);
-		if (!t.is({ATTACK, RELEASE, IDLE}))
-			t.print("AR");
-		CHECK(std::abs(attack - nA) <= 1 && std::abs(release - nR) <= 1, "AR, a %ld-sample gate: Attack %ld, Release %ld samples (want %ld, %ld)",
-		      width, attack, release, nA, nR);
-		CHECK(peak == 10.f && releaseFromTop, "AR, a %ld-sample gate: up to %g, Release from the top %d", width, peak, (int) releaseFromTop);
-		CHECK(!dsGate, "AR, a %ld-sample gate: the D or S gate fired", width);
+		CHECK(t.is({ATTACK, DECAY, IDLE}), "AD, a %ld-sample gate: Attack, Decay, idle", width);
+		if (!t.is({ATTACK, DECAY, IDLE}))
+			t.print("AD");
+		CHECK(std::abs(attack - nA) <= 1 && std::abs(decay - nD) <= 1, "AD, a %ld-sample gate: Attack %ld, Decay %ld samples (want %ld, %ld)",
+		      width, attack, decay, nA, nD);
+		CHECK(peak == 10.f && fallFromTop && end == 0.f, "AD, a %ld-sample gate: up to %g, falls from the top %d to %g", width, peak,
+		      (int) fallFromTop, end);
+		CHECK(!srGate, "AD, a %ld-sample gate: the S or R gate fired", width);
 	}
 	// Triggers faster than Attack: each resumes Attack where it is, so the
 	// envelope still reaches 10 V in Attack's time from the first.
 	{
-		Rig r(fs, 0.2f, 0.1f, 5.f, 0.1f, 0.75f, AR_MODE);
+		Rig r(fs, 0.2f, 0.1f, 5.f, 0.1f, 0.75f, AD_MODE);
 		long top = -1;
 		for (long i = 0; i < 48000 && top < 0; i++) {
 			r.in.gate = i % 2400 < 48;   // 1 ms every 50 ms
@@ -407,13 +412,13 @@ void retrig() {
 	r.step();
 	CHECK(r.v.stage() == ATTACK && r.out.level >= at && r.out.level - at < 0.25f,
 	      "GATE while releasing: Attack from %g (stage %s, %g)", at, stageName(r.v.stage()), r.out.level);
-	// RETRIG in AR mode while the gate is high restarts Attack too.
-	Rig t(48000.f, 0.01f, 0.01f, 5.f, 0.1f, 0.75f, AR_MODE);
+	// RETRIG in AD mode while the gate is high restarts Attack too.
+	Rig t(48000.f, 0.01f, 0.01f, 5.f, 0.1f, 0.75f, AD_MODE);
 	t.in.gate = true;
 	t.run(t.samples(0.05));
 	t.in.retrig = true;
 	t.step();
-	CHECK(t.v.stage() == ATTACK, "RETRIG in AR mode (stage %s)", stageName(t.v.stage()));
+	CHECK(t.v.stage() == ATTACK, "RETRIG in AD mode (stage %s)", stageName(t.v.stage()));
 }
 
 // An Attack begun part-way picks up its full curve at the point with the
@@ -443,20 +448,22 @@ void attack_resumes() {
 			const double at = 10.0 * curveRise(float(p0 + 1.0 / 4800.0), shape);
 			CHECK(std::fabs(first - at) < 2e-3, "shape %g: the first sample %g, the curve there %g", shape, first, at);
 		}
-		// A gate back during Release, in ADSR and in AR mode.
-		for (Mode mode : {GATE_MODE, AR_MODE}) {
-			Rig r(fs, 0.1f, 0.05f, 6.f, 0.4f, shape, mode);
+		// A gate back during the fall: Release in ADSR, Decay in AD.
+		for (Mode mode : {GATE_MODE, AD_MODE}) {
+			const bool ad = mode == AD_MODE;
+			Rig r(fs, 0.1f, ad ? 0.4f : 0.05f, 6.f, 0.4f, shape, mode);
 			r.in.gate = true;
-			r.run(r.samples(0.3));
+			r.run(ad ? 1 : r.samples(0.3));
 			r.in.gate = false;
-			r.run(r.samples(0.15));
+			r.run(r.samples(ad ? 0.25 : 0.15));
+			CHECK(r.v.stage() == (ad ? DECAY : RELEASE), "mode %d: falling (%s)", int(mode), stageName(r.v.stage()));
 			const float from = r.out.level;
 			r.in.gate = true;
 			r.step();
 			float last = -1.f;
 			const long n = runStage(r, ATTACK, 10000, &last) + 1;
 			const double want = 4800.0 * (1.0 - curvePoint(from / 10.0, shape));
-			CHECK(std::fabs(n - want) <= 2.0, "shape %g, mode %d: Attack from %g V in Release took %ld samples (want %.0f)", shape,
+			CHECK(std::fabs(n - want) <= 2.0, "shape %g, mode %d: Attack from %g V in the fall took %ld samples (want %.0f)", shape,
 			      int(mode), from, n, want);
 		}
 	}
@@ -876,55 +883,78 @@ void mode_switch() {
 		const long n = runStage(r, ATTACK, 10000, &last);
 		CHECK(std::fabs(n - 480.0) <= 1.0 && last == 10.f, "and it takes Attack's time (%ld samples, to %g)", n, last);
 	}
-	// HOLD -> AR with the gate low: Release rises from a negative level to 0 V.
+	// HOLD -> AD with the gate low: AD's fall (Decay) rises from a negative level to 0 V.
 	{
 		Rig r(fs, 0.01f, 0.01f, -4.f, 0.1f, 0.75f, HOLD_MODE);
 		r.run(r.samples(0.05));
-		r.in.mode = AR_MODE;
+		r.in.mode = AD_MODE;
 		r.in.sustain = 5.f;
 		r.step();
-		CHECK(r.v.stage() == RELEASE && r.out.level > -4.f && r.out.level < -3.9f,
-		      "HOLD -> AR, low: Release from -4 V (%s, %g)", stageName(r.v.stage()), r.out.level);
+		CHECK(r.v.stage() == DECAY && r.out.level > -4.f && r.out.level < -3.95f,
+		      "HOLD -> AD, low: AD's fall (Decay) from -4 V (%s, %g)", stageName(r.v.stage()), r.out.level);
 		float last = -1.f;
-		const long n = runStage(r, RELEASE, 10000, &last);
-		CHECK(std::fabs(n - 4800.0) <= 1.0 && last == 0.f, "and rises to 0 V in Release's time (%ld samples, to %g)", n,
+		const long n = runStage(r, DECAY, 10000, &last);
+		CHECK(std::fabs(n - 480.0) <= 1.0 && last == 0.f, "and rises to 0 V in Decay's time (%ld samples, to %g)", n,
 		      last);
 		CHECK(r.v.stage() == IDLE, "then idle");
 	}
-	// ADSR <-> AR: the running stage carries on.
+	// ADSR <-> AD: the running stage carries on.
 	{
 		Rig r(fs, 0.1f, 0.1f, 5.f, 0.1f, 0.75f);
 		r.in.gate = true;
 		r.run(r.samples(0.03));
 		const double ph = r.v.phase();
-		r.in.mode = AR_MODE;
+		r.in.mode = AD_MODE;
 		r.step();
-		CHECK(r.v.stage() == ATTACK && r.v.phase() > ph, "ADSR -> AR mid-Attack carries on");
-		r.in.gate = false;   // AR mode: Attack completes
+		CHECK(r.v.stage() == ATTACK && r.v.phase() > ph, "ADSR -> AD mid-Attack carries on");
+		r.in.gate = false;   // AD mode: Attack completes
 		r.run(10);
-		CHECK(r.v.stage() == ATTACK, "and AR mode's rule applies to the next edge (stage %s)", stageName(r.v.stage()));
+		CHECK(r.v.stage() == ATTACK, "and AD mode's rule applies to the next edge (stage %s)", stageName(r.v.stage()));
 		r.in.mode = GATE_MODE;   // no edge: Attack still carries on, then releases
 		r.step();
-		CHECK(r.v.stage() == ATTACK, "AR -> ADSR with the gate already low carries on (stage %s)",
+		CHECK(r.v.stage() == ATTACK, "AD -> ADSR with the gate already low carries on (stage %s)",
 		      stageName(r.v.stage()));
 		float last = 0.f;
 		runStage(r, ATTACK, 10000, &last);
 		CHECK(last == 10.f && r.v.stage() == RELEASE, "then Release from 10 V (stage %s)", stageName(r.v.stage()));
 	}
-	// ADSR -> AR in Decay or Sustain, the gate still high: AR has no Decay
-	// or Sustain (nor any span for them in its window), so Release starts at
-	// once from the level.
-	for (float when : {0.03f, 0.3f}) {
-		Rig r(fs, 0.01f, 0.1f, 5.f, 0.1f, 0.75f);
+	// ADSR -> AD in Decay, Sustain or Release: AD's only fall is Decay to
+	// 0 V, so the envelope falls from its level over Decay at once.
+	for (float when : {0.03f, 0.3f, 0.45f}) {
+		Rig r(fs, 0.01f, 0.1f, 5.f, 0.5f, 0.75f);
 		r.in.gate = true;
-		r.run(r.samples(when));
+		r.run(r.samples(when < 0.4f ? when : 0.3f));
+		if (when > 0.4f) {
+			r.in.gate = false;
+			r.run(r.samples(0.15));
+		}
 		const Stage before = r.v.stage();
 		const float at = r.out.level;
-		r.in.mode = AR_MODE;
-		r.clearStep();
+		r.in.mode = AD_MODE;
 		r.step();
-		CHECK((before == DECAY || before == SUSTAIN) && r.v.stage() == RELEASE && r.out.level <= at && at - r.out.level < 0.01f,
-		      "ADSR -> AR in %s: Release from %g at once (stage %s, %g)", stageName(before), at, stageName(r.v.stage()), r.out.level);
+		CHECK(r.v.stage() == DECAY && r.v.goal() == 0.0 && r.out.level <= at && at - r.out.level < 0.02f,
+		      "ADSR -> AD in %s: falls from %g to 0 over Decay (stage %s, goal %g, %g)", stageName(before), at, stageName(r.v.stage()),
+		      r.v.goal(), r.out.level);
+		float last = -1.f;
+		const long n = runStage(r, DECAY, 100000, &last) + 1;
+		CHECK(std::fabs(n - 4800.0) <= 2.0 && last == 0.f && r.v.stage() == IDLE, "and takes Decay's 100 ms to 0 (%ld samples, %g, then %s)", n,
+		      last, stageName(r.v.stage()));
+	}
+	// AD -> ADSR mid-fall: with the gate high, Decay heads for Sustain
+	// instead of 0 V; with it low, Release.
+	for (bool high : {true, false}) {
+		Rig r(fs, 0.01f, 0.5f, 5.f, 0.2f, 0.75f, AD_MODE);
+		r.in.gate = true;
+		r.run(r.samples(0.1));   // into AD's Decay, falling toward 0 V
+		r.in.gate = high;
+		r.run(2);
+		const float at = r.out.level;
+		r.in.mode = GATE_MODE;
+		r.step();
+		const Stage want = high ? DECAY : RELEASE;
+		CHECK(r.v.stage() == want && r.v.goal() == (high ? 5.0 : 0.0) && std::fabs(r.out.level - at) < 0.02f,
+		      "AD -> ADSR mid-fall, gate %s: %s toward %g from %g (%g)", high ? "high" : "low", stageName(r.v.stage()), r.v.goal(), at,
+		      r.out.level);
 	}
 	// Through all three positions at audio rate with the gate high: no jump
 	// beyond the fastest stage's own step, gates coherent.
@@ -946,7 +976,7 @@ void mode_switch() {
 
 void nan() {
 	const float nanv = std::nanf(""), inf = INFINITY;
-	for (Mode mode : {GATE_MODE, AR_MODE, HOLD_MODE}) {
+	for (Mode mode : {GATE_MODE, AD_MODE, HOLD_MODE}) {
 		for (int field = 0; field < 6; field++) {
 			for (float bad : {nanv, inf, -inf}) {
 				Rig r(48000.f, 0.003f, 0.004f, 5.f, 0.005f, 0.75f, mode);
@@ -979,7 +1009,7 @@ int main() {
 	levels();
 	part_way();
 	gate_mode();
-	ar_mode();
+	ad_mode();
 	attack_resumes();
 	retrig();
 	no_jumps();

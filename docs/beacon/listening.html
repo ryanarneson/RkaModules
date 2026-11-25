@@ -57,8 +57,8 @@ th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: upper
 <body>
 <main>
 <h1>BEACON</h1>
-<div class="sub">Listening list · test build 2.0.44 · 2026-11-25 · a full retest</div>
-<p class="lead">Beacon back for a full retest, on one rule: it should always do what you expect, and the window should always show what it is doing. What changed in 2.0.44: the switch reads <b>ADSR / AR / HOLD</b>; <b>AR is a one-shot</b> (Attack to the top, then Release, whatever the gate does); an Attack that starts part-way up <b>picks up its curve and takes only the time left</b>; the window draws what the mode will do, each stage in its own zone. The manual's new table, "Gates, pulses and triggers", says what each gate length gives in each mode. The retest report (beacon-2.0.44-retest.html) shows 22 of these patches as scope traces beside the window.
+<div class="sub">Listening list · test build 2.0.45 · 2026-11-25 · a full retest</div>
+<p class="lead">Beacon back for a full retest, on one rule: it should always do what you expect, and the window should always show what it is doing. What changed (2.0.44 and 2.0.45): the switch reads <b>ADSR / AD / HOLD</b>; <b>AD is a one-shot</b>, as a trigger into Maths (Attack to the top, then down over the <b>Decay</b> time, whatever the gate does); an Attack that starts part-way up <b>picks up its curve and takes only the time left</b>; the window draws what the mode will do, each stage in its own zone. The manual's new table, "Gates, pulses and triggers", says what each gate length gives in each mode. The retest report (beacon-2.0.45-retest.html) shows 22 of these patches as scope traces beside the window.
 Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> need your eyes: the window's geometry is now tested against the output every sample, but not how it looks in Rack, nor the switch, the lights and the button.</p>
 
 <div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
@@ -70,7 +70,7 @@ Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the cli
 <h2>Verdicts (say what to change)</h2>
 <table>
 <tr><th>What</th><th>The question</th></tr>
-<tr><td><b>AR</b></td><td>A one-shot that ignores gate length. Is that what you expect from a switch reading AR? Should RETRIG in AR work without the gate high (it now needs the gate high, as in ADSR)?</td></tr>
+<tr><td><b>AD</b></td><td>A one-shot that ignores gate length, its fall on the D knob. Is that what you expect from a switch reading AD? Should RETRIG in AD work without the gate high (it now needs the gate high, as in ADSR)?</td></tr>
 <tr><td><b>RESUMED ATTACK</b></td><td>A retrigger finishes Attack's curve from where it is: from 6 V, 40 % of Attack at Shape noon, about 64 % at the default, 80 % fully right, 12 % fully left. Does a retriggered note feel right at each end of Shape?</td></tr>
 <tr><td><b>THE WINDOW</b></td><td>Does what you see now match what you hear and scope, in both modes and with short gates? Anything still surprising?</td></tr>
 </table>
@@ -81,25 +81,25 @@ Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the cli
 <div class="chain">Sway square (PW knob) → Beacon GATE · Beacon OUT → a scope and Sluice level CV</div>
 <p>ADSR, <b>A</b> 50 ms, <b>D</b> 200 ms, <b>S</b> 5 V. Sway at 1 Hz, then sweep its PW from 1 % (10 ms) up to 50 %: a blip, then up and part-way down Decay, then the full ADSR holding at Sustain. The gate's length is shaping the envelope, as on any ADSR.</p></div>
 
-<div class="patch"><h4>2. The same pulses in AR</h4>
-<div class="chain">the same patch · switch to AR</div>
-<p>Now every pulse, from 1 % to 99 %, gives the same envelope: up to 10 V in 50 ms, then Release. Change Sway's rate and PW: nothing about the shape changes. The window shows only A and R.</p></div>
+<div class="patch"><h4>2. The same pulses in AD</h4>
+<div class="chain">the same patch · switch to AD</div>
+<p>Now every pulse, from 1 % to 99 %, gives the same envelope: up to 10 V in 50 ms, then down over the 200 ms Decay. Change Sway's rate and PW: nothing about the shape changes. The window shows only A and D. (Or use Sway's EOC, a true 1 ms trigger.)</p></div>
 
 <div class="patch"><h4>3. Retriggers</h4>
 <div class="chain">MIDI to CV GATE → GATE · its RETRIG → RETRIG</div>
 <p>ADSR, <b>A</b> 1 s, <b>S</b> 6 V. Hold a note into Sustain, then play overlapping notes: each climbs from 6 V and reaches the top in less than a full second. Watch the dot join the drawn Attack curve at the level and ride it up. Try Shape fully left, noon and fully right.</p></div>
 
 <div class="patch"><h4>4. Fast triggers into a long Attack</h4>
-<div class="chain">a clock at 8 to 16 Hz → GATE · AR</div>
-<p><b>A</b> 500 ms, <b>R</b> 300 ms. The envelope climbs steadily to the top in half a second, then releases a little between triggers and catches the top again. Before 2.0.44 it crept and never arrived.</p></div>
+<div class="chain">a clock at 8 to 16 Hz → GATE · AD</div>
+<p><b>A</b> 500 ms, <b>D</b> 300 ms. The envelope climbs steadily to the top in half a second, then falls a little between triggers and catches the top again. Before 2.0.44 it crept and never arrived.</p></div>
 
 <div class="patch"><h4>5. Slow swells for a drone</h4>
-<div class="chain">Squall GATE → Beacon GATE (AR) · OUT → Sluice level CV · Fathom → Sluice → Fog</div>
-<p><b>A</b> about 8 s, <b>R</b> 20 s, <b>SHAPE</b> fully left. Each Squall gate swells the drone in and lets it fade, however long Squall holds its gate. A new gate mid-fade swells back up from where it is.</p></div>
+<div class="chain">Squall GATE → Beacon GATE (AD) · OUT → Sluice level CV · Fathom → Sluice → Fog</div>
+<p><b>A</b> about 8 s, <b>D</b> 20 s, <b>SHAPE</b> fully left. Each Squall gate swells the drone in and lets it fade, however long Squall holds its gate. A new gate mid-fade swells back up from where it is.</p></div>
 
 <div class="patch"><h4>6. Events from the stage gates</h4>
 <div class="chain">Beacon A gate → Rigging STRUM · Beacon TRIG → Narrows PING</div>
-<p>ADSR with a long gate: five pings (Attack, Decay, Sustain, Release, rest). AR: three (Attack, Release, rest).</p></div>
+<p>ADSR with a long gate: five pings (Attack, Decay, Sustain, Release, rest). AD: three (Attack, Decay, rest).</p></div>
 
 <div class="patch"><h4>7. Hold as glide</h4>
 <div class="chain">Sequencer V/OCT → Beacon SUSTAIN CV · Beacon OUT → Fathom V/OCT</div>
@@ -109,23 +109,23 @@ Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the cli
 <script>
 const groups = [
  ["First look", [
-  ["Add Beacon and look at it before patching anything.", "The switch is lettered ADSR / AR / HOLD, up at ADSR. The window shows the default envelope, letters A D S R, all dim; the dot at rest bottom left.", null, true],
-  ["Move the switch to AR.", "The window redraws with only Attack and Release, lettered A and R. Back to ADSR: the four stages again.", null, true],
-  ["Open a patch saved with the switch on Trig.", "It opens on AR."]]],
+  ["Add Beacon and look at it before patching anything.", "The switch is lettered ADSR / AD / HOLD, up at ADSR. The window shows the default envelope, letters A D S R, all dim; the dot at rest bottom left.", null, true],
+  ["Move the switch to AD.", "The window redraws with only Attack and Decay, lettered A and D, Decay falling to the bottom. Back to ADSR: the four stages again.", null, true],
+  ["Open a patch saved with the switch on Trig (or on AR in 2.0.44).", "It opens on AD; the fall is now on the D knob."]]],
  ["ADSR: gate length", [
   ["A 50 ms Attack, 200 ms Decay, Sustain 5 V. A 1 ms trigger into GATE.", "A faint blip, as on any ADSR: it only rises while the gate is high. The window draws its Release in the R zone, from the level it reached."],
   ["The same with a 30 ms pulse, a 150 ms pulse, then a gate held for a second.", "30 ms: part of the way up, then Release. 150 ms: to the top, part of the way down Decay, then Release from there. Held: the full ADSR, holding at Sustain until the gate falls."],
   ["Sway square at 1 Hz into GATE; sweep its PW from 1 % to 50 %.", "The envelope grows with the pulse, blip to full ADSR, and the window's dot follows OUT on a scope."],
   ["A gate falling mid-Attack, mid-Decay and in Sustain, with Release at 1 s.", "Release takes 1 s from each level, as an analog release does. The window draws each Release in the R zone."]]],
- ["AR: one-shot", [
-  ["AR, A 50 ms, R 300 ms. A 1 ms trigger, a 100 ms pulse, a 2 s gate.", "All three: up to 10 V in 50 ms, then Release in 300 ms. Only the A and R lights and gates; D and S never fire."],
-  ["Sway square at 1 % width at 0.1 Hz (a 100 ms pulse) with A at 50 ms (your earlier patch).", "A clean AR. Before 2.0.44 it humped through Decay."],
-  ["Hold the push button in AR.", "One AR; holding longer changes nothing. Let go and press again for another."],
-  ["A clock faster than Attack (A 500 ms, triggers every 100 ms).", "It climbs steadily and reaches the top in 500 ms, then releases a little between triggers."]]],
+ ["AD: one-shot", [
+  ["AD, A 50 ms, D 300 ms. A 1 ms trigger, a 100 ms pulse, a 2 s gate.", "All three: up to 10 V in 50 ms, then down to 0 V in 300 ms. Only the A and D lights and gates; S and R never fire, and turning S or R changes nothing."],
+  ["Sway square at 1 % width at 0.1 Hz (a 100 ms pulse) with A at 50 ms (your earlier patch).", "A clean AD. Before 2.0.44 it humped through Decay to Sustain."],
+  ["Hold the push button in AD.", "One AD; holding longer changes nothing. Let go and press again for another."],
+  ["A clock faster than Attack (A 500 ms, triggers every 100 ms).", "It climbs steadily and reaches the top in 500 ms, then falls a little between triggers."]]],
  ["Retrigger and Attack's curve", [
   ["ADSR, A 1 s, S 6 V. Hold into Sustain, then RETRIG. Shape at noon.", "Back to the top in about 0.4 s (the 4 V left of a 10 V, 1 s climb), on a straight line; the dot joins the drawn Attack line at 6 V."],
   ["The same at Shape fully right, then fully left.", "Right: about 0.8 s (the slow end of the classic curve is what's left). Left: about 0.12 s (the swell's slow start is behind it). The window's dot rides the drawn curve either way.", null, true],
-  ["A gate back during Release, in ADSR and in AR.", "Attack picks up from the level; no jump, no crawl."],
+  ["A gate back during the fall: Release in ADSR, Decay in AD.", "Attack picks up from the level; no jump, no crawl."],
   ["RETRIG while the gate is low.", "Nothing happens (in both modes)."]]],
  ["Shape and the window", [
   ["Shape at noon, a long note. Watch the window and a scope of OUT.", "Straight lines in both. The window's stage widths are log-scaled, so it won't line up with the scope in time, only in shape."],
@@ -133,10 +133,10 @@ const groups = [
   ["Turn Shape while a long Attack runs.", "No jump; the rest of the stage bends from where it is, and the window redraws from there.", null, true]]],
  ["Hold, outputs, patch", [
   ["HOLD with an LFO into the SUSTAIN CV.", "Unchanged: a slew, A up, D down; the window scrolls the output."],
-  ["Move the switch ADSR → HOLD → AR → ADSR while an envelope runs.", "The output never jumps. An Attack running when you switch to AR goes on into Release."],
+  ["Move the switch ADSR → HOLD → AD → ADSR while an envelope runs.", "The output never jumps. To AD: a Sustain or Release falls to 0 V over Decay. Back to ADSR with the gate high: the fall heads for Sustain."],
   ["Save, quit, reopen; Initialize; change the sample rate mid-envelope.", "Everything comes back; Initialize rests at 0 V; a rate change carries on where it was."]]]
 ];
-const KEY = "beacon-2.0.44-listening";
+const KEY = "beacon-2.0.45-listening";
 let state = {};
 try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
@@ -176,7 +176,7 @@ document.getElementById("copy").addEventListener("click", ev => {
     const s = state[i + 1] || {};
     if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
   });
-  const text = "Beacon 2.0.44 listening notes\n" + lines.join("\n");
+  const text = "Beacon 2.0.45 listening notes\n" + lines.join("\n");
   const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
   if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
 });

@@ -439,7 +439,7 @@ void mode_switch() {
 		             tr = stageSeconds(g.f.params[F::RELEASE]);
 		const double a = std::fabs(2.0 * g.f.params[F::SHAPE] - 1.0);
 		const double pole = 1.0 - std::exp(-1.0 / (0.002 * fs));
-		const int order[3] = {0, 2, 1};   // GATE, HOLD, TRIG
+		const int order[3] = {0, 2, 1};   // ADSR, HOLD, AD
 		int prevStage = IDLE, prevMode = 0;
 		float prevPhase = 0.f, prevOut = 0.f;
 		double start = 0.0, goal = 0.0;
@@ -461,7 +461,7 @@ void mode_switch() {
 			} else {
 				if (s != prevStage || ph < prevPhase || prevMode == 2) {
 					start = prevOut;
-					goal = s == ATTACK ? 10.0 : s == DECAY ? sus : 0.0;
+					goal = s == ATTACK ? 10.0 : s == DECAY ? (mode == 1 ? 0.0 : sus) : 0.0;
 				}
 				if (s == SUSTAIN)
 					bound = std::fabs(sus - prevOut) * pole;
@@ -499,7 +499,7 @@ void mode_switch() {
 		      "every mode and stage visited (hold %ld, A %ld, D %ld, S %ld)", holds, stages[ATTACK], stages[DECAY],
 		      stages[SUSTAIN]);
 		// Back to ADSR: a new gate, held, settles in Sustain. (A gate held
-		// through a switch from AR is no new edge: AR's Release may run on.)
+		// through a switch from AD is no new edge: AD's Decay may run on.)
 		g.f.params[F::MODE] = 0.f;
 		g.scv[0] = 0.f;
 		g.gate[0] = 0.f;
@@ -570,7 +570,7 @@ void inv_exact() {
 void published() {
 	Eng g;
 	g.f.gate.channels = 2;
-	g.f.params[F::MODE] = 1.2f;   // rounds to AR
+	g.f.params[F::MODE] = 1.2f;   // rounds to AD
 	g.acv[1] = 5.f;               // channel 2: a longer Attack, so it differs
 	g.f.attackCv.channels = 2;
 	g.gate[0] = g.gate[1] = 5.f;
@@ -588,18 +588,18 @@ void published() {
 		levelBad += p.level.load() != g.r.out[0];
 		const float ph = p.phase.load();
 		phaseBad += !(ph >= 0.f && ph <= 1.f);
-		modeBad += p.mode.load() != AR_MODE;
+		modeBad += p.mode.load() != AD_MODE;
 	}
-	// AR, the gate held half a second: Attack, Release, idle (a one-shot).
-	const int want[3] = {ATTACK, RELEASE, IDLE};
+	// AD, the gate held half a second: Attack, Decay, idle (a one-shot).
+	const int want[3] = {ATTACK, DECAY, IDLE};
 	bool ok = n == 3;
 	for (int k = 0; ok && k < 3; k++)
 		ok = seq[k] == want[k];
-	CHECK(ok, "published stage walks A, R, IDLE in AR (%d stages: %s %s %s %s)", n, stageName(seq[0]),
+	CHECK(ok, "published stage walks A, D, IDLE in AD (%d stages: %s %s %s %s)", n, stageName(seq[0]),
 	      n > 1 ? stageName(seq[1]) : "-", n > 2 ? stageName(seq[2]) : "-", n > 3 ? stageName(seq[3]) : "-");
 	CHECK(levelBad == 0, "published level is channel 1's OUT (%ld samples not)", levelBad);
 	CHECK(phaseBad == 0, "published phase within 0..1 (%ld samples not)", phaseBad);
-	CHECK(modeBad == 0, "published mode: AR (%ld samples not)", modeBad);
+	CHECK(modeBad == 0, "published mode: AD (%ld samples not)", modeBad);
 	// Phase mid-Attack is the voice's.
 	Eng h;
 	h.f.params[F::ATTACK] = stageKnob(0.1f);
@@ -771,14 +771,14 @@ void published_prev_stage() {
 		g.run(10);
 		g.gate[0] = 0.f;
 		g.run(100);
-		CHECK(g.stage() == ATTACK, "TRIG: Attack runs on past the trigger (%s)", stageName(g.stage()));
+		CHECK(g.stage() == ATTACK, "AD: Attack runs on past the trigger (%s)", stageName(g.stage()));
 		long k = 0;
 		while (g.stage() == ATTACK && k < 100000) {
 			g.step();
 			k++;
 		}
-		CHECK(g.stage() == RELEASE && g.e.published().prevStage.load() == ATTACK,
-		      "TRIG: Attack completes into %s after %s (want RELEASE after ATTACK)", stageName(g.stage()),
+		CHECK(g.stage() == DECAY && g.e.published().prevStage.load() == ATTACK,
+		      "AD: Attack completes into %s after %s (want DECAY after ATTACK)", stageName(g.stage()),
 		      stageName(g.e.published().prevStage.load()));
 	}
 	// A fall half-way up Attack: Release after Attack, cut off at ~0.5.

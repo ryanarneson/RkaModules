@@ -106,7 +106,7 @@ struct Beacon : Module {
 		typedef rka::BeaconFrame F;
 		configParam<ShapeQuantity>(SHAPE_PARAM, 0.f, 1.f, defaults.params[F::SHAPE],
 		                           "Shape (left: reverse, noon: linear, right: classic)", " %", 0.f, 200.f, -100.f);
-		configSwitch(MODE_PARAM, 0.f, 2.f, 0.f, "Mode", {"ADSR", "AR (one-shot)", "Hold"});
+		configSwitch(MODE_PARAM, 0.f, 2.f, 0.f, "Mode", {"ADSR", "AD (one-shot)", "Hold"});
 		configParam<TimeQuantity>(ATTACK_PARAM, 0.f, 1.f, defaults.params[F::ATTACK], "Attack (Hold: time to rise 10 V)");
 		configParam<TimeQuantity>(DECAY_PARAM, 0.f, 1.f, defaults.params[F::DECAY], "Decay (Hold: time to fall 10 V)");
 		configParam(SUSTAIN_PARAM, 0.f, 1.f, defaults.params[F::SUSTAIN], "Sustain (Hold: offset)", " V", 0.f, 10.f);
@@ -235,20 +235,20 @@ struct EnvelopeWindowView {
 	float start = 0.f, goal = 0.f;    // the running stage's, volts
 	float bpPhase = 0.f, bpLevel = 0.f;   // the running stage's breakpoint, 0..1, volts
 	bool hold = false;
-	bool ar = false;                  // AR mode: the window draws only A and R
+	bool ad = false;                  // AD mode: the window draws only A and D
 };
 
 // Beacon's window (its spec, "The window"), drawn in vectors in the
 // self-illuminating layer on the glass, in the theme's cyan as TapeWindow.
-// ADSR and AR: the envelope the knobs make in that mode (layoutEnvelope;
-// AR: only A and R), each stage its own stroke, dim; the running Attack,
+// ADSR and AD: the envelope the knobs make in that mode (layoutEnvelope;
+// AD: only A and D, Decay falling to 0 V), each stage its own stroke, dim; the running Attack,
 // Decay or Release drawn bright over its own span, from its true start (or,
 // after a Shape change during it, from that breakpoint) to its goal
 // (liveStageHeight), with the dot on it. An Attack resumed part-way is
 // its own full curve, the dot on it at the level; a Release that cut a
 // stage short runs over the R span from where it started. Sustain
 // running: its span bright (dim at a 0 V sustain, the dot then at the end
-// of the line). The stages' letters under their spans (AR: A and R), the
+// of the line). The stages' letters under their spans (AD: A and D), the
 // running letter bright. Hold: a scrolling line of channel
 // 1's output (+-10 V), 60 points a second of the UI's frame clock
 // (HoldRing), kept here (UI thread only).
@@ -331,7 +331,7 @@ struct EnvelopeWindow : widget::Widget {
 		using namespace rka::beacon;
 		const NVGcolor signal = RkaTheme::SIGNAL;
 		const NVGcolor dim = nvgTransRGBAf(signal, 0.38f);
-		const EnvelopeLayout e = layoutEnvelope(v.params, v.ar);
+		const EnvelopeLayout e = layoutEnvelope(v.params, v.ad);
 		// A stage number from another sample than the phase (separate
 		// relaxed atomics) only misplaces the dot for one frame; anything
 		// out of range reads as idle.
@@ -347,7 +347,7 @@ struct EnvelopeWindow : widget::Widget {
 		for (int s = 0; s < 4; s++) {
 			const float u0 = e.x[s], u1 = e.x[s + 1];
 			if (!(u1 > u0))
-				continue;   // AR: no D or S span
+				continue;   // AD: no S or R span
 			nvgBeginPath(vg);
 			for (int i = 0; i <= CURVE_POINTS; i++) {
 				// The last point just inside the span (heightAt takes the
@@ -415,7 +415,7 @@ struct EnvelopeWindow : widget::Widget {
 			const float y = box.size.y - pad() - 0.5f * lettersH();
 			for (int s = 0; s < 4; s++) {
 				if (!(e.x[s + 1] > e.x[s]))
-					continue;   // AR: no D or S letter
+					continue;   // AD: no S or R letter
 				nvgFillColor(vg, s == running ? signal : dim);
 				nvgText(vg, xAt(0.5f * (e.x[s] + e.x[s + 1])), y, letters[s], NULL);
 			}
@@ -498,7 +498,7 @@ struct BeaconWidget : ModuleWidget {
 			v.bpLevel = p.bpLevel.load(std::memory_order_relaxed);
 			const int mode = p.mode.load(std::memory_order_relaxed);
 			v.hold = mode == int(rka::beacon::HOLD_MODE);
-			v.ar = mode == int(rka::beacon::AR_MODE);
+			v.ad = mode == int(rka::beacon::AD_MODE);
 			return true;
 		};
 		addChild(window);

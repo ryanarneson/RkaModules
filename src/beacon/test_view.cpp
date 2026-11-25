@@ -147,30 +147,32 @@ void live_span_own() {
 	CHECK(u == 1.f && h == 0.f, "and ends at the right edge at 0: %g, %g", u, h);
 }
 
-// AR mode draws only Attack and Release, as the voice runs there: no D or
-// S span, Release from the top; A and R keep their ADSR weights' ratio.
-void ar_layout() {
+// AD mode draws only Attack and Decay, as the voice runs there: Decay
+// falls from the top to 0 V; no S or R span; A and D keep their ADSR
+// weights' ratio.
+void ad_layout() {
 	const ViewParams p{0.05f, 0.3f, 0.4f, 1.f, 0.75f};
-	const EnvelopeLayout adsr = layoutEnvelope(p), ar = layoutEnvelope(p, true);
-	CHECK(ar.ar && !adsr.ar, "the AR flag");
-	CHECK(ar.x[0] == 0.f && ar.x[1] == ar.x[2] && ar.x[2] == ar.x[3] && ar.x[4] == 1.f, "AR: no D or S span (%g %g %g %g %g)", ar.x[0],
-	      ar.x[1], ar.x[2], ar.x[3], ar.x[4]);
-	const float rAdsr = (adsr.x[1] - adsr.x[0]) / (adsr.x[4] - adsr.x[3]), rAr = (ar.x[1] - ar.x[0]) / (ar.x[4] - ar.x[3]);
-	CHECK(std::fabs(rAdsr - rAr) < 1e-5f, "A to R width ratio kept: %g (ADSR %g)", rAr, rAdsr);
-	CHECK(ar.heightAt(ar.x[1] - 1e-6f) > 0.999f && std::fabs(ar.heightAt(ar.x[3] + 1e-6f) - 1.f) < 1e-3f && ar.heightAt(1.f) == 0.f,
-	      "AR: up to the top, Release from the top to 0 (%g, %g, %g)", ar.heightAt(ar.x[1] - 1e-6f), ar.heightAt(ar.x[3] + 1e-6f),
-	      ar.heightAt(1.f));
-	// An AR envelope's dot rides that outline.
+	const EnvelopeLayout adsr = layoutEnvelope(p), ad = layoutEnvelope(p, true);
+	CHECK(ad.ad && !adsr.ad, "the AD flag");
+	CHECK(ad.x[0] == 0.f && ad.x[2] == 1.f && ad.x[3] == 1.f && ad.x[4] == 1.f && ad.x[1] > 0.f && ad.x[1] < 1.f,
+	      "AD: A and D only (%g %g %g %g %g)", ad.x[0], ad.x[1], ad.x[2], ad.x[3], ad.x[4]);
+	const float rAdsr = (adsr.x[1] - adsr.x[0]) / (adsr.x[2] - adsr.x[1]), rAd = (ad.x[1] - ad.x[0]) / (ad.x[2] - ad.x[1]);
+	CHECK(std::fabs(rAdsr - rAd) < 1e-5f, "A to D width ratio kept: %g (ADSR %g)", rAd, rAdsr);
+	CHECK(ad.heightAt(ad.x[1] - 1e-6f) > 0.999f && std::fabs(ad.heightAt(ad.x[1] + 1e-6f) - 1.f) < 1e-3f && ad.heightAt(1.f) == 0.f &&
+	          ad.heightAt(0.999999f) < 1e-3f,
+	      "AD: up to the top, Decay from the top to 0 (%g, %g, %g)", ad.heightAt(ad.x[1] - 1e-6f), ad.heightAt(ad.x[1] + 1e-6f),
+	      ad.heightAt(0.999999f));
+	// An AD envelope's dot rides that outline.
 	long off = 0;
 	for (int i = 0; i <= 20; i++) {
 		const float ph = i / 20.f;
 		float u, h;
-		ar.dot(ATTACK, ph, 0.f, 0.f, 1.f, u, h);
-		off += std::fabs(ar.heightAt(u < ar.x[1] ? u : ar.x[1] - 1e-6f) - h) > 1e-4f;
-		ar.dot(RELEASE, ph, 0.f, 1.f, 0.f, u, h);
-		off += std::fabs(ar.heightAt(u > ar.x[3] ? u : ar.x[3] + 1e-6f) - h) > 1e-3f;
+		ad.dot(ATTACK, ph, 0.f, 0.f, 1.f, u, h);
+		off += std::fabs(ad.heightAt(u < ad.x[1] ? u : ad.x[1] - 1e-6f) - h) > 1e-4f;
+		ad.dot(DECAY, ph, 0.f, 1.f, 0.f, u, h);
+		off += std::fabs(ad.heightAt(u > ad.x[1] ? (u < 1.f ? u : 0.999999f) : ad.x[1] + 1e-6f) - h) > 1e-3f;
 	}
-	CHECK(off == 0, "AR's dot leaves its outline at %ld points", off);
+	CHECK(off == 0, "AD's dot leaves its outline at %ld points", off);
 }
 
 // After a Shape change mid-stage (#83) the bright line runs from the
@@ -311,14 +313,14 @@ void window_lines_up() {
 		{"a gate ending in Decay", 0, nA + 1400}, {"a held gate", 0, 20000},
 		{"a square faster than Attack", 700, 350}, {"triggers faster than Attack", 480, 24}};
 	long offLevel = 0, offSpan = 0, offLine = 0, checked = 0;
-	for (Mode mode : {GATE_MODE, AR_MODE})
+	for (Mode mode : {GATE_MODE, AD_MODE})
 		for (float shape : {0.f, 0.5f, 0.75f, 1.f})
 			for (float sus : {5.f, 0.f})
 				for (const Gate& g : gates) {
 					Voice v;
 					v.setSampleRate(fs);
 					v.reset();
-					const EnvelopeLayout e = layoutEnvelope({A, D, sus * 0.1f, R, shape}, mode == AR_MODE);
+					const EnvelopeLayout e = layoutEnvelope({A, D, sus * 0.1f, R, shape}, mode == AD_MODE);
 					// The kept line: its stage instance and what it was drawn from.
 					long instance = 0, keptInstance = -1;
 					Stage lastStage = IDLE;
@@ -347,9 +349,9 @@ void window_lines_up() {
 								std::printf("  mode %d shape %g S %g, %s, sample %ld (%d): dot at %g, OUT %g\n", int(mode), shape, sus, g.name, i, int(st), h * 10.f, o.level);
 						}
 						const float lo = st == SUSTAIN ? e.x[2] : e.x[st - 1], hi = st == SUSTAIN ? e.x[3] : e.x[st];
-						if (st != SUSTAIN && (u < lo - 1e-5f || u > hi + 1e-5f)) {
+						if (!(hi > lo) || (st != SUSTAIN && (u < lo - 1e-5f || u > hi + 1e-5f))) {
 							if (offSpan++ < 3)
-								std::printf("  mode %d shape %g S %g, %s, sample %ld: stage %d's dot at u %g, outside its span %g..%g\n", int(mode), shape, sus, g.name, i, int(st), u, lo, hi);
+								std::printf("  mode %d shape %g S %g, %s, sample %ld: stage %d's dot at u %g, outside its span %g..%g (or the span is empty)\n", int(mode), shape, sus, g.name, i, int(st), u, lo, hi);
 						}
 						if (st == ATTACK || st == DECAY || st == RELEASE) {
 							if (instance == keptInstance && kStage == st && kBp == float(v.bpPhase())) {
@@ -368,6 +370,32 @@ void window_lines_up() {
 						}
 					}
 				}
+	// And across mode switches: the switch flips between ADSR and AD every
+	// 1100 samples under a gate held 1.6 s, then pulses; the window takes
+	// the mode's layout each sample, as the module does.
+	for (float shape : {0.f, 0.75f}) {
+		Voice v;
+		v.setSampleRate(fs);
+		v.reset();
+		for (long i = 0; i < 60000; i++) {
+			const Mode mode = (i / 1100) % 2 ? AD_MODE : GATE_MODE;
+			const EnvelopeLayout e = layoutEnvelope({A, D, 0.5f, R, shape}, mode == AD_MODE);
+			VoiceIn in{A, D, R, 5.f, shape, i < 76800 && (i < 30000 || i % 4000 < 900), false, mode};
+			VoiceOut o;
+			v.process(in, o);
+			const Stage st = v.stage();
+			if (st == IDLE)
+				continue;
+			checked++;
+			float u, h;
+			e.dot(st, float(v.phase()), o.level * 0.1f, float(v.bpLevel()) * 0.1f, float(v.goal()) * 0.1f, u, h, float(v.bpPhase()));
+			if (std::fabs(h - o.level * 0.1f) > 2e-4f && offLevel++ < 3)
+				std::printf("  switching, shape %g, sample %ld (%d): dot at %g, OUT %g\n", shape, i, int(st), h * 10.f, o.level);
+			const float lo = st == SUSTAIN ? e.x[2] : e.x[st - 1], hi = st == SUSTAIN ? e.x[3] : e.x[st];
+			if ((!(hi > lo) || (st != SUSTAIN && (u < lo - 1e-5f || u > hi + 1e-5f))) && offSpan++ < 3)
+				std::printf("  switching, shape %g, sample %ld: stage %d's dot at u %g, span %g..%g\n", shape, i, int(st), u, lo, hi);
+		}
+	}
 	CHECK(checked > 100000, "the window was checked on %ld samples", checked);
 	CHECK(offLevel == 0, "the dot left the output's level on %ld samples", offLevel);
 	CHECK(offSpan == 0, "the dot left its stage's span on %ld samples", offSpan);
@@ -384,7 +412,7 @@ int main() {
 	live_stage_curve();
 	live_dot_on_line();
 	live_span_own();
-	ar_layout();
+	ad_layout();
 	live_breakpoint();
 	sustain_zero();
 	hold_ring_time();

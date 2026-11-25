@@ -3,8 +3,8 @@
 // per-channel port voltages in, per-channel volts out; Beacon.cpp only maps
 // params, ports and lights onto it.
 //
-// Each sample: MODE (rounded, 0..2: ADSR, AR, HOLD), the channel count
-// (GATE's in ADSR and AR, the Sustain CV's in HOLD; 1 unpatched; at most 16), then per
+// Each sample: MODE (rounded, 0..2: ADSR, AD, HOLD), the channel count
+// (GATE's in ADSR and AD, the Sustain CV's in HOLD; 1 unpatched; at most 16), then per
 // channel: GATE and RETRIG through Schmitt triggers (0.1 V / 1 V; PUSH or's
 // into every channel's gate, and is the gate when GATE is unpatched), the
 // times (knob + CV / 10 through stageSecondsCv), the sustain volts, Shape
@@ -141,7 +141,7 @@ public:
 	void process(const BeaconFrame& f, BeaconResult& out) {
 		typedef BeaconFrame F;
 		const float m = f.params[F::MODE];
-		const beacon::Mode mode = m >= 1.5f ? beacon::HOLD_MODE : m >= 0.5f ? beacon::AR_MODE : beacon::GATE_MODE;
+		const beacon::Mode mode = m >= 1.5f ? beacon::HOLD_MODE : m >= 0.5f ? beacon::AD_MODE : beacon::GATE_MODE;
 		const BeaconPort& countPort = mode == beacon::HOLD_MODE ? f.sustainCv : f.gate;
 		int n = countPort.channels;
 		n = n < 1 ? 1 : n > MAX_CHANNELS ? MAX_CHANNELS : n;
