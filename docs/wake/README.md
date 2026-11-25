@@ -46,14 +46,17 @@ in ten steps:
 
 **1/4, 1/3, 1/2, 2/3, 3/4, ×1, ×1.5, ×2, ×3, ×4**
 
-Noon is ×1: one echo per clock tick. The tooltip shows the step, and you
-can type one in as it shows them ("x2", "1/2", "x1.5 clock").
+Noon is ×1: one echo per clock tick. ×1 has the widest step, from just
+left of noon to just right of it, so the knob at noon, or untouched, is
+always ×1. The tooltip shows the step, and you can type one in as it
+shows them ("x2", "1/2", "x1.5 clock").
 
 - The tempo is taken from the time between the last two ticks, so it
   follows a clock that changes.
 - A clock that pauses and starts again keeps its tempo: a gap of more
-  than four ticks is not taken for a tick. (A clock that really slows by
-  more than that is followed one tick late.)
+  than four ticks is not taken for a tick. A clock that really slows by
+  more than that is followed one tick late: a second long gap like the
+  first is the new tempo.
 - Time's CV moves along the same steps, so a clocked echo is always on the
   clock's grid.
 - If the result would be longer than 10 s it is halved until it fits; if
@@ -156,10 +159,12 @@ either means.
 - Drift still acts, so a frozen sound is not perfectly static. Turn Drift
   to 0 for an exact loop.
 - Freezing is seamless; releasing fades back over a few hundredths of a
-  second. A freeze asked for while Time is still crossfading (Digital), or
+  second, and the echo of the moment you released runs from the frozen
+  sound into the new one, with no gap. A freeze asked for while Time is still crossfading (Digital), or
   just after a release, waits for that fade to finish: 40 ms at most.
 
-The button's state is saved with the patch; the sound in the delay is not.
+The sound in the delay is not saved with the patch, so a patch always
+loads unfrozen.
 
 ### Ping Pong
 
@@ -225,6 +230,8 @@ carries the average of the two. The style light stays lit.
   at 768 kHz.
 - What goes into the delay is limited to ±24 V.
 - A change of sample rate, and Initialize, empty the delay and unfreeze.
-- Saved with the patch: the knobs, Style, Freeze and Ping Pong.
+  A Freeze gate that is high at the time does not freeze the empty delay
+  again: it must fall and rise.
+- Saved with the patch: the knobs, Style and Ping Pong.
 - Randomize does not touch Freeze or Style.
 - CPU: about 0.15 % of a core at 48 kHz.

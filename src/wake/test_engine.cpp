@@ -147,7 +147,7 @@ void clocked() {
 	for (int step = 0; step < 10; step++) {
 		Rig g;
 		g.f.clockPatched = true;
-		g.f.params[F::TIME] = step / 9.f;
+		g.f.params[F::TIME] = clockKnob(step);
 		for (int i = 0; i < 24000 * 3; i++) {
 			g.f.clock = i % 24000 < 480 ? 10.f : 0.f;
 			g.step(0.f);
@@ -156,6 +156,18 @@ void clocked() {
 		}
 		CHECK(g.e.clockStep() == step && std::fabs(g.e.seconds(0) / (0.5 * mult[step]) - 1.0) < 1e-3,
 		      "knob step %d on a 0.5 s clock gives step %d, %g s (want %g)", step, g.e.clockStep(), g.e.seconds(0), 0.5 * mult[step]);
+	}
+	// A fresh Wake, Time untouched, on a clock: one echo per tick.
+	{
+		Rig g;
+		g.f.params[F::TIME] = F().params[F::TIME];
+		g.f.clockPatched = true;
+		for (int i = 0; i < 24000 * 3; i++) {
+			g.f.clock = i % 24000 < 480 ? 10.f : 0.f;
+			g.step(0.f);
+		}
+		CHECK(g.e.clockStep() == 5 && std::fabs(g.e.seconds(0) - 0.5f) < 1e-3f,
+		      "the default Time on a 0.5 s clock is step %d, %g s (want x1, 0.5 s)", g.e.clockStep(), g.e.seconds(0));
 	}
 	// Each multiple typed as the tooltip shows it puts the engine on it.
 	for (int step = 0; step < 10; step++) {
@@ -807,6 +819,24 @@ void clock_restart() {
 		h.step(0.f);
 	}
 	CHECK(std::fabs(h.e.seconds(0) - 0.75f) < 0.01f, "a clock that slows from 0.25 to 0.75 s is followed (%.3f s)", h.e.seconds(0));
+	// Slowed by more than four times: followed a tick late.
+	for (long slow : {48000L, 96000L, 144000L}) {
+		Rig s;
+		s.f.clockPatched = true;
+		s.f.params[F::TIME] = 0.5f;
+		long nx = 0, ed = 0;
+		const long change = 48000L * 2, end = change + slow * 3 + 1000;
+		for (long i = 0; i < end; i++) {
+			if (i == nx) {
+				ed = i;
+				nx += i < change ? 12000 : slow;
+			}
+			s.f.clock = i - ed < 480 ? 10.f : 0.f;
+			s.step(0.f);
+		}
+		CHECK(std::fabs(s.e.seconds(0) - slow / 48000.f) < 0.01f, "a clock that slows from 0.25 to %.0f s is followed (%.3f s)",
+		      slow / 48000.0, s.e.seconds(0));
+	}
 	// Unplugged and plugged back in: two fresh edges before it is believed.
 	Rig k;
 	k.f.clockPatched = true;
@@ -969,6 +999,94 @@ void limit() {
 	}
 }
 
+// A sample-rate change empties the delay and unfreezes; a Freeze gate
+// still high from before does not freeze the empty line again. It must
+// fall and rise.
+void rate_change_unfreezes() {
+	for (float rate : {44100.f, 96000.f}) {
+		Rig g;
+		g.time(0.2f);
+		long n = 0;
+		auto sine = [&]() { return 2.f * (float) std::sin(TWO_PI * 220.0 * n++ / 48000.0); };
+		for (int i = 0; i < 48000; i++)
+			g.step(sine());
+		g.f.freezeGate = 5.f;
+		for (int i = 0; i < 4800; i++)
+			g.step(sine());
+		CHECK(g.r.frozen, "the gate freezes");
+		g.e.setSampleRate(rate);
+		bool refroze = false;
+		double wet = 0;
+		for (int i = 0; i < (int) rate; i++) {
+			g.step(sine());
+			refroze = refroze || g.r.frozen;
+			if (i > (int) (0.3f * rate))
+				wet += (double) g.r.l * g.r.l;
+		}
+		CHECK(!refroze, "%.0f Hz: a gate held high across the change must not freeze the empty line", rate);
+		CHECK(wet > 1.0, "%.0f Hz: the echo comes back after the change (%.3f)", rate, wet);
+		g.f.freezeGate = 0.f;
+		for (int i = 0; i < 64; i++)
+			g.step(sine());
+		g.f.freezeGate = 5.f;
+		for (int i = 0; i < 4800; i++)
+			g.step(sine());
+		CHECK(g.r.frozen, "%.0f Hz: a fresh gate freezes again", rate);
+	}
+}
+
+// Releasing Freeze leaves no hole in the line: what plays back one echo
+// later runs from the frozen loop into the new input, with no dip to
+// silence (#93). One-cycle RMS windows across 1.2 echo times after the
+// release, against the steady echo.
+void release_leaves_no_hole() {
+	double worst[2] = {0, 0};
+	for (int style : {0, 1, 2})
+		for (float T : {0.2f, 1.f})
+			for (int src = 0; src < 2; src++) {
+				Rig g;
+				g.f.style = style;
+				g.time(T);
+				rka::hadal::Random rng;
+				rng.seed(4);
+				long n = 0;
+				auto in = [&]() {
+					return src == 0 ? 2.f * (float) std::sin(TWO_PI * 220.0 * n++ / 48000.0) : 2.f * rng.uniform();
+				};
+				const int warm = (int) (48000 * (T + 0.5f));
+				for (int i = 0; i < warm; i++)
+					g.step(in());
+				// The steady echo's level, window by window.
+				const int W = src == 0 ? 218 : 96;   // a cycle; 2 ms
+				auto windows = [&](int count, double& lo, double& mean) {
+					lo = 1e30;
+					mean = 0;
+					for (int w = 0; w < count; w++) {
+						double e = 0;
+						for (int i = 0; i < W; i++) {
+							g.step(in());
+							e += (double) g.r.l * g.r.l;
+						}
+						e = std::sqrt(e / W);
+						lo = std::min(lo, e);
+						mean += e / count;
+					}
+				};
+				double lo, steady;
+				windows(40, lo, steady);
+				g.f.freeze = true;
+				for (int i = 0; i < 48000 * 3 / 2; i++)
+					g.step(in());
+				g.f.freeze = false;
+				double low, mean;
+				windows((int) (1.2f * T * 48000) / W, low, mean);
+				worst[src] = std::min(worst[src], db(low / steady));
+				CHECK(db(low / steady) > -6.0, "style %d, T %.1f s, %s: after a release the echo dips to %+.1f dB (want above -6)", style,
+				      T, src == 0 ? "sine" : "noise", db(low / steady));
+			}
+	std::printf("  after a release: the echo dips to %+.1f dB (sine), %+.1f dB (noise, 2 ms windows)\n", worst[0], worst[1]);
+}
+
 } // namespace
 
 int main() {
@@ -988,6 +1106,8 @@ int main() {
 	refreeze_does_not_click();
 	frozen_is_what_was_heard();
 	clock_restart();
+	rate_change_unfreezes();
+	release_leaves_no_hole();
 	stereo();
 	bypass();
 	mix_law();

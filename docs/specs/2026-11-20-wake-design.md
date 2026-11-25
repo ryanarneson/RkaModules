@@ -113,7 +113,11 @@ Diffuse sit on the way into the delay line, so the line holds exactly what
 is heard and a frozen loop is the echo that was playing. A crossfade
 (Digital's change of time, and the release from Freeze) is linear and
 takes 40 ms; a freeze waits for one to finish. A clock edge more than four
-periods after the last is a restart, not a period. Drift is a wander of
+periods after the last is a restart, not a period; a second such
+interval within 2x of the first is the new period (2026-11-25, #91). On a
+release, the line's end is joined to the audio one loop older and the
+write crossfades from the loop's continuation into the new sound, so the
+line holds no hole (2026-11-25, #93). Drift is a wander of
 each side's tape speed, so short echoes waver less than long ones. With R
 unpatched L carries the average of the two sides.
 
@@ -133,7 +137,8 @@ unpatched L carries the average of the two sides.
 - A rising edge at CLOCK (0.1 V / 1 V Schmitt trigger) sets the tempo from
   the time between the last two edges.
 - With CLOCK patched, the Time knob picks a multiple of the clock's
-  period, in steps: 1/4, 1/3, 1/2, 2/3, 3/4, 1, 3/2, 2, 3, 4. Noon is 1.
+  period, in steps: 1/4, 1/3, 1/2, 2/3, 3/4, 1, 3/2, 2, 3, 4. Noon is 1,
+  centred: 1 spans the knob from 0.45 to 0.55 (2026-11-25, #90).
   The tooltip shows the ratio.
 - Time's CV moves along the same steps (*designer's call*, so a clocked
   echo is always on the clock's grid): the knob's position and the CV,
@@ -269,7 +274,8 @@ listening stop.
 
 - Bypassed, the inputs pass to the outputs, with the same normalling.
 - NaN or infinite input samples and CVs read as 0 V.
-- A sample-rate change clears the delay.
+- A sample-rate change clears the delay and releases Freeze; a gate
+  still high must fall and rise to freeze again (2026-11-25, #92).
 - Initialize clears the delay and unfreezes.
 - Saved: the knobs, Style, Freeze and Ping Pong. Not the delay's contents.
 

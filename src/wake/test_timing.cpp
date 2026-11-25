@@ -31,11 +31,23 @@ void multiples() {
 		CHECK(std::fabs(clockMultiple(i) - want[i]) < 1e-6, "multiple %d is %g (want %g)", i, clockMultiple(i), want[i]);
 	CHECK(clockMultiple(-1) == 0.25f && clockMultiple(99) == 4.f, "steps clamp");
 	CHECK(clockStep(0.5f, 0.f) == 5 && clockMultiple(5) == 1.f, "noon is x1 (step %d)", clockStep(0.5f, 0.f));
+	CHECK(clockStep(0.4924f, 0.f) == 5, "the default knob (300 ms) is x1 on a clock (step %d)", clockStep(0.4924f, 0.f));
 	CHECK(clockStep(0.f, 0.f) == 0 && clockStep(1.f, 0.f) == 9, "the knob's ends are 1/4 and x4");
-	// 10 V is the travel: 9 steps. From noon (4.5, rounds to 5): +1 V is
-	// 5.4 -> 5, +2 V is 6.3 -> 6, -1 V is 3.6 -> 4, -5 V is 0.
-	CHECK(clockStep(0.5f, 1.f) == 5 && clockStep(0.5f, 2.f) == 6 && clockStep(0.5f, -1.f) == 4 && clockStep(0.5f, -5.f) == 0,
-	      "CV moves along the steps (%d %d %d %d)", clockStep(0.5f, 1.f), clockStep(0.5f, 2.f), clockStep(0.5f, -1.f),
+	// x1 is centred on noon, 0.45 to 0.55: a knob set to noon by eye is
+	// x1. Below it the five slower steps share 0 to 0.45 (0.1 each, half
+	// that for 1/4); above it the four faster share 0.55 to 1.
+	CHECK(clockStep(0.449f, 0.f) == 4 && clockStep(0.451f, 0.f) == 5 && clockStep(0.549f, 0.f) == 5 &&
+	          clockStep(0.551f, 0.f) == 6,
+	      "x1 spans 0.45 to 0.55 (%d %d %d %d)", clockStep(0.449f, 0.f), clockStep(0.451f, 0.f), clockStep(0.549f, 0.f),
+	      clockStep(0.551f, 0.f));
+	CHECK(clockStep(0.049f, 0.f) == 0 && clockStep(0.051f, 0.f) == 1 && clockStep(0.349f, 0.f) == 3 && clockStep(0.351f, 0.f) == 4,
+	      "the slower steps are 0.1 wide");
+	for (int s = 0; s < kMultiples; s++)
+		CHECK(clockStep(clockKnob(s), 0.f) == s, "the knob for step %d (%g) is in it (%d)", s, clockKnob(s), clockStep(clockKnob(s), 0.f));
+	// 10 V is the travel. From noon: +0.4 V (0.54) is still x1, +1 V (0.6)
+	// is x1.5; -1 V (0.4) is 3/4; -5 V is 1/4.
+	CHECK(clockStep(0.5f, 0.4f) == 5 && clockStep(0.5f, 1.f) == 6 && clockStep(0.5f, -1.f) == 4 && clockStep(0.5f, -5.f) == 0,
+	      "CV moves along the steps (%d %d %d %d)", clockStep(0.5f, 0.4f), clockStep(0.5f, 1.f), clockStep(0.5f, -1.f),
 	      clockStep(0.5f, -5.f));
 	CHECK(clockStep(0.9f, 10.f) == 9 && clockStep(0.1f, -10.f) == 0 && clockStep(std::nanf(""), 0.f) == 0, "the sum clamps");
 	CHECK(!std::strcmp(clockName(0), "1/4") && !std::strcmp(clockName(5), "x1") && !std::strcmp(clockName(9), "x4"),
@@ -123,6 +135,41 @@ void clock_follower() {
 	for (int i = 0; i < 72000 * 3; i++)
 		c.process(i % 72000 < 480 ? 10.f : 0.f);
 	CHECK(c.periodSamples() == 72000.f, "a clock that slows to a third is followed (%g)", c.periodSamples());
+	// One that slows by more than four times is followed a tick late:
+	// the first long interval is taken for a pause, the second like it
+	// for the new tempo (0.25 s to 1, 2 and 3 s).
+	for (int slow : {48500, 96000, 144000}) {
+		ClockFollower d;
+		d.reset();
+		for (int i = 0; i < 12000 * 4; i++)
+			d.process(i % 12000 < 480 ? 10.f : 0.f);
+		CHECK(d.periodSamples() == 12000.f, "locked at 0.25 s (%g)", d.periodSamples());
+		float afterOne = 0.f;
+		for (int e = 0; e < 3; e++) {
+			for (int i = 0; i < slow; i++)
+				d.process(i < 480 ? 10.f : 0.f);
+			if (e == 1)
+				afterOne = d.periodSamples();
+		}
+		// Each pass starts with its edge: the first ends the last 0.25 s
+		// interval, the second ends the first long one, the third the next.
+		CHECK(afterOne == 12000.f, "the first long interval (%d samples) is a pause (%g)", slow, afterOne);
+		CHECK(d.periodSamples() == (float) slow, "a clock slowed to %d samples is followed (%g)", slow, d.periodSamples());
+	}
+	// Two pauses of very different lengths are not a tempo.
+	{
+		ClockFollower d;
+		d.reset();
+		for (int i = 0; i < 12000 * 4; i++)
+			d.process(i % 12000 < 480 ? 10.f : 0.f);
+		const int gaps[2] = {60000, 200000};
+		for (int g : gaps)
+			for (int i = 0; i < g; i++)
+				d.process(i < 480 ? 10.f : 0.f);
+		for (int i = 0; i < 480; i++)
+			d.process(10.f);   // the edge that ends the second pause
+		CHECK(d.periodSamples() == 12000.f, "pauses of 1.25 and 4.2 s keep the 0.25 s period (%g)", d.periodSamples());
+	}
 	// A ripple on a high level makes no edges; nor does one under 1 V.
 	c.reset();
 	for (int i = 0; i < 48000; i++)

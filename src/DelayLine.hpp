@@ -56,16 +56,25 @@ struct DelayLine {
 		buf[pos] = x;
 	}
 
-	// Fade the newest `n` samples in place, from untouched (n writes ago)
-	// down to silence (the latest): for a writer that stopped and is about
-	// to start again somewhere else in the sound, so the join is not a step.
-	void fadeOutNewest(int n) {
-		if (buf.empty() || n < 1)
+	// Join the newest `n` samples in place to the audio `period` samples
+	// older, as a frozen loop of that length joins its end to its start:
+	// from untouched (n writes ago) to all the older audio (the latest). The
+	// line then runs on, without a step, into what followed that older
+	// audio, readInt(period - 1) at the next write: for a writer that
+	// stopped and is about to start again elsewhere in the sound, and
+	// crossfades from that continuation into what it writes.
+	void joinNewest(int n, int period) {
+		if (buf.empty() || n < 1 || period < 1)
 			return;
-		if (n > maxDel)
-			n = maxDel;
-		for (int k = 0; k < n; k++)
-			buf[(pos - (uint32_t) k) & mask] *= (float) k / (float) n;
+		if (period > maxDel - 1)
+			period = maxDel - 1;
+		if (n > maxDel - period)
+			n = maxDel - period;
+		for (int k = 0; k < n; k++) {
+			float& x = buf[(pos - (uint32_t) k) & mask];
+			const float older = buf[(pos - (uint32_t) (k + period)) & mask];
+			x += (float) (n - k) / (float) n * (older - x);
+		}
 	}
 
 	// The sample written delaySamples writes ago (0 = the latest).

@@ -189,6 +189,10 @@ struct DelayTap {
 	bool frozen() const {
 		return frozen_;
 	}
+	// The frozen loop's length in samples (the last one, once released).
+	double loopSamples() const {
+		return loop_;
+	}
 	float delay() const {
 		return (float) d_;
 	}

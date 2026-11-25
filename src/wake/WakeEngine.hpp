@@ -107,6 +107,11 @@ public:
 		ringPos_ = 0;
 		clock_.reset();
 		frozen_ = gateHigh_ = false;
+		// A gate already high is not taken until it falls: the line is
+		// empty, and freezing it would hold silence.
+		gateArmed_ = false;
+		for (int s = 0; s < 2; s++)
+			cont_[s] = 0;
 		writeGain_ = 1.f;
 		written_ = 0;
 		clockWasPatched_ = false;
@@ -130,6 +135,9 @@ public:
 			if (gate <= 0.1f)
 				gateHigh_ = false;
 		}
+		else if (!gateArmed_) {
+			gateArmed_ = gate <= 0.1f;
+		}
 		else if (gate >= 1.f) {
 			gateHigh_ = true;
 		}
@@ -150,13 +158,17 @@ public:
 				}
 				else {
 					tap_[s].release();
-					// Writing starts again at another place in the sound:
-					// the old end fades out and the new start fades in,
-					// so the line holds no step to play back later. Only
-					// what was written since the last release is faded
-					// (never the same samples twice, and never more work
-					// than there were writes).
-					line_[s].fadeOutNewest(written_ < switchSamples_ ? written_ : switchSamples_);
+					// Writing starts again at another place in the sound.
+					// The line's end is joined to the audio one loop older,
+					// as the loop that was heard joins its end to its
+					// start, and what is written crossfades from the
+					// loop's continuation into the new sound: so the line
+					// holds no step, and no hole, to play back one echo
+					// later. Only what was written since the last release
+					// is joined (never the same samples twice, and never
+					// more work than there were writes).
+					cont_[s] = (int) tap_[s].loopSamples();
+					line_[s].joinNewest(written_ < switchSamples_ ? written_ : switchSamples_, cont_[s]);
 				}
 			}
 			if (!frozen_) {
@@ -184,8 +196,19 @@ public:
 			const float mono = 0.5f * (inL + inR);
 			const float xL = inL + pp_ * (mono - inL) + feedback_ * (y[0] + pp_ * (y[1] - y[0]));
 			const float xR = (1.f - pp_) * (inR + feedback_ * y[1]) + pp_ * y[0];
-			line_[0].write(writeGain_ * colour_[0].process(smear_[0].process(xL)));
-			line_[1].write(writeGain_ * colour_[1].process(smear_[1].process(xR)));
+			const float wL = colour_[0].process(smear_[0].process(xL));
+			const float wR = colour_[1].process(smear_[1].process(xR));
+			if (writeGain_ < 1.f) {
+				// From the frozen loop's continuation into the new sound.
+				const float cL = cont_[0] > 0 ? line_[0].readInt(cont_[0] - 1) : 0.f;
+				const float cR = cont_[1] > 0 ? line_[1].readInt(cont_[1] - 1) : 0.f;
+				line_[0].write(cL + writeGain_ * (wL - cL));
+				line_[1].write(cR + writeGain_ * (wR - cR));
+			}
+			else {
+				line_[0].write(wL);
+				line_[1].write(wR);
+			}
 			if (written_ < switchSamples_)
 				written_++;
 		}
@@ -404,7 +427,8 @@ private:
 	int switchSamples_ = 480, written_ = 0;
 	bool clockWasPatched_ = false;
 	float smooth_ = 1.f, switchStep_ = 1.f;
-	bool frozen_ = false, gateHigh_ = false, snap_ = true;
+	bool frozen_ = false, gateHigh_ = false, gateArmed_ = false, snap_ = true;
+	int cont_[2] = {0, 0};   // the released loop's length: what the write crossfades from
 	int countdown_ = 0;
 };
 
