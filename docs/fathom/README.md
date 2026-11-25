@@ -81,7 +81,9 @@ signal compresses the filter against itself: that is the growl.
 - Right-click **Sub through filter**: off by default, so the sub joins the
   mix after the filter and CUTOFF never thins it. On, the sub goes
   through the ladder too, for closing everything down.
-- CUTOFF, RES and DRIVE are smoothed over 20 ms so sweeps don't zipper.
+- CUTOFF, RES and DRIVE are smoothed over 20 ms so sweeps don't zipper,
+  and SUB and Sub through filter glide over 20 ms (the sub crossfades
+  between the two routes) so a mapped SUB or the toggle doesn't click.
 
 ## CV
 
@@ -94,7 +96,10 @@ signal compresses the filter against itself: that is the growl.
 ## Outputs
 
 - **L / R**: the mix, ±5 V, through a soft clipper (mild saturation at
-  the defaults, more as SUB and DETUNE go up) and a DC blocker.
+  the defaults, more as SUB and DETUNE go up), a DC blocker and a limit
+  that holds them within ±5 V. The limit does nothing below 4.75 V, so
+  only patches pushed hard (SUB, DETUNE and DRIVE up together) or a big
+  CV step reach it.
 - **SUB**: the sub sine alone, ±5 V, before the SUB knob, the filter and
   the clipper, so it can feed a sub bus or a side-chain however the mix
   is set.

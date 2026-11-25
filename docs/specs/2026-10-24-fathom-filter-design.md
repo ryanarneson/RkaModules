@@ -196,7 +196,9 @@ spread, giving `left`, `right`, `sub`):
    The exponent is tunable by ear.
 4. **Mix out.** Add `SUB · subGain · sub` if "Sub through filter" is off.
 5. **Output stage** as phase 1: `tanh(CLIP_DRIVE · v)`, DC block at 2 Hz,
-   × 5 V. `CLIP_DRIVE` is retuned so the defaults still peak near 4 V
+   output limit, × 5 V. The limit (issue #88) is the identity below 0.95
+   and a tanh knee into ±1 above it: the DC blocker on its own pushed the
+   clip's ±1 to 1.05 held (asymmetric clipping) and 1.45 after a CV step. `CLIP_DRIVE` is retuned so the defaults still peak near 4 V
    (the ladder's 24 dB slope takes more of the saws' harmonics than the
    12 dB SVF did). SUB OUT is unchanged: the raw sub before everything.
 
@@ -217,6 +219,9 @@ the ceiling constant is the one knob to turn, and the cost is tuning.
 Parameter smoothing, once per 16-sample block at the base rate: cutoff in
 octaves with a 20 ms one-pole (as now), `k` and `g_drive` with a 20 ms
 one-pole each. `G` is computed once per block from the smoothed cutoff.
+Per sample, the SUB level and the sub's route (a 0 ... 1 share through
+the ladder, the rest around it) each have a 20 ms one-pole too, so a
+step of SUB or of Sub through filter doesn't click (issue #87).
 
 Oversampling: copy Fundamental's `Upsampler2x` / `Downsampler2x` (three
 allpass sections per branch, 78 dB stopband, flat passband) into a
