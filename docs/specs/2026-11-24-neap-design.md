@@ -90,6 +90,15 @@ Anti-goals (a failure even if it works):
 - An expander after øchd's (2026-11-23).
 - Option B: the eight cycles plus TIDE, HIGH and one Weight knob
   (2026-11-24).
+- After the listening stop on test builds 2.0.38 and 2.0.39 (2026-11-24):
+  "nothing needs changing for now". Every first guess stands: the RATE
+  range and noon default, the step table, the spread and Drift on by
+  default, Weight's curve, TIDE's gain (2.0; TIDE past +-2.5 V 18.8 % of
+  the time), MARK +2 V (HIGH on 15.6 % of the time), Triangle by default,
+  and Spring reading only the eight cycles. Also kept as they are: MARK
+  above about +4.9 V never fires HIGH, and a RESET can fire Spring's
+  triggers on even cycles that were below 0 V.
+- Neap's right-click menu adds Spring (2026-11-24), as Ballast adds Pan.
 
 Everything below that is not in this list is the designer's call,
 marked *(call)*, for the user to correct.
