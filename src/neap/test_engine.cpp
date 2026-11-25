@@ -13,6 +13,15 @@ using rka::NeapEngine;
 using rka::NeapFrame;
 using rka::NeapResult;
 
+// Every engine call goes through this one non-inlined function, as the module
+// has one call site with Level and the other menu items as runtime flags.
+// Inlined per call site, g++ 15 with the plugin's -funsafe-math-optimizations
+// specialises each copy for its constant frame and rounds the copies
+// differently, so two engines compared bit for bit would disagree.
+__attribute__((noinline)) void run(NeapEngine& e, const NeapFrame& f, NeapResult& r) {
+	e.process(f, r);
+}
+
 void levels() {
 	NeapEngine a, b;
 	a.reset();
@@ -22,8 +31,8 @@ void levels() {
 	NeapResult ra, rb;
 	fa.rate = fb.rate = 1.f;
 	for (int k = 0; k < 20000; k++) {
-		a.process(fa, ra);
-		b.process(fb, rb);
+		run(a, fa, ra);
+		run(b, fb, rb);
 		for (int i = 0; i < 8; i++) {
 			CHECK(ra.shaped[i] == rb.shaped[i], "shaped is Level-free");
 			CHECK(ra.cycle[i] == ra.shaped[i], "bipolar cycle = shaped");
@@ -48,8 +57,8 @@ void levels() {
 		int edges = 0;
 		float last = -1.f;
 		for (int k = 0; k < 200000; k++) {
-			p.process(f1, r1);
-			q.process(f2, r2);
+			run(p, f1, r1);
+			run(q, f2, r2);
 			CHECK(r1.high == r2.high, "mark %g: same switching", marks[m]);
 			if (r1.high != last) edges++;
 			last = r1.high;
@@ -68,42 +77,42 @@ void reset_edges() {
 	f.rate = 1.f;
 	NeapResult r;
 	// Run until the cycles are away from 0.
-	for (int k = 0; k < 5000; k++) e.process(f, r);
+	for (int k = 0; k < 5000; k++) run(e, f, r);
 	CHECK(std::fabs(r.shaped[0]) > 0.1f, "cycle 1 is moving");
 	// Rising through 1 V resets once.
 	f.reset = 0.5f;
-	e.process(f, r);
+	run(e, f, r);
 	CHECK(std::fabs(r.shaped[0]) > 0.1f, "0.5 V does not reset");
 	f.reset = 1.f;
-	e.process(f, r);
+	run(e, f, r);
 	CHECK(std::fabs(r.shaped[0]) < 0.02f, "1 V resets: %g", r.shaped[0]);
 	// Held high: no repeat. (A RESET already held high when the module loads
 	// resets once, since reset() clears the trigger's state: intended.)
 	float prev = r.shaped[0];
-	for (int k = 0; k < 100; k++) e.process(f, r);
+	for (int k = 0; k < 100; k++) run(e, f, r);
 	CHECK(r.shaped[0] > prev && r.shaped[0] > 0.05f, "held high runs on: %g", r.shaped[0]);
 	// Dropping to 0.5 V does not re-arm; rising again does not reset.
 	f.reset = 0.5f;
-	e.process(f, r);
+	run(e, f, r);
 	f.reset = 2.f;
 	const float before = r.shaped[0];
-	e.process(f, r);
+	run(e, f, r);
 	CHECK(r.shaped[0] > before, "no re-arm between 0.1 and 1 V");
 	// Re-arms below 0.1 V.
 	f.reset = 0.05f;
-	for (int k = 0; k < 10; k++) e.process(f, r);
+	for (int k = 0; k < 10; k++) run(e, f, r);
 	f.reset = 1.5f;
-	e.process(f, r);
+	run(e, f, r);
 	CHECK(std::fabs(r.shaped[0]) < 0.02f, "re-armed: %g", r.shaped[0]);
 	// Noise between 0.1 and 1 V never resets.
 	f.reset = 0.f;
-	for (int k = 0; k < 10; k++) e.process(f, r);
+	for (int k = 0; k < 10; k++) run(e, f, r);
 	unsigned s = 12345;
 	for (int k = 0; k < 20000; k++) {
 		s = s * 1664525u + 1013904223u;
 		f.reset = 0.11f + 0.88f * float(s >> 8) / 16777216.f;
 		const float before2 = r.shaped[0];
-		e.process(f, r);
+		run(e, f, r);
 		if (k > 100) {
 			CHECK(std::fabs(r.shaped[0] - before2) < 0.1f, "noise reset at %d", k);
 		}
@@ -130,7 +139,7 @@ void no_jumps() {
 		f.weightCv = 5.f * std::sin(t * 4.1f);
 		f.mark = 5.f * std::sin(t * 2.3f);
 		f.wave = (long(t * 20.f) % 2) ? rka::neap::WAVE_SINE : rka::neap::WAVE_TRIANGLE;
-		e.process(f, r);
+		run(e, f, r);
 		if (have) {
 			for (int i = 0; i < 8; i++)
 				if (std::fabs(r.shaped[i] - p.shaped[i]) > cycBound) { if (bad < 5) std::printf("cyc %d k %ld d %g b %g\n", i, k, r.shaped[i]-p.shaped[i], cycBound); bad++; }
@@ -184,7 +193,7 @@ void hostile_inputs() {
 				f.reset = pick(0.f);
 				f.wave = (s >> 5) & 1 ? rka::neap::WAVE_SINE : rka::neap::WAVE_TRIANGLE;
 			}
-			e.process(f, r);
+			run(e, f, r);
 			if (!inRange(r, uni != 0)) {
 				CHECK(false, "out of range at %d (uni %d)", k, uni);
 				return;
@@ -193,7 +202,7 @@ void hostile_inputs() {
 		// Recovers on sane input.
 		NeapFrame g;
 		g.unipolar = uni != 0;
-		for (int k = 0; k < 48000; k++) e.process(g, r);
+		for (int k = 0; k < 48000; k++) run(e, g, r);
 		CHECK(inRange(r, uni != 0), "recovers");
 	}
 }
@@ -211,8 +220,8 @@ void nan_cv_reads_zero() {
 	fb.rateCv = nan;
 	NeapResult ra, rb;
 	for (int k = 0; k < 30000; k++) {
-		a.process(fa, ra);
-		b.process(fb, rb);
+		run(a, fa, ra);
+		run(b, fb, rb);
 		CHECK(ra.tide == rb.tide && ra.cycle[7] == rb.cycle[7], "NaN CV = 0 at %d", k);
 	}
 }
@@ -231,7 +240,7 @@ void sample_rate_change() {
 		float prev = r.shaped[0];
 		const long steps = long(seconds * fs);
 		for (long k = 0; k < steps; k++) {
-			e.process(f, r);
+			run(e, f, r);
 			if (prev < 0.f && r.shaped[0] >= 0.f) n++;
 			prev = r.shaped[0];
 		}
@@ -242,7 +251,7 @@ void sample_rate_change() {
 	// Switch: phase continues (no jump), then 40 Hz again.
 	NeapResult before = r;
 	f.sampleTime = 1.f / 96000.f;
-	e.process(f, r);
+	run(e, f, r);
 	CHECK(std::fabs(r.shaped[0] - before.shaped[0]) < 5.f * 4.f * 40.2f / 48000.f, "no jump at the switch");
 	const int b = crossings(96000.f, 1.f);
 	CHECK(b >= 39 && b <= 41, "96 kHz: %d crossings", b);
@@ -270,8 +279,8 @@ void weight_cv_adds_and_clamps() {
 		NeapResult ra, rb;
 		float worst = 0.f, spread = 0.f;
 		for (int k = 0; k < 48000; k++) {
-			a.process(fa, ra);
-			b.process(fb, rb);
+			run(a, fa, ra);
+			run(b, fb, rb);
 			if (k > 12000) {   // past the glide (50 ms) and its settle
 				worst = std::fmax(worst, std::fabs(ra.tide - rb.tide));
 				spread = std::fmax(spread, std::fabs(rb.tide));
@@ -289,8 +298,8 @@ void weight_cv_adds_and_clamps() {
 	NeapResult ra, rb;
 	float diff = 0.f;
 	for (int k = 0; k < 48000; k++) {
-		a.process(fa, ra);
-		b.process(fb, rb);
+		run(a, fa, ra);
+		run(b, fb, rb);
 		diff = std::fmax(diff, std::fabs(ra.tide - rb.tide));
 	}
 	CHECK(diff > 0.05f, "WEIGHT 0.5 and 1 differ (%g)", diff);
@@ -310,8 +319,8 @@ void wave_is_wired() {
 	NeapResult ra, rb;
 	float diff = 0.f;
 	for (int k = 0; k < 4800; k++) {   // past the 10 ms crossfade
-		a.process(fa, ra);
-		b.process(fb, rb);
+		run(a, fa, ra);
+		run(b, fb, rb);
 		if (k > 1000)
 			diff = std::fmax(diff, std::fabs(ra.shaped[0] - rb.shaped[0]));
 	}
