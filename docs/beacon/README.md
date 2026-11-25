@@ -75,7 +75,9 @@ low.
 - **SHAPE**: one curve for every stage. Noon is linear; right, the
   classic contour (a fast, rounded attack, decays with a long tail); left,
   the mirror (an attack that swells, decays that hold and then fall).
-  Default three quarters right.
+  Default three quarters right. Turned while a stage runs, the rest of
+  the stage takes the new curve from where the level is, so the level
+  does not jump and the stage still ends on time.
 - **Push button**: a gate on every channel while held (shift-click
   latches it).
 - **GATE, RETRIG**: gates at the plugin's usual thresholds (high at 1 V,

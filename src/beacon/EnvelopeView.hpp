@@ -75,26 +75,36 @@ struct EnvelopeLayout {
 		}
 	}
 
-	// Point f (0..1) of the running stage's bright line: across liveSpan,
-	// its height liveStageHeight(f, start01, goal01).
-	void livePoint(Stage stage, Stage prev, float prevPhase, float f, float start01, float goal01, float& u, float& h) const {
+	// Point f (0..1) of the running stage's bright line, drawn from the
+	// stage's breakpoint (Voice::bpPhase): bpPhase (0..1, NaN 0) of the way
+	// across liveSpan to its end, its height liveStageHeight(f, start01,
+	// goal01), start01 being the level at the breakpoint. With bpPhase 0
+	// (no Shape change during the stage) that is the whole span from the
+	// stage's start.
+	void livePoint(Stage stage, Stage prev, float prevPhase, float f, float start01, float goal01, float& u, float& h,
+	               float bpPhase = 0.f) const {
 		float u0, u1;
 		liveSpan(stage, prev, prevPhase, u0, u1);
+		const float b = detail::clamp01(bpPhase);
+		u0 = u0 + b * (u1 - u0);
 		u = u0 + f * (u1 - u0);
 		h = liveStageHeight(f, start01, goal01, shape);
 	}
 
 	// Where the dot goes for a stage and phase. Attack, Decay and Release:
-	// on the running stage's bright line (livePoint), so it is on it by
-	// construction. Sustain has no phase worth drawing: mid-span at the real
+	// on the running stage's bright line (livePoint, from the breakpoint
+	// bpPhase with start01 its level), so it is on it by construction; a
+	// phase before the breakpoint (a sample apart) sits at its start. Sustain has no phase worth drawing: mid-span at the real
 	// level, or, with the sustain level at 0, at the end of the line (1, 0).
 	// IDLE: x 0, height 0.
-	void dot(Stage stage, Stage prev, float prevPhase, float phase, float level01, float start01, float goal01, float& u, float& h) const {
-		const float p = detail::clamp01(phase);
+	void dot(Stage stage, Stage prev, float prevPhase, float phase, float level01, float start01, float goal01, float& u, float& h,
+	         float bpPhase = 0.f) const {
+		const float p = detail::clamp01(phase), b = detail::clamp01(bpPhase);
+		const float f = b < 1.f ? detail::clamp01((p - b) / (1.f - b)) : 1.f;
 		switch (stage) {
 			case ATTACK:
 			case DECAY:
-			case RELEASE: livePoint(stage, prev, prevPhase, p, start01, goal01, u, h); return;
+			case RELEASE: livePoint(stage, prev, prevPhase, f, start01, goal01, u, h, b); return;
 			case SUSTAIN:
 				if (sustain01 <= 0.f) {
 					u = 1.f;

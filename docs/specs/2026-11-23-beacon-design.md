@@ -185,6 +185,20 @@ one is out of scope.
   (`tides2/resources/lookup_tables.py`, MIT; keep the notice) or be
   computed; the builder chooses. Either way the stage's time stays exact.
 - Default: the builder's call, by ear (likely right of noon).
+- **Shape moved during a stage** (issue #83, after build 2.0.39; option A
+  of three put to the owner): a breakpoint, by the same Tides rule as a
+  retrigger. The rest of the running Attack, Decay or Release becomes the
+  new Shape's full curve, rescaled from the level where Shape changed to
+  the goal, over the stage's time left. The level does not move, the
+  stage still ends at its set time, and the window draws the bright line
+  from the breakpoint. Before, the level was recomputed on the new curve
+  from the stage's start, which slid it by up to 0.875 of the stage's
+  distance (8.75 V) on a long stage. Shape's 5 ms smoothing stays, so a
+  turn is a run of breakpoints, one a sample, while it settles: turning
+  toward right steepens the level's slope for that while (up to 4 times
+  the straight-line rate for what is left), toward left flattens it.
+  Rejected: a fading correction (OUT off the drawn line for the rest of
+  the stage) and Shape held until the next stage.
 
 ### Hold mode (slew limiter, cèis's)
 
@@ -257,6 +271,11 @@ the slew, so the switch itself never moves the output:
   when Decay began, so a Sustain move during Decay makes the bright Decay
   end at the old level, as the voice really does (it then settles to the
   new level in Sustain).
+  After a Shape move during the stage (see Shape) the bright line runs
+  from that breakpoint: from the breakpoint's phase of the way across the
+  stage's span, at its level, to the goal along the new Shape's curve.
+  The engine publishes channel 1's breakpoint phase and level for this
+  (the stage's start and phase 0 until Shape moves).
 - **Skipped stages** (issue #76, after test builds 2.0.35 and 2.0.36):
   when the running stage skipped others, it is drawn bright from where
   the last stage was cut off (its phase then, across its span; a cut-off
