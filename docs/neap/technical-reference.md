@@ -25,7 +25,7 @@ The saved-state keys did not change between the two builds (the Level change was
 
 - Every number comes from one of the sources below, marked where it matters:
   - **[code]**: a constant or formula in the 2.0.39 sources, cited as file:line (`src/neap/*`, `src/spring/*`).
-  - **[test]**: printed or asserted by the module's automated tests. I built them from the 2.0.39 tree with the repository's own rules (`make -f tests.mk`, `-Werror`; the hostile tests with ASan and UBSan at `-O1`) and again, for the non-sanitizer ones, with the plugin's flags (`-O3 -funsafe-math-optimizations -march=armv8-a+fp+simd`), on an Apple M-series Mac. All seven test programs passed; the five without sanitizers also passed at the plugin's flags (section 9).
+  - **[test]**: printed or asserted by the module's automated tests. I built them from the 2.0.39 tree with the repository's own rules (`make -f tests.mk`, `-Werror`; the hostile tests with ASan and UBSan at `-O1`) and again, for the non-sanitizer ones, with the plugin's flags (`-O3 -funsafe-math-optimizations -march=armv8-a+fp+simd`), on an Apple M-series Mac. All eight test programs passed (seven at first; `neap/test_state` was added after the whole-branch review); the six without sanitizers are built at the plugin's flags by `make test` (section 9).
   - **[meas]**: a small program I wrote against the Rack-free engine (`rka::NeapEngine`, `neap::Cycles`, `neap::Tide`, `rka::SpringCore`, the code the modules run), built with the plugin's flags. Sampling rates are stated where they matter. Paths are in the note at the end.
 - **[issue #N]**: an open GitHub issue in `ryanarneson/RkaModules`. There are none against Neap or Spring (section 8).
 - **[unverified]**: anything I could not check, mostly Rack host behaviour. I did not run Rack. I did compile `Neap.cpp` and `Spring.cpp` against the Rack SDK 2.6.6 (both compile without warnings).
@@ -385,7 +385,7 @@ Sixteen outputs in two staggered columns (x 16.2 and 25.4 mm), alternating left 
 | 14 | SODD | ODD | 16.2, 110.2 | Steps odd (1 3 5 7) |
 | 15 | SEVEN | EVEN | 25.4, 115.9 | Steps even (2 4 6 8) |
 
-Light id 0: LINK ("Link (Neap at the left)"). The output count and the three T ids are pinned by `static_assert` in `Spring.cpp:30-31`.
+Light id 0: LINK ("Link (Neap at the left)"). The output count and the three T ids are pinned by `static_assert` in `Spring.cpp:26-27`.
 
 ---
 
@@ -418,7 +418,7 @@ JSON values that do not fit cannot corrupt anything; the code never narrows an i
 
 ### 4.3 Spring's state
 
-Spring has no params and saves no data. Initialize sets a flag so that the next call from Neap clears the trigger state and the outputs [code: `Spring.cpp:43-45`].
+Spring has no params and saves no data. Initialize sets a flag so that the next call from Neap clears the trigger state and the outputs [code: `Spring.cpp:39-49`, `SpringRun` in `SpringCore.hpp:162-180`].
 
 ### 4.4 Bypass
 
@@ -498,7 +498,7 @@ Each sample, Neap's `process()` finds `rightExpander.module`, skips it if bypass
 
 ### 6.2 The link and its timeout of 64 process calls
 
-[code, `SpringCore.hpp:126-154`, `Spring.cpp:48-69`; test `link_timeout`]
+[code, `SpringCore.hpp:129-180`, `Spring.cpp:52-71`; tests `link_timeout`, `run_reset_latch`]
 
 - Neap's call to `fromNeap` increments an atomic counter. Spring's `process()` compares it with the last value it saw, once per call.
 - A change means linked (idle count 0). With no change the idle count rises; **at 64 consecutive process calls with no change the link is lost**. At that point the outputs are set to 0 V, the LINK light goes dark and the trigger state is flagged to clear.
@@ -511,7 +511,7 @@ Each sample, Neap's `process()` finds `rightExpander.module`, skips it if bypass
 
 ### 6.3 Outputs
 
-[code, `SpringCore.hpp:40-117`; all tests pass, section 9]
+[code, `SpringCore.hpp:13-124`; all tests pass, section 9]
 
 | Output | Law | Range | Notes |
 |---|---|---|---|
@@ -561,7 +561,7 @@ A Neap Reset drops each cycle to phase 0, which reads about +0.0003 V next sampl
 
 ### 6.6 LINK light
 
-Lit (1.0) while linked, dark otherwise [code: `Spring.cpp:58-67`]. It is not smoothed. Unlinked Spring writes 0 V on every output every call.
+Lit (1.0) while linked, dark otherwise [code: `Spring.cpp:59-71`]. It is not smoothed. Unlinked Spring writes 0 V on every output every call.
 
 ---
 
@@ -649,7 +649,7 @@ These are things the code does that the spec did not say, or that QA may want a 
 
 ## 9. What the automated suite already covers
 
-All seven test programs passed in my run. The repository builds the Neap and Spring tests at `-O2` (not the plugin's flags); I ran them that way (`make -f tests.mk build/test/neap/test_rate …` with `TEST_WERROR=-Werror`), and re-ran the five non-sanitizer ones at the plugin's flags. The two hostile tests use ASan and UBSan at `-O1`. Run time on an Apple M-series Mac: `test_rate` 0.16 s, `test_cycles` 1.7 s, `test_tide` 0.5 s, `test_engine` 0.4 s, Neap `test_hostile` 3.4 s, Spring `test_core` 0.2 s, Spring `test_hostile` 1.7 s. Tests are named for what they guarantee; tolerances are as asserted.
+All eight test programs pass. Since the whole-branch review, `make test` builds the six non-sanitizer ones (`neap/test_rate`, `test_cycles`, `test_tide`, `test_engine`, `test_state`, `spring/test_core`) at the plugin's flags (`PLUGIN_MATH_TESTS` in `tests.mk`); Spring's `test_hostile` was also run once at the plugin's flags by hand and passes. The two hostile tests use ASan and UBSan at `-O1`. Run time on an Apple M-series Mac: `test_rate` 0.16 s, `test_cycles` 1.7 s, `test_tide` 0.5 s, `test_engine` 0.4 s, Neap `test_hostile` 3.4 s, Spring `test_core` 0.2 s, Spring `test_hostile` 1.7 s. Tests are named for what they guarantee; tolerances are as asserted.
 
 ### 9.1 neap/test_rate (tables, rate law, tooltip)
 
@@ -706,6 +706,10 @@ All seven test programs passed in my run. The repository builds the Neap and Spr
 
 `bad_values_everywhere`, `recovers_after_nan`, `sample_rates`, `bad_sample_times`, `toggles`, `reset_hostile`, `no_allocation_in_process`, `seeded_fuzz` (section 7.3).
 
+### 9.5b neap/test_state (saved menu state)
+
+`parseMenu` (`NeapState.hpp`): good values round-trip; missing keys give the defaults (Drift on, Triangle, ±5 V); `drift` counts only when it is a JSON boolean (0, 1 or a string keep it on); `wave` and `level` count only as the integers 0 or 1 (2^32 + 1, booleans and others give the default).
+
 ### 9.6 spring/test_core and spring/test_hostile
 
 | Test | Guarantees |
@@ -717,6 +721,7 @@ All seven test programs passed in my run. The repository builds the Neap and Spr
 | cascade_all_masks | all 16 masks: each patched output = OR of its own and the unpatched ones before it; mask 0 nothing; only T6 patched takes all four |
 | steps_codes_and_order | all 16 codes on each output, first named cycle the MSB, 15 = 10 V |
 | sample_time | a bad sample time keeps the last (960 samples at 96 kHz) |
+| run_reset_latch | `SpringRun`: a reset request (Initialize, bypass, un-bypass or unlink) clears the trigger history on the next call from Neap, so a crossing that happened while bypassed fires nothing; with no request the same crossing fires |
 | link_timeout | unlinked at start; linked on the first change; linked through 63 idle calls; unlinked on the 64th; linked again at the next change; restart of the count; the module contract of reset on unlink |
 | (hostile) bad_values_everywhere, nan_does_not_fire_or_stick, relink_has_no_burst, pulse_width_at_every_rate, bad_sample_time_keeps_the_last, bad_indices, link_against_model, no_allocation_in_step, chained_fuzz, seeded_fuzz | section 7.3 |
 
