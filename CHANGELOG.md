@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.44 (2026-11-25): Beacon rework: ADSR / AR / HOLD, AR one-shot, Attack resumes along its curve, the window draws what the mode will do
 - 2.0.43 (2026-11-25): Rigging: air takes a string's top even at Damp 0 (no metallic sizzle at low Damp)
 - 2.0.42 (2026-11-25): Listening fixes: Rigging NaN at a tiny Damp, Wake opens at noon with the dial lettered true, Tape/Analog bend capped at 1 s
 - 2.0.41 (2026-11-25): Fix waves: Wake clock and Freeze (#90-#93), Squall merged gates (#78), Beacon Shape breakpoint (#83), Rigging Damp glide (#85), Fathom SUB smoothing and +-5 V limit (#87, #88), Fog bypass and Visibility rise (#13, #22), Shoal negative Mod range (#81), test fixes (#74, #84, #36)
