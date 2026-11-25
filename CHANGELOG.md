@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.40 (2026-11-25): Neap/Spring review fixes from PR #103: Spring resets its triggers on bypass and un-bypass; stricter loading of Neap's saved menu settings
 - 2.0.39 (2026-11-24): Neap: Add Spring expander menu item
 - 2.0.38 (2026-11-24): Neap and Spring: first test build
 - 2.0.37 (2026-11-23): Beacon: running stage starts where the last stage was cut off (#76)
