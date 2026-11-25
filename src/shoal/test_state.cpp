@@ -45,14 +45,20 @@ std::vector<int> snapshot(Core& c) {
 }
 
 // Set every setting of every app to a value other than its default, then
-// leave the core on app `last`.
-void scramble(Core& c, int last) {
+// leave the core on app `last`. By default each goes to its maximum (its
+// minimum where the default is the maximum); `low` sends each to its minimum
+// instead (its maximum where the default is the minimum), which reaches the
+// negative end of the signed settings (#81).
+void scramble(Core& c, int last, bool low = false) {
 	for (int app = 0; app < shoal::kNumApps; app++) {
 		c.selectApp(app);
 		for (int ch = 0; ch < c.channels(); ch++)
 			for (int i = 0; i < c.settingCount(); i++) {
 				const shoal::SettingInfo s = c.settingInfo(i);
-				c.setSettingRaw(ch, i, s.def == s.max ? s.min : s.max);
+				if (low)
+					c.setSettingRaw(ch, i, s.def == s.min ? s.max : s.min);
+				else
+					c.setSettingRaw(ch, i, s.def == s.max ? s.min : s.max);
 			}
 	}
 	c.selectApp(last);
@@ -74,9 +80,9 @@ void press(Core& c, shoal::Button b, double seconds) {
 	run(c, 0.02);
 }
 
-void testRoundTripEveryApp() {
+void testRoundTripEveryApp(bool low) {
 	Core a;
-	scramble(a, 7);
+	scramble(a, 7, low);
 	std::vector<uint8_t> img(kImage);
 	a.save(img.data());
 	Core b;
@@ -91,13 +97,45 @@ void testRoundTripEveryApp() {
 			for (int i = 0; i < a.settingCount(); i++, k++) {
 				const char* name = a.settingInfo(i).name;
 				if (k < sb.size() && !isException(app, ch, name))
-					CHECK(sa[k] == sb[k], "%s ch %d '%s': saved %d, restored %d",
-						Core::appName(app), ch, name, sa[k], sb[k]);
+					CHECK(sa[k] == sb[k], "%s ch %d '%s' (%s ends): saved %d, restored %d",
+						Core::appName(app), ch, name, low ? "low" : "high", sa[k], sb[k]);
 			}
 	}
 	// The scrambled values are not the defaults, so the match is not trivial.
 	Core fresh;
 	CHECK(snapshot(fresh) != sa, "scrambled settings differ from a fresh core's");
+}
+
+// #81: References' "Mod range oct" (-3..3) was stored as an unsigned byte,
+// so -2 was saved as 254 and restored clamped to +3.
+void testRefsNegativeModRange() {
+	int refs = -1;
+	for (int app = 0; app < shoal::kNumApps; app++)
+		if (std::strcmp(Core::appName(app), "References") == 0)
+			refs = app;
+	CHECK(refs >= 0, "References app found");
+	if (refs < 0)
+		return;
+	for (int v : { -2, -1, -3, 2 }) {
+		Core a;
+		a.selectApp(refs);
+		int idx = -1;
+		for (int i = 0; i < a.settingCount(); i++)
+			if (std::strcmp(a.settingInfo(i).name, "Mod range oct") == 0)
+				idx = i;
+		CHECK(idx >= 0, "'Mod range oct' found");
+		if (idx < 0)
+			return;
+		a.setSettingRaw(0, idx, v);
+		CHECK(a.setting(0, idx) == v, "set to %d, reads %d", v, a.setting(0, idx));
+		std::vector<uint8_t> img(kImage);
+		a.save(img.data());
+		Core b;
+		CHECK(b.restore(img.data()), "restore");
+		b.selectApp(refs);
+		CHECK(b.setting(0, idx) == v, "References A 'Mod range oct' %d after save+restore: %d",
+			v, b.setting(0, idx));
+	}
 }
 
 void testSaveIsStable() {
@@ -779,7 +817,9 @@ void testInputMapUpperBoundary() {
 } // namespace
 
 int main() {
-	testRoundTripEveryApp();
+	testRoundTripEveryApp(false);
+	testRoundTripEveryApp(true);
+	testRefsNegativeModRange();
 	testSaveIsStable();
 	testFreshCoreSaves();
 	testCorruptImage();
