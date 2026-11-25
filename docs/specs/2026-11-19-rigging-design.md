@@ -228,6 +228,9 @@ Smoothed against zipper noise.
 - Damp must not detune the string (the filter's own delay is taken off the
   string's length).
 - **Damp CV** adds to the knob, 10 V across its travel.
+- A change of Damp glides, as pitch does (8 ms time constant): a step in
+  Damp (a CV step, a mapped control, a preset) would otherwise open the
+  loop's filter on the raw input the strings hold, a click of up to 4 V.
 
 ### Strum and Spread: the strike
 

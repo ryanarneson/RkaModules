@@ -473,6 +473,46 @@ void chord_cv_no_chatter() {
 	CHECK(during < 2.0 * before, "a chord change mid-ring: a step of %.4g, %.4g before it", during, before);
 }
 
+// Damp stepped while an input plays through the strings: no click. (The
+// loop's low-pass and the input's share once jumped at the control tick:
+// steps of up to 3.9 V on a sine whose own steps are 0.2 V.) Several
+// instants in the sine's cycle, from Damp 1 and from Damp 0.33 to 0.
+void damp_step_with_input() {
+	for (float from : {1.f, 0.33f}) {
+		Rig g;
+		g.f.params[F::DAMP] = from;
+		g.f.strumPatched = true;
+		g.f.inLPatched = true;
+		const double hz = 130.81;
+		long t = 0;
+		auto play = [&](double seconds, std::vector<float>* out) {
+			const long n = std::lround(seconds * kFs);
+			for (long i = 0; i < n; i++, t++) {
+				g.f.inL = 5.f * (float) std::sin(kTwoPi * hz * t / kFs);
+				g.step();
+				if (out)
+					out->push_back(g.r.l);
+			}
+		};
+		play(5.0, nullptr);
+		double worst = 0.0, steadyWorst = 0.0;
+		for (int instant = 0; instant < 8; instant++) {
+			g.f.params[F::DAMP] = from;
+			play(1.0 + instant * 0.00097, nullptr);
+			std::vector<float> steady, after;
+			play(1.0, &steady);
+			const double s = largestStep(steady, 0, (long) steady.size());
+			g.f.params[F::DAMP] = 0.f;
+			play(0.1, &after);
+			const double a = std::max(largestStep(after, 0, (long) after.size()), (double) std::fabs(after[0] - steady.back()));
+			worst = std::max(worst, a / s);
+			steadyWorst = std::max(steadyWorst, s);
+			CHECK(a < 3.0 * s, "Damp %g to 0 with a 130.81 Hz sine in (instant %d): a step of %.3g V, %.3g V steady", from, instant, a, s);
+		}
+		std::printf("Damp %g to 0 with a sine in: worst step %.2f times the steady step (%.3g V)\n", from, worst, steadyWorst);
+	}
+}
+
 // Strikes counted by the engine over `samples`, with V/OCT set at the given
 // samples. (The light stays on 0.1 s, so it cannot count close strikes.)
 int strikesIn(Rig& g, long samples, const std::vector<std::pair<long, float>>& voctAt) {
@@ -735,6 +775,7 @@ int main() {
 	mix();
 	cv();
 	chord_cv_no_chatter();
+	damp_step_with_input();
 	note_strikes();
 	strum_edges();
 	reset_cancels_a_rake();
