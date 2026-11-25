@@ -23,3 +23,5 @@ extern Model* modelSluice;
 extern Model* modelEddy;
 extern Model* modelSpindrift;
 extern Model* modelBeacon;
+extern Model* modelNeap;
+extern Model* modelSpring;

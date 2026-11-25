@@ -18,7 +18,7 @@ process and a plain panel; **M** needs real DSP work or tuning by ear;
 The existing three are already in the Instrument look
 (`docs/specs/2026-11-15-instrument-look-design.md`): Sway, Fathom and
 Shoal moved to it in PR #7, after Shoal's friendly mode landed in PR #6
-(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging, Wake, Narrows, Eddy, Spindrift and Beacon were built in it from the start.
+(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging, Wake, Narrows, Eddy, Spindrift, Beacon, Neap and Spring were built in it from the start.
 
 **Changes since (the user, 2026-11-18):** Squall was built next, ahead of
 Plimsoll and Lull. Plimsoll is skipped for now, since Ballast's soft limit
@@ -81,6 +81,14 @@ Shape. At the listening stop (test build 2.0.34) every stage was made to
 take exactly its set time wherever it starts, and the window was made
 to draw the running stage from where it really began.
 
+**Changes since (2026-11-24):** Neap was built (8 HP) with its expander
+Spring (6 HP). Against the idea: eight cycles after Instruō øchd instead
+of four named after tidal constituents, one Weight knob instead of a
+height knob per cycle, and a gate (HIGH) above a settable Mark. At the
+listening stop (test builds 2.0.38 and 2.0.39) nothing was changed: every
+first guess stands. The manual is `docs/neap/README.md`; the design is
+`docs/specs/2026-11-24-neap-design.md`.
+
 ## 1. A whole patch from RKA alone
 
 With Sway, Fathom and Shoal these six make a complete dark ambient patch:
@@ -118,7 +126,7 @@ Mostly light DSP.
 
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
-| 12 | [Neap](neap.md) | S | Layered slow cycles that take a long time to repeat. |
+| 12 | [Neap](neap.md) (built) | S | Eight slow cycles that take a long time to repeat, with a tide (their sum), a High-water gate and an expander, Spring. Built 2026-11-24, 8 HP, after the Instruō øchd. |
 | 13 | [Reckoner](reckoner.md) | S | A wandering X and Y. Into the Pan expander's CV, sounds move by themselves. |
 | 14 | [Watch](watch.md) | S | One ramp across a whole piece, and a trigger per section. |
 | 15 | [Tackle](tackle.md) | S | Scale and shift. By now there is a lot of modulation to tame. |

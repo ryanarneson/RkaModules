@@ -2,6 +2,8 @@
 
 ## Test builds
 
+- 2.0.39 (2026-11-24): Neap: Add Spring expander menu item
+- 2.0.38 (2026-11-24): Neap and Spring: first test build
 - 2.0.37 (2026-11-23): Beacon: running stage starts where the last stage was cut off (#76)
 - 2.0.36 (2026-11-23): Beacon: running stage drawn from where the last stage ended (#76)
 - 2.0.35 (2026-11-23): Beacon: listening-stop and final-review fixes (window from true start, Sustain at 0, lights, switch steps by direction, bypass resets)
@@ -42,6 +44,19 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Neap**, an 8 HP source of eight slow cycles in the Instrument
+  look, after the Instruō øchd, with **Spring**, a 6 HP expander:
+  - Eight cycles about an octave apart in uneven steps (2.16, 1.93, 2.25,
+    ...) that no pair can lock to; RATE over 12 octaves (cycle 1 from 40 Hz
+    down to 1.7 minutes, cycle 8 from 4.2 s to 4.8 hours), RATE CV at
+    1 V/oct with an attenuverter, Reset, a slight tracking spread, Drift,
+    triangle or sine, ±5 V or 0-10 V (menu).
+  - TIDE, the weighted sum of the eight, with Weight and Weight CV; HIGH,
+    a gate while the tide is above Mark; ALL, the eight as one
+    polyphonic cable; a light on every pulley.
+  - Spring: four folds, the min and max of cycles 2 and 3 and of 6 and 7,
+    four zero-crossing triggers that cascade (T2 to T4 to T6 to T8), and
+    four 16-step codes; add it from Neap's menu (Add Spring expander).
 - New module: **Beacon**, a 10 HP polyphonic envelope in the Instrument look:
   - Gate, Trig or Hold on a switch (after the Instruō cèis 2): Gate runs
     Attack, Decay and Sustain while the gate is high and Release when it

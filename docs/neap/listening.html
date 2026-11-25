@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neap and Spring listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>NEAP</h1>
+<div class="sub">Listening list · test build 2.0.39 · 2026-11-24 · with Spring</div>
+<p class="lead">Neap's first test builds: eight slow cycles after the Instruō øchd, each roughly an octave below the one above but on uneven steps so none ever lock, plus TIDE (a weighted sum of all eight, tilted by WEIGHT) and HIGH (a gate while TIDE is above MARK). Spring is its 6 HP expander after øchd's ø4^2: folds, min/max pairs, chained triggers and four 4-bit step codes, all from Neap's cycles. 2.0.39 adds <b>Add Spring expander</b> to Neap's right-click menu.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: the lights, tooltips, the menu item and LINK.
+RATE's range, the step table, TIDE's gain and the defaults are first guesses, to be set by ear here.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>RATE RANGE</b></td><td>12 octaves: cycle 1 from 1.7 min to 25 ms; cycle 8 from 4.8 h to a few seconds. Noon gives 1.6 s and 4.5 min. Is the top fast enough, the bottom slow enough, and is noon the right default?</td></tr>
+<tr><td><b>STEP TABLE</b></td><td>The steps are 2.16, 1.93, 2.25, 1.93, 1.93, 2.23, 2.17 (cycle 1 to 8 about 169:1, against øchd's 150:1), chosen so no pair falls near a simple ratio. Does any pair still seem to fall into step by ear or on a scope?</td></tr>
+<tr><td><b>DRIFT</b></td><td>±0.5 % wander per cycle, on by default. Worth having, too little, too much, or off by default?</td></tr>
+<tr><td><b>WEIGHT</b></td><td>Each knob end favours one end of the bank by a factor of 2 per cycle. Does the knob feel even across its travel, and is noon (all equal) the right default?</td></tr>
+<tr><td><b>TIDE GAIN</b></td><td>TIDE is past ±2.5 V 18.8 % of the time against an aim of about 25 %. Does it move enough, or should the gain go up?</td></tr>
+<tr><td><b>HIGH AT +2 V</b></td><td>How often does HIGH fire at the default MARK? Too often, too rarely? And in 0–10 V, should MARK follow the offset?</td></tr>
+<tr><td><b>WAVE</b></td><td>Triangle by default. Keep, or default to sine?</td></tr>
+<tr><td><b>SPRING AND TIDE</b></td><td>Spring reads only the eight cycles: TIDE, HIGH, WEIGHT, MARK and Level never reach it. Fine as øchd's expander does, or should Spring use TIDE or WEIGHT?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. Eight on a scope</h4>
+<div class="chain">Neap ALL → a poly scope (or C1–C4 and C5–C8 on two scopes)</div>
+<p>Watch for a few minutes at noon, then at RATE three quarters right, where all eight move visibly. No pair should ever settle into a fixed relationship.</p></div>
+
+<div class="patch"><h4>2. A slow drone that breathes</h4>
+<div class="chain">Fathom → Narrows → Sluice → Fog · Neap C3 → Narrows cutoff · C5 → Fathom wavefold or timbre · TIDE → Sluice level CV</div>
+<p>The core use: three unrelated slow motions over one sound. Try WEIGHT left and right and listen to how restless TIDE makes the level.</p></div>
+
+<div class="patch"><h4>3. Events from HIGH</h4>
+<div class="chain">Neap HIGH → Beacon GATE · Beacon OUT → Sluice level CV on a second layer</div>
+<p>A second layer swells in whenever the tide is high. Move MARK to set how often that happens.</p></div>
+
+<div class="patch"><h4>4. Spring as a melody</h4>
+<div class="chain">Right-click Neap → Add Spring expander · Spring S1–4 → a quantiser → Fathom V/OCT · Spring T2 → Beacon GATE</div>
+<p>A wandering 16-step line, struck by cycle 2's triggers. Then try S odd or S even, and RATE faster.</p></div>
+
+<div class="patch"><h4>5. Triggers that fall back</h4>
+<div class="chain">Spring T2 → Rigging STRUM · T8 → Narrows PING (T4 and T6 left empty)</div>
+<p>With T4 and T6 unpatched their triggers fall through to T8, so Narrows rings on cycles 4, 6 and 8 together: busier than T8 alone.</p></div>
+
+<div class="patch"><h4>6. Folds and pairs into a filter</h4>
+<div class="chain">Spring F1 → Narrows cutoff · MAX 6·7 → Fog size or mix</div>
+<p>F1 gives a double-speed, always-positive sweep with a sharp dip; MAX 6·7 a slow, lopsided swell that never falls below the higher of two cycles.</p></div>
+</main>
+
+<script>
+const groups = [
+
+ ["First look", [
+  ["Add Neap with nothing patched and look at it.", "Eight pulley lights fade up and down by brightness only: the top ones quickly, the bottom ones too slowly to see move. The HIGH light by MARK comes and goes.", null, true],
+  ["Hover RATE at its default (noon).", "The tooltip reads the periods of cycles 1 and 8: “1: 1.6 s · 8: 4.5 min”.", null, true],
+  ["Look at Neap and Spring in the module browser.", "Both panels draw; no crash.", null, true]]],
+ ["Rate", [
+  ["Turn RATE fully left, then fully right, reading the tooltip.", "Fully left: about “1: 1.7 min · 8: 4.8 h”. Fully right: cycle 1 about 25 ms (40 Hz), cycle 8 a few seconds. 12 octaves over the turn, an equal share each."],
+  ["Scope C1 to C8 together at noon for a minute or two.", "Each output is slower than the one above, by roughly an octave but uneven (steps 2.16, 1.93, 2.25, 1.93, 1.93, 2.23, 2.17), so the eight never line up into a repeating pattern."],
+  ["A 1 V/oct CV into RATE CV with the attenuverter fully right; then fully left; then at noon.", "Right: +1 V doubles every rate. Left: +1 V halves them. Noon: the CV does nothing. The tooltip follows the CV."],
+  ["Push RATE CV to +10 V with RATE fully right.", "Cycle 1 stops speeding up at 160 Hz (2 octaves above the knob's top); nothing breaks."],
+  ["Turn RATE fast while watching the scope.", "Every output changes speed but never jumps: the phases carry on."],
+  ["A trigger into RESET.", "Every cycle restarts from phase 0 together (rising through 0 V). The menu items stay as they were."]]],
+ ["Waves, Level and Drift (right-click)", [
+  ["Wave: Triangle, then Sine, while the outputs run.", "Triangle by default. The change crossfades over 10 ms: no click on C1 at audio-ish rates."],
+  ["Level: ±5 V, then 0–10 V.", "±5 V by default. 0–10 V lifts C1–C8, ALL and TIDE by 5 V. HIGH stays 0/10 V."],
+  ["Drift on, then off; compare two Neaps started together.", "On by default. With Drift on, two Neaps reset together slowly move apart (each rate wanders by up to ±0.5 % over about a minute); with it off they stay locked."],
+  ["Patch ALL into a poly scope or a poly VCA.", "8 channels, the same voltages as C1 to C8 in order."]]],
+ ["Tide, Weight and High", [
+  ["Scope TIDE at the default WEIGHT (noon) for a few minutes.", "A slow, uneven swell inside ±5 V (a soft limit, no flat tops). It sits past ±2.5 V about a fifth of the time (18.8 % measured; the design aimed for a quarter)."],
+  ["WEIGHT fully left, then fully right.", "Left: TIDE follows the fast cycles and busies up. Right: it follows the slow ones and barely moves. The change glides over about 50 ms."],
+  ["A CV into WEIGHT CV.", "±5 V covers the knob's whole travel, added to the knob."],
+  ["Scope TIDE and HIGH together, MARK at its default (+2 V).", "HIGH is 10 V while TIDE is above MARK, with a little hysteresis (±0.05 V) so it never chatters at the crossing. The HIGH light matches."],
+  ["Turn MARK from −5 V to +5 V.", "Low MARK: HIGH almost always on. High MARK: rarely or never."],
+  ["Level 0–10 V with MARK at +2 V.", "MARK still compares against the ±5 V tide, so HIGH now fires while the TIDE jack reads above 7 V. Note whether that reads as wrong."]]],
+ ["Adding Spring", [
+  ["Right-click Neap → Add Spring expander.", "Spring appears directly to Neap's right, pushing anything there along. LINK lights.", null, true],
+  ["Undo (Ctrl/Cmd-Z), then redo.", "Spring goes and comes back in one step each.", null, true],
+  ["Right-click Neap again with Spring beside it.", "Add Spring expander is greyed out.", null, true],
+  ["Move Spring away from Neap; then put it back.", "Away: LINK goes dark and every Spring output drops to 0 V. Back: LINK lights and the outputs resume, with no burst of triggers.", null, true],
+  ["Bypass Neap (Ctrl/Cmd-E), then un-bypass.", "Spring goes dark and silent while Neap is bypassed."]]],
+ ["Spring outputs", [
+  ["Scope F1, F3, F5 and F7 against C1, C3, C5, C7.", "Each fold is twice the cycle's size with the negative half flipped up: 0 to 10 V at twice the speed, with a sharp dip at each zero crossing."],
+  ["Scope MIN 2·3 and MAX 2·3 against C2 and C3; then 6·7.", "MIN follows whichever of the two is lower, MAX the higher. Together they draw the envelope of the pair."],
+  ["Patch T2, T4, T6 and T8 into four drums or a scope.", "A 10 ms, 10 V pulse each time cycle 2, 4, 6 or 8 rises through 0 V."],
+  ["Unplug T4 and T6, leaving T2 and T8.", "Unpatched triggers pass on: T8 now also fires for cycles 4 and 6 (the chain runs T2→T4→T6→T8→T2)."],
+  ["Patch S1–4 into a quantiser driving an oscillator.", "A 16-step staircase from 0 to 10 V (cycles 1–4 above zero as four bits, cycle 1 the top bit) that wanders rather than counts. S5–8, S odd and S even the same from their own cycles."],
+  ["Switch Neap's Level and Wave with Spring patched.", "Level changes nothing on Spring (it always reads the ±5 V cycles). Wave does: sine folds are rounder."]]],
+ ["With the patch", [
+  ["Set every knob and menu item, save, quit Rack, reopen.", "Everything comes back, including Drift, Wave and Level."],
+  ["Initialize Neap (right-click).", "Defaults back: RATE noon, WEIGHT noon, MARK +2 V, Drift on, Triangle, ±5 V."],
+  ["Change Rack's sample rate (44.1, 48, 96 kHz).", "Rates stay the same in seconds; nothing jumps."],
+  ["Bypass Neap.", "Its outputs go silent."]]]
+];
+const KEY = "neap-2.0.39-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Neap and Spring 2.0.39 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

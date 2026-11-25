@@ -1,7 +1,7 @@
 {
   "slug": "rka",
   "name": "RKA",
-  "version": "2.0.37",
+  "version": "2.0.39",
   "license": "GPL-3.0-or-later",
   "brand": "RKA",
   "author": "Ryan Arneson",
@@ -173,6 +173,26 @@
         "Slew limiter"
       ],
       "keywords": "envelope adsr ar ad eg contour gate trigger retrigger slew lag portamento polyphonic"
+    },
+    {
+      "slug": "Neap",
+      "name": "Neap",
+      "description": "Eight slow cycles at their own rates: eight outputs, a weighted TIDE sum and a HIGH gate, Drift, Weight, Mark and Reset, with Spring as its expander",
+      "tags": [
+        "LFO",
+        "Low-frequency oscillator"
+      ],
+      "keywords": "lfo slow tide eight cycles polyrhythm random drift modulation"
+    },
+    {
+      "slug": "Spring",
+      "name": "Spring",
+      "description": "Neap's expander: folds, min and max, triggers and step codes from the eight cycles",
+      "tags": [
+        "Expander",
+        "LFO"
+      ],
+      "keywords": "neap expander fold min max trigger steps quantiser"
     }
   ]
 }
