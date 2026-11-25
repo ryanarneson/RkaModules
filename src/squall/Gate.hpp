@@ -24,7 +24,11 @@ public:
 			pending_ = n;
 			return;
 		}
-		if (highLeft_ > 0) {
+		// wasHigh_: the last sample was high though the length has just run
+		// out (an event exactly one gate length after the last, as a clocked
+		// gate of whole ticks gives). It still needs its drop, or the two
+		// gates join with no rising edge (issue #78).
+		if (highLeft_ > 0 || wasHigh_) {
 			const long long low = samples(lowSeconds);
 			lowLeft_ = low;
 			pending_ = n;
@@ -36,6 +40,7 @@ public:
 	}
 
 	bool process() {
+		wasHigh_ = false;
 		if (lowLeft_ > 0) {
 			if (--lowLeft_ == 0)
 				highLeft_ = pending_;
@@ -43,6 +48,7 @@ public:
 		}
 		if (highLeft_ > 0) {
 			highLeft_--;
+			wasHigh_ = true;
 			return true;
 		}
 		return false;
@@ -55,6 +61,7 @@ public:
 
 	void clear() {
 		highLeft_ = lowLeft_ = pending_ = 0;
+		wasHigh_ = false;
 	}
 
 private:
@@ -65,6 +72,7 @@ private:
 
 	float fs_ = 48000.f;
 	long long highLeft_ = 0, lowLeft_ = 0, pending_ = 0;
+	bool wasHigh_ = false;
 };
 
 } // namespace squall
