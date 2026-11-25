@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ballast listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>BALLAST</h1>
+<div class="sub">Listening list · build 2.0.39 · 2026-11-24</div>
+<p class="lead">Ballast is a 12 HP four-channel stereo mixer: each channel has a Level knob and a level CV that works like a VCA, the four sum through Master with a CHAIN input, and the output is DC-blocked and soft-limited. Pan is its 6 HP expander: a pan knob, attenuverter and CV for each channel, with true pan or balance for stereo sources and a choice of pan law. 2.0.39 is the build the listening list is cut at; Pan is added from <b>Add Pan expander</b> in Ballast's right-click menu.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: the lights, tooltips, the menus, LINK and how the panels look.
+The Level curve, the limiter's knee and the Pan defaults are first guesses, to be set by ear here.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>LEVEL CURVE</b></td><td>Unity at three quarters, +6 dB fully right, about -8.5 dB at noon and -23 dB at a quarter turn. Is the travel even to your hand, and is unity at three quarters the right place for a default?</td></tr>
+<tr><td><b>CV CAN'T BOOST</b></td><td>A level CV opens from silence at 0 V to the knob's level at 10 V and never goes past the knob. Right for envelopes and tremolo, or should a CV be able to go above the knob?</td></tr>
+<tr><td><b>LIMITER AND CLIP</b></td><td>Nothing below 8 V is touched, nothing leaves above 10 V, and CLIP holds 150 ms. Is 8 V the right knee, and does CLIP warn you early enough?</td></tr>
+<tr><td><b>DC BLOCKER (#44)</b></td><td>On by default, 3 Hz. Turning it on fades an offset over 50 ms; turning it off steps. Fade the off step too, or leave it as the right behaviour on CV?</td></tr>
+<tr><td><b>PAN LAW DEFAULT</b></td><td>No boost by default: a source is a little quieter at the sides (about 3 dB for mono), but cannot push a clean mix into the limiter. For dark, quiet work is that the right default, or should Constant loudness be?</td></tr>
+<tr><td><b>STEREO SOURCES</b></td><td>True pan is the default: the whole image moves and nothing is lost. Does Balance suit your stereo sources better?</td></tr>
+<tr><td><b>ATTENUVERTER AT 0</b></td><td>Each Pan attenuverter starts at 0, so a patched CV does nothing until you turn it. Keep, or start at +100 %?</td></tr>
+<tr><td><b>GLIDE ON LOAD (#42)</b></td><td>Pan glides in from centre on patch load (63 % in 10 ms, settled in about 85 ms) and on attach. Is it audible and does it matter, given the spec wanted a snap on load?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. Four sources and a reverb</h4>
+<div class="chain">Fathom Left / Right → Ballast IN 1 L / R · Hadal Hiss → IN 2 L · Ballast L / R → Fog Left / Right</div>
+<p>Level 1 and 2 at unity, Hiss low. The stereo Fathom keeps its image; the mono Hiss sits in the centre. Turn Master and watch CLIP.</p></div>
+
+<div class="patch"><h4>2. Slow auto-pan</h4>
+<div class="chain">Hadal Hiss → Ballast IN 1 L · Sway Sine → Pan PAN 1 CV · Ballast L / R → Fog Left / Right</div>
+<p>Right-click Ballast, Add Pan expander. Turn Pan 1's attenuverter up and set Sway's Rate slow: the noise drifts left and right. Try each Pan law and listen for the dip at the extremes.</p></div>
+
+<div class="patch"><h4>3. Ducking and swelling</h4>
+<div class="chain">Fathom Left → Ballast IN 1 L · Squall Gate → Beacon GATE · Beacon OUT → Ballast CV 1</div>
+<p>Level 1 at unity. Each gate swells the channel from silence to the knob. The swell never goes above the knob.</p></div>
+
+<div class="patch"><h4>4. Two Ballasts, one Pan each</h4>
+<div class="chain">Ballast A L / R → Ballast B CHAIN L / R · Ballast B L / R → Fog Left / Right</div>
+<p>Add a Pan to each Ballast from its menu. Pan A's four channels and Pan B's four channels separately. Turn Ballast B's Master and hear all eight move.</p></div>
+
+<div class="patch"><h4>5. Pan stereo against mono</h4>
+<div class="chain">Fathom Left / Right → IN 1 L / R · Fathom Sub → IN 2 L · Pan 1 and Pan 2 CV from one slow Sway Sine</div>
+<p>Pan 1 is a stereo source, Pan 2 a mono one. Switch Stereo sources between True pan and Balance and listen to how only channel 1 changes.</p></div>
+
+<div class="patch"><h4>6. Unlinking test</h4>
+<div class="chain">Hadal Hiss → Ballast IN 1 L · Ballast L / R → Fog</div>
+<p>Turn Pan 1 hard right with the Hiss running. Drag Pan away, then back; bypass it and un-bypass it. Listen for the step to centre and the glide in (settled in about 85 ms), and watch LINK.</p></div>
+
+<div class="patch"><h4>7. Ballast as a CV mixer</h4>
+<div class="chain">Sway Triangle → Ballast IN 1 L · Sway Saw → IN 2 L · Ballast L → Fathom Cutoff CV</div>
+<p>Switch the DC blocker off in Ballast's menu so slow offsets pass. Level 1 and 2 set how much of each LFO reaches the filter. Turning the blocker back on fades the offset away.</p></div>
+</main>
+
+<script>
+const groups = [
+ ["First look", [
+  ["Add Ballast with nothing patched and look at it.", "Four Level knobs and Master at three quarters of the turn, CLIP dark, no sound.", null, true],
+  ["Hover a Level knob and Master at their defaults.", "The tooltip reads dB; both read +0.0 dB (unity at three quarters).", null, true],
+  ["Look at Ballast and Pan in the module browser.", "Both panels draw; no crash.", null, true]]],
+ ["Levels and Master", [
+  ["Send a steady tone into IN L of channel 1. Turn Level 1 fully left, to three quarters, then fully right.", "Fully left: silence (the tooltip reads -inf). Three quarters: 0 dB, the same level as the input. Fully right: +6 dB.", null, false],
+  ["Set Level 1 to noon, then to a quarter turn, reading the tooltip.", "About -8.5 dB at noon and -23 dB at a quarter turn.", null, true],
+  ["Turn a Level and Master fast while a tone plays.", "No clicks: knob moves are smoothed over about 10 ms.", null, false],
+  ["Send tones into all four channels with CHAIN L also patched; turn Master down.", "Master scales the whole mix, CHAIN included.", null, false]]],
+ ["Level CV and Master CV", [
+  ["Send 0 V, 5 V and 10 V to CV 1 with Level 1 at three quarters.", "0 V: silence. 5 V: 6 dB under the knob. 10 V: the knob's level. Unpatched: the knob alone.", null, false],
+  ["Send -5 V and then 15 V to CV 1.", "Below 0 V is silence; above 10 V is still only the knob's level. A CV never pushes past the knob.", null, false],
+  ["A Beacon envelope into CV 1, then a 0 to 10 V Sway into it, then a bipolar one.", "Envelope: sharp swells and gates (the CV is not smoothed). Unipolar LFO: tremolo between silence and the knob. Bipolar LFO: silent for the negative half, only half level at the top.", null, false],
+  ["Same checks on Master CV.", "The same law, on the whole mix.", null, false]]],
+ ["Inputs", [
+  ["A tone into IN L alone; then into IN R alone (other jack empty).", "Either one alone sits in the centre of both L and R.", null, false],
+  ["Patch both IN L and IN R of one channel with different sounds.", "Stereo: left stays left, right stays right.", null, false],
+  ["A polyphonic cable into an input.", "All channels are summed into one signal.", null, false],
+  ["A tone into CHAIN L alone; then CHAIN L and CHAIN R.", "Alone, it is centred on both sides (CHAIN R is normalled to CHAIN L). Both: stereo. Added after the channels and before Master.", null, false],
+  ["Two Ballasts: the first's L and R into the second's CHAIN L and R. Turn the second's Master.", "Eight channels in one mix; the second's Master sets the level of all eight.", null, false]]],
+ ["Outputs and the limit", [
+  ["Patch only L, with a stereo source on a channel (hard-panned content on each side).", "L carries both sides as a mono sum, (L + R) / the square root of 2.", null, false],
+  ["Patch R while a tone plays, then unpatch it.", "L switches between the mono sum and the left side over about 10 ms: no click.", null, false],
+  ["Push the mix hot: four channels at +6 dB with Master up.", "Nothing below 8 V is touched; peaks round off and never leave above 10 V. CLIP lights and holds about 150 ms.", null, true]]],
+ ["DC blocker (right-click)", [
+  ["Open Ballast's menu.", "\"DC blocker (3 Hz high-pass on the outputs)\" is ticked, then \"Add Pan expander\" below it.", null, true],
+  ["Feed a steady 3 V into a channel, blocker off, then tick the blocker on.", "The 3 V fades away over about 50 ms rather than stepping.", null, false],
+  ["With an offset present, turn the blocker off (issue #44).", "The output steps up by the offset in one sample; it is audible as a click on audio. The open question is whether to fade it in or leave the step.", null, false]]],
+ ["Adding Pan", [
+  ["Right-click Ballast, choose Add Pan expander.", "Pan appears directly to Ballast's right, pushing anything there along. Pan's LINK lights.", null, true],
+  ["Undo (Ctrl/Cmd-Z), then redo.", "Pan goes and comes back, one step each. Known: undo leaves the neighbours it pushed where they are (issue #42).", null, true],
+  ["Right-click Ballast again with Pan beside it.", "Add Pan expander is greyed out.", null, true],
+  ["Put Ballast's outputs to nothing and look at Pan's LINK.", "LINK still lights: Ballast links its expanders whether or not an output is patched.", null, true],
+  ["With every Pan knob at noon, compare the sound with and without Pan, in both menu modes and both laws.", "Identical: a centred Pan changes nothing.", null, false]]],
+ ["Pan controls", [
+  ["A mono source (one input) on channel 1. Turn Pan 1 hard left, then hard right.", "Hard left: all in L. Hard right: all in R. With the default law the side it sits on stays at the level it had at centre.", null, false],
+  ["Hover Pan 1 and its attenuverter.", "Pan reads -100 % to +100 %, 0 at noon (the default). The attenuverter reads -100 % to +100 %, 0 by default.", null, true],
+  ["With the attenuverter at 0, send a bipolar LFO to Pan 1 CV. Then turn it fully right, then fully left.", "At 0: the CV does nothing. Fully right: +-5 V sweeps hard left to hard right only with the Pan knob at noon. With the knob elsewhere the sum is clamped, so at knob 0.75 about +2.5 V is already hard right. Fully left: the sweep is inverted.", null, false],
+  ["Audio-rate CV into Pan 1 CV.", "Audio-rate auto-pan works: the CV is not smoothed.", null, false]]],
+ ["Stereo sources, law and menus (right-click Pan)", [
+  ["Open Pan's menu.", "Pan law: No boost (default) or Constant loudness. Stereo sources: True pan (default) or Balance.", null, true],
+  ["A stereo source (both inputs) with different sounds left and right. True pan, hard right.", "Nothing is lost: the left side folds into the right. With No boost the right side is (L + R) / 2; with Constant loudness (L + R) / the square root of 2.", null, false],
+  ["The same source on Balance, hard right and hard left.", "Hard right: left side silent, right side as it was. Hard left the reverse. Balance never boosts under either law.", null, false],
+  ["A mono source hard over, No boost, then Constant loudness.", "No boost: same level on its side as at centre; a little quieter overall at the sides (about 3 dB). Constant loudness: up to +3 dB on its side.", null, false]]],
+ ["Chaining, bypass and unlinking", [
+  ["Add a second Pan against the first.", "The second does nothing and its LINK stays dark.", null, false],
+  ["Bypass the first Pan (Ctrl/Cmd-E).", "The second takes over and its LINK lights; the first's LINK is dark and Ballast sounds as without the first.", null, true],
+  ["Two Ballasts chained through CHAIN, each with its own Pan.", "Each Pan acts on its own Ballast's four channels only.", null, false],
+  ["With channel 1 panned hard right and sounding, bypass Pan, then un-bypass.", "Bypass: a step back to centre, as unpatching a cable would be; Ballast sounds as without Pan. Un-bypass: the channels glide back from centre; it settles in about 85 ms.", null, false],
+  ["Drag Pan away from Ballast so there is a gap; then put it back.", "Away: LINK goes dark within a moment and the panning stops. Back: LINK lights and the pans glide in from centre, settling in about 85 ms, with no click.", null, true],
+  ["Bypass Ballast.", "Both outputs go silent; Pan's LINK goes dark.", null, false]]],
+ ["With the patch", [
+  ["Set every knob, the DC blocker, Pan law and Stereo sources, with a Pan attached. Save, quit Rack, reopen.", "Everything comes back, and Pan is still beside Ballast.", null, false],
+  ["After reopening a patch with panned knobs, listen as it loads (issue #42).", "The spec says Pan should snap to its saved positions on load; the build glides in from centre, settling in about 85 ms. Note whether you can hear it.", null, false],
+  ["Initialize Ballast, then Pan (right-click).", "Ballast: knobs at unity, DC blocker on. Pan: knobs at centre, attenuverters 0, True pan, No boost.", null, false],
+  ["Change Rack's sample rate (44.1, 48, 96 kHz).", "The sound carries on without a click; smoothing and the DC blocker keep their state.", null, false]]]
+];
+const KEY = "ballast-2.0.39-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Ballast and Pan 2.0.39 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

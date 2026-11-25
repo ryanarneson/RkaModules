@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Squall listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>SQUALL</h1>
+<div class="sub">Listening list · build 2.0.39 · 2026-11-24</div>
+<p class="lead">Squall is a random source of gates and CV, the weather of a piece. One dial, Weather, sets how much happens, from one event in ten minutes to eight a second; Gust bunches events into bursts, Memory replays the recent past, and the three outputs (GATE, STEP, SWELL) tell one story. It runs free or locks to a clock.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: how the panel looks, the tooltips, the event light and the right-click menu.
+Gust's strength, Swell's pace and the defaults are first guesses, to be set by ear here.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>WEATHER SCALE</b></td><td>One event in 10 minutes at Calm, 72 s at Fair, 8.7 s at noon, about one a second at Rain, 8 a second at Stormy. Is noon the right default for ambient work, and is the range wide enough at both ends?</td></tr>
+<tr><td><b>GUST</b></td><td>Default 30 %. Full is strong but never changes the average rate. Are the bursts clear enough at full, too strong at 30 %?</td></tr>
+<tr><td><b>GATE LENGTH</b></td><td>A quarter of the average gap, held to 5 ms to 4 s: about 2.2 s at noon, 4 s at Calm and Fair, 30 ms at Stormy. Fine for strikes and slow envelopes, or should the fraction change?</td></tr>
+<tr><td><b>SWELL PACE</b></td><td>It reaches a new value in about one average gap, so about 9 s at noon, tens of minutes at Calm. Right for drones, too slow or too fast against Weather?</td></tr>
+<tr><td><b>MEMORY</b></td><td>Loops of 4, 8 (default) or 16 events, saved with the patch. Are the three lengths enough, and does 70 % read as a pattern that wears away?</td></tr>
+<tr><td><b>CLOCK AT STORMY</b></td><td>At Stormy every tick fires, at any Gust, once it is running (the spec says so). Only a start-up lull of up to 26 ticks at Gust 1 skips ticks. The manual's line about skipped ticks is wrong. Is the start-up lull fine?</td></tr>
+<tr><td><b>RANGES</b></td><td>±5 V by default, with 0 to 10 V, ±2 V and ±1 V in the menu. Is ±5 V the right default, and are these four enough?</td></tr>
+<tr><td><b>POLYPHONY (#64)</b></td><td>Squall is one weather system: a polyphonic CV uses channel 1, and two Squalls make two. Enough, or is a poly output wanted?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. Distant thunder</h4>
+<div class="chain">Squall GATE → Beacon GATE · Beacon OUT → Sluice A level CV · Hadal RUMBLE → Sluice A in · Sluice D → Fog left input</div>
+<p>Weather near Fair, Gust 60 %. Each gate swells the rumble in and lets it fade. Beacon's A and R set how.</p></div>
+
+<div class="patch"><h4>2. A drone that breathes</h4>
+<div class="chain">Squall SWELL (Range 0 to 10 V) → Ballast channel 1 level CV · Fathom Left, Right → Ballast channel 1 left, right</div>
+<p>Weather about a quarter left of noon. The drone's level drifts at a pace that follows the weather.</p></div>
+
+<div class="patch"><h4>3. Moving room</h4>
+<div class="chain">Squall SWELL → Fog Bloom CV (attenuverter about a third) · Hadal L, R → Fog left, right</div>
+<p>Swell moves Fog's Bloom slowly and never jumps.</p></div>
+
+<div class="patch"><h4>4. Wandering pan</h4>
+<div class="chain">Squall SWELL → Pan 1 CV on a Pan expander beside Ballast</div>
+<p>Use one Squall for each channel. The Range menu's ±1 V or ±2 V gives a narrow wander.</p></div>
+
+<div class="patch"><h4>5. A loop that wears away</h4>
+<div class="chain">Squall GATE → Rigging STRUM · Squall STEP (Range ±1 V) → Rigging V/OCT · Rigging L, R → Fog</div>
+<p>Memory 100 %, Loop length 4: a four-note phrase repeats exactly. Bring Memory down to about 60 % and it wears away.</p></div>
+
+<div class="patch"><h4>6. A storm across a piece</h4>
+<div class="chain">Sway SIN (Rate very low) → Squall Gust CV and Weather CV · Squall GATE → Narrows PING</div>
+<p>Both attenuverters about halfway clockwise. The piece goes from calm and steady to stormy and bunched, and back.</p></div>
+
+<div class="patch"><h4>7. Clocked and frozen</h4>
+<div class="chain">Sway SQR (Rate about 2 Hz) → Squall CLOCK · a gate → Squall FREEZE · Squall GATE → Narrows PING · Hadal HISS → Narrows L</div>
+<p>Weather near Rain: events fall only on the clock's ticks, about one in four. Hold FREEZE and everything stops; let go and it continues.</p></div>
+
+</main>
+
+<script>
+const groups = [
+ [
+  "First look and first sound",
+  [
+   [
+    "Add Squall with nothing patched and look at it.",
+    "An aneroid barometer: a Weather face lettered CALM, FAIR, CHANGE, RAIN, STORMY with the pointer at CHANGE (noon); Gust and Memory under it; attenuverters and CV jacks; CLOCK, the event light and FREEZE; STEP, SWELL and GATE on ivory tiles. Within a few seconds the event light flashes now and then.",
+    null,
+    true
+   ],
+   [
+    "Hover Weather at noon, fully left and fully right.",
+    "The tooltip reads the free-running average: “1 per 8.7 s”, “1 per 10.0 min”, “8.0 per s”.",
+    null,
+    true
+   ],
+   [
+    "Hover Gust, Memory and each attenuverter.",
+    "Gust 30 %, Memory 0 %, attenuverters 0 %.",
+    null,
+    true
+   ],
+   [
+    "Scope STEP, SWELL and GATE together at the defaults for a few minutes.",
+    "Events arrive about every 9 s on average, unevenly. At each one STEP jumps to a new value and holds, SWELL glides after it, GATE goes to 10 V for about 2 s (a quarter of the average gap) and the light flashes."
+   ],
+   [
+    "A fresh Squall before its first event.",
+    "STEP reads 0 V (the middle of ±5 V) and SWELL starts at 0 V."
+   ],
+   [
+    "Look at Squall in the module browser.",
+    "The panel draws; no crash.",
+    null,
+    true
+   ]
+  ]
+ ],
+ [
+  "Weather (free-running, Gust 0)",
+  [
+   [
+    "Gust 0. Count events at noon over several minutes.",
+    "About one every 8.7 s on average (the rate is 1/600 s × 4800^Weather). Irregular: some close together, some far apart; no beat."
+   ],
+   [
+    "Count events at Fair (a quarter turn), Rain and Stormy over a minute each.",
+    "Fair about one every 72 s; Rain about one a second; Stormy about 8 a second."
+   ],
+   [
+    "Turn Weather fully left (Calm) and wait.",
+    "Minutes can pass with nothing; every event flashes the light. It averages one event in 10 minutes."
+   ],
+   [
+    "A slow LFO into Weather CV, its attenuverter fully clockwise; then fully anticlockwise; then at 0.",
+    "Clockwise: ±5 V from noon sweeps the whole of Weather. Anticlockwise inverts. At 0 the CV does nothing. The rate follows the CV at once."
+   ]
+  ]
+ ],
+ [
+  "Gust",
+  [
+   [
+    "Noon Weather, Gust 0 against Gust fully right, a few minutes each.",
+    "The average number of events is the same. At 0 they are evenly random; at full they come in bursts with long lulls between."
+   ],
+   [
+    "At Gust 0, watch the gaps.",
+    "Independent of each other, no pulse and no pattern."
+   ],
+   [
+    "Stormy with Gust full.",
+    "Bursts last a moment, with brief lulls between."
+   ],
+   [
+    "A slow LFO into Gust CV, attenuverter up.",
+    "Steady at one end of the LFO, bursty at the other. Same law as Weather."
+   ]
+  ]
+ ],
+ [
+  "Memory and loop length",
+  [
+   [
+    "Memory 0 (the default), a few minutes.",
+    "Every event is new; STEP never repeats a pattern."
+   ],
+   [
+    "Run a fresh Squall at Memory 100 % (Loop 8). Watch STEP and GATE.",
+    "It makes new events until it has 8, then the last 8 loop exactly: the same STEP values, gaps and gate lengths, round and round."
+   ],
+   [
+    "Memory about 70 %.",
+    "A pattern settles in, recurs and slowly wears away: about 7 events in 10 are replays."
+   ],
+   [
+    "Loop length 4, then 16 events, with Memory 100 %.",
+    "The loop is that many events long once the memory has filled."
+   ],
+   [
+    "With a loop locked, turn Weather up and down.",
+    "The loop speeds up and slows down but keeps its shape."
+   ],
+   [
+    "A slow ramp or LFO into Memory CV.",
+    "Wanders from steady new events to a locked loop and back."
+   ]
+  ]
+ ],
+ [
+  "Clock",
+  [
+   [
+    "A steady clock (about 2 Hz) into CLOCK, Gust 0. Weather at Calm, Fair, noon, Rain and Stormy.",
+    "Events land only on clock ticks. Chance per tick: 1 in 256, 1 in 64, 1 in 16, 1 in 4, every tick."
+   ],
+   [
+    "Stormy, clocked, Gust 0, then Gust full.",
+    "Gust 0: an event on every tick. Gust full: also every tick once running. After adding the module or raising Weather, up to 26 ticks at Gust 1 may be skipped at the start (a short lull), then every tick fires. Not every other tick."
+   ],
+   [
+    "A clock into CLOCK at about 0.5 V, then 5 V.",
+    "0.5 V does not tick (the trigger rises at 1 V and falls at 0.1 V); 5 V does."
+   ],
+   [
+    "Clocked gate lengths.",
+    "10 ms until two ticks have arrived, then a quarter of the clock period divided by the tick chance, held between 5 ms and 4 s."
+   ],
+   [
+    "Unpatch CLOCK and patch it again with a loop locked.",
+    "Squall runs free, then clocked again; the same pattern carries on in each mode."
+   ]
+  ]
+ ],
+ [
+  "Freeze",
+  [
+   [
+    "Send a gate to FREEZE.",
+    "While high: no events, STEP holds, clock ticks are ignored, SWELL slows to a stop over about 20 ms with no click and holds. A gate already high ends at its normal time."
+   ],
+   [
+    "Release FREEZE.",
+    "It carries on where it stopped; SWELL starts again smoothly; no burst of events."
+   ],
+   [
+    "Release FREEZE with a clock patched.",
+    "The clock's period is measured fresh from the next two ticks; gates keep the period from before until then."
+   ]
+  ]
+ ],
+ [
+  "Outputs",
+  [
+   [
+    "Meter GATE at noon and at Stormy.",
+    "0 or 10 V. About 2.2 s long at noon, about 30 ms at Stormy (a quarter of the average gap, between 5 ms and 4 s; 4 s once the average gap passes 16 s)."
+   ],
+   [
+    "Rain with Gust full, GATE on a scope.",
+    "An event during a high gate drops it for about 1 ms and raises it again, so every event is a rising edge."
+   ],
+   [
+    "Scope STEP across a few hundred events (Gust and Weather up).",
+    "It changes only at events; values spread evenly across the range."
+   ],
+   [
+    "Scope SWELL beside STEP at noon.",
+    "A smooth drift after STEP: no overshoot and no corner. It gets to a new value in about one average gap and settles within 5 % in about two."
+   ],
+   [
+    "SWELL during a burst, then a lull.",
+    "In a burst it smooths through the quick changes; in a lull it arrives and rests."
+   ],
+   [
+    "SWELL at Calm and at Stormy.",
+    "Its pace follows Weather: slow swings at Calm, a fraction of a second at Stormy."
+   ],
+   [
+    "Watch the event light at Calm.",
+    "It flashes for about 100 ms on each event and is easy to see.",
+    null,
+    true
+   ],
+   [
+    "Right-click Squall.",
+    "“Range (Step and Swell)” with ±5 V, 0 to 10 V, ±2 V, ±1 V (±5 V chosen); “Loop length” showing “8 events” and listing 4, 8, 16 events with 8 ticked.",
+    null,
+    true
+   ],
+   [
+    "Change Range while STEP and SWELL run: 0 to 10 V, ±2 V, ±1 V.",
+    "STEP moves to the new range at once, SWELL glides to it with no jump. Both stay inside the range."
+   ],
+   [
+    "A polyphonic CV into a CV jack.",
+    "Only channel 1 is used."
+   ]
+  ]
+ ],
+ [
+  "With the patch",
+  [
+   [
+    "Set every knob, Range and Loop length, with a loop locked. Save, quit Rack, reopen.",
+    "Everything comes back, including the loop, and STEP and SWELL carry on from where they were with no jump or glide from 0 V."
+   ],
+   [
+    "Initialize (right-click).",
+    "Defaults back (Weather noon, Gust 30 %, Memory 0, attenuverters 0), Range ±5 V, Loop 8, the memory emptied, STEP at 0 V. SWELL glides to it instead of jumping."
+   ],
+   [
+    "Change Rack's sample rate (44.1, 48, 96 kHz).",
+    "Rates stay the same in seconds, including a slow Calm; nothing jumps."
+   ],
+   [
+    "Bypass the module.",
+    "All three outputs 0 V, the gate low."
+   ],
+   [
+    "Add a second Squall beside the first, same settings.",
+    "They never make the same weather."
+   ]
+  ]
+ ]
+];
+const KEY = "squall-2.0.39-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Squall 2.0.39 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

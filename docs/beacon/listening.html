@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beacon listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>BEACON</h1>
+<div class="sub">Listening list · test build 2.0.34 · 2026-11-23</div>
+<p class="lead">Beacon's first test build: a polyphonic envelope after the Instruō cèis, with Gate / Trig / Hold on a switch, a gate for every stage, a stage trigger, OUT and INV, Shape from swell through linear to classic, and a window that draws the envelope.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: everything you see in the window, the lights and the button.
+The defaults and Shape's ends are first guesses, to be set by ear here.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>SHAPE</b></td><td>Fully right is classic (a fast, rounded attack; decays with a long tail); fully left the swell (a slow-starting attack; decays that hold, then fall). Default is three quarters right (+50 %). Are the ends too strong or too weak, and is the default right?</td></tr>
+<tr><td><b>DEFAULT TIMES</b></td><td>Attack 10 ms, Decay 300 ms, Sustain 5 V, Release 1 s. Keep, or start slower for ambient work?</td></tr>
+<tr><td><b>SHORT TIMES</b></td><td>The knobs run 1 ms to 60 s, each decade an equal share of the turn; noon is about 245 ms. Is the bottom of the knob (1 to 50 ms) easy enough to set?</td></tr>
+<tr><td><b>THE WINDOW</b></td><td>Stage widths grow with the log of their time, not to scale. Does it read at a glance? Is the dot easy to follow? In Hold it shows a scrolling line of the output instead: useful, or would two marks (input and output) be better?</td></tr>
+<tr><td><b>WINDOW GLOW</b></td><td>The window's lines, dim ones included, are drawn as light, as Eddy's are, so they still show with Rack's room lights turned down. Keep, or dim the inactive stages more in the dark?</td></tr>
+<tr><td><b>SHAPE TOOLTIP</b></td><td>It reads "Linear" only at exactly noon; a drag that stops just beside noon reads a small percentage (e.g. 0.4 %). Fine, or snap a small zone round noon?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. Plain voice</h4>
+<div class="chain">MIDI to CV → Fathom V/OCT · GATE → Beacon GATE · Beacon OUT → Sluice level CV and Narrows cutoff</div>
+<p>The first test: play notes. Switch on <b>GATE</b>. Turn <b>A</b> through its range, then <b>D</b>, <b>S</b> and <b>R</b>. Then <b>SHAPE</b> fully left, noon and fully right on the same settings and listen to how the same times feel.</p></div>
+
+<div class="patch"><h4>2. Legato with Retrig</h4>
+<div class="chain">MIDI to CV GATE → GATE · RETRIG → RETRIG</div>
+<p>Play overlapping notes. Without RETRIG patched, only the first note gets an Attack. With it, every new note climbs from where the envelope is back to the top, then decays to Sustain, and held notes stay connected.</p></div>
+
+<div class="patch"><h4>3. Slow swells for a drone</h4>
+<div class="chain">Squall GATE → Beacon GATE (Trig) · OUT → Sluice level CV · Fathom → Sluice → Fog</div>
+<p>Switch on <b>TRIG</b>. <b>A</b> at about 8 s, <b>R</b> at 20 s, <b>SHAPE</b> fully left. Each Squall gate swells the drone in and lets it fade. Then try Shape fully right on the same times.</p></div>
+
+<div class="patch"><h4>4. Events from the stage gates</h4>
+<div class="chain">Beacon A gate → Rigging STRUM · Beacon TRIG → Narrows PING</div>
+<p>One envelope drives events: Rigging is struck when Attack begins (the A gate rising), and Narrows pings at every stage start. A long gate gives five pings: at the start of Attack, Decay, Sustain and Release, and at the return to rest.</p></div>
+
+<div class="patch"><h4>5. Ducking with INV</h4>
+<div class="chain">Beacon INV → Sluice level CV (a drone already open)</div>
+<p>INV runs 0 to −10 V, so it pulls the drone down while the envelope rises and lets it back as it falls. Triggered by Squall or a clock, the drone breathes around the hits.</p></div>
+
+<div class="patch"><h4>6. Hold as glide</h4>
+<div class="chain">Sequencer V/OCT → Beacon SUSTAIN CV · Beacon OUT → Fathom V/OCT</div>
+<p>Switch on <b>HOLD</b> and turn <b>S</b> fully left (no offset). <b>A</b> sets the glide up, <b>D</b> the glide down. Watch the A, D and S gates: A while it glides up, D down, S when it has arrived.</p></div>
+
+<div class="patch"><h4>7. Polyphonic chord</h4>
+<div class="chain">MIDI to CV (4 voices) GATE → Beacon GATE · OUT → Sluice (poly) · V/OCT → a poly oscillator</div>
+<p>Each voice gets its own envelope; staggered notes each start their own Attack. The window and the stage lights follow voice 1.</p></div>
+
+<div class="patch"><h4>8. Retrig pulses on a held sound</h4>
+<div class="chain">Push button held (or a long gate) · Squall GATE or a clock → RETRIG</div>
+<p>Hold the gate high and send pulses into RETRIG: the envelope re-swells from wherever it is. <b>D</b> and <b>S</b> set how far each pulse falls back before the next.</p></div>
+</main>
+
+<script>
+const groups = [
+ ["First sound", [
+  ["Add Beacon and look at it before patching anything.", "The window shows the default envelope (A short, D, a flat S, R tailing to zero), letters A D S R underneath, all dim; the dot at rest bottom left. Switch up (GATE).", null, true],
+  ["Hold the push button under GATE.", "OUT rises through Attack and Decay to 5 V and holds; let go and it releases over 1 s. The window brightens the running stage and its letter and the dot rides the line; the stage light by each knob lights in turn.", null, true],
+  ["Patch a gate into GATE and play.", "The same as the button: one envelope per gate."],
+  ["Look at Beacon in the module browser.", "A still window with the default envelope, no crash.", null, true]]],
+ ["Gate and Trig", [
+  ["GATE mode: a long gate, then a gate shorter than Attack (set A to 1 s, tap quickly).", "Long: A, D, S, then R on release. Short: Release starts from wherever Attack had got to."],
+  ["GATE mode: a 1 ms trigger into GATE with A at 50 ms.", "Almost nothing: a faint blip, then Release from it. With A at its minimum (1 ms) a trigger gives a sharp pluck."],
+  ["TRIG mode: the same trigger with A at 50 ms.", "Attack always runs to the top, then Release (no Decay or Sustain): an AR shape. Lights: A then R."],
+  ["TRIG mode: a long gate.", "The full ADSR, as in GATE mode."],
+  ["A new gate while the envelope is releasing, in both modes.", "Attack restarts from where the envelope is: no jump, no drop to zero."],
+  ["RETRIG while the gate is high; then RETRIG while the gate is low.", "High: Attack restarts from the present level. Low: nothing happens."],
+  ["Sustain at 0 (ADR); Decay at its minimum with Sustain full (AR).", "The shapes cèis gives from its knobs."]]],
+ ["Times", [
+  ["Turn A, D and R from fully left to fully right with the gate held long.", "1 ms at the left, about 245 ms at noon, 60 s at the right; each decade an equal share of the turn."],
+  ["Hover and type into each time's tooltip: 250, 250 ms, 1.5 s, 90 s, abc.", "250 and 250 ms are a quarter second; 1.5 s; 90 s is held to 60 s; abc does nothing. The tooltip shows ms or s."],
+  ["Release from Sustain 5 V with R at 2 s; time it roughly.", "2 s, not 1 s: every stage takes its set time wherever it starts (your ruling)."],
+  ["Move A slowly while a long Attack runs.", "The rate changes; the level never jumps."],
+  ["A CV into each time's jack.", "Adds to the knob, 10 V for the whole travel; held between 1 ms and 60 s. The window's widths follow."]]],
+ ["Sustain and Shape", [
+  ["Move S during Sustain, and put a 5 Hz LFO on its CV.", "The level follows smoothly (no click); the LFO makes a tremolo."],
+  ["SHAPE fully left, noon, fully right, with A at 2 s and R at 4 s.", "Left: Attack swells in slowly and speeds up; R holds then falls. Noon: straight lines. Right: Attack shoots up and rounds off; R drops fast with a long tail. The window's curve follows."],
+  ["Turn SHAPE fast while an envelope runs.", "The curve changes without a click (Shape is smoothed over about 5 ms)."],
+  ["Hover SHAPE's tooltip.", "−100 to +100 %, \"Linear\" at noon, +50 % by default."]]],
+ ["Hold (slew)", [
+  ["Switch to HOLD with a slow LFO, then steps, into the SUSTAIN CV.", "OUT follows the input, rising at A's time per 10 V and falling at D's. Gates: A while rising, D while falling, S when arrived; R stays low. The window shows a scrolling line of the output.", null, true],
+  ["In HOLD, turn S.", "An offset of 0 to 10 V added to the input."],
+  ["In HOLD, press the button, and send gates to GATE and RETRIG.", "Nothing happens."],
+  ["Move the switch GATE → HOLD → TRIG → GATE while an envelope runs.", "The output never jumps. HOLD back to GATE with the gate low releases from wherever it was to 0 V."]]],
+ ["Outputs", [
+  ["Scope OUT and INV together.", "INV is OUT upside down: 0 to −10 V."],
+  ["Scope the four stage gates and TRIG with a long gate.", "Each gate is 10 V while its stage runs. TRIG: a short pulse at each stage start, including the end of Release."],
+  ["The stage lights by the knobs.", "Each is lit while its stage runs, following voice 1.", null, true]]],
+ ["Polyphony", [
+  ["A 4-voice gate cable into GATE.", "Four envelopes; OUT, INV, the gates and TRIG all carry 4 channels."],
+  ["A mono CV into A's jack with a poly gate; then a poly CV.", "Mono: the same time for every voice. Poly: each voice its own."],
+  ["Change the gate cable's channel count while voices play.", "Voices that stay keep going; new ones start at rest."],
+  ["HOLD with a poly V/OCT into SUSTAIN CV.", "One slew per channel."]]],
+ ["With the patch", [
+  ["Set every knob and the switch, save, quit Rack, reopen.", "Everything comes back."],
+  ["Initialize (right-click).", "Defaults back; every envelope at rest at 0 V."],
+  ["Change Rack's sample rate (44.1, 48, 96 kHz) while a long envelope runs.", "It carries on where it was; times stay the same in seconds."],
+  ["Bypass the module.", "The outputs go silent."]]]
+];
+const KEY = "beacon-2.0.34-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Beacon 2.0.34 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

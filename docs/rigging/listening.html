@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rigging listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>RIGGING</h1>
+<div class="sub">Listening list · build 2.0.39 · 2026-11-24</div>
+<p class="lead">Rigging is six tuned strings in 14 HP, after wind in a ship's rigging. Any sound you patch in keeps the strings ringing at their pitches, so noise becomes a tuned drone, and a trigger at STRUM (or a new note at V/OCT) strikes the strings, one after another from the lowest. Both can run at once on the same strings: a drone underneath and strikes on top.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: the strike light, tooltips, the menu and how the panel looks.
+The detunes, the string positions, Ring and Damp's laws and the pitch glide are first guesses, to be set by ear here.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>DEFAULT CHORD</b></td><td>Fifths, with Unison to Bell in seven stops. Is Fifths the right place to start for dark, ambient work, and is the order of the seven right?</td></tr>
+<tr><td><b>RING</b></td><td>0.1 s to 60 s, default 4 s, the time shown at Damp 0. Is the default long enough for drones, and is the top long enough?</td></tr>
+<tr><td><b>DAMP</b></td><td>Default is a third, so a 60 s Ring still lasts over 30 s; fully right nothing rings more than about two seconds. Is the curve even, and is the default too bright or too dark?</td></tr>
+<tr><td><b>DETUNES</b></td><td>Unison is -8, -4, 0, +3, +7, +11 cents; Octaves has the doubled strings 5 cents apart. Too much beating, too little, or right?</td></tr>
+<tr><td><b>STRING POSITIONS</b></td><td>String 1 in the middle; the others at -0.25, +0.25, -0.5, +0.5, -0.75 on alternate sides. Is the stereo picture wide enough, and too lopsided?</td></tr>
+<tr><td><b>PITCH GLIDE</b></td><td>A change of pitch closes on its target with an 8 ms time constant (the spec first suggested 30 ms). Does a chord or Tune change sound smooth, or should it be slower?</td></tr>
+<tr><td><b>SPREAD</b></td><td>0 to 1.5 s with the default 60 ms. Is a quick strum the right default, and is 1.5 s long enough for a slow rake?</td></tr>
+<tr><td><b>NOTE STRIKES (#54)</b></td><td>With STRUM unpatched, a jump of more than 1/30 V within 1 ms strikes, so a fast wide LFO on V/OCT can strike. Add a menu item to turn it off, or require V/OCT to settle first?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. A tuned drone</h4>
+<div class="chain">Hadal Hiss → Rigging IN L · Rigging L / R → Fog Left / Right</div>
+<p>Chord at Fifths or Unison, Ring long, Damp about half. Tune it under a Fathom or by ear.</p></div>
+
+<div class="patch"><h4>2. Distant bells</h4>
+<div class="chain">Squall Gate → Rigging STRUM · Rigging L / R → Fog Left / Right</div>
+<p>Chord at Bell, Ring about 20 s, Spread about a third. Fog's weather near Fair.</p></div>
+
+<div class="patch"><h4>3. A plucked line from one cable</h4>
+<div class="chain">Shoal A → Rigging V/OCT (STRUM empty) · Rigging L / R → Fog Left / Right</div>
+<p>Each new note strikes. Ring 1 to 2 s and Spread at 0. Then patch a trigger into STRUM and watch the note-strikes stop.</p></div>
+
+<div class="patch"><h4>4. Breathing brightness</h4>
+<div class="chain">Hadal Hiss → Rigging IN L · Sway Triangle → Rigging Damp CV</div>
+<p>Slow Sway Rate. The drone opens and closes as its upper overtones come and go.</p></div>
+
+<div class="patch"><h4>5. Harmony that moves</h4>
+<div class="chain">Hadal Hiss → Rigging IN L · Squall Step → Rigging Chord CV</div>
+<p>The tuning changes with each Squall event. Try Squall's smaller ranges so it steps between neighbours.</p></div>
+
+<div class="patch"><h4>6. A drone that swells in</h4>
+<div class="chain">Hadal Hiss → Sluice A in · Squall Gate → Beacon GATE · Beacon OUT → Sluice A level CV · Sluice A out → Rigging IN L</div>
+<p>Open Sluice's Level A. Each Squall gate swells the noise into the strings and lets it fall away; Ring sets how long the drone hangs on.</p></div>
+
+<div class="patch"><h4>7. Pitched input</h4>
+<div class="chain">Fathom Left → Rigging IN L · the same V/OCT to Fathom V/OCT and Rigging V/OCT</div>
+<p>A pitched sound makes the strings near its pitch sing loudest. Mix at noon blends the Fathom and the strings.</p></div>
+</main>
+
+<script>
+const groups = [
+ ["First look and first sound", [
+  ["Add Rigging with nothing patched and look at it.", "Six String levels at full, Tune at noon, Chord at Fifths, Mix fully right, strike light dark. No sound: Rigging has none of its own.", null, true],
+  ["Look at Rigging in the module browser.", "A still panel; no crash.", null, true],
+  ["Hadal Hiss into IN L, with Rigging into Fog.", "A drone: the strings ring for as long as the noise lasts, in fifths on C2 (C, G, C, G, C, G). It dies away over about 4 s after the noise stops.", null, false],
+  ["A clock or a Squall Gate into STRUM, nothing in the audio inputs.", "Each trigger strikes the strings low to high over 60 ms and they ring for about 4 s. The strike light flashes on every strike.", null, true],
+  ["Drone and strikes together.", "Both on the same strings, in the same tuning.", null, false]]],
+ ["Tune and V/OCT", [
+  ["Turn Tune fully left, to noon, fully right, reading the tooltip, with a drone running.", "C0, C2 (65.4 Hz) and C4 for string 1: two octaves below to two octaves above, in semitone steps.", null, true],
+  ["Turn Tune slowly.", "It clicks from note to note by semitone; the strings bend to each new note without a click.", null, false],
+  ["Right-click, tick Free pitch, turn Tune; then untick it.", "Free: Tune moves smoothly and the tooltip reads semitones (for example 3.27 st). Unticking rounds the knob to the nearest semitone.", null, true],
+  ["A 1 V/oct source (Fathom's V/OCT or a sequencer) into V/OCT, checked against a tuner.", "1 V per octave, added to all six strings.", null, false],
+  ["V/OCT very high, then very low.", "No string goes above 12 kHz or below 8 Hz.", null, false]]],
+ ["Chord", [
+  ["Turn Chord through all seven stops, reading the tooltip.", "Unison, Octaves, Fifths (default), Minor, Sus, Cluster, Bell; one click each.", null, true],
+  ["Listen to each chord on a drone from string 1 up.", "Unison all one note; Octaves C, C+1, C+1, C+2, C+2, C+3; Fifths 0, 7, 12, 19, 24, 31 semitones; Minor 0, 7, 12, 15, 19, 24; Sus 0, 5, 7, 12, 17, 19; Cluster a semitone apart; Bell at 1, 2, 2.4, 3, 4, 6 times string 1.", null, false],
+  ["Hear Unison and Octaves closely.", "Unison: the six a few cents apart, a thick single pitch. Octaves: the doubled strings slightly apart. Judge the amounts by ear.", null, false],
+  ["Type \"bell\", then \"4\", into Chord's tooltip.", "Bell, then Minor: a name (or the start of one) or a number from 1 to 7 works.", null, true],
+  ["Change Chord while the strings ring.", "The strings bend to their new notes; no click.", null, false],
+  ["A slow ramp of 0 to 10 V into Chord CV; then a CV that rests between two tunings.", "The CV steps through the seven tunings, about one every 1.4 V, and does not chatter when it rests on a boundary.", null, false]]],
+ ["String levels", [
+  ["Turn each String level (1 lowest, 6 highest) to zero in turn.", "That string leaves the mix, from 100 % (the default) to nothing; the tooltip shows a percentage.", null, false],
+  ["Bring a string up in the middle of a drone.", "It fades in already sounding, not as a new strike.", null, false],
+  ["On Minor, turn string 4 (its third) fully down.", "Neither major nor minor: fifths and octaves only.", null, false]]],
+ ["Ring and Damp", [
+  ["Hover Ring at its default, then turn it fully left and right.", "4.00 s by default; 0.10 s fully left; 60 s fully right (the time at Damp 0).", null, true],
+  ["Type 10 into Ring's tooltip.", "Ring reads 10 s.", null, true],
+  ["Strike with Ring fully left, noon and fully right.", "A thud, a short note, a toll of a minute. A very low string at the shortest settings is a thud with no clear pitch.", null, false],
+  ["A drone from noise while turning Ring from 0.1 s to 60 s.", "The drone gets longer and smoother, not louder: its level stays about the same.", null, false],
+  ["Damp fully left, at its default (a third), fully right, on a strike.", "Left: bright all through. Default: starts bright and mellows. Right: a soft, almost pure tone that dies within about two seconds.", null, false],
+  ["Damp on a drone.", "Higher Damp gives a darker, purer drone.", null, false],
+  ["A CV into Ring CV and Damp CV, 10 V across the whole knob.", "It adds to the knob, held at the ends.", null, false]]],
+ ["Strum and Spread", [
+  ["A trigger into STRUM, string 1 audible alone then all six.", "The strike goes from string 1 up to string 6. A rising edge of 1 V or more strikes; it re-arms below 0.1 V.", null, false],
+  ["Spread fully left, at default, fully right.", "0 (all at once, a stab); 60 ms (a quick strum); 1.5 s (a slow rake up the strings). The tooltip shows the time.", null, true],
+  ["Type 250 and then 0.5 s into Spread's tooltip.", "250 is a quarter second (milliseconds); 0.5 s is half a second.", null, true],
+  ["Trigger again partway through a slow rake.", "A new rake starts from string 1; the strings the old one had not reached are not struck by it.", null, false],
+  ["Strike at Ring 1 s, then at Ring 60 s.", "Equally loud. Two strikes in a row are never quite identical.", null, false],
+  ["With nothing in STRUM, send a stepped sequence into V/OCT.", "Each new note strikes the strings. A slide to a pitch is one strike; the same note again does not strike; a slow glide or gentle LFO only bends the pitch.", null, false],
+  ["Patch a trigger into STRUM while V/OCT is in use.", "Note-strikes stop; only STRUM strikes.", null, false],
+  ["A fast, wide LFO into V/OCT with STRUM unpatched (issue #54).", "Open: it may strike the strings, because a jump of more than 1/30 V within 1 ms counts as a new note. Note whether it does and whether it matters.", null, false]]],
+ ["Inputs, outputs and Mix", [
+  ["Noise into IN L alone, then into IN R alone.", "Either alone feeds all six strings and both sides.", null, false],
+  ["Different noises into IN L and IN R.", "Strings 1, 3 and 5 hear the left input; 2, 4 and 6 the right.", null, false],
+  ["Listen to L and R with all six strings sounding.", "String 1 in the middle, the others further out as they go up, on alternate sides. L alone is a mono mix of all six.", null, false],
+  ["Mix fully left, noon, fully right.", "Left: the dry input only. Noon: dry and strings, equal power. Right (default): strings alone.", null, false],
+  ["Noise at +-5 V in, then a strike of all six strings with Scope.", "A drone of about +-3 V; a single struck string 1.5 to 4 V; all six at once about 6 V. Soft-limited below +-10 V, untouched under 8 V.", null, false],
+  ["A polyphonic cable into IN L; then into V/OCT and STRUM.", "Audio is summed; V/OCT, CVs and STRUM use their first channel. Outputs are mono cables.", null, false]]],
+ ["Known issues", [
+  ["Hold a noise drone on a very low string (Tune left) and move Damp off 0 (issue #53).", "Open: the drone's level may change in a step at Damp exactly 0. Note whether you hear it.", null, false],
+  ["Scope the output of a noise drone below 10 Hz (issue #55).", "Open: about 35 to 40 mV RMS of content under 10 Hz. Inaudible, but it moves speaker cones slightly.", null, false]]],
+ ["With the patch", [
+  ["Set every knob and Free pitch, save, quit Rack, reopen.", "Everything comes back, including Free pitch. The strings' ringing is not saved: it starts silent.", null, false],
+  ["Initialize (right-click).", "Defaults back: C2, Fifths, Ring 4 s, Damp a third, Spread 60 ms, Mix fully right, levels full, Free pitch off; the strings cleared.", null, false],
+  ["Change Rack's sample rate (44.1, 48, 96 kHz) while a drone rings.", "The strings retune and go silent, then ring again at the same pitches.", null, false],
+  ["Bypass the module.", "Rigging passes the dry input: IN L to L, IN R to R, one cable alone to both. The strike light goes dark.", null, true],
+  ["Two Riggings with the same settings and the same trigger.", "They never strike identically.", null, false]]]
+];
+const KEY = "rigging-2.0.39-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Rigging 2.0.39 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

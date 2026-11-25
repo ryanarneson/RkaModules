@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sluice listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>SLUICE</h1>
+<div class="sub">Listening list · build 2.0.39 · 2026-11-24</div>
+<p class="lead">Sluice is a quad VCA, 10 HP: four rows, each with an input, a Level dial, a CV jack, a light and an output, all DC-coupled and polyphonic. Unpatched inputs take the signal from the row above (the rope) and unpatched outputs mix into the row below, so it works as four VCAs, one signal split four ways, or a four-channel mixer; one Lin/Exp switch sets the response for all rows.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: the lights, the panel, the tooltips and the switch.
+The Exp curve, the 10 ms Level smoothing and the closed default are first guesses, to be set by ear here.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>LEVEL DEFAULT</b></td><td>Every Level opens at 0 %, fully closed, so a new Sluice is silent until a dial is turned. Keep, or should row A open to some level?</td></tr>
+<tr><td><b>EXP CURVE</b></td><td>Exp is linear in dB over 60 dB, so 50 % is about −30 dB, with a short ramp to true silence over the bottom 5 % of the dial. Does a fade sound even? Is 60 dB the right depth, and is the bottom of the dial easy to set for a very quiet layer?</td></tr>
+<tr><td><b>CV SCALE</b></td><td>CV adds to Level, 10 V across the whole dial (1 V per division). With Level at noon a ±5 V LFO opens and closes the row. Is that the right amount, or would a CV attenuator be missed?</td></tr>
+<tr><td><b>SMOOTHING</b></td><td>Level is smoothed over about 10 ms; CV is not; the Lin/Exp switch changes the level at once. Is any of the three wrong in a drone: a click on the dial, a hard CV, a jump when the switch is flicked?</td></tr>
+<tr><td><b>THE ROPE AND MIX</b></td><td>One signal into A with only D patched and every Level open comes out 4× (+12 dB); nothing scales the mix. Keep the manual's warning as it is, or should the sum be scaled down?</td></tr>
+<tr><td><b>THE LIGHT</b></td><td>Each light shows Level plus CV before the curve, so it reads the same in Lin and Exp (the design spec said it glows with the gain). Does it say what you need at a glance on a slow fade?</td></tr>
+<tr><td><b>STEREO</b></td><td>No stereo features: Merge, one row, Split is the recommended patch. Is that enough, or would a linked pair of rows be missed? (Issue 64, polyphony, lists Sluice as already polyphonic.)</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. Breathing drone</h4>
+<div class="chain">Fathom Left → Sluice A · Sway Sine → Sluice A CV · Sluice A → Fog IN L</div>
+<p>Set <b>A</b> Level to noon and the Sway to a slow rate. The ±5 V sine opens and closes the row from silent to fully open. Move Level up and down and listen to where the swing flattens at the top or bottom.</p></div>
+
+<div class="patch"><h4>2. Envelope as a VCA</h4>
+<div class="chain">Squall Gate → Beacon GATE · Beacon OUT → Sluice A CV · Fathom Left → Sluice A</div>
+<p>Leave <b>A</b> Level at 0 so the 0–10 V envelope works as a classic VCA. Switch between Exp and Lin and hear how the same envelope feels.</p></div>
+
+<div class="patch"><h4>3. One signal, four layers</h4>
+<div class="chain">Hadal Left → Sluice A · Neap C1 → A CV · C3 → B CV · C5 → C CV · C7 → D CV · only D out patched → Fog IN L</div>
+<p>The rope carries Hadal to all four rows; each row is opened by its own slow cycle. At Exp, 25 % is already −45 dB per row, so start higher: about 80 % per row (−12 dB each) gives unity for four equal copies. The four copies add up (+12 dB at full).</p></div>
+
+<div class="patch"><h4>4. Stereo through one row</h4>
+<div class="chain">Fathom Left and Right → VCV Merge → Sluice A · Sluice A out → VCV Split → Fog IN L and IN R · Neap TIDE → A CV</div>
+<p>One Level and one CV, so the two sides cannot drift apart. Turn Level and listen for the image leaning to one side; it should not.</p></div>
+
+<div class="patch"><h4>5. Four-channel mixer</h4>
+<div class="chain">Fathom Left → A · Rigging Left → B · Hadal Left → C · Eddy Left → D · only D out patched → Fog IN L · Squall Swell → B CV</div>
+<p>Patch only D so it carries all four rows. Balance with the four Levels; the Squall swell moves the Rigging layer in and out.</p></div>
+
+<div class="patch"><h4>6. Gating an LFO</h4>
+<div class="chain">Sway Sine → Sluice A · Beacon OUT → A CV (Level 0, switch on Lin) · Sluice A → Fathom Detune CV</div>
+<p>The LFO reaches Fathom only while the envelope is open; on Lin a half-open row passes exactly half of it.</p></div>
+
+<div class="patch"><h4>7. Eight voices through one row</h4>
+<div class="chain">Neap ALL → Sluice A · Beacon OUT → A CV · Sluice A out → a poly scope</div>
+<p>The row has 8 voices out; the mono CV moves every voice together. Then try a polyphonic CV (a 4-channel cable) and see what voices 5 to 8 do: a short CV gives them 0 V of CV, so they sit at the Level setting. They close only with Level at 0.</p></div>
+</main>
+
+<script>
+const groups = [
+
+ ["First look and first sound", [
+  ["Add Sluice and look at it before patching anything.", "Four rows A to D top to bottom, each with an input, Level dial, CV jack, light and output; the Lin/Exp switch beside the title at Exp. All four lights dark.", null, true],
+  ["Look at Sluice in the module browser.", "The panel draws with no crash.", null, true],
+  ["Hover each jack and each light.", "Input A: “Silence when unpatched”; B to D: “Normalled from the row above when unpatched”. Outputs A to C: “Mixes into the row below when unpatched”; D: “Final mix”. Lights: “A open” to “D open”. CV jacks: “A level CV” to “D level CV”.", null, true],
+  ["Patch Fathom Left into A and A out to the speakers. Listen with Level at 0, then turn it up.", "Silent at 0 %. The sound comes in smoothly as the dial turns, and at 100 % it is the source unchanged."]]],
+ ["Level and response", [
+  ["Hover Level A; type 50.", "“Level A”, 0 to 100 %, 0 % by default; the typed value sets 50 %.", null, true],
+  ["Hover the switch.", "“Response”: Linear or Exponential; Exponential at default.", null, true],
+  ["Exp: sweep Level slowly from 0 to 100 % on a steady tone.", "A fade that sounds even; about −30 dB at 50 %; unity at 100 %; true silence at 0."],
+  ["Exp: sweep slowly through the bottom 5 % of the dial (about 6 % down to 0).", "The tone falls away to silence with no step and no jump."],
+  ["Lin: the same sweep, and compare 50 % with a scope.", "The output voltage is exactly half the input at 50 %."],
+  ["Turn Level fast, up and down, on a steady tone.", "No zipper or click: Level is smoothed over about 10 ms."],
+  ["Flick the switch between Lin and Exp while the tone plays at 50 %.", "The level changes at once with no fade (accepted in the design). Note whether it bothers you.", null, true],
+  ["Flick the switch with Level at 0 and at 100 %.", "No change at either end: 0 is silence and 100 % is unity in both."]]],
+ ["CV", [
+  ["A 0 to 10 V envelope into A CV with Level at 0.", "A classic VCA: 0 V closed, 10 V fully open, 5 V is the same as the dial at noon."],
+  ["A ±5 V LFO into A CV with Level at noon; then at 75 %.", "At noon the row sweeps from closed to fully open. At 75 % the top of the swing flattens at fully open (the swing flattens at the end it passes)."],
+  ["A negative CV (−5 V) with Level at 0.", "Stays silent: the sum is held at 0."],
+  ["A fast envelope (1 ms attack) on the CV.", "It comes through at its own speed: CV is not smoothed."],
+  ["Patch a CV into A only; leave B to D CV unpatched.", "B, C and D do not move: an unpatched CV is 0 V and does not follow the rope."],
+  ["Watch the light on a row while moving Level and then a CV.", "It brightens with Level plus CV and looks the same in Lin and Exp; at Level 50 % it is about half bright.", null, true]]],
+ ["The rope and the mix", [
+  ["Row A with nothing patched; patch a cable into B only.", "A out is silent. B, C and D use B's signal."],
+  ["One cable into A with Levels B to D at 100 %, only D out patched.", "D carries all four rows added: 4× louder (+12 dB) than the single signal. Turn Levels down before listening."],
+  ["Cables into A and C; B and D inputs empty.", "B uses A's signal and D uses C's: a patched input breaks the rope."],
+  ["Patch all four outputs.", "Four separate rows; no row mixes into another."],
+  ["Patch only A and C outputs, a different source in each input A to D.", "A carries A; C carries B and C; D carries D."],
+  ["Patch only D out with four sources.", "D carries all four rows: a four-channel mixer."],
+  ["Turn a Level down while its output is unpatched.", "The row's contribution to the output below falls with it; the row below keeps its own."]]],
+ ["Polyphony", [
+  ["A 4-voice cable into A; outputs patched.", "Four channels out of every output the rope reaches; one Level moves all four voices."],
+  ["A mono CV on the 4-voice row; then a 4-channel CV.", "Mono: all voices move together. Four channels: each voice has its own gain."],
+  ["A 2-channel CV on the 4-voice row with Level at 0.", "Voices 1 and 2 follow the CV; voices 3 and 4 stay silent (0 V CV)."],
+  ["Mono drone into A (A out unpatched), a 2-voice cable into B.", "B out carries 2 channels; the mono drone is in both. A 2-voice row mixed into a 4-voice row adds into voices 1 and 2 only."],
+  ["A row with no signal: patch a cable from its output to a scope.", "One channel at 0 V."],
+  ["Change the channel count of the input cable while sound plays.", "Each voice that stays keeps its gain."]]],
+ ["Coupling and stereo", [
+  ["A constant 5 V into A, Level 100 %, then a slow LFO.", "5 V out: DC passes untouched. The LFO passes at full depth. Any offset on a signal stays an offset."],
+  ["Fathom Left and Right through Merge, one row, Split; sweep Level.", "Both sides stay equal at every Level; the image does not lean."]]],
+ ["With the patch", [
+  ["Set four different Levels and the switch to Lin, save, quit Rack, reopen.", "All four Levels and the switch come back."],
+  ["Initialize (right-click).", "All four Levels at 0 %, switch at Exp, outputs silent."],
+  ["Change Rack's sample rate (44.1, 48, 96 kHz) with sound passing.", "Levels and gains stay the same."],
+  ["Bypass the module with all four rows patched and the rope broken.", "Each input goes straight to its own output: no rope, no mixing. An empty input gives nothing at its output."]]]
+];
+const KEY = "sluice-2.0.39-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Sluice 2.0.39 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

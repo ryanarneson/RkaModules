@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hadal listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>HADAL</h1>
+<div class="sub">Listening list · build 2.0.39 · 2026-11-24</div>
+<p class="lead">Hadal is a rumble and noise bed with no input: low rumble, hiss and crackle, darkened together by one Depth dial (0 to 11 km) and kept moving by Drift, each layer on its own jack and all three mixed to L and R. It is meant to sit under a piece and feed other modules, such as Fog, filters and delays.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: how the panel looks, the tooltips and the hover text on the jacks.
+The ranges, the defaults and the levels are first guesses, to be set by ear here.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>DEPTH RANGE</b></td><td>Hiss runs from 12 kHz down to 1.5 kHz, Rumble from 160 Hz down to 70 Hz (growl 20 to 70 Hz). Is 0 km too bright, or 11 km not dark enough, for dark ambient work?</td></tr>
+<tr><td><b>RUMBLE SOFT CLIP</b></td><td>Rumble is soft-clipped, harder as Depth goes down to 11 km, so about a third of its energy there is over 60 Hz. Does that keep it audible without turning it buzzy, or should the clip be gentler?</td></tr>
+<tr><td><b>DEFAULTS</b></td><td>Rumble 80 %, Hiss 30 %, Crackle 0 %, Drift 25 %, Depth noon. A new Hadal gives a bed at once with no crackle. Keep, or start with a little Crackle?</td></tr>
+<tr><td><b>CRACKLE LEVEL</b></td><td>At full, its own jack carries about 0.14 V RMS; the ticks are soft-clipped, and at Drift 0 each side of the mix stays inside ±5 V, but the CRACKLE jack itself reaches 6.8 V at 0 km (it is the mono sum of both sides). Drift can lift the odd tick on a side to about 5.3 V at the default Drift, 7.6 V at full (the jack: 6.9 V and 8.8 V). Is full enough, too quiet beside Hiss, or are the loud ticks too loud?</td></tr>
+<tr><td><b>DRIFT</b></td><td>25 % by default; the pace is fixed (a new destination every 8 to 30 s) with no knob for it. Is the pace right for ambient work, and is 25 % too little, too much?</td></tr>
+<tr><td><b>LEVEL LAW</b></td><td>The three level knobs are squared (half a turn is 12 dB down). Does the travel feel even, or is the bottom crowded?</td></tr>
+<tr><td><b>MONO THROUGH L</b></td><td>With R unpatched, rumble is about 3 dB louder than in the stereo mix, hiss unchanged, crackle about 2 dB louder. Fine, or should rumble match?</td></tr>
+<tr><td><b>POLYPHONY (#64)</b></td><td>Hadal is monophonic: a polyphonic CV uses channel 1. Is that enough, or is a poly output wanted?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. Hadal into Fog</h4>
+<div class="chain">Hadal L → Fog left input · Hadal R → Fog right input · Fog L, R → Ballast channel 1 left, right</div>
+<p>Fog on a long Visibility with some Bloom. Turn <b>DEPTH</b> down for something heavier, up for air. A space that is never empty.</p></div>
+
+<div class="patch"><h4>2. Hiss through a filter</h4>
+<div class="chain">Hadal HISS → Narrows L input · Sway TRI (slow) → Narrows FM CV · Narrows L → Ballast channel 1</div>
+<p>Turn Narrows <b>FM</b> up and some Resonance. Wind, surf, a breath through a hull. Hiss leaves the L/R mix while HISS is patched, so patch L and R elsewhere to keep the rest of the bed.</p></div>
+
+<div class="patch"><h4>3. Crackle into a delay</h4>
+<div class="chain">Hadal CRACKLE → Wake L input · Wake L, R → Fog left, right · Hadal L, R → Ballast channel 2</div>
+<p>Turn <b>CRACKLE</b> up (on its own jack it is sparse and fairly quiet). Every tick leaves a trail. The L/R mix still carries Rumble and Hiss.</p></div>
+
+<div class="patch"><h4>4. Depth from a slow LFO</h4>
+<div class="chain">Sway SIN (Rate low) → Hadal DEPTH CV · Hadal L, R → Fog</div>
+<p>Depth's attenuverter at about a third clockwise. The bed sinks and rises over minutes. Try the attenuverter anticlockwise: it rises when the LFO falls.</p></div>
+
+<div class="patch"><h4>5. Distant thunder</h4>
+<div class="chain">Squall GATE → Beacon GATE · Beacon OUT → Sluice A level CV · Hadal RUMBLE → Sluice A in · Sluice D → Fog left input</div>
+<p>Squall Weather near Fair, Gust 60 %. Hadal Depth fully right, Rumble full. Each gate swells the rumble in and lets it fade.</p></div>
+
+<div class="patch"><h4>6. Drift from the weather</h4>
+<div class="chain">Squall SWELL → Hadal DRIFT CV · Squall STEP → Hadal CRACKLE CV · Hadal L, R → Fog</div>
+<p>Both attenuverters about a quarter clockwise, Hadal Crackle at about 30 %. The bed's movement and its crackle follow Squall's slow weather.</p></div>
+
+</main>
+
+<script>
+const groups = [
+ [
+  "First look and first sound",
+  [
+   [
+    "Add Hadal with nothing patched and look at it.",
+    "A depth gauge: a large ivory Depth face numbered in km (0 to 11), Rumble, Hiss, Crackle and Drift on a brass limb under it, five attenuverters, five CV jacks, then RUMBLE, HISS, CRACKLE and L, R on ivory tiles at the bottom right. No right-click items beyond Rack's own.",
+    null,
+    true
+   ],
+   [
+    "Hover each knob.",
+    "Depth reads 5.5 km, Rumble 80 %, Hiss 30 %, Crackle 0 %, Drift 25 %; each attenuverter reads 0 %.",
+    null,
+    true
+   ],
+   [
+    "Patch L alone to a speaker (through Ballast, quietly) and listen for a minute.",
+    "A steady low rumble with some air over it, no crackle (Crackle is 0 %), slowly changing in level and colour. Mono: L carries both sides.",
+    null,
+    null
+   ],
+   [
+    "Patch L and R.",
+    "The same bed, wider: the hiss is different on each side, the rumble stays near the centre."
+   ],
+   [
+    "Look at Hadal in the module browser.",
+    "The panel draws; no crash.",
+    null,
+    true
+   ]
+  ]
+ ],
+ [
+  "Depth",
+  [
+   [
+    "Patch HISS to a spectrum analyser. Turn Depth from fully left to fully right.",
+    "Darker all the way: bright air up to about 12 kHz at 0 km, a dull roar up to about 1.5 kHz at 11 km. The level stays the same (RMS within about 1.5 dB)."
+   ],
+   [
+    "Patch RUMBLE to the analyser and sweep Depth the same way.",
+    "0 km: a low roar with energy up to about 160 Hz. 11 km: a deep growl, mostly 20 to 70 Hz, with overtones above (about a third of the energy is over 60 Hz). Level steady. Little below 15 Hz at any setting."
+   ],
+   [
+    "Listen to the deep end of Rumble on small speakers or headphones, then with a sub if you have one.",
+    "On small speakers the 11 km setting is still audible through its overtones; with a sub the low band is all there."
+   ],
+   [
+    "Patch CRACKLE and turn Crackle up. Sweep Depth.",
+    "0 km: sharp, bright, very short ticks. 11 km: soft, darker, longer thuds. The level stays within about 2 dB of noon (a little quieter at 0 km, a little louder at 11 km)."
+   ],
+   [
+    "Depth tooltip.",
+    "Reads in km, 0 to 11, with 5.5 km at noon.",
+    null,
+    true
+   ],
+   [
+    "Set Depth with equal turns and listen to the steps.",
+    "Equal turns give equal steps in octaves (the corners move on a log scale)."
+   ]
+  ]
+ ],
+ [
+  "Levels",
+  [
+   [
+    "Rumble knob fully left, then slowly up.",
+    "Silent at the left, rising smoothly; the knob sets the level at RUMBLE and in the L/R mix alike."
+   ],
+   [
+    "Rumble, Hiss and Crackle each at half a turn, against fully right.",
+    "Half a turn is a quarter of the voltage (audio taper, the knob squared): about 12 dB down."
+   ],
+   [
+    "Meter RUMBLE at full with Drift at 0.",
+    "About 2.5 V RMS; peaks inside ±5 V (soft-clipped)."
+   ],
+   [
+    "Meter HISS at full with Drift at 0.",
+    "About 1.6 V RMS; peaks around ±5 V."
+   ],
+   [
+    "Meter CRACKLE at full, Drift at 0, Depth at noon, for a minute or two.",
+    "Sparse: about 0.14 V RMS on average, with loud ticks. No tick above ±5 V on a side of the mix at Drift 0; the CRACKLE jack itself can reach 6.8 V (at 0 km; 5.8 V at noon), because it is the mono sum of both sides."
+   ],
+   [
+    "Defaults: RUMBLE at 80 % and HISS at 30 %, measured on their own jacks.",
+    "About 1.6 V RMS Rumble and 0.14 V RMS Hiss (0.8 squared times 2.5 V; 0.3 squared times 1.6 V)."
+   ]
+  ]
+ ],
+ [
+  "Crackle",
+  [
+   [
+    "Crackle fully up, Drift 0. Listen to CRACKLE alone.",
+    "Short decaying clicks at random times, about 10 a second on average, in loose clusters, never evenly spaced. Most are small, now and then one is large."
+   ],
+   [
+    "Patch L and R to two sides and listen to the crackle in the mix.",
+    "Each tick lands at a random place across the stereo field."
+   ],
+   [
+    "Move the Crackle knob.",
+    "It changes the ticks' level, not how many there are."
+   ]
+  ]
+ ],
+ [
+  "Drift",
+  [
+   [
+    "Drift fully left, listen to HISS and RUMBLE for a couple of minutes.",
+    "Perfectly steady: no slow change in level or colour."
+   ],
+   [
+    "The default Drift (25 %), the same listening.",
+    "A slow wander over tens of seconds (a new destination every 8 to 30 s, reached by a glide). It never pulses, cycles or repeats."
+   ],
+   [
+    "Drift fully right, with Crackle up.",
+    "Levels wander within about ±4 dB, colour within about ±⅓ octave, crackle's density between about 5 and 22 ticks a second on average. Still no rhythm."
+   ],
+   [
+    "Add a second Hadal beside the first, same settings.",
+    "They never sound alike (each has its own random seed)."
+   ]
+  ]
+ ],
+ [
+  "CV and attenuverters",
+  [
+   [
+    "Patch a CV into each CV jack with its attenuverter at 0.",
+    "Nothing changes until the attenuverter is turned up."
+   ],
+   [
+    "Sway SIN (slow) into Depth CV, the attenuverter fully clockwise; then fully anticlockwise.",
+    "Clockwise: ±5 V from noon sweeps the whole of Depth. Anticlockwise: the sweep inverts."
+   ],
+   [
+    "Repeat with Rumble, Hiss, Crackle and Drift CV.",
+    "Each follows the law: knob + CV ÷ 10 V × attenuverter, held between fully left and fully right. A level CV below its knob's range simply goes silent."
+   ],
+   [
+    "Send a square wave or steps into Depth CV and each level CV.",
+    "Moves glide over about 30 ms: no clicks, no zipper noise."
+   ],
+   [
+    "A polyphonic CV into any CV jack.",
+    "Only channel 1 is used (Hadal is monophonic)."
+   ]
+  ]
+ ],
+ [
+  "Outputs",
+  [
+   [
+    "Patch HISS alone to a speaker, then also L and R. While running, patch the HISS jack.",
+    "HISS carries the layer alone at its knob's level. In L/R the hiss fades out over about 10 ms with no click. Unplug it and it fades back."
+   ],
+   [
+    "The same with RUMBLE, then CRACKLE.",
+    "Each layer leaves the L/R mix while its own jack is patched, and returns when unplugged."
+   ],
+   [
+    "Patch L only, then add R while it plays.",
+    "Without R, L carries the mono sum (L + R) ÷ √2: hiss about one side's loudness, crackle about 2.2 dB louder, rumble about 2.7 dB louder. Adding R crossfades to the plain left over about 10 ms, no click."
+   ],
+   [
+    "Sum L and R to mono (one Ballast channel with only a left cable) and listen to the rumble.",
+    "The low end does not cancel: the two sides of Rumble are almost the same (correlation about 0.9)."
+   ],
+   [
+    "Hover each output jack.",
+    "The three layer jacks say patching them removes that layer from the L/R mix; L says it is the mono sum when R is unpatched.",
+    null,
+    true
+   ],
+   [
+    "Raise Rumble, Hiss, Crackle, Drift and Depth to the extremes, meter L and R.",
+    "Stays inside ±10 V. The soft limit starts at 8 V and only catches the odd noise peak. At the defaults it never acts."
+   ],
+   [
+    "Meter L, R and the three jacks for DC.",
+    "None."
+   ],
+   [
+    "Listen to Crackle at Depth 0 and Rumble at 0 km and full level for harshness or fizz (issue #67, aliasing).",
+    "Rumble's and Crackle's soft clips are not meant to add audible fizz at Rack's sample rate. Note anything that does."
+   ]
+  ]
+ ],
+ [
+  "With the patch",
+  [
+   [
+    "Set every knob and attenuverter, save, quit Rack, reopen.",
+    "Everything comes back. (Hadal keeps nothing else.)"
+   ],
+   [
+    "Initialize (right-click).",
+    "Defaults back: Depth 5.5 km, Rumble 80 %, Hiss 30 %, Crackle 0 %, Drift 25 %, attenuverters 0. The noise restarts from its own seed."
+   ],
+   [
+    "Change Rack's sample rate (44.1, 48, 96 kHz) while it runs.",
+    "Depth's colour and the levels stay the same at any rate; a brief restart of the filters, no loud burst."
+   ],
+   [
+    "Bypass the module.",
+    "Every output goes silent."
+   ]
+  ]
+ ]
+];
+const KEY = "hadal-2.0.39-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Hadal 2.0.39 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>
