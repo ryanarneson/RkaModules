@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fathom listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>FATHOM</h1>
+<div class="sub">Listening list · build 2.0.39 · 2026-11-24</div>
+<p class="lead">Fathom is a bass drone voice, 10 HP: a sine sub under a seven-saw body that drifts slowly, through a Moog-style ladder filter with resonance and drive. One V/OCT input, stereo L and R outputs and a separate SUB output. It is mono: one voice.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: the tooltips, the right-click menu and how the panel looks.
+The defaults, the drift amount, the drive makeup and the self-oscillation level are first guesses, to be set by ear here.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>THE DEFAULTS</b></td><td>C2 (65.4 Hz), SUB 50 %, DETUNE 25 %, SPREAD 60 %, DRIFT 25 %, CUTOFF 1.2 kHz, RES 20 %, DRIVE 25 %. At these the output peaks near 4 V with mild saturation. Is that the right place to start for dark ambient, or too bright, too wide or too loud?</td></tr>
+<tr><td><b>DRIFT</b></td><td>At 100 % each saw wanders up to ±6 cents and 3 dB, with a new target about twice a second slewed over a second. Held for minutes, is 25 % the right amount, or is the wander too quick for a drone?</td></tr>
+<tr><td><b>SUB</b></td><td>A sine one octave below PITCH by default (two in the menu), joining after the filter so CUTOFF never thins it. Is that the right default? Would you rather it went through the filter?</td></tr>
+<tr><td><b>SELF-OSCILLATION</b></td><td>At the top of RES the ladder sings a quiet sine, about 1 V at the jack, 10 to 12 dB under the drone, tracking CUTOFF at 1 V/oct. Quiet enough, or should it be louder? The sine fades as DRIVE rises.</td></tr>
+<tr><td><b>DRIVE AND LEVEL</b></td><td>DRIVE runs from half to eight times gain (unity at 25 %), with makeup so the level stays within about 2 dB. Does the whole sweep sound like tone change rather than level change?</td></tr>
+<tr><td><b>PITCH RANGE</b></td><td>PITCH is ±2 octaves, snapped to semitones by default, with 0 at C2. V/OCT adds on top; the result is held between 8 Hz and 4 kHz. Is the snap right by default, and is ±2 octaves enough?</td></tr>
+<tr><td><b>MONO (issue 64)</b></td><td>Only channel 1 of V/OCT and the CVs is read, so a chord cable plays one note. Open issue 64 asks for a voice per channel; the filter is 2x oversampled, so CPU grows with voices. Wanted?</td></tr>
+<tr><td><b>CUTOFF RANGE</b></td><td>20 Hz to about 20 kHz (the knob spans 10 octaves from 20 Hz, so the top is 20.48 kHz). Is the knob easy to set in the low, dark part?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. Plain drone</h4>
+<div class="chain">Fathom L → Fog Left · Fathom R → Fog Right · Fog out to the speakers</div>
+<p>Nothing else is patched. Listen for several minutes at the defaults: it should keep slowly breathing. Then DRIFT to 0 and compare.</p></div>
+
+<div class="patch"><h4>2. Sub on its own bus</h4>
+<div class="chain">Fathom SUB → Sluice A · Fathom L → Sluice B · Fathom R → Sluice C</div>
+<p>SUB OUT is the raw sine before the SUB knob, the filter and the clipper, so row A stays a clean sub whatever the voice does. Turn SUB down to 0 and the L / R sub goes while SUB OUT stays.</p></div>
+
+<div class="patch"><h4>3. Slow filter wander</h4>
+<div class="chain">Sway RAND (Range Slow, SMOOTH fully left) → Fathom CUTOFF CV · Fathom L → Fog Left</div>
+<p>Set the CUTOFF attenuverter to about +40 %. The cutoff glides between random values over a cycle. 1 V per octave at full attenuverter.</p></div>
+
+<div class="patch"><h4>4. Swell on a gate</h4>
+<div class="chain">Squall GATE → Beacon GATE · Beacon OUT → Sluice A level CV · Fathom L → Sluice A</div>
+<p>Each gate swells the drone in and lets it fade, as in the Beacon list. SHAPE fully left on Beacon for a slow start.</p></div>
+
+<div class="patch"><h4>5. Growl</h4>
+<div class="chain">Sway SIN (Slow range) → Fathom CUTOFF CV · Fathom L, R → Narrows Left, Right</div>
+<p>Raise RES to about 60 % and DRIVE to about 70 % with Filter type Low-pass 24 dB. Sweep CUTOFF slowly: the peak sits a little below CUTOFF as the stages saturate.</p></div>
+
+<div class="patch"><h4>6. Stepped pitch</h4>
+<div class="chain">Fundamental SEQ3 CV → Fathom V/OCT · Fathom L → Fog Left</div>
+<p>V/OCT steps are smoothed over 5 ms, so no click. Add Free pitch in the menu to tune between semitones.</p></div>
+
+</main>
+
+<script>
+const groups = [
+
+ ["First look and first sound", [
+  ["Add Fathom and look at it before patching anything.", "PITCH on its numbered dial, SUB, SPREAD, DETUNE and DRIFT on the arc, RES, CUTOFF and DRIVE on the next arc, five attenuverters, five CV jacks, V/OCT, SUB, L and R outputs.", null, true],
+  ["Patch L and R to your output and listen for a minute with no other cable.", "A low drone at C2 (65.4 Hz), thick and slightly wide, softened by the 1.2 kHz low-pass. It is already moving slowly by itself; no gate is needed. Peaks near 4 V."],
+  ["Patch SUB to a scope.", "A sine, ±5 V, at 32.7 Hz (one octave below C2). It does not change with SUB, CUTOFF or DRIVE."],
+  ["Look at the module in the module browser.", "The panel draws without a crash.", null, true]]],
+ ["Pitch", [
+  ["Hover over PITCH at the default.", "The tooltip reads \"C2\". Turning it steps by semitones (C#2, D2, and so on); the ends read C0 and C4.", null, true],
+  ["Turn PITCH through its whole range and listen.", "−24 to +24 semitones, snapped, with 0 at C2."],
+  ["1 V into V/OCT.", "The drone moves up one octave (to about 130.8 Hz). 2 V gives C4, and −1 V gives C1."],
+  ["Step V/OCT quickly with a sequencer.", "No click on the step; the pitch slides in about 5 ms."],
+  ["V/OCT at +6 V, then −4 V.", "Held between 8 Hz and 4 kHz: +6 V sounds at 4 kHz (not 4.19 kHz), and −4 V at 8 Hz."],
+  ["Right-click, switch on Free pitch, then turn PITCH.", "The knob moves in fine steps; the tooltip shows semitones such as \"3.27 st\". Switching Free pitch back off rounds the knob to the nearest semitone.", null, true],
+  ["A 4-channel cable into V/OCT (issue 64).", "Only channel 1 is played: one note, not a chord."]]],
+ ["Voice", [
+  ["Turn SUB from 0 to 100 %.", "The sine under the body fades in; the default is 50 %. SUB OUT does not change."],
+  ["Right-click, Sub octave, choose \"Two octaves down\".", "The sub (in L / R and on SUB OUT) drops to 16.35 Hz at C2. \"One octave down\" is the default.", null, true],
+  ["Turn DETUNE from 0 to 100 %.", "At 0 one clean saw; the seven-saw spread opens up as it rises, and the centre saw gets quieter. Default 25 %."],
+  ["Turn SPREAD from 0 to 100 %.", "0 is mono; at 100 % the outer saws are hard left and right. The sub stays in the centre. Default 60 %."],
+  ["DRIFT at 0, then 25 %, then 100 %. Listen for a minute each.", "0 is static. Up, each saw wanders on its own: up to ±6 cents in pitch and 3 dB in level at 100 %. The sub drifts in level only."],
+  ["Patch a CV into DETUNE and DRIFT, attenuverter fully right and fully left.", "±5 V at full sweeps the knob's whole range, and the result stops at 0 and 100 %. Left inverts."],
+  ["Run at the lowest pitch (V/OCT −3 V) and again at a high note.", "The saws do not pile up under the root (they are high-passed at the fundamental); no obvious fold-back tones at the high note. Aliasing is under issue 67; issue 74 (a failing unit test for the detune clamp on Linux aarch64) should change nothing you can hear here."]]],
+ ["Filter", [
+  ["Hover over CUTOFF at the default.", "The tooltip reads about 1200 Hz.", null, true],
+  ["Sweep CUTOFF from fully left to fully right.", "20 Hz at the left (the body is gone, but the sub stays: at SUB 50 % the level drops only about 0.7 dB; the drone is gone only with SUB at 0), about 20 kHz at the right (open). No zipper noise; it is smoothed over 20 ms."],
+  ["CUTOFF CV: 1 V into the jack, attenuverter fully right.", "The cutoff goes up one octave. At full left it goes down one octave. It stops at the ends of the knob's range."],
+  ["Turn RES from 0 to 100 %.", "A resonant peak at the cutoff; the low end of the drone keeps its weight as RES rises in the low-pass types. Default 20 %."],
+  ["RES at 100 %, nothing else changed.", "The ladder sings a quiet sine that tracks CUTOFF at 1 V/oct (about 1 V at the jack, 10 to 12 dB under the drone). It is not loud."],
+  ["With RES at 100 %, turn DRIVE up.", "The sine fades as DRIVE rises; the tone gets more saturated."],
+  ["Turn DRIVE from 0 to 100 %.", "Half gain at 0, unity at 25 % (default), eight times at 100 %. The loudness stays fairly even while the tone gets rougher."],
+  ["With RES and DRIVE both high, find the resonant peak.", "It sits below CUTOFF (up to about an octave) and moves a lot with DRIVE (about an octave more going from 25 % to 70 % on a loud partial); DRIFT moves it far less. That is the growl, not a fault."],
+  ["Right-click, Filter type: try all four.", "Low-pass 24 dB (default), Low-pass 12 dB, Band-pass, High-pass.", null, true],
+  ["Right-click, switch on Sub through filter, then close CUTOFF.", "With it off (default) the sub stays full when CUTOFF closes. With it on, the sub is thinned too.", null, true],
+  ["CV into RES and DRIVE, attenuverter fully right and fully left.", "±5 V at full sweeps the whole range; left inverts."]]],
+ ["Outputs", [
+  ["Scope L and R at the defaults.", "Up to about ±4 V, a little clipped, no DC offset (the DC blocker holds it centred)."],
+  ["Turn SUB, DETUNE and DRIVE up together.", "More saturation. The level stays near ±5 V: expect up to about 5.3 V on a held note, and about 7 V after a hard CV step."],
+  ["Unplug both L and R, leave SUB patched.", "SUB OUT keeps running and follows PITCH and V/OCT; the rest of the voice pauses."],
+  ["Plug L back in.", "The voice returns from rest, with no click or stuck tone."]]],
+ ["With the patch", [
+  ["Set every knob and all four menu choices away from their defaults, save, quit Rack, reopen.", "Everything comes back, including Sub octave, Free pitch, Filter type and Sub through filter."],
+  ["Initialize (right-click).", "Knobs back to the defaults; Sub octave one down, Free pitch off, Low-pass 24 dB, Sub through filter off."],
+  ["Change Rack's sample rate (44.1, 48, 96 kHz) while it plays.", "The pitch stays the same; the filter and drift behave as before, with at most a short settle."],
+  ["Bypass the module.", "The outputs go silent."]]]
+
+];
+const KEY = "fathom-2.0.39-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Fathom 2.0.39 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spindrift listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>SPINDRIFT</h1>
+<div class="sub">Listening list · test build 2.0.32 · 2026-11-23</div>
+<p class="lead">Spindrift as merged to main: Beads in the Instrument look. Play it with Beads in mind; the question throughout is "is this what Beads does?".
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach.
+<b>New since 2.0.29:</b> the GRAINS caption holds still (2.0.30); a buffer frozen in synth mode is no longer saved with the patch, as on Beads; a patch folder that cannot be written logs a warning instead of failing silently (2.0.32). Checks touching these say <b>CHANGED</b>.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (kept as built at 2.0.29; say if any is wrong)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>THE WINDOW</b></td><td>The recording is fixed on the glass and the record head sweeps across it (as Eddy's window). The alternative is a scrolling view, newest at the right. Which reads better?</td></tr>
+<tr><td><b>DEFAULTS</b></td><td>A new Spindrift starts at Density 0.65 (random side) and Dry/Wet at half, so it makes a cloud at once. Beads' own panel has no defaults. Keep these, or start dry?</td></tr>
+<tr><td><b>QUALITY</b></td><td>The setting is spelt out in the window, not shown by a coloured light as on Beads. Enough, or do you want lights on the panel (about 2 HP more)?</td></tr>
+<tr><td><b>LEVELS</b></td><td>Beads' full scale is ±10 V, so ±5 V audio sits at half scale and fully dry comes out at 0.75 of the input, as the hardware does, in Digital, Clean Tape and Vintage Digital (Vintage 0.747 to 0.750; Clean Tape drops from about 6.8 V peak). In Dirty Tape it is lower and depends on level: 0.74 at 0.5 V peak, 0.69 at 5 V, 0.57 at 10 V. Does it sit right in your patches next to the other RKA modules?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. Frozen cloud bed</h4>
+<div class="chain">Fathom → Spindrift → Fog · Sway → TIME CV</div>
+<p>A slow Fathom drone in. Digital, <b>DENSITY</b> at 2 o'clock, <b>SIZE</b> at 1 o'clock, <b>SHAPE</b> at noon, Time's attenuverter a little clockwise for scatter. After ten seconds press <b>FREEZE</b>; now a very slow Sway into <b>TIME CV</b> walks the cloud through the frozen buffer. Fog after it, mostly wet. Leave it for ten minutes.</p></div>
+
+<div class="patch"><h4>2. Dirty-tape choir</h4>
+<div class="chain">Squall → Rigging → Spindrift → Fog</div>
+<p>Squall strikes Rigging's strings sparsely. Spindrift on <b>DIRTY TAPE</b>, <b>PITCH</b> at +12 with its attenuverter a touch clockwise (each grain a little detuned), <b>FEEDBACK</b> at 10 o'clock, <b>REVERB</b> at noon, <b>DRY/WET</b> nearly full. The struck notes smear into a wobbly, hissing chorus.</p></div>
+
+<div class="patch"><h4>3. Reverse shimmer</h4>
+<div class="chain">Any pad → Spindrift → Narrows (low-pass)</div>
+<p><b>SIZE</b> below 9 o'clock so grains play backwards, <b>PITCH</b> at +12 or +7, <b>FEEDBACK</b> at 11 o'clock so each pass climbs again, <b>SHAPE</b> towards reverse for swelling grains. Narrows after it tames the top. The classic shimmer, but made of reversed grains.</p></div>
+
+<div class="patch"><h4>4. Clocked grains</h4>
+<div class="chain">Squall gates (or Shoal clock) → SEED · Hadal → IN L</div>
+<p>Seed latched (its light breathing) with a clock in <b>SEED</b>: Density now divides the clock (left of noon, /1 to /16) or thins it by probability (right). Hadal's rumble as the source gives rhythmic bursts of texture. Turn Density through the dead zone and listen for the change of behaviour.</p></div>
+
+<div class="patch"><h4>5. Delay as a rhythm machine</h4>
+<div class="chain">Shoal clock → SEED · Rigging → Spindrift</div>
+<p><b>SIZE</b> fully clockwise for delay mode (it crosses over in about 1.5 s). With a clock in SEED, <b>TIME</b> picks a ratio of the clock and <b>DENSITY</b> divides the clock (left of noon, /1 to /16) or thins it by probability (right of noon), which sets which clock steps give a repeat; <b>PITCH</b> changes the tape speed. Feedback up for long tails, <b>VINTAGE</b> for a grittier echo.</p></div>
+
+<div class="patch"><h4>6. The hidden synth</h4>
+<div class="chain">Shoal or a sequencer → V/OCT · Sway → TIME CV · nothing in IN L/R</div>
+<p>Unplug both inputs and wait ten seconds (or menu → Synth mode → Always). <b>FEEDBACK</b> chooses one of twelve wavetable banks, <b>TIME</b> the wave, <b>DRY/WET</b> blends the steady voice with a cloud of wavetable grains. A slow Sway on TIME sweeps the timbre. Try each <b>QUALITY</b> for 4-bit to 16-bit crunch.</p></div>
+
+<div class="patch"><h4>7. Granulated field recording</h4>
+<div class="chain">Eddy (field recording, looped) → Spindrift → Wake → Fog</div>
+<p>Eddy plays a few seconds of a field recording on loop. Spindrift on <b>CLEAN TAPE</b> with a long buffer (10.7 s), <b>DENSITY</b> high and random, <b>SIZE</b> long, Time's attenuverter well clockwise: the recording becomes a slowly churning cloud. Wake and Fog after it for distance.</p></div>
+
+<div class="patch"><h4>8. CV-driven randomness</h4>
+<div class="chain">Sway → SIZE CV (attenuverter anticlockwise)</div>
+<p>With a cable in, an attenuverter turned anticlockwise makes the CV's positive half set how much randomness the grains get. A slow Sway then breathes the cloud between orderly and scattered. Try it on PITCH too, for passages of detuned grains.</p></div>
+</main>
+
+<script>
+const groups = [
+ ["First sound", [
+  ["Add Spindrift and patch audio into IN L and IN R; listen at the outputs.", "A cloud of grains straight away (Density 0.65, Dry/Wet half). The window shows the waveform, the ivory head moving, cyan dashes for grains, and DIGITAL · STEREO · 4.0 S."],
+  ["Unplug IN R, keep IN L.", "A short silence (250 ms), then mono: the caption says MONO and 8.0 S; L is copied to both sides."],
+  ["Bypass the module (right-click → Bypass).", "IN L to OUT L, IN R to OUT R."]]],
+ ["The grain controls", [
+  ["TIME from left to right with everything else at noon.", "Grains read from further back in the buffer; the dashes move away from the head."],
+  ["SIZE from fully left to about 1 o'clock.", "Below a third (about 10 o'clock) grains play backwards; above, forwards and longer. Very short grains at the left become buzz."],
+  ["SHAPE through its range.", "Square, then decaying, bell-like at noon, then reversed (swelling) envelopes."],
+  ["PITCH through its range.", "±24 semitones, snapping to 0, 1, 3, 4, 7, 12 and 24 with smooth glides between."],
+  ["Each attenuverter (TIME, SIZE, SHAPE, PITCH) turned off noon with no CV in its jack.", "Each grain draws its own random value: clockwise a random offset scaled by the knob; anticlockwise a random amount of randomness per grain. A little dead zone at noon."],
+  ["The same attenuverters with a CV patched.", "Clockwise scales the CV; anticlockwise lets the CV's positive part set how much random is added."],
+  ["A V/OCT source into PITCH's CV jack, its attenuverter fully clockwise.", "Grains track at one octave a volt."]]],
+ ["Density and Seed", [
+  ["DENSITY from noon to fully left.", "Regular grains, faster as it turns, up to about 130 Hz (a buzz)."],
+  ["DENSITY from noon to fully right.", "Random grains, faster as it turns."],
+  ["DENSITY at noon, Seed latched (its light breathing).", "No grains at all."],
+  ["Press SEED once to unlatch, then tap it with DENSITY at noon.", "Each press makes one grain. Held down with Density off noon, grains run at Density's rate while held."],
+  ["Hold SEED for 4 s, or hold SEED and press FREEZE.", "Seed latches again (light breathing); Freeze does not toggle."],
+  ["A clock into SEED with Seed latched; DENSITY left of noon, then right.", "Left: the clock divided (/1 to /16). Right: clock pulses kept at random, fewer as it turns towards noon."],
+  ["Triggers into SEED with Seed unlatched.", "Grains while the gate is high, or one per trigger in the dead zone. The light flashes with the jack."]]],
+ ["Freeze", [
+  ["Press FREEZE while sound plays, then change the input.", "The buffer stops recording: the head stops, the waveform holds still, grains keep reading the frozen sound. FREEZE lit."],
+  ["A gate into GATE (the FREEZE jack).", "Frozen while the gate is high; the cap lights."],
+  ["Freeze, then press QUALITY three times, then unfreeze.", "While frozen the window shows the pending choice (e.g. DIGITAL → DIRTY TAPE) and the sound does not change; on unfreeze only the last choice is applied, with one short silence."],
+  ["Freeze, then unplug an input or leave both unplugged for over 10 s.", "Nothing changes while frozen: no mono switch, no synth mode. They happen after unfreeze."]]],
+ ["Quality", [
+  ["Press QUALITY repeatedly while sound plays.", "Digital → Vintage Digital → Clean Tape → Dirty Tape → round. Each press: a 250 ms silence, the buffer cleared, the caption and buffer length (4.0, 8.0, 10.7, 16.0 s) change."],
+  ["Listen to the same patch in each quality.", "Vintage duller and grainier; Clean Tape darker and softer, feedback saturating gently; Dirty Tape hissy, wobbly (wow and flutter) and crunchy, the dry signal degraded too."],
+  ["Hold QUALITY for 1.5 s and release.", "No step; input gain goes back to automatic (menu shows Automatic)."]]],
+ ["Delay mode", [
+  ["Turn SIZE fully clockwise, then back.", "Crossfades into a multi-tap delay over about 1.5 s; back below, into grains again. Window shows DELAY and tap ticks."],
+  ["In delay mode: TIME, DENSITY, SHAPE, PITCH, FEEDBACK.", "Time sets the delay, Density divides (left of noon) or thins (right of noon) the clock in SEED, so it sets which steps repeat. Shape their envelope, Pitch the playback speed, Feedback the regeneration."],
+  ["Delay mode with a clock in SEED.", "Time becomes a ratio of the clock."]]],
+ ["Synth mode", [
+  ["Unplug both inputs, keep the output quiet, wait.", "After 10 s (not before): a short silence, then the wavetable synth. Window shows SYNTH · BANK n and the current wave."],
+  ["In synth mode: FEEDBACK, TIME, PITCH/V-OCT, DRY/WET, QUALITY.", "Feedback picks one of 12 banks (smooth change); Time the wave; Pitch and V/OCT the note; Dry/Wet blends voice and grain cloud; Quality the bit depth (4-bit to 16-bit)."],
+  ["Patch an input back in.", "Straight back to grains after a short silence."],
+  ["Menu → Synth mode → Always, then Never.", "Always: synth even with inputs patched. Never: never switches, however long the inputs are empty."]]],
+ ["Mix, CV and outputs", [
+  ["FEEDBACK, DRY/WET and REVERB knobs, then each through its CV jack.", "Feedback builds regeneration (softly clipped, harder at low qualities); Dry/Wet as Beads (dry at 0.75 when fully dry; in Dirty Tape 0.57 to 0.74, lower for louder input); Reverb sets amount and length together."],
+  ["Loud input (±10 V or hotter) with FEEDBACK high.", "Clipped and limited the Beads way; nothing runs away; the output stays within about ±10 V."],
+  ["Menu → Gate output on.", "OUT R becomes a 0/10 V gate per grain; OUT L a mono mix."],
+  ["Menu → Input gain: Fixed, Automatic, Manual (and its slider).", "Fixed: ±10 V is full scale. Automatic: Beads' auto gain settles on the input level. Manual: the slider sets the gain.", null, true]]],
+ ["With the patch", [
+  ["Freeze, save the patch, quit Rack, reopen.", "The same frozen buffer comes back, Freeze lit, the window showing the same waveform.", null, true],
+  ["Freeze with the GATE jack (not the button), save, reopen with the gate low.", "The buffer comes back and Freeze is latched on, so it is not overwritten.", null, true],
+  ["Save an unfrozen patch and reopen.", "Settings, quality and menu choices restored; the buffer starts empty."],
+  ["Freeze in synth mode, save, reopen.", "CHANGED: the frozen synth buffer does not come back; the buffer starts empty and Freeze is off, as Beads.", null, true],
+  ["Freeze a grain-mode buffer, save, reopen, then set Menu → Synth mode → Always and save again; reopen.", "CHANGED (kept on purpose): a buffer restored with the patch and frozen ever since is still kept, as Beads keeps its last backup.", null, true],
+  ["Change Rack's sample rate (44.1, 48, 96 kHz) while it plays, and while frozen.", "Same sound at each rate; a frozen buffer survives the change."]]],
+ ["The window", [
+  ["Watch the window across modes and qualities for a few minutes.", "Readable and calm: waveform faint, head ivory, grains as short dashes whose brightness follows their envelope and height their pan. CHANGED: the GRAINS count holds still while it changes (fixed-width digits, short peak hold)."],
+  ["Look at the module in the module browser (no module running).", "A still preview of the window, no crash."]]]
+];
+const KEY = "spindrift-2.0.32-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Spindrift 2.0.32 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

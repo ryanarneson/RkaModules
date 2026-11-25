@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sway listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>SWAY</h1>
+<div class="sub">Listening list · build 2.0.39 · 2026-11-24</div>
+<p class="lead">Sway is a polyphonic LFO, 12 HP: sine, triangle, saw and square outputs, a MORPH output you shape with MORPH, SKEW and SMOOTH, a random output (stepped, or gliding in), and an end-of-cycle trigger. It runs from 4.5 hours per cycle up to audio rate, can follow a clock, and has a one-shot mode that turns it into an envelope.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: the rate light, the one-shot light, tooltips, the Range menu and how the panel looks.
+The three ranges, the defaults and the random output's behaviour are first guesses, to be set by ear here.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>DEFAULT RATE</b></td><td>Normal range, RATE at +1: 2 Hz. For ambient and dark work, is that too fast to start from? Should the default sit at 0.1 Hz or slower, or should Slow be the default range?</td></tr>
+<tr><td><b>THE THREE RANGES</b></td><td>Slow runs 4.5 h to 1 s per cycle (RATE 0 is about 2 min 8 s), Normal 0.008 to 128 Hz, Audio about 8 Hz to 8.4 kHz. Are the ends right? Is the Normal top (128 Hz) useful, or would Slow reaching 4 Hz be better?</td></tr>
+<tr><td><b>SMOOTH DOES TWO JOBS</b></td><td>Left of centre it rounds MORPH's corners and also makes RAND glide in; right of centre it folds MORPH. Is one knob for both fine, or does rounding MORPH when you only wanted RAND to glide get in the way?</td></tr>
+<tr><td><b>RAND</b></td><td>A new uniform value in ±5 V each cycle, stepped at centre and right, gliding in from the left. Each channel has its own sequence, but the seeds are fixed, so two Sways started together play the same RAND values. Is that acceptable?</td></tr>
+<tr><td><b>PHASE AND RAND</b></td><td>The manual says PHASE shifts every output. In the code RAND and EOC are read from the cycle itself, so PHASE (and SPREAD) never move them. Intended? If yes, the manual line needs a fix.</td></tr>
+<tr><td><b>CV SCALE</b></td><td>On PW, PHASE, SKEW, SMOOTH and MORPH, 5 V at full attenuverter sweeps the whole knob range. Right for LFO-on-LFO, or too sensitive for slow work?</td></tr>
+<tr><td><b>RATE LIGHT</b></td><td>It blinks (lit for the first half of each cycle) up to 10 Hz, then glows steadily at half brightness. Is 10 Hz the right switch point, and is it readable at 0.01 Hz?</td></tr>
+<tr><td><b>EOC IN UNIPOLAR</b></td><td>EOC is always a 10 V, 1 ms pulse, whatever the BI / UNI switch says. Fine, or should it follow the switch?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. Slow breath</h4>
+<div class="chain">Sway SIN (Range Slow, RATE about +1) → Sluice A level CV · Fathom L → Sluice A</div>
+<p>Sluice's level A knob at about 50 %. The drone swells and fades over about a minute. Switch BI / UNI to UNI and compare: 0 to 10 V is the whole level range.</p></div>
+
+<div class="patch"><h4>2. Wandering cutoff</h4>
+<div class="chain">Sway RAND (SMOOTH fully left) → Narrows FM · Fathom L → Narrows Left</div>
+<p>Narrows FM knob about 30 %. With SMOOTH fully left, RAND glides over the whole cycle, so the cutoff drifts from one random value to the next without a step. Move SMOOTH to centre and it steps instead.</p></div>
+
+<div class="patch"><h4>3. Sway clocks Sway</h4>
+<div class="chain">Sway 1 SQR → Sway 2 CLOCK · Sway 2 SIN and TRI → a scope</div>
+<p>After two edges Sway 2 follows Sway 1; set RATE on Sway 2 to ×2, ÷4 and watch the cycles. Patch Sway 1 FM from Sway 2 to make it wobble.</p></div>
+
+<div class="patch"><h4>4. One-shot envelope</h4>
+<div class="chain">Squall GATE → Sway RESET · Sway TRI (UNI) → Sluice B level CV · Sway EOC → Rigging STRUM</div>
+<p>Switch on <b>1-SHOT</b> and BI / UNI to UNI, and set <b>PHASE to 0.75 (270°)</b>. Each Squall gate runs one triangle hump over Sluice, 0 → 10 → 0 V, and TRI rests at 0 V. (With PHASE at 0, TRI runs 5 → 10 → 0 → 5 V and rests at 5 V, which holds Sluice half open.) EOC strikes Rigging when the hump ends (PHASE does not move EOC). Clock edges would not restart it; only RESET does.</p></div>
+
+<div class="patch"><h4>5. Spread across four</h4>
+<div class="chain">Sway SIN (CHANNELS 4, SPREAD 100 %) → Scope (4 channels)</div>
+<p>Four sines a quarter of a cycle apart. Lower SPREAD to bring them together. Patch the poly cable into another poly input to modulate four things at once.</p></div>
+
+<div class="patch"><h4>6. Freeze on a gate</h4>
+<div class="chain">Squall GATE → Sway HOLD · Sway SIN → Narrows FM</div>
+<p>While the gate is high the modulation stops where it is and the rate light stays put. Releasing resumes from the same place.</p></div>
+
+<div class="patch"><h4>7. Sway as an oscillator</h4>
+<div class="chain">Sway SAW (Range Audio) → Narrows Left · Narrows Left out → Fog Left</div>
+<p>RATE sets the pitch (centred on C4); FM is 1 V per octave at +100 %. SAW and SQR are band-limited here.</p></div>
+
+</main>
+
+<script>
+const groups = [
+
+ ["First look and first sound", [
+  ["Add Sway and look at it before patching anything.", "The RATE dial, the rate light above it, SPREAD, CHANNELS, five shape knobs with attenuverters and CV jacks, the FM column, the BI / UNI switch and the 1-SHOT button. The rate light blinks about twice a second (2 Hz default). The 1-SHOT cap is off.", null, true],
+  ["Patch SIN to a scope.", "A sine, ±5 V, 2 Hz (a cycle every 0.5 s), at default RATE in the Normal range."],
+  ["Patch TRI next to SIN.", "A triangle, ±5 V, in phase with the sine: both start at 0 V and rise."],
+  ["Patch SAW and SQR.", "SAW rises over the cycle and drops at the end. SQR is high for half the cycle and low for the other half (PW 50 %)."],
+  ["Hover over the RATE knob.", "The tooltip reads \"2 Hz\".", null, true]]],
+ ["Rate and range", [
+  ["Turn RATE from fully left to fully right (Normal range).", "About 0.008 Hz at the left, 1 Hz at noon, 128 Hz at the right."],
+  ["Right-click the module and open Range.", "Three choices: \"Slow (4.5 h – 1 s per cycle)\", \"Normal (0.008–128 Hz)\" (the one ticked by default) and \"Audio (8 Hz–8 kHz)\".", null, true],
+  ["Slow range: turn RATE from left to right.", "Right end is 1 Hz, noon about 2 min 8 s per cycle, the left end about 4.5 hours per cycle. At default RATE a cycle takes 64 s. The tooltip shows a time (for example \"1m 04s per cycle\") below 1 Hz.", null, true],
+  ["Slow range, RATE fully left: watch SIN for a minute.", "It creeps up by about 0.1 V and keeps moving (the phase does not stall at very slow rates)."],
+  ["Audio range: patch SIN to a tuner or the spectrum.", "Default RATE gives about 429 Hz; the ends are about 8 Hz and 8.4 kHz, centred on C4 at RATE 0."],
+  ["Audio range: SAW and SQR near 5 kHz on a spectrum display.", "Band-limited: much less fold-back below the pitch than in Normal range. MORPH's square is band-limited too."],
+  ["A 1 V/oct source (or another LFO) into FM; FM attenuverter fully right, centre, fully left.", "Right: 1 V doubles the rate. Centre: no effect. Left: inverted, 1 V halves it. The same in every range."],
+  ["A poly cable into FM.", "Each channel runs at its own rate."]]],
+ ["Clock, reset, hold", [
+  ["Patch a steady clock to CLOCK and watch SIN.", "Before the second edge it free-runs from RATE. After two edges the cycle follows the clock, and RATE at noon is ×1 (one cycle per clock)."],
+  ["Turn RATE through the ratios while clocked.", "÷16 ÷12 ÷8 ÷6 ÷4 ÷3 ÷2 ×1 ×2 ×3 ×4 ×6 ×8 ×12 ×16 (15 steps, noon = ×1). The tooltip shows the ratio, such as \"×4\" or \"÷3\".", null, true],
+  ["×2 and ÷4 against the clock.", "×2: the cycle restarts on every clock edge and runs twice per clock. ÷4: it restarts on every fourth edge."],
+  ["Clocked, send ±1 V into FM.", "FM moves the ratio one step per volt (at full attenuverter)."],
+  ["Change the clock tempo.", "Sway follows from the next edge."],
+  ["Unplug CLOCK.", "Sway returns to free-running from RATE at once; the tooltip shows Hz again.", null, true],
+  ["Send a pulse to RESET.", "On the rising edge (above 1 V) every output goes back to the start of the cycle: SIN and TRI at 0 V rising, SAW at its low end. In ÷N the edge count restarts. No EOC pulse comes from a reset."],
+  ["Hold HOLD high.", "All outputs freeze where they are and resume from there when it goes low. The rate light stays as it was.", null, true],
+  ["Set 1-SHOT, then press RESET.", "The cap lights. On switching 1-SHOT on, outputs park at the cycle's end (SAW near +5 V, SIN and TRI near 0 V). A RESET runs exactly one cycle, then they rest again, and EOC fires at its end. The rate light goes dark when it has finished.", null, true],
+  ["1-SHOT on, with a clock patched.", "Clock edges set the speed but never restart the one-shot; only RESET does."],
+  ["Turn 1-SHOT off again.", "The LFO runs freely again."]]],
+ ["Shape knobs", [
+  ["Turn PW from 1 % to 99 %.", "SQR and MORPH's square change duty cycle; default 50 %. It never reaches 0 or 100."],
+  ["Turn PHASE from 0 to 360° on SIN against SAW.", "SIN, TRI, SAW, SQR and MORPH all shift together. RAND and EOC do not move (see the verdict)."],
+  ["Patch MORPH and turn MORPH fully left, a third, two thirds and fully right.", "Sine, triangle, saw, square, in equal thirds of the knob."],
+  ["Turn SKEW with MORPH at sine, then triangle.", "50 % is symmetric. 0 % gives a falling ramp and 100 % a rising one. Only MORPH is affected."],
+  ["Turn SMOOTH on MORPH set to triangle or square.", "Left of centre rounds the corners. Right of centre folds the wave, up to three folds at the right end. Centre leaves it alone."],
+  ["Put a CV on each of PW, PHASE, SKEW, SMOOTH and MORPH, attenuverter fully right and fully left.", "±5 V at full sweeps the whole knob range (the result is limited at the ends of each knob; PHASE wraps). Left inverts."]]],
+ ["Random and end of cycle", [
+  ["Patch RAND, SMOOTH at centre.", "A new value once per cycle, in ±5 V, held for the whole cycle (stepped)."],
+  ["Turn SMOOTH left from centre.", "Each new value glides in (cosine) over a growing part of the cycle: half-way left glides in the first half, fully left over the whole cycle."],
+  ["SMOOTH to the right.", "RAND stays stepped."],
+  ["Patch EOC.", "A 10 V, 1 ms pulse at the end of every cycle, also when a one-shot finishes and when a clock restart cuts a cycle past its middle. Not on RESET."],
+  ["Switch BI / UNI and look at every output but EOC.", "UNI: 0 to 10 V on SIN, TRI, SAW, SQR, MORPH and RAND. BI: ±5 V. EOC stays 0 / 10 V."]]],
+ ["Polyphony", [
+  ["Turn CHANNELS from 1 to 4 with SIN patched to a poly scope.", "The cable carries 4 channels. All outputs carry the same count; EOC too. CHANNELS runs 1 to 16."],
+  ["SPREAD at 0, 50 % and 100 %.", "0: all channels in step. 100 %: evenly spaced around the cycle (four channels a quarter apart). SPREAD moves SIN, TRI, SAW, SQR and MORPH."],
+  ["Send a 6-channel cable into HOLD or CLOCK with CHANNELS at 1.", "Sway raises its channel count to 6."],
+  ["A mono clock, reset or hold with CHANNELS at 4.", "The mono signal drives every channel."],
+  ["RAND on 4 channels.", "Each channel has its own random values."],
+  ["The rate light while 4 channels run.", "It follows channel 1 only.", null, true]]],
+ ["With the patch", [
+  ["Set several knobs, the switch, 1-SHOT and Range to Slow, save, quit Rack and reopen.", "All come back, including the Range choice."],
+  ["Initialize (right-click).", "Knobs and switches back to their defaults, Range back to Normal; phases back to the start."],
+  ["Change Rack's sample rate (44.1, 48, 96 kHz) while a slow cycle runs.", "It carries on from where it was; cycle times stay the same in seconds."],
+  ["Bypass the module.", "The outputs go to 0 V."]]]
+
+];
+const KEY = "sway-2.0.39-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Sway 2.0.39 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

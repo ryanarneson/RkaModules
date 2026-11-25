@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fog listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>FOG</h1>
+<div class="sub">Listening list · build 2.0.39 · 2026-11-24</div>
+<p class="lead">Fog is a stereo reverb, 10 HP, for large dark spaces: decay is set in seconds on the Visibility knob (0.4 s to 80 s, and it holds at any Size), with Size, Damp, Bloom, Drift and Mix on knobs that each have an attenuverter and CV, and four modes (HAAR, FRET, SMOKE, ICE) in the right-click menu. Its measured comparison against ValhallaRoom LV-426 is a separate testbed, on the share in fog-testbed/; this list is for listening.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: the panel and knob faces, the tooltips, the menus and presets, and Rack's CPU meter.
+The defaults, the four modes and the factory presets are first guesses (issue 23), to be set by ear here.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>VISIBILITY RANGE</b></td><td>T60 = 0.4 s × 200^v: 0.4 s fully left, about 5.7 s at noon, 80 s fully right, with the words CLEAR to DENSE on the face. Are the ends right for dark ambient, and is noon the right default?</td></tr>
+<tr><td><b>DEFAULTS</b></td><td>Every knob opens at noon, every attenuverter at 0, Mix at 50/50, Mode HAAR. For ambient work, would you start with more Mix, a longer Visibility, or more Damp?</td></tr>
+<tr><td><b>WET LEVEL</b></td><td>The wet follows the decay time, as in ValhallaRoom: CLEAR is about 11.5 dB quieter than noon and a long tail is louder, with a leveller turning loud drones down. Does the loudness feel right as Visibility moves, or would you rather it stayed flat?</td></tr>
+<tr><td><b>BLOOM</b></td><td>Fully left is under 50 ms, noon about 1 s, fully right about 4 s on the signal fed in (1.2 to 1.7 s measured at the output at noon). Is noon the right swell, and is 4 s long enough at the top?</td></tr>
+<tr><td><b>THE MODES</b></td><td>HAAR dense wash, FRET dark and slow, SMOKE distinct echoes, ICE sparse with an octave up. Each mode's character, equal loudness between them and the factory presets (Becalmed, Nebula, Harbour, Whiteout) have not been tuned by ear (issue 23). What would you change?</td></tr>
+<tr><td><b>EARLY SOUND</b></td><td>Fog has no early reflections: after a gate opens its output takes about 0.18 s to reach −20 dB of its level, against 0.02 s for LV-426 (issue 21). Does a pluck or a drum feel late, or is the slow arrival what you want?</td></tr>
+<tr><td><b>BYPASS WITH ONE INPUT</b></td><td>Bypass wires L to L and R to R, so with only IN L patched OUT R goes silent, although the module normals R to L when active (issue 13). Should bypass normal R to L as well?</td></tr>
+<tr><td><b>MENU DEFAULTS</b></td><td>Low cut 50 Hz, Drift rate Slow (about 0.1 to 0.5 Hz), Dry kill off. Is 50 Hz the right cut for sub-bass drones, and is Slow the right drift rate, or would you start with Very slow?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. First wash</h4>
+<div class="chain">Fathom Left → Fog IN L · Fog OUT L and OUT R → the speakers</div>
+<p>Leave every knob at noon. Hold a note and let go: a HAAR wash, 50/50 with the dry, that outlasts the note by several seconds. IN R is empty, so both sides get the left.</p></div>
+
+<div class="patch"><h4>2. Dark held drone</h4>
+<div class="chain">Hadal Left → Fog IN L · Sway Sine → Fog Size CV</div>
+<p>Mode <b>FRET</b>, Visibility at THICK, Damp up, Bloom up. Turn the Size attenuverter up a little, with the Sway very slow: the space breathes. Then try a fast Sway on Size and hear it as a pitch effect.</p></div>
+
+<div class="patch"><h4>3. Fog on a send</h4>
+<div class="chain">Fathom Left → Ballast Channel 1 left and → Fog IN L · Fog OUT L → Ballast Channel 2 left · Fog OUT R → Ballast Channel 2 right</div>
+<p>Turn on <b>Dry kill (wet only)</b> in the menu: Fog is all wet and Ballast sets the balance. Mix stays where it was.</p></div>
+
+<div class="patch"><h4>4. Breathing into the tail</h4>
+<div class="chain">Fathom Left → Sluice A · Sway Sine → Sluice A CV · Sluice A → Fog IN L</div>
+<p>Sluice A Level at noon. The drone fades in and out; the tail keeps going through the quiet parts. Try Visibility near FOG and near CLEAR.</p></div>
+
+<div class="patch"><h4>5. Plucks in a long space</h4>
+<div class="chain">Squall Gate → Rigging STRUM · Rigging Left and Right → Fog IN L and IN R</div>
+<p>Mode <b>ICE</b>, Visibility near FOG, Mix at about 30 %. Each strum rings and blurs into an octave-up wash; compare HAAR and SMOKE on the same strums.</p></div>
+
+<div class="patch"><h4>6. Slow motion on three knobs</h4>
+<div class="chain">Neap C4 → Fog Damp CV · Neap C6 → Fog Drift CV · Neap C8 → Fog Bloom CV</div>
+<p>Turn the three attenuverters up to about 50 %. Three unrelated slow movements over one tail; the knobs at noon give ±5 V the whole range.</p></div>
+
+<div class="patch"><h4>7. Echoes into the wash</h4>
+<div class="chain">Fathom Left → Wake Left in · Wake Left out → Fog IN L</div>
+<p>Wake's echoes arrive in the reverb, which smears them. Then try SMOKE mode for echoes that stay distinct.</p></div>
+</main>
+
+<script>
+const groups = [
+
+ ["First look and first sound", [
+  ["Add Fog and look at it before patching anything.", "Visibility, the hero, low on the panel on an enamel face lettered CLEAR, HAZE, MIST, FOG, THICK, DENSE; Size, Damp, Bloom, Drift and Mix on a brass arc, each with an attenuverter and CV jack below. IN L and IN R at the bottom left, L and R outputs at the bottom right. Every knob at noon.", null, true],
+  ["Look at Fog in the module browser.", "The panel draws with no crash.", null, true],
+  ["Hover Visibility at its default, then fully left and fully right.", "About 5.66 s at noon; 0.4 s at the left; 80 s at the right (shown in seconds).", null, true],
+  ["Hover an attenuverter and an input jack.", "Attenuverters read “Size CV amount” and so on, −100 to 100 %, at 0 %. The jacks read “Left”, “Right (normalled to left)”, and “Size CV” to “Mix CV”.", null, true],
+  ["Patch Fathom Left into IN L only; both outputs to the speakers; hold a note and let go.", "A HAAR wash at 50/50 that outlasts the note by seconds, in both ears (IN R is normalled to IN L)."],
+  ["Patch a different source into IN R.", "Left and right now carry their own sources. Unplug IN R: both sides take the left again."],
+  ["Load each factory preset from the right-click Preset menu: Becalmed, Nebula, Harbour, Whiteout.", "Becalmed: FRET, THICK, heavy Damp, slow Bloom. Nebula: HAAR, large Size, high Drift, near DENSE. Harbour: HAAR, HAZE, short Size, Mix about 30 %. Whiteout: ICE, wet only, Bloom and Visibility high. Note which you would keep (issue 23).", null, true]]],
+ ["Visibility", [
+  ["A short ping into IN L; Visibility at CLEAR, HAZE, MIST, FOG, THICK, DENSE; time how long the tail takes to fall away.", "Roughly 0.5, 2, 5, 12, 30 and 70 s to fall by 60 dB. Even fully right the tail dies away: no freeze."],
+  ["Move Size from left to right at one Visibility.", "The decay time does not change with Size, and the level does not change either."],
+  ["Turn Visibility quickly during a tail.", "No click and no step in the wet: it follows through a 30 ms smoother."],
+  ["Visibility at CLEAR, noon and DENSE with the same noise at Mix full wet.", "The wet is about 11.5 dB quieter at CLEAR than at noon, and louder at DENSE; a short sound is about 11 dB louder at DENSE than at CLEAR."],
+  ["Stepped change 0 to 1 within 150 ms of a note ending (type a value, or load a preset during a tail). Issue 22.", "Known: the tail lifts by about 6 dB, because the make-up rises while echoes are still in the network. Turning the knob does not do this. Note whether it matters."],
+  ["Look for a Visibility CV jack.", "There is none.", null, true]]],
+ ["Size and Damp", [
+  ["Size fully left, then fully right, at HAZE.", "Left: a close space whose reflections blur at once. Right: vast."],
+  ["Size fully right at CLEAR, with a ping.", "Sparse, separate echoes before anything fills in."],
+  ["A slow CV on Size, then a fast one.", "Slow: the space moves. Fast: a pitch effect, a swoop like a Doppler pass. Size settles about 100 ms after a change."],
+  ["Damp fully left, noon, fully right at a long Visibility.", "Left: no extra damping. Noon: the highs (about 4 kHz) die about 2× faster. Right: about 8× faster, and the tail turns into a low rumble within seconds."],
+  ["Damp at noon in HAAR, FRET and ICE.", "FRET is darker than HAAR at every setting, ICE brighter."]]],
+ ["Bloom, Drift and Mix", [
+  ["Bloom fully left, noon, fully right with a held note.", "Left: the wash is there at once (under about 50 ms). Noon: about 1 s to swell in. Right: about 4 s. The dry sound is never delayed."],
+  ["Drift fully left, noon, fully right on a held note.", "Left: still and glassy. Noon: gentle movement, enough to stop long tails ringing. Right: heavy smearing, pitch deviations of tens of cents."],
+  ["Mix from fully left to fully right on a steady source.", "Left: dry only. Noon: 50/50. Right: wet only. The loudness does not dip in the middle."],
+  ["Hover Mix.", "“Mix”, 0 to 100 %, 50 % at default.", null, true]]],
+ ["CV and attenuverters", [
+  ["Patch a slow LFO into Size CV and leave the attenuverter alone.", "Nothing moves: attenuverters default to 0."],
+  ["Turn the Size attenuverter fully right; then fully left.", "Right: ±5 V sweeps the whole Size range with the knob at noon. Left: the same sweep inverted."],
+  ["The same ±5 V LFO with the Size knob fully left, or fully right.", "One end of the sweep is clipped: the sum is held in the range."],
+  ["A 4-channel polyphonic cable into a CV jack.", "Only the first channel is used."],
+  ["Fast CV on Drift or Damp.", "The change is smoothed (30 to 40 ms), so a stepped CV moves smoothly."]]],
+ ["Menu: Mode", [
+  ["Open the right-click menu.", "Mode, Drift rate, Low cut and Dry kill (wet only); the current choice of each is marked: HAAR, Slow, 50 Hz, off.", null, true],
+  ["Switch Mode while a tail rings: HAAR, FRET, SMOKE, ICE and back.", "The wet fades out over about 50 ms, the network clears and the new mode starts clean and fades in: no click. The old tail is cut off. Switching runs some set-up in the audio thread (issue 14), so watch Rack's CPU meter for a spike.", null, true],
+  ["FRET, with a held note and a ping.", "Dark, slow to build: the space rises behind the sound."],
+  ["SMOKE, with pings.", "Distinct repeats that blur into the wash."],
+  ["ICE at several Visibility settings.", "Sparse and glassy, with an octave-up shimmer about 11 to 13.5 dB under the note, audible at every Visibility. The decay is a little shorter than the knob says (about 13 %)."],
+  ["Each mode at the same Visibility, Size and Mix on the same source.", "Compare the loudness between modes (issue 23). Note which are louder or quieter."]]],
+ ["Menu: Drift rate, Low cut, Dry kill", [
+  ["Drift rate: Slow, then Very slow, at Drift noon, with a held note.", "Very slow moves about 5× slower; changing it moves the modulation smoothly, with no click."],
+  ["Low cut: Off, 50 Hz and 100 Hz with a 40 Hz sine and a long Visibility.", "Off: the sub-bass builds in the tail. 50 and 100 Hz: it does not pile up. The dry sound is untouched at every setting."],
+  ["Dry kill on, Mix at 25 %.", "The output is all wet; the Mix knob does not move; switching it changes the level without a click (5 ms ramp)."]]],
+ ["Stereo, level and sleep", [
+  ["Sum OUT L and OUT R to mono with a low sine (about 100 Hz).", "The low end does not cancel: below about 300 Hz both sides share one tap at 80 degrees apart."],
+  ["Patch a 4-channel polyphonic cable into IN L.", "The channels are summed to one signal."],
+  ["A loud, bright drone into Fog at DENSE.", "The wet is turned down smoothly rather than clipping; the dry is untouched; no breathing in the level. Note any."],
+  ["A hot spike with Mix at noon.", "The wet is limited near 10 V; the dry passes untouched, so the output can reach about 10.6 V."],
+  ["Stop the input and let the tail die at a short Visibility. Watch Rack's CPU meter.", "Once the input and tail are practically silent for about 1.4 s Fog sleeps at near-zero CPU; the dry still passes below full wet; the wet is silent; the next sound wakes it with no click. At long Visibility it takes much longer (issue 63 measured up to minutes at DENSE).", null, true]]],
+ ["With the patch", [
+  ["Set every knob, attenuverter and the four menu items away from default, save, quit Rack, reopen.", "Everything comes back: Mode, Drift rate, Low cut and Dry kill too. The patch opens in its saved mode with no fade."],
+  ["Initialize (right-click).", "Knobs at noon, attenuverters at 0; the menu back to HAAR, Slow, 50 Hz and Dry kill off."],
+  ["Change Rack's sample rate (44.1, 48, 96 kHz) with a tail ringing.", "The network restarts clean, so the tail is cut; times stay the same in seconds."],
+  ["Bypass the module with both inputs patched.", "IN L goes straight to OUT L and IN R to OUT R."],
+  ["Bypass with only IN L patched (issue 13).", "Known: OUT R is silent in bypass, although the active module fills both sides. Note whether this bothers you."]]]
+];
+const KEY = "fog-2.0.39-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Fog 2.0.39 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

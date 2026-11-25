@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wake listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>WAKE</h1>
+<div class="sub">Listening list · build 2.0.39 · 2026-11-24</div>
+<p class="lead">Wake is a stereo echo, 14 HP, for sounds that have just been struck: a delay of 10 ms to 10 s with feedback, a tone filter in the loop, a clock input, freeze and ping pong, in three styles (Tape, Analog, Digital). Diffuse blurs the repeats and Drift makes the echo time waver.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: the lights, the tooltips, how the panel looks and the module browser.
+The defaults, the three styles and the Diffuse and Drift amounts are first guesses, to be set by ear here.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>DEFAULTS</b></td><td>Time 300 ms, Feedback 40 %, Tone flat, Ratio 1:1, Mix 35 %, Diffuse 0, Drift 15 %, Tape. Keep, or start slower and darker (longer Time, Tone a little left, some Diffuse) for ambient and dark work?</td></tr>
+<tr><td><b>TIME RANGE</b></td><td>10 ms to 10 s on a log scale, opening at 300 ms. Is 10 ms short enough and 10 s long enough, and is the middle (100 ms to 3 s) where you want the room?</td></tr>
+<tr><td><b>FEEDBACK TOP</b></td><td>The knob goes to 110 %, with a soft ceiling so it holds a saturated wash. Is 110 % the right top, and is the 100 mark by the knob easy to find?</td></tr>
+<tr><td><b>TONE RANGE</b></td><td>Darkest about 500 Hz and thinnest about 1 kHz per pass. Too little or too much at either end?</td></tr>
+<tr><td><b>THE THREE STYLES</b></td><td>Tape: 6 kHz top, bend time 0.15 s. Analog: 5 kHz falling to 1.5 kHz at long times, harder drive, bend time 0.08 s. Digital: clean, crossfade 40 ms. Are the three far enough apart, and is the pitch bend's speed right?</td></tr>
+<tr><td><b>DIFFUSE AND DRIFT</b></td><td>Diffuse smears each pass; Drift is up to 15 cents a side (30 apart), 15 % by default. Is Diffuse enough at full to become a wash, and is Drift too little, too much, or better off by default?</td></tr>
+<tr><td><b>RATIO AND CLOCK STEPS</b></td><td>Seven ratio steps (1/2, 2/3, 3/4 of Time on either side) and ten clock multiples (1/4 to x4). Is any step missing or never used?</td></tr>
+<tr><td><b>FREEZE HOLDS TIME</b></td><td>While frozen, Time, Ratio, the clock and Ping Pong are held until release. Fine, or should Time still move the held loop?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. Depth behind a strum</h4>
+<div class="chain">Squall GATE → Rigging STRUM · Rigging L, R → Wake IN L, IN R · Wake L, R → Ballast</div>
+<p>Tape, <b>TIME</b> about 400 ms, <b>FEEDBACK</b> 40 %, <b>RATIO</b> one step right, <b>MIX</b> 30 %. Each strike trails off to one side.</p></div>
+
+<div class="patch"><h4>2. Echoes on the clock</h4>
+<div class="chain">Squall GATE → Rigging STRUM and → Wake CLOCK</div>
+<p>The same clock drives both. Turn <b>TIME</b> to x1.5 or 3/4 and the echoes land between the hits. Watch the tooltip read the step.</p></div>
+
+<div class="patch"><h4>3. A bounce</h4>
+<div class="chain">Rigging L → Wake IN L · Wake L, R → Ballast</div>
+<p><b>PING PONG</b> on, <b>RATIO</b> two steps left, <b>FEEDBACK</b> 60 %, Digital. One hit becomes a long-short pattern crossing the field.</p></div>
+
+<div class="patch"><h4>4. A dark wash</h4>
+<div class="chain">Hadal L, R → Wake IN L, IN R · Wake L, R → Fog Left, Right</div>
+<p>Analog, <b>TIME</b> 2 s, <b>FEEDBACK</b> 85 %, <b>DIFFUSE</b> 70 %, <b>TONE</b> a little left, <b>MIX</b> about 50 %. Hadal dissolves into a dark cloud; Fog makes it bigger.</p></div>
+
+<div class="patch"><h4>5. Hold a moment</h4>
+<div class="chain">Squall GATE → Wake FREEZE jack · Rigging L → Wake IN L</div>
+<p>A slow gate freezes what was passing and holds it until the gate ends. Try <b>DRIFT</b> at 0 and at 15 % while it is held.</p></div>
+
+<div class="patch"><h4>6. Tape slur</h4>
+<div class="chain">Sway Sine → Wake TIME CV · Fathom Left → Wake IN L</div>
+<p>Tape, <b>FEEDBACK</b> 70 %, the <b>TIME CV</b> attenuverter barely open. The repeats bend around the note.</p></div>
+
+<div class="patch"><h4>7. Self-sustaining drone</h4>
+<div class="chain">Rigging L → Wake IN L · Wake L → Narrows IN L</div>
+<p><b>FEEDBACK</b> above 100 % with a short <b>TIME</b> and <b>TONE</b> left: one hit becomes a held tone at the echo's pitch. Narrows on the way out (Ladder, LP) darkens it. Bring Feedback down to let it go.</p></div>
+</main>
+
+<script>
+const groups = [
+ ["First look and first sound", [
+  ["Add Wake and look at it before patching anything.", "Time at 300 ms, Feedback 40 %, Tone at noon, Ratio at noon (1:1), Mix 35 %, Diffuse 0, Drift 15 %. The Tape light is lit; Freeze and Ping Pong are off.", null, true],
+  ["Look at Wake in the module browser.", "The panel draws; no crash.", null, true],
+  ["Put a short struck sound (a Rigging strum or a ping) into IN L only; take both L and R.", "The dry sound plus echoes about 300 ms apart, on both sides: one input alone feeds both. Mix 35 % is a clear but not loud echo.", null, false],
+  ["Take only the L output, with R unpatched.", "L carries the average of the two sides, so the echo is still there and about as loud as before.", null, false]]],
+ ["Time", [
+  ["Turn TIME from fully left to fully right with a sound going in.", "10 ms at the left, 10 s at the right, on a log scale: 100 ms to 3 s fills the middle of the travel. The tooltip shows ms below 1 s and seconds above.", null, false],
+  ["Type into the Time tooltip: 250, 250 ms, 1.5 s, abc.", "250 and 250 ms are a quarter second; 1.5 s is 1.5 s; abc does nothing.", null, false],
+  ["Patch a CV into TIME CV with the attenuverter at its centre (0).", "Nothing happens until the attenuverter is turned up.", null, false],
+  ["TIME CV with the attenuverter fully right, then fully left.", "Right: 1 V doubles the time, so about +/-5 V from noon covers the whole range. Left: inverted. The time stays between 10 ms and 10 s.", null, false],
+  ["Sweep TIME while echoes are playing, in each style (press STYLE to change).", "Tape: the pitch of the repeats bends and settles. Analog: a bend, a little faster. Digital: the echo crossfades to the new time with no bend. No clicks in any.", null, false],
+  ["Make a big, fast Time change in Tape and Analog.", "The pitch bends but never by more than two octaves either way.", null, false]]],
+ ["Clock", [
+  ["Patch a steady clock into CLOCK and turn TIME.", "Time becomes a multiple of the clock's period in ten steps: 1/4, 1/3, 1/2, 2/3, 3/4, x1, x1.5, x2, x3, x4. Noon is x1: one echo per tick. The tooltip shows the step with \"clock\".", null, false],
+  ["Type into the Time tooltip while clocked: x2, 1/2, x1.5 clock.", "Each sets the knob to that step.", null, false],
+  ["Change the clock's speed.", "The echo follows the new tempo (taken from the last two ticks).", null, false],
+  ["Pause the clock for more than four ticks, then restart it; then stop it for good.", "A pause keeps the tempo. A stopped clock leaves the last tempo in place.", null, false],
+  ["Unplug the clock, then plug it back in.", "Unplugged: the knob is milliseconds again. Plugged in: it needs two ticks before it is followed.", null, false],
+  ["TIME CV while clocked.", "The CV moves the echo along the same steps, so it stays on the clock's grid.", null, false],
+  ["A 4 s clock at x4.", "16 s is too long, so it is halved to 8 s. A very fast clock at 1/4 that comes out under 10 ms is doubled until it is not.", null, false]]],
+ ["Ratio", [
+  ["Turn RATIO through its seven steps with a click or ping going in.", "L 1:2, L 2:3, L 3:4, 1:1, R 3:4, R 2:3, R 1:2. The named side's echo is that fraction of Time, the other side is at Time. At 1:1 both sides echo together; off noon the echoes spread across the stereo field. The tooltip names the step.", null, false],
+  ["Type into the Ratio tooltip: R 2:3, 1:1, 5, 9.", "R 2:3 and 1:1 set those steps; 5 is the fifth step (R 3:4); 9 does nothing.", null, false]]],
+ ["Feedback", [
+  ["FEEDBACK at 0, then at 40 %, then at 90 %.", "0: one echo. Raising it gives more repeats. The tooltip reads a percentage, up to 110 %.", null, false],
+  ["Compare the same Feedback (about 70 %) in Tape, Analog and Digital.", "Tape and Analog die away sooner than Digital, which loses nothing but what Tone takes.", null, false],
+  ["FEEDBACK past 100 %, with a short Time and Tone left.", "Repeats sustain or grow, then settle into a held, saturated wash. They never run away. Bring Feedback down and it lets go.", null, false],
+  ["FEEDBACK CV.", "10 V is the whole travel, added to the knob.", null, false]]],
+ ["Tone", [
+  ["TONE from noon to fully left, then to fully right, with Feedback at about 70 %.", "Noon: repeats keep their tone. Left: each repeat darker than the last (to about 500 Hz at the end). Right: each repeat thinner (lows lost, up to about 1 kHz). The effect builds with every repeat.", null, false],
+  ["Hover TONE.", "The tooltip runs -100 % to +100 %, 0 % at noon.", null, true],
+  ["With a long, loud repeating echo, jump Tone from far left to exactly noon in one move (type the value, or Randomize). Issue #58.", "Listen for a step or click as the filter leaves the path. This is the known case; say how audible it is.", null, false]]],
+ ["Style", [
+  ["Press STYLE through Tape, Analog, Digital and round again.", "Each press steps to the next; the light follows. A new module opens on Tape. The change is smooth, no click.", null, true],
+  ["Listen to a repeating echo in each style.", "Tape: gently saturated, a little top above about 6 kHz and a little bottom lost each pass. Analog: darker (about 5 kHz at short times, 1.5 kHz at 1 s and beyond), driven harder and gritty. Digital: clean and full; only Tone changes the repeats.", null, false]]],
+ ["Diffuse and Drift", [
+  ["DIFFUSE at 0, then up, with Feedback at about 60 %.", "0: repeats exact. Up: each repeat blurs more than the last, turning toward a wash. The level of the repeats does not change.", null, false],
+  ["Move DIFFUSE from exactly 0 to a small value.", "The echo shifts by a few milliseconds as it comes in; nothing worse.", null, false],
+  ["DRIFT at 0, at its default 15 %, and fully right, on a held tone going into a long echo.", "0: nothing moves, in any style. Up: the repeats waver in pitch and the two sides separate; at full, up to about 30 cents on echoes of a few seconds. The two sides wander independently.", null, false]]],
+ ["Freeze", [
+  ["Press FREEZE with an echo running.", "Each side loops the last stretch it recorded, as long as its echo time, for as long as you like. The button's cap lights. Nothing new is recorded; the input still passes to the output through Mix.", null, true],
+  ["Send a gate into the FREEZE jack.", "The same as the button, and the cap lights for the gate too.", null, true],
+  ["While frozen, move Feedback, Tone, Diffuse and press STYLE.", "No effect on the held sound. Release and they apply again.", null, false],
+  ["While frozen, move Time, Ratio, Ping Pong and the clock.", "All are held: nothing changes until release, then the new settings take effect.", null, false],
+  ["Frozen with Drift at its default, then Drift at 0.", "Default: the held sound still moves a little. At 0: an exact loop.", null, false],
+  ["Release the freeze; then freeze again right after a Digital Time change.", "Release fades back over a few hundredths of a second. A freeze asked for during a crossfade waits for it: 40 ms at most. No clicks.", null, false],
+  ["Randomize the module (right-click) while frozen and while not.", "Freeze and Style are not touched by it: Freeze stays as it was and the style does not change. Ping Pong IS randomized, so it may switch on or off, along with Time, Feedback, Tone, Ratio, Mix, Diffuse and Drift.", null, false]]],
+ ["Ping Pong and Mix", [
+  ["PING PONG on, Feedback 0, a single hit.", "One echo on the left, then one as loud on the right. At higher Feedback it bounces left, right, left, each pair falling against the one before. The input goes into the left side only.", null, false],
+  ["PING PONG on, RATIO off noon.", "A long-short rhythm in the bounce.", null, false],
+  ["PING PONG off with a stereo input.", "Each side feeds itself and the image stays stereo.", null, false],
+  ["MIX fully left, then fully right.", "Left: the input exactly. Right: echoes only. Equal power across the knob; the default is 35 %.", null, false],
+  ["MIX CV.", "10 V is the whole travel, added to the knob.", null, false]]],
+ ["Inputs and outputs", [
+  ["Patch only IN R.", "It feeds both sides, as IN L alone does. With both patched, a stereo input stays stereo (Ping Pong off).", null, false],
+  ["Mono in, mono out: IN L, L out, nothing on R, Mix fully left.", "The output is exactly the input.", null, false],
+  ["A polyphonic cable into IN L; a polyphonic cable into a CV input.", "The audio input sums the channels. A CV input uses its first channel only.", null, false],
+  ["Send a very hot signal (+/-20 V) in.", "Output is soft-limited from 8 V and never passes 10 V; no runaway.", null, false],
+  ["Loud input at Feedback near 100 %, in Tape and Analog, listening for aliasing (issue #67).", "The saturation in the loop should not add inharmonic whine. Say what you hear.", null, false]]],
+ ["With the patch", [
+  ["Set every knob, Style, Freeze and Ping Pong, save, quit Rack, reopen.", "All of it comes back. The sound inside the delay does not (it starts empty).", null, false],
+  ["Initialize (right-click).", "Defaults back, Tape, unfrozen, Ping Pong off, delay empty.", null, false],
+  ["Change Rack's sample rate (44.1, 48, 96 kHz) with an echo running.", "The delay empties; times stay the same in seconds. It unfreezes only if the Freeze button is off and the gate is low. With Freeze latched or the gate high it freezes again at once and the loop is silent: release the button to recover.", null, false],
+  ["Bypass the module.", "Inputs pass straight to the outputs, routed as when working: either input alone goes to both; with R empty, L carries the average. The style light stays lit.", null, true]]]
+];
+const KEY = "wake-2.0.39-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Wake 2.0.39 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

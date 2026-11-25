@@ -56,7 +56,8 @@ Sway is drawn as a pendulum swinging from a pivot at the top right.
 ## Shape
 
 - **PW**: pulse width of SQR and of MORPH's square, 1% to 99%.
-- **PHASE**: shifts every output by 0–360°.
+- **PHASE**: shifts SIN, TRI, SAW, SQR and MORPH by 0–360°. RAND and EOC
+  follow the unshifted cycle and do not move.
 - **SKEW**, **SMOOTH**, **MORPH** shape the MORPH output (SMOOTH also
   sets the RAND output's curve):
   - **MORPH** sweeps sine → triangle → saw → square.
@@ -68,7 +69,10 @@ Sway is drawn as a pendulum swinging from a pivot at the top right.
     stepped, and turning left makes each new value glide in, over the whole
     cycle when fully left.
 - Each of FM, PW, PHASE, SKEW, SMOOTH and MORPH has a CV jack with an
-  attenuverter; ±5 V at full sweeps the whole knob range.
+  attenuverter. CV adds to the knob, then the sum is clamped, so ±5 V at
+  full covers the whole range from the knob's centre (PW, SKEW at noon;
+  SMOOTH at 0). MORPH defaults to 0, so +5 V reaches only half way; use
+  0–10 V. PHASE ±5 V is ±half a cycle, which wraps.
 - **BI / UNI**: every output swings ±5 V (bipolar) or 0–10 V (unipolar).
 
 ## Polyphony

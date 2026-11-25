@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shoal listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>SHOAL</h1>
+<div class="sub">Listening list · build 2.0.39 · 2026-11-24</div>
+<p class="lead">Shoal runs the Ornament &amp; Crime firmware: thirteen apps, a friendly mode with a mouse list of each app's settings, a hardware mode with the firmware's own menu, and a scope on the upper screen. This list covers the panel, both modes, the apps the friendly list covers best, the scope, and saving.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: everything you see on the screens, the lights, the tooltips and menus, and how the panel looks.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>SMOOTH VIEWS</b></td><td>In friendly mode Quadraturia, Piqued, Dialectic Ping Pong, Low-rents, Automatonnetz and Harrington 1200 draw their own smooth views. Deliberate differences from the hardware: Piqued's envelope shapes are dropped, and Low-rents is mirrored. Do they read better than the o_C screen, or would you rather match the hardware?</td></tr>
+<tr><td><b>FIXED SCALES</b></td><td>Each trace lane has one fixed scale for its app (0 to +5 V for Piqued, 0 to +6.25 V for Dialectic Ping Pong, the full range for Quadraturia), and the window is a fixed 4 seconds. Is that right, or do you want a zoom or time base?</td></tr>
+<tr><td><b>HARDWARE MODE SCREEN</b></td><td>Hardware mode shows the o_C screen exactly: no dividers, letters or smooth views. Keep it as a faithful copy, or add the lane letters there too?</td></tr>
+<tr><td><b>START AT 0 V</b></td><td>The outputs start at 0 V when added, initialized or loaded, where the hardware starts near its top voltage. Is 0 V the better choice for a rack?</td></tr>
+<tr><td><b>HARDWARE-ONLY EDITORS</b></td><td>User scale notes, Sequins steps, Acid Curds chords, Automatonnetz cells and References' Autotune still need hardware mode. Which one do you reach for most, so it gets a mouse editor first?</td></tr>
+<tr><td><b>MISSING OPTIONS</b></td><td>The right-click choices for the ±5 V input range, encoder acceleration and the app are not there yet. Which do you miss?</td></tr>
+<tr><td><b>CPU (issue #51)</b></td><td>The output history is copied in full on every published frame, even in hardware mode and in apps that do not draw it. The average cost is tiny. Do several Shoals in one patch still feel light?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. A canon from one line</h4>
+<div class="chain">Squall Step → Shoal CV 1 · Squall Gate → Shoal TRIG 1 · Shoal A → Fathom 1 V/oct · Shoal D → a second Fathom 1 V/oct</div>
+<p>CopierMaschine, the default. Pick a Scale in the list. Both voices play the same melody, D three clocks behind A. Raise <b>buf.index</b> to push them further apart.</p></div>
+
+<div class="patch"><h4>2. Quantised weather</h4>
+<div class="chain">Squall Step → Shoal CV 1 · Squall Gate → Shoal TRIG 1 · Shoal A → Rigging 1 V/oct (STRUM unpatched)</div>
+<p>Quantermain, <b>Trigger source</b> TR1, a Scale chosen. Each event gives one note of the scale and Rigging strikes on each new note.</p></div>
+
+<div class="patch"><h4>3. Four drones in turn</h4>
+<div class="chain">Hadal Hiss, Rumble, Crackle → Ballast channels 1 to 3 left · Shoal A to D → Ballast channel 1 to 4 level CV</div>
+<p>Quadraturia with <b>Phase/frq sprd</b> turned up: the channels fade one after another. The LFOs are not centred on 0 V, so set <b>Offset</b> and <b>Output range</b> until each closes fully.</p></div>
+
+<div class="patch"><h4>4. Chaos on a filter</h4>
+<div class="chain">Fathom Left → Narrows Left · Shoal A → Narrows FM · Shoal B → Fog Size CV · Narrows Left → Fog Left</div>
+<p>Low-rents. A and B come from one attractor, so the filter and the room move in a related way that never repeats. A slow Sway Sine into Shoal CV 2 moves <b>Rho/c 1</b> from calm to wild. A gate into TRIG 4 freezes the lot.</p></div>
+
+<div class="patch"><h4>5. Chords on a pedal bass</h4>
+<div class="chain">Sway End of cycle → Shoal TRIG 2 · a second Sway End of cycle → TRIG 3 · Shoal B → Fathom 1 V/oct · Shoal A → a second Fathom 1 V/oct</div>
+<p>Harrington 1200. B follows the chord while A, the root, stays as a bass. Use the scope: the circle shows the notes and the moves list shows P, L and R.</p></div>
+
+<div class="patch"><h4>6. Envelopes from one clock</h4>
+<div class="chain">Sway End of cycle → Shoal TRIG 1 · Shoal A → Sluice A level CV · Hadal Hiss → Sluice A</div>
+<p>Piqued. Shape <b>Attack</b> and <b>Decay</b>, then thin the triggers with <b>Eucl length</b> and <b>Fill</b>. The scope shows A's envelope as a smooth trace.</p></div>
+
+<div class="patch"><h4>7. A bass line with its own gate</h4>
+<div class="chain">Sway End of cycle → Shoal TRIG 1 · Shoal A → Fathom 1 V/oct · Shoal C → Beacon Gate · Beacon Envelope → Sluice A level CV</div>
+<p>Sequins. A new module plays one note, so edit the steps in hardware mode first (click <b>Steps</b>, switch UI MODE, press R). C is the gate by default.</p></div>
+</main>
+
+<script>
+const groups = [
+ ["The panel and display", [
+  ["Add Shoal and look at it before patching anything.", "Three screens on the left: the scope above, the settings list below, and a strip of four voltages (\"+0.00V\" each, under A to D). Two encoders, each with a PUSH button beside it; UP over DOWN, UI MODE to their right; TRIG and CV jacks in two columns, a light beside each trigger jack; outputs A to D on ivory tiles with a light each. UI MODE is lit cyan and the lower screen shows CopierMaschine's list.", null, true],
+  ["Read A to D with a meter or scope on a new module, before any clock.", "0 V on all four (the hardware starts near its top voltage; Shoal deliberately does not)."],
+  ["Send a 5 V gate, then a 20 Hz LFO, into the TRIG jacks and watch the lights.", "The light beside each trigger jack follows its input; a 1 ms trigger still shows as a blip.", null, true]]],
+ ["Encoders and buttons", [
+  ["Drag ENCODER L up and down; then hold Ctrl (Cmd on a Mac) and drag.", "Up turns it clockwise, down anticlockwise, with no end stop. 8 px of drag is one detent; 32 px with Ctrl. The knurled rim moves as you turn.", null, true],
+  ["Click and hold a PUSH button, then release; then shift-click it, then click it again.", "A click holds the button down only while the mouse is held (a long click is a long press). Shift-click latches it down; a second click releases it."]]],
+ ["Inputs and outputs", [
+  ["Send a slow ramp, 0 to 5 V and back, into TRIG 1 and watch its light.", "The light comes on once the input passes 1 V and goes off only when it falls below 0.1 V.", null, true],
+  ["Send a 4-voice poly cable into CV 1 and TRIG 1; patch A to a scope.", "Only the first channel is used. The outputs are single channels."]]],
+ ["Friendly mode: the list", [
+  ["Click the app's name at the top of the lower screen.", "A menu of the thirteen apps, the current one ticked. Choosing one switches to it. On the right the header shows the app's status, or CLICK APP TO SWITCH if it has none.", null, true],
+  ["Change a setting in Quantermain, switch to Piqued, change one there, switch back.", "Each app keeps its own settings."],
+  ["In Quantermain, click the tabs A to D.", "Each tab shows that channel's settings and each keeps its own. The firmware selects the same channel.", null, true],
+  ["Drag a slider; then click it without moving; then drag with Ctrl (Cmd), then Ctrl+Shift; then double-click.", "The drag moves the value from where it is; a click alone changes nothing. Ctrl is a quarter of the speed, Ctrl+Shift a sixteenth. Double-click sets the default."],
+  ["Use a dropdown, an on/off switch and the \"Active notes\" cells (click one; then drag across several).", "The dropdown ticks the current value. The switch flips. A cell toggles; a drag sets every cell crossed the way the first one went. The last active note will not go dark where the firmware keeps one."],
+  ["Edit a row in friendly mode, then switch to hardware mode and turn ENCODER R.", "ENCODER R is on the setting you last touched. Turning the encoders in friendly mode shows in the list within a frame."],
+  ["In Harrington 1200, click \"Reset all settings\"; first dismiss, then confirm.", "A small menu with the row's name opens. Nothing is reset until you click Confirm."],
+  ["Long-press ENCODER R's PUSH to open the app menu while in friendly mode.", "A brass banner reads HARDWARE EDITOR OPEN; the list is dimmed and takes no edits. Clicking the banner switches to hardware mode. The app picker in the header still works.", null, true]]],
+ ["Hardware mode", [
+  ["Switch UI MODE to hardware.", "The lower screen is the firmware's menu and the upper screen the o_C screen pixel for pixel, with no dividers or letters. The button goes dark. The app's sound is unchanged.", null, true],
+  ["In Quantermain with a user scale chosen, click the \"Active notes\" label, switch to hardware mode, press R.", "The hardware's note editor opens on that row and notes can be edited.", null, true]]],
+ ["The scope (upper screen, friendly mode)", [
+  ["Quadraturia: look at the upper screen.", "Four smooth traces in four lanes, A at the top, newest at the right, about 4 seconds across, with each lane's letter in its corner and a faint 0 V line. The lane runs from −3.75 V to +6.25 V.", null, true],
+  ["Piqued: fire a trigger at A; then a very short trigger.", "A's lane runs 0 V at the bottom to +5 V at the top, with no envelope-shape preview behind it. A very short pulse still draws as a spike.", null, true],
+  ["Low-rents: look at the upper screen.", "Two halves, A × B and C × D: output A across against B up, a curve of the last 4 seconds fading with age. Higher voltage is right and up (the hardware plots right to left, so this is mirrored).", null, true],
+  ["Automatonnetz and Harrington 1200: clock them and watch.", "Automatonnetz: the last four cells on the 5 by 5 grid (a disc where it is now) and the chord on a circle of twelve notes, C at the top, going clockwise by semitone. Harrington: the circle, the last four moves newest at the top (+ major, − minor, * reset) and the three notes.", null, true],
+  ["Quantermain, Meta-Q and Viznutcracker sweet: look at the upper screen.", "The o_C pixels with thin dividers and letters: four columns A to D for Quantermain, two halves A and B for Meta-Q, four rows for Viznutcracker.", null, true],
+  ["Change app, then Initialize, with traces running.", "The traces and curves start again from empty.", null, true]]],
+ ["CopierMaschine and Quantermain", [
+  ["CopierMaschine: Squall Step into CV 1, a clock into TRIG 1, A to D into a scope.", "At \"buf.index\" 0, A is the newest value and B, C, D are one, two and three clocks older. Raising \"buf.index\" delays all four."],
+  ["Hold a gate on TRIG 2; then drop it.", "While high, the outputs cycle through the last \"hold (buflen)\" values. \"Hold / Freeze\" in the list does the same by hand."],
+  ["Set \"CV source\" to TM with only a clock into TRIG 1.", "The app makes its own slowly changing line."],
+  ["Quantermain: pick a Scale; Squall Step into CV 1 and Squall Gate into TRIG 1, \"Trigger source\" TR1.", "A holds one scale note per event; the pitch only changes at the trigger."],
+  ["Quantermain: \"Trigger source\" cnt+ on A, a Sway LFO into CV 1, then a gate into TRIG 1.", "A quantizes all the time, so the LFO becomes a rising and falling stair. TRIG 1 high moves it an octave up from the next note change."]]],
+ ["Meta-Q and Sequins", [
+  ["Meta-Q: a melody into CV 1 with a clock into TRIG 1; read A and C.", "A is the quantized pitch. C is a gate (the default \"aux.output\"), the length set by the \"--> pw\" row."],
+  ["Meta-Q: \"seq_mode\" TR+3 and a slower clock into TRIG 2, with different scales in the slots.", "Each TRIG 2 steps A to the next of the four slots, so the key or mode changes."],
+  ["Sequins: a clock into TRIG 1 on a new module.", "A repeats one pitch (the root) on every step, and C gives a gate. Nothing else changes until the steps are edited in hardware mode."]]],
+ ["Quadraturia and Low-rents", [
+  ["Quadraturia at its defaults; scope A to D.", "All four move together, from about −3.75 V to +5.2 V, centred near +0.75 V, not 0 V."],
+  ["Raise \"Phase/frq sprd\" above 0; then take it below 0.", "Above 0 the phases spread up to a quarter cycle apart. Below 0 the rates differ instead."],
+  ["Send a trigger into TRIG 1; hold a gate on TRIG 2.", "TRIG 1 resets all the phases. TRIG 2 high freezes them."],
+  ["Low-rents at its defaults; scope A and B.", "Smooth voltages that wander and never repeat; A and B swing either side of about +1.25 V."],
+  ["Low-rents: a trigger into TRIG 1; hold a gate on TRIG 4.", "TRIG 1 resets generator 1 only. TRIG 4 high freezes all four outputs where they are, until it drops."]]],
+ ["Piqued, Harrington 1200 and Automatonnetz", [
+  ["Piqued: a trigger into TRIG 1, A on a scope.", "A rises from 0 V toward +5 V at full \"Amplitude\" and falls back. \"Inverted\" turns it upside down."],
+  ["Harrington 1200: triggers into TRIG 2, 3 and 4 (\"Trigger type\" PLR); then TRIG 1.", "TRIG 2, 3 and 4 apply P, L and R to the chord. B, C and D are the chord's notes. A, the root, stays put. TRIG 1 resets to the root's triad."],
+  ["Automatonnetz: a slow clock into TRIG 1 on a new module.", "Chord changes at once (the grid starts with random moves) on B, C and D."]]],
+ ["Dialectic Ping Pong, Viznutcracker sweet and References", [
+  ["Dialectic Ping Pong: a trigger into TRIG 1, A on a scope.", "A bounce: 0 V at rest, rising as far as +6.25 V, each bounce lower and quicker than the last."],
+  ["Viznutcracker sweet: look at A with no trigger.", "It runs on its own, a gritty waveform centred on 0 V."],
+  ["References: A to D at the start; then raise \"Octave\" on A.", "All four are 0 V at first. A's pitch rises 1 V per octave."]]],
+ ["With the patch", [
+  ["Set a different app and settings, latch UP with shift-click, save, quit Rack, reopen.", "The app and its settings come back, UI MODE as it was, and UP is released."],
+  ["Save in hardware mode, reopen.", "It comes back in hardware mode. A patch saved before friendly mode existed opens in friendly mode."],
+  ["Duplicate the module.", "The copy starts with the same settings and then runs on its own, with its own random values."],
+  ["Initialize (right-click).", "CopierMaschine, outputs at 0 V, friendly mode."],
+  ["Randomize.", "Nothing changes."],
+  ["Change Rack's sample rate (44.1, 48, 96 kHz).", "Shoal keeps running with the same app and settings."],
+  ["Bypass the module.", "The outputs go silent."]]]
+];
+const KEY = "shoal-2.0.39-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Shoal 2.0.39 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

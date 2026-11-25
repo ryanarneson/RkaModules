@@ -41,11 +41,13 @@ one in ("440", "440 Hz", "2.5 k").
 | | Slope | Character |
 |---|---|---|
 | **Ladder** | 24 dB per octave | Fathom's filter: a four-pole transistor ladder. Rounder, and it saturates when driven |
-| **State** | 12 dB per octave | A state-variable filter. Gentler slope, more open, a sharper resonant peak |
+| **State** | 12 dB per octave | A state-variable filter. Gentler slope, more open, a lower and shorter-ringing resonant peak |
 
-The two are matched: at the same settings they sit at the same pitch,
-begin to self-oscillate at the same place on Res, and ring at about the
-same level. Flipping the switch crossfades over a few hundredths of a
+The two are matched in pitch and in where they begin to self-oscillate on
+Res; their sine is within about 1.6 dB in level. They differ in the rest.
+The State core's −3 dB corner is at the cutoff; the Ladder's is at
+0.435 × the cutoff. The Ladder's resonant peak is higher and rings
+longer (at Res 90 % about 6.6 dB higher and 2.7 times longer). Flipping the switch crossfades over a few hundredths of a
 second, with no click, and a self-oscillating tone carries across.
 
 ### Mode: low-pass, band-pass, high-pass

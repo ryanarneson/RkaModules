@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Narrows listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>NARROWS</h1>
+<div class="sub">Listening list · build 2.0.39 · 2026-11-24</div>
+<p class="lead">Narrows is a polyphonic stereo filter, 14 HP, with a Ladder (24 dB) and a State (12 dB) core, a Mode dial from low-pass through band-pass to high-pass, resonance that self-oscillates, a comb, drive and spread. It can filter anything, or be struck with a trigger at PING or played as a sine voice from V/OCT.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: the tooltips, how the panel looks and the module browser.
+The defaults, Drive's range, the comb's level and the Mode in-betweens are first guesses, to be set by ear here.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (first guesses; say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>CUTOFF</b></td><td>16 Hz to 16.4 kHz, an octave per tenth of the turn, opening at 1 kHz. Is 1 kHz the right place to start, or should it open lower for dark work?</td></tr>
+<tr><td><b>DEFAULT CORE</b></td><td>The switch opens up on Ladder (24 dB). Keep, or should State (12 dB, more open) be the default?</td></tr>
+<tr><td><b>SELF-OSCILLATION</b></td><td>Res sings from 95 % and reaches about 4 to 5 V at 100 %, within 7 cents of pitch up to about 3.5 kHz (above 4 kHz it drifts, sharp in the state core and flat in the ladder). Is the last 5 % of the knob enough to set the level, and is the sine too loud or too quiet?</td></tr>
+<tr><td><b>COMB</b></td><td>Peaks reach about 16 dB over dry at full, and Left puts them halfway between, an octave lower. Right level? Does the left half sound as useful as the right?</td></tr>
+<tr><td><b>DRIVE</b></td><td>Up to 24 dB of gain, with 62 % of that (in octaves) taken back at the output. Is the range right, and does the level stay even as you turn it?</td></tr>
+<tr><td><b>MODE</b></td><td>A half-turn dial, LP at the left end, blends between neighbours, with its own blend in each core. Does the sweep feel even, and is LP the right default?</td></tr>
+<tr><td><b>SPREAD</b></td><td>Half an octave each way at full. Enough for width, or should it go further?</td></tr>
+<tr><td><b>CV SCALES</b></td><td>Res and Mode CV take 10 V for the whole travel; Comb CV takes 5 V either way; FM is 1 V per octave at full. Is the mix of scales a problem when patching?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>1. Dark water</h4>
+<div class="chain">Hadal L, R → Narrows IN L, IN R · Sway Sine → Narrows FM · Narrows L, R → Wake IN L, IN R</div>
+<p>Ladder, LP, <b>CUTOFF</b> around 300 Hz, <b>RES</b> 40 %. Open <b>FM</b> a little so the slow Sway moves the cutoff.</p></div>
+
+<div class="patch"><h4>2. Dark to thin</h4>
+<div class="chain">Sway Triangle → Narrows MODE CV · Hadal Hiss → Narrows IN L</div>
+<p>A slow Sway turns the sound from low-pass through band-pass to high-pass and back. Try both cores.</p></div>
+
+<div class="patch"><h4>3. A tuned ping</h4>
+<div class="chain">Squall Gate → Narrows PING · Squall Step → Narrows V/OCT · Narrows L, R → Wake IN L, IN R</div>
+<p>Nothing in the audio inputs. <b>RES</b> 90 %. Each gate rings the filter close to the pitch of the step, not exactly on it: at RES 90 % the state core rings about 5 cents flat and the ladder about 49 cents flat (nearly a quarter of a semitone). The ring reaches the pitch as RES nears 95 %. Rings above about 1.5 kHz are weak, because the 1 ms ping has little energy there. Wake follows it.</p></div>
+
+<div class="patch"><h4>4. A sine voice</h4>
+<div class="chain">Squall Step → Narrows V/OCT · Narrows L → Sluice input · Squall Gate → Sluice level CV</div>
+<p><b>RES</b> 100 %, nothing into the audio inputs. Sluice shapes the loudness.</p></div>
+
+<div class="patch"><h4>5. A chord of filters</h4>
+<div class="chain">Hadal L → Narrows IN L · 4-voice poly V/OCT → Narrows V/OCT · Narrows L, R → Fog Left, Right</div>
+<p><b>RES</b> 85 %, band-pass. The noise is tuned to the chord, one filter per voice. Narrows sends four channels on each output; use a mixer that sums them before Fog.</p></div>
+
+<div class="patch"><h4>6. Width from mono</h4>
+<div class="chain">Fathom Left → Narrows IN L · Narrows L, R → Ballast channel 1 left, right</div>
+<p><b>SPREAD</b> 30 %, with a little <b>COMB</b> to the right. A mono sound opens across the field.</p></div>
+
+<div class="patch"><h4>7. After Rigging</h4>
+<div class="chain">Rigging L, R → Narrows IN L, IN R · Narrows L, R → Fog Left, Right</div>
+<p>State core, band-pass, <b>DRIVE</b> 40 %. The strings are narrowed to a hollow band, then given room by Fog.</p></div>
+</main>
+
+<script>
+const groups = [
+ ["First look and first sound", [
+  ["Add Narrows and look at it before patching anything.", "Cutoff reads 1.02 kHz, core switch up (Ladder), Mode at LP, Drive, FM, Res and Spread at 0, Comb at noon.", null, true],
+  ["Look at Narrows in the module browser.", "The panel draws; no crash.", null, true],
+  ["Hadal noise into IN L only; take L and R.", "A darker, filtered noise on both sides: one input alone feeds both. Sweep CUTOFF and it follows.", null, false]]],
+ ["Cutoff, V/OCT and FM", [
+  ["Turn CUTOFF fully left, then fully right, reading the tooltip.", "16 Hz at the left, about 16.4 kHz at the right: an octave for every tenth of the turn. The tooltip reads Hz below 1 kHz and kHz above.", null, true],
+  ["Type into the Cutoff tooltip: 440, 440 Hz, 2.5 k, abc.", "440 and 440 Hz are 440 Hz; 2.5 k is 2.5 kHz; abc does nothing.", null, true],
+  ["A 1 V/oct pitch into V/OCT.", "0 V gives the dial's frequency; each volt raises the cutoff an octave. The cutoff is held between 8 Hz and 20 kHz however much is added.", null, false],
+  ["A CV into FM with the FM knob at 0, then fully right, then fully left.", "0: nothing happens. Right: 1 V raises the cutoff an octave. Left: lowers it.", null, false],
+  ["An audio-rate signal into FM and into V/OCT.", "Both work at audio rate.", null, false]]],
+ ["Core and Mode", [
+  ["Flip the core switch (down State, up Ladder) while noise passes.", "Ladder is 24 dB per octave and rounder; State is 12 dB and more open. The change is a crossfade over a few hundredths of a second, no click.", null, false],
+  ["Set Res to 100 % and flip the core switch.", "A self-oscillating tone carries across the switch at the same pitch and about the same level.", null, false],
+  ["Turn MODE from the left end, through the middle, to the right end.", "LP, BP, HP at the three lettered points, exactly that response. Between them a smooth blend, no steps. The tooltip names it, e.g. \"LP 60 % / BP 40 %\".", null, true],
+  ["Type into the Mode tooltip: lp, bp, hp.", "Each sets that point.", null, true],
+  ["Listen to the in-between Mode sounds in each core.", "They differ between Ladder and State: each blends its own responses. Say which you prefer, and whether either sounds wrong.", null, false],
+  ["A stepped CV (a Squall Step) and a slow Sway into MODE CV.", "10 V is the whole dial. A stepped CV does not click; a slow LFO turns the sound dark to hollow to thin.", null, false]]],
+ ["Res and Drive", [
+  ["Turn RES from 0 up to about 90 %.", "A peak at the cutoff that gets sharper. The low-pass keeps its level below the peak.", null, false],
+  ["RES past 95 % with nothing patched in; scope the output.", "The filter sings a sine at the cutoff. It grows from nothing at 95 % to about 4 to 5 V at 100 %, in both cores.", null, false],
+  ["Play the singing filter from V/OCT and check the pitch against a tuner or an oscillator, 55 Hz to 3.5 kHz.", "Within 1 cent as it starts to sing and within 7 cents at 100 %, in both cores. This holds up to about 3.5 kHz; above 4 kHz it drifts.", null, false],
+  ["From silence at Res 100 %, then with a trigger into PING.", "The sine takes a moment to start, longer at low pitches. A trigger at PING starts it at once.", null, false],
+  ["RES CV.", "10 V is the whole travel, added to the knob.", null, false],
+  ["DRIVE from 0 up to full on a +/-5 V signal, in both cores.", "At 0 it is clean. Up, the signal pushes into the core's saturation (up to 24 dB at full) and the output is turned down to match: dirtier, not much louder.", null, false]]],
+ ["Comb and Spread", [
+  ["COMB at noon, then right, then left, with noise going in.", "Noon: untouched. Right: peaks at the cutoff and its harmonics. Left: peaks halfway between them, hollower and an octave lower.", null, false],
+  ["Move CUTOFF, V/OCT and FM with Comb up.", "The comb moves with them and stays in tune with the cutoff.", null, false],
+  ["Noise with COMB fully right; then a steady note sitting on a peak.", "Noise keeps its loudness while the peaks rise to about 16 dB over dry. A steady note on a peak gets that much louder and can reach the output's soft limit.", null, false],
+  ["COMB CV.", "5 V is the full travel either way.", null, false],
+  ["SPREAD from 0 up to full on a mono input.", "0: both sides identical. Up: the left cutoff falls and the right rises, half an octave each at full. A mono sound becomes stereo. The comb follows each side's cutoff.", null, false]]],
+ ["Ping", [
+  ["Nothing patched in. Res about 90 %, a trigger into PING.", "The filter rings close to the cutoff and dies away: a ping, on both sides (state core about 5 cents flat, ladder about 49 cents flat at Res 90 %). Rings above about 1.5 kHz are weak. Higher Res rings longer. No audio patched is needed.", null, false],
+  ["The same with COMB to the right and Res lower.", "A plucked sound.", null, false]]],
+ ["Polyphony", [
+  ["A one-channel noise into IN L and a 4-channel chord into V/OCT.", "Four voices: a chord of filters on that sound. The outputs carry 4 channels.", null, false],
+  ["A mono CV into RES CV; then a 4-channel CV.", "Mono: the same Res for every voice. Polyphonic: each voice its own channel.", null, false],
+  ["A 4-channel V/OCT with a 2-channel Res CV.", "Voices 3 and 4 get 0 V from that CV (nothing added to Res).", null, false],
+  ["Channel counts differ across IN L, IN R, V/OCT and PING.", "The voice count is the largest. Channel 3 of IN L pairs with channel 3 of IN R, V/OCT and the CVs.", null, false],
+  ["16 channels into V/OCT with Res at 85 %.", "16 voices play; watch the CPU meter (the manual gives about 2.5 % of a core at 48 kHz on an M-series Mac).", null, false]]],
+ ["Inputs and outputs", [
+  ["Patch only IN R.", "It feeds both sides, as IN L alone does.", null, false],
+  ["Take only the L output, with SPREAD up; then patch R as well.", "Alone, L carries the average of the two sides. With R patched, L is the left side alone.", null, false],
+  ["A very hot signal (+/-20 V) in, or a steady note on a comb peak.", "Output is soft-limited from 8 V and never passes 10 V; no runaway.", null, false],
+  ["Drive full with a bright signal and Res high, listening for aliasing (issue #67).", "The saturation should not add inharmonic whine. Say what you hear, at 44.1 kHz in particular.", null, false]]],
+ ["With the patch", [
+  ["Set every knob, the core switch and Mode, save, quit Rack, reopen.", "Everything comes back.", null, false],
+  ["Initialize (right-click).", "Defaults back (Cutoff 1.02 kHz, Ladder, LP); every voice at rest.", null, false],
+  ["Change Rack's sample rate (44.1, 48, 96 kHz) with the filter singing.", "Voices come to rest, then sing again at the same cutoff in Hz.", null, false],
+  ["Bypass the module, with a 4-channel cable on IN L.", "Inputs pass straight to the outputs with all channels; either input alone goes to both.", null, false]]]
+];
+const KEY = "narrows-2.0.39-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Narrows 2.0.39 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

@@ -62,7 +62,7 @@ A four-pole transistor ladder in the Moog manner, run at twice the
 engine rate so driving it doesn't alias. Each stage saturates, so a hot
 signal compresses the filter against itself: that is the growl.
 
-- **CUTOFF**: the ladder's pole frequency, 20 Hz – 20 kHz, default
+- **CUTOFF**: the ladder's pole frequency, 20 Hz – 20.48 kHz, default
   1.2 kHz. A quiet signal resonates here; a hot one pulls the peak below
   CUTOFF as the stages saturate (up to about an octave at the module's
   own levels), and it moves a little with DRIFT. That droop is the growl,
@@ -72,8 +72,7 @@ signal compresses the filter against itself: that is the growl.
   drone keeps its weight while the peak moves. At the top the ladder
   sings a quiet sine that tracks CUTOFF at 1 V/oct. Its level follows
   DRIVE the other way round: loudest with DRIVE down, fading as DRIVE
-  rises, because the makeup that keeps the drone's loudness even also
-  scales the sine.
+  rises (0.9 V at the jack at DRIVE 25 %, 1.7 V at 0 %, 0.2 V at 100 %).
 - **DRIVE**: gain into the ladder's saturators, from half to eight times.
   Unity at 25 %. The level is made up as it rises, so DRIVE changes the
   tone far more than the loudness; push it with RES up for the growl.
@@ -87,7 +86,9 @@ signal compresses the filter against itself: that is the growl.
 ## CV
 
 - **DETUNE**, **DRIFT**, **RES** and **DRIVE** jacks with attenuverters:
-  ±5 V at full sweeps the knob's whole range.
+  CV adds to the knob, then the sum is clamped to 0–100 %, so ±5 V at
+  full covers the whole range only from noon. At the defaults, +5 V
+  reaches 75 % (RES 70 %) and −5 V stops at 0.
 - **CUTOFF CV** with attenuverter: 1 V/oct at full clockwise.
 
 ## Outputs
