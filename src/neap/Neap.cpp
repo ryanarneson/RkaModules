@@ -164,6 +164,20 @@ struct NeapWidget : ModuleWidget {
 		addChild(createLightCentered<rka::JewelLight>(mm2px(LIGHT_HIGH), module, Neap::HIGH_LIGHT));
 	}
 
+	// Places a new module directly to the right, pushing neighbours along
+	// (as Ballast does for Pan), as one undoable action.
+	void addExpander(Model* model) {
+		Module* m = model->createModule();
+		APP->engine->addModule(m);
+		ModuleWidget* w = model->createModuleWidget(m);
+		APP->scene->rack->setModulePosForce(w, Vec(box.pos.x + box.size.x, box.pos.y));
+		APP->scene->rack->addModule(w);
+		history::ModuleAdd* h = new history::ModuleAdd;
+		h->name = "create " + model->name;
+		h->setModule(w);
+		APP->history->push(h);
+	}
+
 	void appendContextMenu(Menu* menu) override {
 		Neap* module = getModule<Neap>();
 		if (!module)
@@ -172,6 +186,12 @@ struct NeapWidget : ModuleWidget {
 		menu->addChild(createBoolPtrMenuItem("Drift (slow random wander of each rate)", "", &module->drift));
 		menu->addChild(createIndexPtrSubmenuItem("Wave", {"Triangle", "Sine"}, &module->wave));
 		menu->addChild(createIndexPtrSubmenuItem("Level", {"\xC2\xB1" "5 V", "0\xE2\x80\x93" "10 V"}, &module->level));
+
+		// A Spring already sitting directly to the right greys the item out.
+		Module* right = module->rightExpander.module;
+		const bool hasSpring = right && dynamic_cast<rka::NeapExpander*>(right);
+		menu->addChild(new MenuSeparator);
+		menu->addChild(createMenuItem("Add Spring expander", "", [this]() { addExpander(modelSpring); }, hasSpring));
 	}
 };
 
