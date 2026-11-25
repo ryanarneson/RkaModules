@@ -1,6 +1,14 @@
 # Neap: a tide predictor
 
-Status: idea, 2026-11-15. Not designed.
+Status: built, 2026-11-24 (8 HP, with a 6 HP expander, Spring). The manual
+is [docs/neap/README.md](../neap/README.md); the design is
+`docs/specs/2026-11-24-neap-design.md`. The text below is the original
+idea.
+
+**What changed from the idea.** Eight cycles after the Instruō øchd, not
+four named for the tidal constituents; one Weight knob in place of a
+height knob per cycle; a High-water gate (HIGH) with a settable Mark; the
+rate range is minutes to hours, not days. Spring, the expander, is new.
 
 ![mockup](neap-mockup.svg)
 
