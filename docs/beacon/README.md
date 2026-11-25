@@ -44,8 +44,10 @@ From the top:
   an input that moves slower than the slew reads as S.
 
 (Patches saved before build 2.0.44 with the switch on Trig open in AR. A
-pulse shorter than Attack behaves as before; a longer gate now gives AR
-instead of running on into Decay and Sustain.)
+pulse from rest that is shorter than Attack gives the same envelope as
+before. A longer gate now gives AR instead of running on into Decay and
+Sustain, and a pulse that arrives while the envelope is still moving picks
+Attack up from where it is, so it reaches the top sooner than it did.)
 
 ### Gates, pulses and triggers: what you get
 
@@ -82,8 +84,11 @@ time, from wherever they start, as an analog release does.
 
 Moving the switch never moves the output: from Hold back to ADSR or AR,
 Attack starts from the present level with the gate high, Release with it
-low. Between ADSR and AR the running stage carries on; an Attack that is
-running when you switch to AR goes straight on into Release.
+low. Switching to AR: an Attack that is running goes on to the top and
+into Release; a Decay or Sustain goes straight into Release from where it
+is. Switching to ADSR: the running stage carries on. If AR's envelope has
+already finished while you still hold the gate, nothing starts until the
+next rising edge (a held gate is not a new note).
 
 ## Controls
 

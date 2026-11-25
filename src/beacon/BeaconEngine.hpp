@@ -3,8 +3,8 @@
 // per-channel port voltages in, per-channel volts out; Beacon.cpp only maps
 // params, ports and lights onto it.
 //
-// Each sample: MODE (rounded, 0..2), the channel count (GATE's in GATE and
-// TRIG, the Sustain CV's in HOLD; 1 unpatched; at most 16), then per
+// Each sample: MODE (rounded, 0..2: ADSR, AR, HOLD), the channel count
+// (GATE's in ADSR and AR, the Sustain CV's in HOLD; 1 unpatched; at most 16), then per
 // channel: GATE and RETRIG through Schmitt triggers (0.1 V / 1 V; PUSH or's
 // into every channel's gate, and is the gate when GATE is unpatched), the
 // times (knob + CV / 10 through stageSecondsCv), the sustain volts, Shape
@@ -13,7 +13,8 @@
 // Channels that appear (the count rising) start idle at 0 V; channels past
 // the count read 0 V. Channel 1's stage, phase, level, the running
 // stage's start and goal levels, its breakpoint (where Shape last changed
-// during it), and the stage before it and how far it got, are published for the window with relaxed stores. BeaconLights (below) turns channel 1's
+// during it), and the stage before it and how far it got (no longer drawn,
+// kept for tests), are published for the window with relaxed stores. BeaconLights (below) turns channel 1's
 // stage gates into lights.
 //
 // No libm and no allocation in process(). Non-copyable (the atomics).

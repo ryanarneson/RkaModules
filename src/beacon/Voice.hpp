@@ -119,6 +119,8 @@ struct Voice {
 			}
 			if (rise || (retrigRise && in.gate))
 				begin(ATTACK);
+			else if (mode == AR_MODE && (stage_ == DECAY || stage_ == SUSTAIN))
+				begin(RELEASE);   // switched to AR mid-Decay or Sustain: AR has neither
 			else if (fall && stage_ != IDLE && stage_ != RELEASE && !(mode == AR_MODE && stage_ == ATTACK))
 				begin(RELEASE);
 			runStage(stage_ == ATTACK ? ta : stage_ == DECAY ? td : tr);

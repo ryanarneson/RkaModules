@@ -258,9 +258,12 @@ the slew, so the switch itself never moves the output:
 - **Hold to Gate/Trig:** with the gate high, Attack starts from the
   present level; with it low, Release runs from the present level to 0 V
   (a rise when the level is negative), over Release's time.
-- **ADSR to AR or back:** the running stage carries on; the new mode
-  applies from its end or the next edge (AR: an Attack running ends into
-  Release, a Decay or Sustain running carries on until the gate falls).
+- **ADSR to AR or back:** to AR, an Attack running goes on to 10 V and
+  into Release, and a Decay or Sustain running goes into Release at once
+  from its level (AR has neither, nor any span for them in its window;
+  ruled 2026-11-25 after QA found the dot stranded at the A/R join). To
+  ADSR, the running stage carries on; a gate held through AR's finished
+  one-shot starts nothing until its next rising edge.
 - **Channels that appear** (the channel count changes on a switch or a
   repatch) start at 0 V, idle; channels that go away are dropped.
 

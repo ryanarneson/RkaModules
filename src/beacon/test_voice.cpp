@@ -911,6 +911,21 @@ void mode_switch() {
 		runStage(r, ATTACK, 10000, &last);
 		CHECK(last == 10.f && r.v.stage() == RELEASE, "then Release from 10 V (stage %s)", stageName(r.v.stage()));
 	}
+	// ADSR -> AR in Decay or Sustain, the gate still high: AR has no Decay
+	// or Sustain (nor any span for them in its window), so Release starts at
+	// once from the level.
+	for (float when : {0.03f, 0.3f}) {
+		Rig r(fs, 0.01f, 0.1f, 5.f, 0.1f, 0.75f);
+		r.in.gate = true;
+		r.run(r.samples(when));
+		const Stage before = r.v.stage();
+		const float at = r.out.level;
+		r.in.mode = AR_MODE;
+		r.clearStep();
+		r.step();
+		CHECK((before == DECAY || before == SUSTAIN) && r.v.stage() == RELEASE && r.out.level <= at && at - r.out.level < 0.01f,
+		      "ADSR -> AR in %s: Release from %g at once (stage %s, %g)", stageName(before), at, stageName(r.v.stage()), r.out.level);
+	}
 	// Through all three positions at audio rate with the gate high: no jump
 	// beyond the fastest stage's own step, gates coherent.
 	{
