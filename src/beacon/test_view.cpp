@@ -175,9 +175,60 @@ void live_span_after_skip() {
 		float du, dh, lu, lh;
 		l.dot(RELEASE, DECAY, cut, p, 0.123f, start01, goal01, du, dh);
 		l.livePoint(RELEASE, DECAY, cut, p, start01, goal01, lu, lh);
-		CHECK(du == lu && dh == lh, "p %g: dot %g, %g on the line %g, %g", p, du, dh, lu, lh);
+		// dot() is livePoint() by construction, but with the plugin's
+		// -funsafe-math-optimizations the two inlined copies may round
+		// differently (an ulp or two), so within 1e-6 of the window.
+		CHECK(std::fabs(du - lu) < 1e-6f && std::fabs(dh - lh) < 1e-6f, "p %g: dot %.9g, %.9g on the line %.9g, %.9g", p, du,
+		      dh, lu, lh);
 		CHECK(std::fabs(lu - (u0 + p * (1.f - u0))) < 1e-6f, "p %g: u %g across the widened span", p, lu);
 	}
+}
+
+// After a Shape change mid-stage (#83) the bright line runs from the
+// voice's breakpoint: a real Voice, 10 s Attack at Shape 0, Shape to 1 at
+// phase 0.3. The dot, from the voice's phase and breakpoint, is at the
+// voice's level and still moves across the span with the phase; the line
+// starts at the breakpoint and ends at the span's end at 10 V. Drawn from
+// the stage's start instead (the old way), it would be volts off.
+void live_breakpoint() {
+	Voice v;
+	VoiceIn in = {10.f, 0.3f, 1.f, 10.f, 0.f, true, false, GATE_MODE};
+	VoiceOut o;
+	while (v.phase() < 0.3)
+		v.process(in, o);
+	in.shape = 1.f;
+	v.process(in, o);
+	const float b = float(v.bpPhase()), bp01 = float(v.bpLevel()) * 0.1f;
+	CHECK(v.stage() == ATTACK && b > 0.29f && b < 0.31f && bp01 > 0.f && bp01 < 0.01f,
+	      "a breakpoint at phase %g, %g of the height (%d)", b, bp01, int(v.stage()));
+	const EnvelopeLayout e = layoutEnvelope({10.f, 0.3f, 1.f, 1.f, 1.f});
+	float u, h;
+	e.livePoint(ATTACK, IDLE, 0.f, 0.f, bp01, 1.f, u, h, b);
+	CHECK(std::fabs(u - b * e.x[1]) < 1e-6f && h == bp01, "the line starts at the breakpoint: %g, %g (want %g, %g)", u,
+	      h, b * e.x[1], bp01);
+	e.livePoint(ATTACK, IDLE, 0.f, 1.f, bp01, 1.f, u, h, b);
+	CHECK(u == e.x[1] && h == 1.f, "and ends at the span's end at 10 V: %g, %g", u, h);
+	float worstH = 0.f, worstU = 0.f, oldOff = 0.f;
+	long n = 0;
+	while (v.stage() == ATTACK) {
+		if (++n % 4800 == 0) {
+			const float p = float(v.phase()), level01 = v.level() * 0.1f;
+			e.dot(ATTACK, IDLE, 0.f, p, 0.5f, bp01, 1.f, u, h, b);
+			worstH = std::fmax(worstH, std::fabs(h - level01));
+			worstU = std::fmax(worstU, std::fabs(u - p * e.x[1]));
+			e.dot(ATTACK, IDLE, 0.f, p, 0.5f, float(v.start()) * 0.1f, 1.f, u, h);
+			oldOff = std::fmax(oldOff, std::fabs(h - level01));
+		}
+		v.process(in, o);
+	}
+	CHECK(n > 300000 && worstH < 1e-5f, "the dot is at the voice's level within %g of the height (%ld samples)", worstH, n);
+	CHECK(worstU < 1e-6f, "and across the span by phase within %g", worstU);
+	CHECK(oldOff > 0.3f, "drawn from the stage's start it would be %g of the height off", oldOff);
+	// A NaN breakpoint phase reads 0: the whole span, as before.
+	float u2, h2;
+	e.livePoint(ATTACK, IDLE, 0.f, 0.5f, 0.f, 1.f, u, h);
+	e.livePoint(ATTACK, IDLE, 0.f, 0.5f, 0.f, 1.f, u2, h2, std::nanf(""));
+	CHECK(u == u2 && h == h2, "NaN bpPhase is 0: %g, %g (want %g, %g)", u2, h2, u, h);
 }
 
 // Sustain at 0: the dot at the end of the line; above 0, mid-span at the level.
@@ -262,6 +313,7 @@ int main() {
 	live_stage_curve();
 	live_dot_on_line();
 	live_span_after_skip();
+	live_breakpoint();
 	sustain_zero();
 	hold_ring_time();
 	return rkatest::finish("beacon/test_view");

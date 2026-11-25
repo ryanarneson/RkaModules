@@ -8,6 +8,11 @@
 // one, then edges and mode changes may start a stage, then the stage runs.
 // So every stage, even one that ends at once, holds its gate for at least one
 // sample, and a stage of time T lasts ceil(T fs) samples.
+//
+// A Shape change mid-stage is a breakpoint (Tides' rule, as a retrigger):
+// the rest of the stage becomes the new Shape's curve rescaled from the
+// level and phase where it changed to the goal, over the time left. The
+// level does not move and the stage still ends at its set time.
 #include "Curve.hpp"
 #include "FastMath.hpp"
 #include "Timing.hpp"
@@ -56,6 +61,9 @@ struct Voice {
 		stage_ = prevStage_ = IDLE;
 		phase_ = prevPhase_ = 0.0;
 		level_ = start_ = goal_ = 0.0;
+		bpPhase_ = 0.0;
+		bpLevel_ = 0.0;
+		bpScale_ = 1.0;
 		done_ = false;
 		pulse_ = 0;
 		prevGate_ = prevRetrig_ = false;
@@ -64,7 +72,7 @@ struct Voice {
 		time_[1] = 0.3f;
 		time_[2] = 1.f;
 		sustain_ = 0.f;
-		shape_ = 0.75f;
+		shape_ = stageShape_ = 0.75f;
 	}
 
 	void process(const VoiceIn& in, VoiceOut& out) {
@@ -125,6 +133,11 @@ struct Voice {
 	// leaving Hold, whose stages are no envelope's). A gate low as Attack
 	// ends goes straight to Release: Release after Attack.
 	Stage prevStage() const { return prevStage_; }
+	// The running stage's breakpoint: the phase (0..1) and level (volts) its
+	// curve runs from, the stage's start (phase 0) until Shape changes
+	// mid-stage, then where it last changed. Hold leaves them as they were.
+	double bpPhase() const { return bpPhase_; }
+	double bpLevel() const { return bpLevel_; }
 	// How far that stage had got when it was cut off, 0..1: Attack's or
 	// Decay's phase then (1 when it completed); Sustain, which has no
 	// phase, 1; 0 with prevStage IDLE.
@@ -133,6 +146,7 @@ struct Voice {
 private:
 	Stage stage_, prevStage_;
 	double phase_, prevPhase_, level_, start_, goal_;
+	double bpPhase_, bpLevel_, bpScale_;   // the breakpoint; bpScale_ = 1 / (1 - bpPhase_)
 	double dt_ = 1.0 / 48000.0, sustainCoef_ = 0.0;
 	bool done_;
 	int pulse_ = 0, pulseLen_ = 48;
@@ -141,6 +155,7 @@ private:
 	float time_[3];       // the last good Attack, Decay, Release times
 	float sustain_;       // the last good sustain level (GATE/TRIG)
 	float shape_;         // the last good Shape
+	float stageShape_;    // the Shape the running stage's curve was set with
 
 	// A time in kMinSeconds..kMaxSeconds; NaN keeps the last good one.
 	static double pickTime(float t, float& last) {
@@ -158,6 +173,10 @@ private:
 		phase_ = 0.0;
 		start_ = level_;
 		goal_ = s == ATTACK ? 10.0 : s == DECAY ? double(sustain_) : 0.0;
+		bpPhase_ = 0.0;
+		bpLevel_ = start_;
+		bpScale_ = 1.0;
+		stageShape_ = shape_;
 		done_ = false;
 		pulse_ = pulseLen_;
 	}
@@ -172,6 +191,14 @@ private:
 		default:
 			if (done_)
 				break;
+			// Shape moved: a breakpoint here, at the level of the last sample
+			// (phase_ < 1 while the stage runs, so the division is safe).
+			if (shape_ != stageShape_) {
+				bpPhase_ = phase_;
+				bpLevel_ = level_;
+				bpScale_ = 1.0 / (1.0 - phase_);
+				stageShape_ = shape_;
+			}
 			// A phase within a thousandth of a sample of 1 counts as 1, so a
 			// time of a whole number of samples (1 ms at 48 kHz: 0.001f is
 			// 5e-8 long) takes that many, not one more.
@@ -182,9 +209,9 @@ private:
 				level_ = goal_;
 				done_ = true;
 			} else {
-				const float p = float(phase_);
-				const float c = goal_ > start_ ? curveRise(p, shape_) : curveFall(p, shape_);
-				level_ = start_ + (goal_ - start_) * double(c);
+				const float p = float((phase_ - bpPhase_) * bpScale_);
+				const float c = goal_ > bpLevel_ ? curveRise(p, shape_) : curveFall(p, shape_);
+				level_ = bpLevel_ + (goal_ - bpLevel_) * double(c);
 			}
 		}
 	}

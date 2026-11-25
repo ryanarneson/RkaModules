@@ -957,6 +957,95 @@ void shape_smoothing() {
 	CHECK(bad == 0, "settled Shape is the target: a new envelope equals a lone Voice at Shape 1 (%ld differ)", bad);
 }
 
+
+// #83: a 10 s Attack, Shape 0 -> 1 in one sample at phase 0.1 and 0.5. A
+// Shape change is a breakpoint: no sample-to-sample step beyond the stage's
+// own (the largest at Shape 0 or 1, or the new curve's steepest from the
+// breakpoint, 4 x the distance left over the samples left) x 1.5 + 0.1 mV;
+// once Shape settles OUT is Shape 1's curve rescaled from the published
+// breakpoint to 10 V by the phase the test counts; Attack still takes its
+// set time.
+void shape_long_stage() {
+	const float fs = 48000.f;
+	const float knob = stageKnob(10.f);
+	const double T = stageSeconds(knob), len = std::ceil(T * fs);
+	auto ownMax = [&](float shape) {
+		Eng g(fs);
+		g.f.params[F::ATTACK] = knob;
+		g.f.params[F::SHAPE] = shape;
+		g.f.params[F::PUSH] = 1.f;
+		float prev = 0.f, worst = 0.f;
+		for (long i = 0; i < 600000; i++) {
+			g.step();
+			if (g.stage() != ATTACK)
+				break;
+			worst = std::fmax(worst, std::fabs(g.r.out[0] - prev));
+			prev = g.r.out[0];
+		}
+		return worst;
+	};
+	const float own = std::fmax(ownMax(0.f), ownMax(1.f));
+	const double at[2] = {0.1, 0.5};
+	for (double ph : at) {
+		Eng g(fs);
+		g.f.params[F::ATTACK] = knob;
+		g.f.params[F::SHAPE] = 0.f;
+		g.f.params[F::PUSH] = 1.f;
+		const long before = long(ph * T * fs);
+		g.run(before);
+		CHECK(g.stage() == ATTACK && std::fabs(g.e.published().phase.load() - ph) < 1e-4,
+		      "phase %g before the change (%s, %g)", ph, stageName(g.stage()), g.e.published().phase.load());
+		g.f.params[F::SHAPE] = 1.f;
+		const float atChange = g.r.out[0];
+		const double bound = 1.5 * std::fmax(own, 4.0 * (10.0 - atChange) / (len - before)) + 1e-4;
+		float prev = atChange, worst = 0.f;
+		long n = before, curveBad = 0, checked = 0;
+		double curveWorst = 0.0, bLast = -1.0;
+		while (g.stage() == ATTACK && n < 700000) {
+			g.step();
+			n++;
+			if (g.stage() == ATTACK || g.r.out[0] == 10.f)
+				worst = std::fmax(worst, std::fabs(g.r.out[0] - prev));
+			prev = g.r.out[0];
+			// 0.25 s on (Shape settled to the bit, about 0.15 s: the 5 ms pole in
+			// double), every 1000th sample of the Attack.
+			if (g.stage() == ATTACK && n - before > long(0.25 * fs) && n % 1000 == 0) {
+				const rka::BeaconPublished& p = g.e.published();
+				const double b = p.bpPhase.load(), L = p.bpLevel.load();
+				const double phase = n / (T * fs);
+				const double want = L + (10.0 - L) * curveRise(float((phase - b) / (1.0 - b)), 1.f);
+				const double err = std::fabs(g.r.out[0] - want);
+				curveWorst = std::fmax(curveWorst, err);
+				bLast = b;
+				curveBad += !(err < 1e-4 && b > ph && b < ph + 0.2 / T);
+				checked++;
+			}
+		}
+		CHECK(worst <= bound, "10 s Attack, Shape 0 -> 1 at phase %g: largest step %g V (bound %g V)", ph, worst, bound);
+		CHECK((n - 1) == long(len), "and Attack takes its time: %ld samples (want %.0f)", n - 1, len);
+		CHECK(checked > 100 && curveBad == 0,
+		      "then Shape 1's curve from the breakpoint at phase %.6f: %ld of %ld points off (worst %g V)", bLast, curveBad,
+		      checked, curveWorst);
+	}
+	// A new stage starts its curve afresh: the breakpoint is its start.
+	Eng g(fs);
+	g.f.params[F::ATTACK] = knob;
+	g.f.params[F::SHAPE] = 0.f;
+	g.f.params[F::PUSH] = 1.f;
+	g.run(48000);
+	g.f.params[F::SHAPE] = 1.f;
+	g.run(4800);
+	CHECK(g.e.published().bpPhase.load() > 0.1f, "a breakpoint mid-Attack (%g)", g.e.published().bpPhase.load());
+	g.f.params[F::PUSH] = 0.f;
+	g.step();
+	const rka::BeaconPublished& p = g.e.published();
+	CHECK(g.stage() == RELEASE && p.bpPhase.load() == 0.f && p.bpLevel.load() == p.start.load(),
+	      "Release's breakpoint is its start (%s, %g, %g V, start %g V)", stageName(g.stage()), p.bpPhase.load(),
+	      p.bpLevel.load(), p.start.load());
+	g.e.reset();
+	CHECK(p.bpPhase.load() == 0.f && p.bpLevel.load() == 0.f, "reset clears it (%g, %g)", p.bpPhase.load(), p.bpLevel.load());
+}
+
 } // namespace
 
 int main() {
@@ -975,5 +1064,6 @@ int main() {
 	stage_lights();
 	rate_change();
 	shape_smoothing();
+	shape_long_stage();
 	return rkatest::finish("test_engine");
 }
