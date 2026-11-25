@@ -67,8 +67,6 @@ struct Fog : Module {
 		configInput(IN_R_INPUT, "Right (normalled to left)");
 		configOutput(OUT_L_OUTPUT, "Left");
 		configOutput(OUT_R_OUTPUT, "Right");
-		configBypass(IN_L_INPUT, OUT_L_OUTPUT);
-		configBypass(IN_R_INPUT, OUT_R_OUTPUT);
 		engine.setSampleRate(APP ? APP->engine->getSampleRate() : 48000.f);
 	}
 
@@ -146,6 +144,22 @@ struct Fog : Module {
 
 		outputs[OUT_L_OUTPUT].setVoltage(result.outL);
 		outputs[OUT_R_OUTPUT].setVoltage(result.outR);
+	}
+
+	// Bypassed: each input to its output, every channel, IN R normalled to
+	// IN L as in process() (rka::FogEngine::bypassSource).
+	void processBypass(const ProcessArgs&) override {
+		frame.inL.v = inputs[IN_L_INPUT].getVoltages();
+		frame.inL.channels = inputs[IN_L_INPUT].getChannels();
+		frame.inR.v = inputs[IN_R_INPUT].getVoltages();
+		frame.inR.channels = inputs[IN_R_INPUT].getChannels();
+		for (int side = 0; side < 2; side++) {
+			const rka::FogPort& in = rka::FogEngine::bypassSource(frame, side);
+			Output& out = outputs[OUT_L_OUTPUT + side];
+			out.setChannels(in.channels);
+			for (int c = 0; c < in.channels; c++)
+				out.setVoltage(in.v[c], c);
+		}
 	}
 };
 

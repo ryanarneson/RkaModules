@@ -391,7 +391,9 @@ leveller's state starts clean on waking.
 
 ### Bypass
 
-IN L passes to OUT L and IN R to OUT R.
+IN L passes to OUT L and IN R to OUT R, every channel. IN R normals to IN
+L, as when running, so a mono source on IN L alone reaches both outputs
+(a `processBypass` override: `configBypass` cannot express a normal).
 
 ### Presets
 

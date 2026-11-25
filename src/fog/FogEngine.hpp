@@ -169,6 +169,15 @@ struct FogEngine {
 	bool limiterEnabled = true;
 	bool levellerEnabled = true;
 
+	// Bypassed (Fog::processBypass): the port each output copies, every
+	// channel as it is (0 OUT L, 1 OUT R). IN R normals to IN L, as in
+	// process(), so a mono source on IN L alone reaches both outputs. Rack's
+	// configBypass routes one input to one output and cannot express the
+	// normal: with it, OUT R was silent on a mono source (issue #13).
+	static const FogPort& bypassSource(const FogFrame& f, int side) {
+		return side && f.inR.channels > 0 ? f.inR : f.inL;
+	}
+
 	// Fathom's law, in [0, 1].
 	static float knob(const FogFrame& f, int param, int cvIndex, int att) {
 		const float k = fogFinite(f.params[param]) + f.cv[cvIndex].first() * 0.1f * fogFinite(f.params[att]);

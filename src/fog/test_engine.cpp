@@ -208,6 +208,42 @@ void monoNormals() {
 	std::printf("  mono_normals: wet RMS L %.3f, R %.3f\n", rl, rr);
 }
 
+// Bypassed, each output copies an input port whole (Rack's bypass keeps
+// every channel), and IN R normals to IN L as it does in process(): a mono
+// source on IN L alone reaches both outputs, IN R patched reaches OUT R, and
+// IN R alone leaves OUT L empty, as process() leaves the left dry. Bypass
+// wired L -> L and R -> R left OUT R silent on a mono source (issue #13).
+void bypassNormals() {
+	float vl[3] = {1.5f, -2.f, 3.f}, vr[2] = {-4.f, 0.5f};
+	FogFrame f;
+	f.inL.v = vl;
+	f.inR.v = vr;
+	struct Case {
+		int chL, chR;       // channels patched on IN L, IN R
+		const float* wantL; // the port each output should copy
+		const float* wantR;
+		int wantChL, wantChR;
+	};
+	const Case cases[] = {
+		{1, 0, vl, vl, 1, 1}, // mono on IN L only: both sides
+		{3, 0, vl, vl, 3, 3}, // poly on IN L only: every channel, both sides
+		{1, 2, vl, vr, 1, 2}, // both patched: L -> L, R -> R
+		{0, 2, vl, vr, 0, 2}, // IN R alone: OUT L empty, as the dry is
+		{0, 0, vl, vl, 0, 0}, // nothing patched
+	};
+	for (const Case& c : cases) {
+		f.inL.channels = c.chL;
+		f.inR.channels = c.chR;
+		const rka::FogPort& l = FogEngine::bypassSource(f, 0);
+		const rka::FogPort& r = FogEngine::bypassSource(f, 1);
+		CHECK(l.v == c.wantL && l.channels == c.wantChL, "IN L %d ch, IN R %d ch: OUT L copies %s (%d ch), want %s (%d ch)", c.chL, c.chR,
+		      l.v == vl ? "IN L" : "IN R", l.channels, c.wantL == vl ? "IN L" : "IN R", c.wantChL);
+		CHECK(r.v == c.wantR && r.channels == c.wantChR, "IN L %d ch, IN R %d ch: OUT R copies %s (%d ch), want %s (%d ch)", c.chL, c.chR,
+		      r.v == vl ? "IN L" : "IN R", r.channels, c.wantR == vl ? "IN L" : "IN R", c.wantChR);
+	}
+	std::printf("  bypass_normals: %d cases\n", (int) (sizeof(cases) / sizeof(cases[0])));
+}
+
 void polyInputBounded() {
 	Rig r;
 	r.f.params[FogFrame::MIX] = 1.f;
@@ -1454,6 +1490,7 @@ int main() {
 	dryKillOverridesCv();
 	cvLaw();
 	monoNormals();
+	bypassNormals();
 	polyInputBounded();
 	unplugKeepsTail();
 	rateIgnored();

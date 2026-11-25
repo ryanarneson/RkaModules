@@ -174,7 +174,9 @@ To keep your own, save from the same menu (Save preset).
 
 ## Bypass
 
-IN L passes straight to OUT L and IN R to OUT R.
+IN L passes straight to OUT L and IN R to OUT R, every channel of a
+polyphonic cable. With only IN L patched, it reaches both outputs, as IN R
+normals to IN L when Fog is running.
 
 ## Other details
 
