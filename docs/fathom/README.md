@@ -81,7 +81,9 @@ signal compresses the filter against itself: that is the growl.
 - Right-click **Sub through filter**: off by default, so the sub joins the
   mix after the filter and CUTOFF never thins it. On, the sub goes
   through the ladder too, for closing everything down.
-- CUTOFF, RES and DRIVE are smoothed over 20 ms so sweeps don't zipper.
+- CUTOFF, RES and DRIVE are smoothed over 20 ms so sweeps don't zipper,
+  and SUB and Sub through filter glide over 20 ms (the sub crossfades
+  between the two routes) so a mapped SUB or the toggle doesn't click.
 
 ## CV
 

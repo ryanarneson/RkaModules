@@ -150,12 +150,15 @@ void testNoDrift() {
 		f.inputs[F::DRIVE_IN] = cv(i, 0.23, 48000.f, 0.6);
 	}, PEAK_BOUND, RMS_BOUND);
 	// Steps of every knob and menu setting every 0.25 s, pitch included.
+	// SUB and Sub through filter are drawn each time but set only at the
+	// start: since issue #87 they glide over 20 ms where the reference
+	// jumps (test_output checks the glide).
 	render("steps, no drift", 44100.f, 6.0, [](F& f, long i, Lcg& rng, float&) {
 		f.params[F::DRIFT] = 0.f;
 		if (i % 11025 != 0)
 			return;
 		f.params[F::PITCH] = std::round(-24.f + 48.f * rng.uniform());
-		f.params[F::SUB] = rng.uniform();
+		const float sub = rng.uniform();
 		f.params[F::DETUNE] = rng.uniform();
 		f.params[F::SPREAD] = rng.uniform();
 		f.params[F::CUTOFF] = 10.f * rng.uniform();
@@ -163,7 +166,11 @@ void testNoDrift() {
 		f.params[F::DRIVE] = rng.uniform();
 		f.filterType = int(4.f * rng.uniform());
 		f.subOctave = rng.uniform() < 0.5f ? 0 : 1;
-		f.subThroughFilter = rng.uniform() < 0.5f;
+		const bool through = rng.uniform() < 0.5f;
+		if (i == 0) {
+			f.params[F::SUB] = sub;
+			f.subThroughFilter = through;
+		}
 	}, PEAK_BOUND, RMS_BOUND);
 }
 

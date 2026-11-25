@@ -217,6 +217,9 @@ the ceiling constant is the one knob to turn, and the cost is tuning.
 Parameter smoothing, once per 16-sample block at the base rate: cutoff in
 octaves with a 20 ms one-pole (as now), `k` and `g_drive` with a 20 ms
 one-pole each. `G` is computed once per block from the smoothed cutoff.
+Per sample, the SUB level and the sub's route (a 0 ... 1 share through
+the ladder, the rest around it) each have a 20 ms one-pole too, so a
+step of SUB or of Sub through filter doesn't click (issue #87).
 
 Oversampling: copy Fundamental's `Upsampler2x` / `Downsampler2x` (three
 allpass sections per branch, 78 dB stopband, flat passband) into a

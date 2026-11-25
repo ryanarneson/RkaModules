@@ -18,12 +18,23 @@ static const float F0_MIN = 8.f;
 static const float F0_MAX = 4000.f;
 // One-pole on the pitch so V/Oct steps don't click.
 static const float PITCH_SLEW_SEC = 0.005f;
+// One-poles on the SUB level and on the sub's route (through the filter or
+// around it), per sample, so a mapped SUB or the menu toggle doesn't click
+// (issue #87); as long as CUTOFF, RES and DRIVE's.
+static const float SUB_SLEW_SEC = 0.02f;
 // Body and sub gains, tuned so the default settings peak at about 0.95
 // before the soft clip (test_voice testDefaultLevel).
 static const float BODY_GAIN = 0.8f;
 static const float SUB_GAIN = 0.6f;
 // Coefficient-heavy work runs once per this many samples.
 static const int BLOCK = 16;
+
+// One step of a one-pole from x toward target, landing on it once within
+// 1e-6 so it neither creeps nor decays into denormals.
+inline float slewTo(float x, float target, float coef) {
+	x += (target - x) * coef;
+	return std::fabs(target - x) < 1e-6f ? target : x;
+}
 
 struct DroneVoice {
 	SuperSaw saws;
@@ -59,12 +70,17 @@ struct DroneVoice {
 
 	Out process(float f0Hz, float detune, float spread, float driftAmount, float subLevel, int subOctaves, float sampleRate) {
 		const float dt = 1.f / sampleRate;
+		const float subTarget = std::max(0.f, std::min(subLevel, 1.f));
 		if (sampleRate != lastRate) {
 			slew = 1.f - std::exp(-dt / PITCH_SLEW_SEC);
+			subSlew = 1.f - std::exp(-dt / SUB_SLEW_SEC);
+			// Start on the level of now, as the stage starts on its controls.
+			subLevelNow = subTarget;
 			lastRate = sampleRate;
 			block = 0;
 		}
 		f0 += (clampF0(f0Hz) - f0) * slew;
+		subLevelNow = slewTo(subLevelNow, subTarget, subSlew);
 		// Once a block, and only when the pitch or rate moved (tan is libm).
 		if (block == 0 && (!hpKnown || f0 != hpF0 || sampleRate != hpRate)) {
 			hpLeft.setCoefficients(f0, BUTTERWORTH_K, sampleRate);
@@ -90,7 +106,7 @@ struct DroneVoice {
 		Out o;
 		o.left = l;
 		o.right = r;
-		o.subMix = std::max(0.f, std::min(subLevel, 1.f)) * SUB_GAIN * drift.subGain * sub;
+		o.subMix = subLevelNow * SUB_GAIN * drift.subGain * sub;
 		o.sub = sub;
 		return o;
 	}
@@ -103,6 +119,7 @@ struct DroneVoice {
 		const float dt = 1.f / sampleRate;
 		if (sampleRate != lastRate) {
 			slew = 1.f - std::exp(-dt / PITCH_SLEW_SEC);
+			subSlew = 1.f - std::exp(-dt / SUB_SLEW_SEC);
 			lastRate = sampleRate;
 			block = 0;
 		}
@@ -117,6 +134,9 @@ struct DroneVoice {
 
 private:
 	float slew = 1.f;
+	float subSlew = 1.f;
+	// The smoothed SUB level, 0 ... 1.
+	float subLevelNow = 0.f;
 	float lastRate = 0.f;
 	float lastDetune = -1.f;
 	// The f0 and rate the high-passes' coefficients were worked out for.
@@ -209,6 +229,8 @@ struct OutputStage {
 			// The controls are smoothed once per block.
 			cutoffCoef = 1.f - std::exp(-BLOCK / (sampleRate * CUTOFF_SLEW_SEC));
 			resCoef = 1.f - std::exp(-BLOCK / (sampleRate * RES_SLEW_SEC));
+			routeCoef = 1.f - std::exp(-1.f / (sampleRate * SUB_SLEW_SEC));
+			through = p.subThroughFilter ? 1.f : 0.f;
 			lastRate = sampleRate;
 			block = 0;
 			cutoffOct = cutoffLog2(p.cutoffHz);
@@ -239,8 +261,11 @@ struct OutputStage {
 		}
 		block = (block + 1) % BLOCK;
 
-		const float subIn = p.subThroughFilter ? subMix : 0.f;
-		const float subOut = p.subThroughFilter ? 0.f : subMix;
+		// The route crossfades: `through` of the sub goes into the ladder,
+		// the rest joins after it.
+		through = slewTo(through, p.subThroughFilter ? 1.f : 0.f, routeCoef);
+		const float subIn = through * subMix;
+		const float subOut = subMix - subIn;
 		float l = ladderLeft.process(driveGain * (left + subIn)) * makeup + subOut;
 		float r = ladderRight.process(driveGain * (right + subIn)) * makeup + subOut;
 		left = dcLeft.process(fastTanh(CLIP_DRIVE * l), dcCoef);
@@ -251,6 +276,9 @@ private:
 	float dcCoef = 0.f;
 	float cutoffCoef = 1.f;
 	float resCoef = 1.f;
+	float routeCoef = 1.f;
+	// The share of the sub going through the ladder, 0 ... 1, smoothed.
+	float through = 0.f;
 	float cutoffOct = 0.f;
 	float k = 0.f;
 	float driveOct = 0.f;
