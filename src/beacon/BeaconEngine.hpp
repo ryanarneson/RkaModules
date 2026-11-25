@@ -140,7 +140,7 @@ public:
 	void process(const BeaconFrame& f, BeaconResult& out) {
 		typedef BeaconFrame F;
 		const float m = f.params[F::MODE];
-		const beacon::Mode mode = m >= 1.5f ? beacon::HOLD_MODE : m >= 0.5f ? beacon::TRIG_MODE : beacon::GATE_MODE;
+		const beacon::Mode mode = m >= 1.5f ? beacon::HOLD_MODE : m >= 0.5f ? beacon::AR_MODE : beacon::GATE_MODE;
 		const BeaconPort& countPort = mode == beacon::HOLD_MODE ? f.sustainCv : f.gate;
 		int n = countPort.channels;
 		n = n < 1 ? 1 : n > MAX_CHANNELS ? MAX_CHANNELS : n;

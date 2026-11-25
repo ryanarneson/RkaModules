@@ -106,7 +106,7 @@ struct Beacon : Module {
 		typedef rka::BeaconFrame F;
 		configParam<ShapeQuantity>(SHAPE_PARAM, 0.f, 1.f, defaults.params[F::SHAPE],
 		                           "Shape (left: reverse, noon: linear, right: classic)", " %", 0.f, 200.f, -100.f);
-		configSwitch(MODE_PARAM, 0.f, 2.f, 0.f, "Mode", {"Gate", "Trig", "Hold"});
+		configSwitch(MODE_PARAM, 0.f, 2.f, 0.f, "Mode", {"ADSR", "AR (one-shot)", "Hold"});
 		configParam<TimeQuantity>(ATTACK_PARAM, 0.f, 1.f, defaults.params[F::ATTACK], "Attack (Hold: time to rise 10 V)");
 		configParam<TimeQuantity>(DECAY_PARAM, 0.f, 1.f, defaults.params[F::DECAY], "Decay (Hold: time to fall 10 V)");
 		configParam(SUSTAIN_PARAM, 0.f, 1.f, defaults.params[F::SUSTAIN], "Sustain (Hold: offset)", " V", 0.f, 10.f);
@@ -233,22 +233,23 @@ struct EnvelopeWindowView {
 	int stage = rka::beacon::IDLE;    // rka::beacon::Stage
 	float phase = 0.f, level = 0.f;   // 0..1, volts
 	float start = 0.f, goal = 0.f;    // the running stage's, volts
-	int prevStage = 0;                // the stage that ran before it
-	float prevPhase = 0.f;            // how far it had got, 0..1
 	float bpPhase = 0.f, bpLevel = 0.f;   // the running stage's breakpoint, 0..1, volts
 	bool hold = false;
+	bool ar = false;                  // AR mode: the window draws only A and R
 };
 
 // Beacon's window (its spec, "The window"), drawn in vectors in the
 // self-illuminating layer on the glass, in the theme's cyan as TapeWindow.
-// Gate and Trig: the envelope the knobs make (layoutEnvelope), each stage
-// its own stroke, dim; the running Attack, Decay or Release drawn bright
-// from its true start (or, after a Shape change during it, from that
-// breakpoint) to its goal (liveStageHeight) over its span, widened
-// back to where the last stage was cut off when stages were skipped
-// (liveSpan), with the dot on it; Sustain running: its span bright (dim
-// at a 0 V sustain, the dot then at the end of the line); A D S R under
-// the spans, the running letter bright. Hold: a scrolling line of channel
+// ADSR and AR: the envelope the knobs make in that mode (layoutEnvelope;
+// AR: only A and R), each stage its own stroke, dim; the running Attack,
+// Decay or Release drawn bright over its own span, from its true start (or,
+// after a Shape change during it, from that breakpoint) to its goal
+// (liveStageHeight), with the dot on it. An Attack resumed part-way is
+// its own full curve, the dot on it at the level; a Release that cut a
+// stage short runs over the R span from where it started. Sustain
+// running: its span bright (dim at a 0 V sustain, the dot then at the end
+// of the line). The stages' letters under their spans (AR: A and R), the
+// running letter bright. Hold: a scrolling line of channel
 // 1's output (+-10 V), 60 points a second of the UI's frame clock
 // (HoldRing), kept here (UI thread only).
 // It knows nothing of the engine: `source` fills an EnvelopeWindowView, or
@@ -330,7 +331,7 @@ struct EnvelopeWindow : widget::Widget {
 		using namespace rka::beacon;
 		const NVGcolor signal = RkaTheme::SIGNAL;
 		const NVGcolor dim = nvgTransRGBAf(signal, 0.38f);
-		const EnvelopeLayout e = layoutEnvelope(v.params);
+		const EnvelopeLayout e = layoutEnvelope(v.params, v.ar);
 		// A stage number from another sample than the phase (separate
 		// relaxed atomics) only misplaces the dot for one frame; anything
 		// out of range reads as idle.
@@ -345,6 +346,8 @@ struct EnvelopeWindow : widget::Widget {
 		const bool sustainLit = stage == SUSTAIN && e.sustain01 > 0.f;
 		for (int s = 0; s < 4; s++) {
 			const float u0 = e.x[s], u1 = e.x[s + 1];
+			if (!(u1 > u0))
+				continue;   // AR: no D or S span
 			nvgBeginPath(vg);
 			for (int i = 0; i <= CURVE_POINTS; i++) {
 				// The last point just inside the span (heightAt takes the
@@ -375,16 +378,11 @@ struct EnvelopeWindow : widget::Widget {
 		const float bpPhase = std::isfinite(v.bpPhase) ? v.bpPhase : 0.f;
 		const float start01 = std::isfinite(v.bpLevel) ? v.bpLevel * 0.1f : 0.f;
 		const float goal01 = std::isfinite(v.goal) ? v.goal * 0.1f : 0.f;
-		// Stages skipped (Release straight after Attack or Decay): drawn
-		// from where the last stage was cut off (liveSpan). The previous
-		// stage and its phase may be a sample apart too: one frame.
-		const int ps = v.prevStage;
-		const Stage prev = (ps >= ATTACK && ps <= RELEASE) ? Stage(ps) : IDLE;
 		if (stage == ATTACK || stage == DECAY || stage == RELEASE) {
 			nvgBeginPath(vg);
 			for (int i = 0; i <= CURVE_POINTS; i++) {
 				float u, h;
-				e.livePoint(Stage(stage), prev, v.prevPhase, float(i) / CURVE_POINTS, start01, goal01, u, h, bpPhase);
+				e.livePoint(Stage(stage), float(i) / CURVE_POINTS, start01, goal01, u, h, bpPhase);
 				const float x = xAt(u), y = yAt(h);
 				if (i == 0)
 					nvgMoveTo(vg, x, y);
@@ -401,7 +399,7 @@ struct EnvelopeWindow : widget::Widget {
 		// line (Sustain: at its level, or at the end at 0 V). Idle: at rest
 		// at the start, dim.
 		float u, h;
-		e.dot(Stage(stage), prev, v.prevPhase, math::clamp(v.phase, 0.f, 1.f), std::isfinite(v.level) ? v.level * 0.1f : 0.f, start01, goal01, u, h, bpPhase);
+		e.dot(Stage(stage), math::clamp(v.phase, 0.f, 1.f), std::isfinite(v.level) ? v.level * 0.1f : 0.f, start01, goal01, u, h, bpPhase);
 		nvgBeginPath(vg);
 		nvgCircle(vg, xAt(u), yAt(h), mm2px(running >= 0 ? 0.75f : 0.55f));
 		nvgFillColor(vg, running >= 0 ? signal : dim);
@@ -416,6 +414,8 @@ struct EnvelopeWindow : widget::Widget {
 			nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 			const float y = box.size.y - pad() - 0.5f * lettersH();
 			for (int s = 0; s < 4; s++) {
+				if (!(e.x[s + 1] > e.x[s]))
+					continue;   // AR: no D or S letter
 				nvgFillColor(vg, s == running ? signal : dim);
 				nvgText(vg, xAt(0.5f * (e.x[s] + e.x[s + 1])), y, letters[s], NULL);
 			}
@@ -494,11 +494,11 @@ struct BeaconWidget : ModuleWidget {
 			v.level = p.level.load(std::memory_order_relaxed);
 			v.start = p.start.load(std::memory_order_relaxed);
 			v.goal = p.goal.load(std::memory_order_relaxed);
-			v.prevStage = p.prevStage.load(std::memory_order_relaxed);
-			v.prevPhase = p.prevPhase.load(std::memory_order_relaxed);
 			v.bpPhase = p.bpPhase.load(std::memory_order_relaxed);
 			v.bpLevel = p.bpLevel.load(std::memory_order_relaxed);
-			v.hold = p.mode.load(std::memory_order_relaxed) == int(rka::beacon::HOLD_MODE);
+			const int mode = p.mode.load(std::memory_order_relaxed);
+			v.hold = mode == int(rka::beacon::HOLD_MODE);
+			v.ar = mode == int(rka::beacon::AR_MODE);
 			return true;
 		};
 		addChild(window);

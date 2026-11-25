@@ -1,5 +1,5 @@
 #pragma once
-// One Beacon voice: the stage machine (Gate and Trig modes), Hold's slew,
+// One Beacon voice: the stage machine (ADSR and AR modes), Hold's slew,
 // the stage gates and TRIG. Rack-free; no libm and no allocation in
 // process(). Phase, its step and the level are double: a 60 s stage at
 // 768 kHz is 46 M samples, past float's resolution.
@@ -8,6 +8,17 @@
 // one, then edges and mode changes may start a stage, then the stage runs.
 // So every stage, even one that ends at once, holds its gate for at least one
 // sample, and a stage of time T lasts ceil(T fs) samples.
+//
+// ADSR mode (GATE_MODE): Attack and Decay while the gate is high, then
+// Sustain; the gate's fall starts Release from wherever the envelope is.
+// AR mode (AR_MODE): a one-shot; Attack always runs to 10 V and Release
+// follows at once, whatever the gate does. Decay and Sustain take no part.
+//
+// An Attack begun part-way (a retrigger, a gate back during Release)
+// picks up its full curve, 0 to 10 V over the Attack time in its Shape, at
+// the point with the present level, and finishes it: from a level it takes
+// the share of Attack left on that curve, as an RC envelope does. Decay and
+// Release take their whole time from wherever they start.
 //
 // A Shape change mid-stage is a breakpoint (Tides' rule, as a retrigger):
 // the rest of the stage becomes the new Shape's curve rescaled from the
@@ -21,11 +32,11 @@ namespace rka {
 namespace beacon {
 
 enum Stage { IDLE, ATTACK, DECAY, SUSTAIN, RELEASE };
-enum Mode { GATE_MODE, TRIG_MODE, HOLD_MODE };
+enum Mode { GATE_MODE, AR_MODE, HOLD_MODE };   // the switch: ADSR, AR, HOLD
 
 struct VoiceIn {                  // one channel, one sample
 	float attack, decay, release; // seconds, already through stageSecondsCv
-	float sustain;                // volts 0..10 (GATE/TRIG) or the Hold input, +/-10
+	float sustain;                // volts 0..10 (ADSR/AR) or the Hold input, +/-10
 	float shape;                  // 0..1
 	bool gate, retrig;            // after Schmitt (edges are the voice's job)
 	Mode mode;
@@ -76,7 +87,7 @@ struct Voice {
 	}
 
 	void process(const VoiceIn& in, VoiceOut& out) {
-		const Mode mode = in.mode == HOLD_MODE ? HOLD_MODE : in.mode == TRIG_MODE ? TRIG_MODE : GATE_MODE;
+		const Mode mode = in.mode == HOLD_MODE ? HOLD_MODE : in.mode == AR_MODE ? AR_MODE : GATE_MODE;
 		const double ta = pickTime(in.attack, time_[0]);
 		const double td = pickTime(in.decay, time_[1]);
 		const double tr = pickTime(in.release, time_[2]);
@@ -100,7 +111,7 @@ struct Voice {
 				begin(in.gate ? ATTACK : RELEASE);
 			} else if (done_) {
 				if (stage_ == ATTACK)
-					begin(in.gate ? DECAY : RELEASE);
+					begin(in.gate && mode != AR_MODE ? DECAY : RELEASE);
 				else if (stage_ == DECAY)
 					begin(in.gate ? SUSTAIN : RELEASE);
 				else if (stage_ == RELEASE)
@@ -108,7 +119,7 @@ struct Voice {
 			}
 			if (rise || (retrigRise && in.gate))
 				begin(ATTACK);
-			else if (fall && stage_ != IDLE && stage_ != RELEASE && !(mode == TRIG_MODE && stage_ == ATTACK))
+			else if (fall && stage_ != IDLE && stage_ != RELEASE && !(mode == AR_MODE && stage_ == ATTACK))
 				begin(RELEASE);
 			runStage(stage_ == ATTACK ? ta : stage_ == DECAY ? td : tr);
 		}
@@ -153,7 +164,7 @@ private:
 	bool prevGate_, prevRetrig_;
 	Mode prevMode_;
 	float time_[3];       // the last good Attack, Decay, Release times
-	float sustain_;       // the last good sustain level (GATE/TRIG)
+	float sustain_;       // the last good sustain level (ADSR/AR)
 	float shape_;         // the last good Shape
 	float stageShape_;    // the Shape the running stage's curve was set with
 
@@ -179,6 +190,29 @@ private:
 		stageShape_ = shape_;
 		done_ = false;
 		pulse_ = pulseLen_;
+		// Attack from a level in 0..10 V resumes its full curve there: the
+		// curve runs from 0 V at phase 0, and the phase starts where it is
+		// at the level. (Leaving Hold, a level outside that range keeps the
+		// stage's curve rescaled from it, over the full time.)
+		if (s == ATTACK && level_ >= 0.0 && level_ < 10.0) {
+			phase_ = curvePhase(level_ * 0.1, shape_);
+			bpLevel_ = 0.0;
+		}
+	}
+
+	// The phase at which Attack's rising curve, in this Shape, reaches
+	// `frac` of the way (0..1): bisection (the curve rises monotonically),
+	// no libm. Called only when a stage begins.
+	static double curvePhase(double frac, float shape) {
+		double lo = 0.0, hi = 1.0;
+		for (int i = 0; i < 40; i++) {
+			const double mid = 0.5 * (lo + hi);
+			if (double(curveRise(float(mid), shape)) < frac)
+				lo = mid;
+			else
+				hi = mid;
+		}
+		return lo;
 	}
 
 	void runStage(double t) {

@@ -71,9 +71,37 @@ Anti-goals (a failure even if it works):
 - Build it the Tides way: timed stages (Approaches, 2).
 - **Every stage takes exactly its set time, wherever it starts** (option
   A of two put to the user): Release at 2 s from Sustain at 5 V takes 2 s;
-  a retrigger from 8 V takes the full Attack time to reach 10 V. Rejected:
+  a retrigger from 8 V takes the full Attack time to reach 10 V (Attack
+  revised 2026-11-25, above). Rejected:
   times as rates for a full 10 V, under which stage lengths shift with
   Sustain.
+- **Revised 2026-11-25** (a full retest, after the user could not
+  predict what a patch would do; rule: least astonishment, judged against
+  cèis and VCV's ADSR):
+  - **The switch reads ADSR / AR / HOLD.** Trig was only sometimes a
+    trigger mode: as on cèis, a pulse longer than Attack ran Decay and
+    Sustain, so AR or ADSR hung on the pulse's width against Attack, and
+    the name clashed with the TRIG output. **AR is a strict one-shot:**
+    a rising edge runs Attack to 10 V, then Release, whatever the gate
+    does after. Decay and Sustain take no part. (VCV's ADSR has no such
+    mode; cèis runs a long gate through D and S. Under an AR label that
+    would surprise, so AR ignores gate length.)
+  - **Attack resumes along its curve**, replacing "every stage takes its
+    set time wherever it starts" for Attack. An Attack begun from a level
+    picks up its full curve (0 to 10 V over the Attack time, in its
+    Shape) at the point with that level, and finishes it from there: from
+    6 V it takes 40 % of Attack at linear Shape, about 64 % at the default
+    (0.75), 80 % fully right and 12 % fully left. This is how an RC envelope (cèis, VCV's ADSR: about
+    61 % from 6 V) behaves, and a retrigger, a gate back during Release
+    or fast triggers no longer crawl. Decay and Release are unchanged:
+    they take their time from wherever they start, as an analog release
+    does. Starts outside 0 to 10 V (leaving Hold) keep the old rule.
+  - **The window draws what the mode will do:** ADSR mode the four
+    stages; AR mode only A and R (no D or S span or letter). Each running
+    stage is drawn over its own span: an Attack resumed part-way sits on
+    the drawn Attack curve; a Release that cut a stage short runs over the
+    R span from the level it started at. Log-scaled widths stay.
+  - Shape keeps its default (0.75).
 - **Panel:** as the mockup. A window at the top in place of the first
   sketch's lamp (the user: the lamp "doesn't really have much use"); a
   small push button for a manual gate under the GATE jack.
@@ -125,30 +153,34 @@ one is out of scope.
 
 ## Controls and behaviour
 
-### Envelope (Gate and Trig modes)
+### Envelope (ADSR and AR modes)
+
+(Revised 2026-11-25: ADSR is the old Gate mode, AR replaces Trig, and
+Attack resumes along its curve. The bullets below give the rules now.)
 
 - **Stages:** Attack rises from where the envelope is to 10 V; Decay falls
   to Sustain's level; Sustain holds while the gate is high; Release falls
-  to 0 V. A stage always starts from the envelope's present level and
-  takes exactly its set time to reach its goal, however far that is (the
-  user's ruling). The curve is the stage's full curve rescaled between
-  that start and the goal (Tides' breakpoint rule). Decay with Sustain at
-  10 V, or any stage already at its goal, ends at once.
-- **Gate mode** (cèis's): a rising edge starts Attack. Attack and Decay
+  to 0 V. A stage always starts from the envelope's present level.
+  Decay and Release take exactly their set time to reach their goal,
+  however far that is, along their full curve rescaled between that start
+  and the goal (Tides' breakpoint rule). Attack picks up its own full
+  curve at the point with the present level and finishes it, so it takes
+  the share of its time that is left on that curve (above). Decay with
+  Sustain at 10 V, or any stage already at its goal, ends at once.
+- **ADSR mode** (the old Gate mode; cèis's Gate): a rising edge starts Attack. Attack and Decay
   run while the gate is high, then Sustain holds. The falling edge starts
   Release from wherever the envelope is. A trigger, or a gate shorter
   than Attack (+ Decay), goes straight to Release.
-- **Trig mode** (cèis's): a rising edge starts Attack, and Attack always
-  runs to the end. If the gate is still high after Attack, Decay and
-  Sustain follow as in Gate mode; if it is low, Release starts at the top.
-  So a trigger gives AR (Attack, then Release: AD in other modules'
-  terms), and a long gate gives the full ADSR.
+- **AR mode** (replaces Trig): a rising edge starts Attack, which always
+  runs to 10 V; Release follows at once, whatever the gate is doing. Gate
+  length plays no part, and Decay and Sustain none at all.
 - **A rising edge while the envelope is running** restarts Attack from the
   present level, in both modes.
 - **RETRIG** (cèis 2's): a rising edge restarts Attack from the present
   level without a new gate. It does nothing while the gate is low.
 - **Shapes from the knobs:** Sustain at 0 is ADR; Decay at its minimum
-  with Sustain at full is AR; Trig mode with a trigger is AR/AD.
+  with Sustain at full is a gated AR (held while the gate is); AR mode is
+  the one-shot AR (AD in some modules' terms).
 - **The push button:** pressing it is a gate held for as long as it is
   held (in both modes), on every channel, as if GATE were high.
 - **Inputs:** GATE and RETRIG read as gates with the plugin's usual
@@ -226,8 +258,9 @@ the slew, so the switch itself never moves the output:
 - **Hold to Gate/Trig:** with the gate high, Attack starts from the
   present level; with it low, Release runs from the present level to 0 V
   (a rise when the level is negative), over Release's time.
-- **Gate to Trig or back:** the running stage carries on; the new mode
-  applies from the next edge.
+- **ADSR to AR or back:** the running stage carries on; the new mode
+  applies from its end or the next edge (AR: an Attack running ends into
+  Release, a Decay or Sustain running carries on until the gate falls).
 - **Channels that appear** (the channel count changes on a switch or a
   repatch) start at 0 V, idle; channels that go away are dropped.
 
@@ -276,7 +309,13 @@ the slew, so the switch itself never moves the output:
   stage's span, at its level, to the goal along the new Shape's curve.
   The engine publishes channel 1's breakpoint phase and level for this
   (the stage's start and phase 0 until Shape moves).
-- **Skipped stages** (issue #76, after test builds 2.0.35 and 2.0.36):
+- **Revised 2026-11-25:** each running stage is drawn over its own span
+  only (the "skipped stages" rule below is gone). An Attack resumed
+  part-way is the drawn Attack curve itself, the dot on it at the level;
+  a Release that cut Attack or Decay short runs over the R span from the
+  level it started at to 0 V. In AR mode the window draws only A and R.
+- **Skipped stages** (issue #76, after test builds 2.0.35 and 2.0.36;
+  superseded 2026-11-25, above):
   when the running stage skipped others, it is drawn bright from where
   the last stage was cut off (its phase then, across its span; a cut-off
   Sustain counts as its span's end) to the end of its own span, so the
@@ -364,10 +403,17 @@ TESTING.md applies in full. Particular to Beacon:
   96 kHz, at Shape left, noon and right.
 - **Levels.** Attack ends at 10 V, Decay at Sustain, Release at 0 V
   exactly; Sustain holds its level for minutes.
-- **Modes.** Gate mode: a short gate goes to Release mid-Attack; Trig
-  mode: a trigger completes Attack, then Release; a long gate in Trig mode
-  gives the full ADSR. ADR (Sustain 0) and AR (Decay min, Sustain full)
-  shapes.
+- **Modes.** ADSR mode: a short gate goes to Release mid-Attack; AR
+  mode: any gate, from 1 sample to many times Attack, gives exactly
+  Attack then Release (only the A and R gates fire). ADR (Sustain 0) and
+  gated AR (Decay min, Sustain full) shapes.
+- **Resumed Attack.** From a level L, Attack takes Attack x (1 - p0),
+  p0 the point of its curve at L, at every Shape; triggers faster than
+  Attack reach 10 V on time; no jump at the resume.
+- **The window lines up.** Through a matrix of gate widths, triggers,
+  retriggers, Shapes and both modes, the dot sits at the output's level
+  every sample, and the bright line drawn at any moment is what the
+  output then does while the stage runs on.
 - **No jumps.** Retrigger mid-Release, mid-Decay and mid-Attack; RETRIG;
   a gate ending in Attack or Decay; a knob or CV moved mid-stage; a mode
   switch while running: no sample-to-sample step beyond the stage's own
