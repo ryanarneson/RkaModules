@@ -23,11 +23,19 @@ static void testDetuneTable() {
 	CHECK(std::fabs(s.gain - 0.3f) < 1e-6f, "gain %f", s.gain);
 }
 
+static bool near(float a, float b) {
+	return std::fabs(a - b) <= 1e-6f * std::fabs(b);
+}
+
+// Equal to 1e-6 relative (about 8 ulps), not bit for bit: with arguments
+// known at compile time GCC on arm64 folds one call exactly and fuses the
+// other's multiply-add, so ratio[6] at detune 2 and 1 differ by one ulp
+// (issue #74). An unclamped detune 2 moves ratio[6] by 4 %.
 static bool sameTables(const SuperSaw& a, const SuperSaw& b) {
 	for (int i = 0; i < SuperSaw::N; i++)
-		if (a.ratio[i] != b.ratio[i] || a.volume[i] != b.volume[i])
+		if (!near(a.ratio[i], b.ratio[i]) || !near(a.volume[i], b.volume[i]))
 			return false;
-	return a.gain == b.gain;
+	return near(a.gain, b.gain);
 }
 
 static void testDetuneClamps() {
