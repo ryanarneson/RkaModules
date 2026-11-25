@@ -387,7 +387,24 @@ void ring_change_is_smooth() {
 
 } // namespace
 
+// Every Damp gives a finite string, the smallest above 0 too: there the
+// loss per trip rounds to nothing, and the low-pass's pole was once worked
+// out as 0 / 0, a NaN that then went round the loop for good. Reached by
+// the knob or a CV just off 0.
+void tiny_damp_is_finite() {
+	for (float fs : {44100.f, 48000.f, 96000.f})
+		for (float hz : {32.7f, 130.81f, 1046.5f, 4186.f})
+			for (float d : {1e-7f, 1e-6f, 1e-5f, 1e-4f, 1e-3f}) {
+				String s = make(fs, hz, 4.f, d);
+				bool finite = true;
+				for (int i = 0; i < 2000 && finite; i++)
+					finite = std::isfinite(s.process(0.3f * (float) std::sin(0.01 * i)));
+				CHECK(finite, "Damp %g at %g Hz, %g: not finite", d, hz, fs);
+			}
+}
+
 int main() {
+	tiny_damp_is_finite();
 	glide_ends();
 	dc_dies_with_ring();
 	ring_change_is_smooth();

@@ -197,8 +197,11 @@ private:
 			const double G = keep * keep, c = std::cos(w0);
 			const double A = G - 1.0, B = 2.0 - 2.0 * G * c;
 			const double disc = B * B - 4.0 * A * A;
-			double r = disc > 0.0 ? (-B + std::sqrt(disc)) / (2.0 * A) : 0.0;
-			r = r < 0.0 ? 0.0 : r > 0.9999 ? 0.9999 : r;
+			// The smaller root, as 2 A / (-B - sqrt(disc)): the same number
+			// as (-B + sqrt(disc)) / 2 A, without its 0 / 0 when the loss is
+			// too small to register and A rounds to 0 (Damp just off 0).
+			double r = disc > 0.0 ? 2.0 * A / (-B - std::sqrt(disc)) : 0.0;
+			r = r > 0.0 ? (r > 0.9999 ? 0.9999 : r) : 0.0;   // a NaN comes out 0
 			a_ = (float) (1.0 - r);
 			lpDelay = std::atan2(r * std::sin(w0), 1.0 - r * std::cos(w0)) / w0;
 		}
