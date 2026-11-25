@@ -96,8 +96,7 @@ Anti-goals (a failure even if it works):
   default, Weight's curve, TIDE's gain (2.0; TIDE past +-2.5 V 18.8 % of
   the time), MARK +2 V (HIGH on 15.6 % of the time), Triangle by default,
   and Spring reading only the eight cycles. Also kept as they are: MARK
-  above about +4.9 V never fires HIGH, MARK compares with the +-5 V
-  tide in 0–10 V mode too, and a RESET can fire Spring's
+  above about +4.9 V never fires HIGH, and a RESET can fire Spring's
   triggers on even cycles that were below 0 V.
 - Neap's right-click menu adds Spring (2026-11-24), as Ballast adds Pan.
 
@@ -213,10 +212,9 @@ As the mockup (`2026-11-24-neap-mockup.png`, seen by the user
 
 - **HIGH** is 10 V while TIDE is above **MARK**, else 0 V, with 0.1 V of
   hysteresis.
-- **MARK** runs −5 V to +5 V; default +2 V *(call)*. MARK is compared with
-  the +-5 V tide in both Level modes, so in 0–10 V mode HIGH fires while
-  the TIDE jack reads above MARK + 5 V. (The first draft had the mark
-  follow the mode; the build does not, and the listening stop kept it.)
+- **MARK** runs −5 V to +5 V; default +2 V *(call)*. In 0–10 V mode the
+  mark follows (0 to 10 V): HIGH fires while the TIDE jack reads above
+  MARK + 5 V, the same moments as in +-5 V mode.
 
 ### ALL
 
