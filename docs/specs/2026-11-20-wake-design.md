@@ -188,7 +188,10 @@ A change of style crossfades over a few tens of milliseconds.
     bends up or down and settles, as a tape machine changing speed.
     The bend is at most two octaves, held there at most about 1 s
     (BEND_MAX_S); a bigger change crossfades the rest of the way, so
-    the new echo arrives within a second.
+    the new echo arrives within a second. The same limit holds both
+    ways: a big turn down bends up (as a tape speeding up) for up to a
+    second too, which the user heard as a high tone and chose to keep
+    (2026-11-25).
   - Each pass through the loop is gently saturated, loses a little top
     (about 6 kHz) and a little bottom.
 - **Analog.**
