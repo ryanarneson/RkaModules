@@ -602,7 +602,7 @@ SETTINGS_DECLARE(ReferenceChannel, REF_SETTING_LAST) {
   { 0, -3, 6, "Octave", nullptr, settings::STORAGE_TYPE_I8 },
   #endif
   { 0, 0, 11, "Semitone", OC::Strings::note_names_unpadded, settings::STORAGE_TYPE_U8 },
-  { 0, -3, 3, "Mod range oct", nullptr, settings::STORAGE_TYPE_U8 },
+  { 0, -3, 3, "Mod range oct", nullptr, settings::STORAGE_TYPE_I8 }, // SHOAL: was STORAGE_TYPE_U8, which restored -1..-3 as +3 (#81)
   { 0, 0, 30, "Mod rate (s)", nullptr, settings::STORAGE_TYPE_U8 },
   { 0, 0, 1, "Notes/BPM :", notes_or_bpm, settings::STORAGE_TYPE_U8 },
   { 440, 400, 480, "A above mid C", nullptr, settings::STORAGE_TYPE_U16 },
