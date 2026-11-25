@@ -188,6 +188,12 @@ private:
 		double dampRate = DAMP_MAX_RATE;
 		for (int i = 0; i < DAMP_POWER; i++)
 			dampRate *= damp_;
+		// And air's, the same n^2 loss pinned to AIR_HZ: the fundamental's
+		// share of it is (hz / AIR_HZ)^2, held at the pivot's above it.
+		const double airRel = (double) (hz_ < AIR_PIVOT_HZ ? hz_ : AIR_PIVOT_HZ) / AIR_HZ;
+		const double airRate = 6.907755278982137 / AIR_T60_S * airRel * airRel;
+		dampRate += airRate;
+		gain = std::exp(-(ringRate - airRate) / hz_);   // the fundamental's air given back
 		double lpDelay = 0.0;
 		if (dampRate > 0.0) {
 			double keep = std::exp(-dampRate / hz_);

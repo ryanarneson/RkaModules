@@ -103,7 +103,10 @@ the default is 4 s. Every string rings for the same time, low or high.
 
 ### Damp: how the brightness dies
 
-Fully left, a string stays bright for as long as it rings. Turned up, its
+Fully left, a string stays bright for as long as it rings, short of its
+very top: as on a real string, the air takes the highest shimmer (around
+10 kHz) within half a second or so, so a long ring never turns into a
+metallic sizzle. Turned up, its
 upper overtones die sooner than its fundamental: a struck string starts
 bright and mellows, and a drone gets darker and purer. Fully right, a
 string settles within a moment to a soft, almost pure tone.

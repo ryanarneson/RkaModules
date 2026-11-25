@@ -403,7 +403,27 @@ void tiny_damp_is_finite() {
 			}
 }
 
+// Even at Damp 0 the very top dies early, as air takes it from a real
+// string: the partial nearest 10 kHz falls 60 dB in at most about 0.6 s,
+// while the fundamental still rings as long as Ring says. Once, Damp 0
+// kept every partial to 20 kHz as long and as loud as the fundamental: a
+// held, metallic sizzle on every note.
+void top_dies_at_damp_0() {
+	const double fs = 48000.0;
+	for (float hz : {65.406f, 130.81f, 523.25f, 1046.5f}) {
+		String s = make((float) fs, hz, 4.f, 0.f);
+		strike(s);
+		const std::vector<float> x = run(s, 2.0, fs);
+		const double top = std::round(10000.0 / hz) * hz;
+		const double tTop = measureT60(x, fs, top, 2400, 0.1, 0.3);
+		const double t1 = measureT60(x, fs, hz, 4800, 0.3, 1.2);
+		CHECK(tTop < 0.6, "%g Hz at Damp 0: the partial at %.0f Hz rings %.2f s (want under 0.6)", hz, top, tTop);
+		CHECK(std::fabs(t1 / 4.0 - 1.0) < 0.05, "%g Hz at Damp 0: the fundamental rings %.2f s (want Ring's 4)", hz, t1);
+	}
+}
+
 int main() {
+	top_dies_at_damp_0();
 	tiny_damp_is_finite();
 	glide_ends();
 	dc_dies_with_ring();

@@ -219,6 +219,12 @@ Smoothed against zipper noise.
   bright for its whole Ring; turned up, the upper overtones die sooner,
   until fully right the string settles almost at once to a soft, near-pure
   tone. Default about a third.
+- Air (added 2.0.43, after a listen found Damp below about 10 % metallic):
+  whatever Damp is, the loop also loses the top as air would, a partial
+  at 10 kHz falling 60 dB in about 0.4 s (AIR_HZ, AIR_T60_S), on the same
+  n^2 curve as Damp. Ring's gain gives the fundamental back what air takes
+  where it has room, and above 250 Hz a string's air is held at 250 Hz's
+  (its own harmonics), so a 60 s Ring on a high string is about 55 s.
 - Damp also shortens the whole ring somewhat, as on a real string (my
   call, changed from "only the overtones": a filter that left the
   fundamental untouched at every pitch would need gain above 1 below it,
