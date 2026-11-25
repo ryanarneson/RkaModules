@@ -175,7 +175,11 @@ void live_span_after_skip() {
 		float du, dh, lu, lh;
 		l.dot(RELEASE, DECAY, cut, p, 0.123f, start01, goal01, du, dh);
 		l.livePoint(RELEASE, DECAY, cut, p, start01, goal01, lu, lh);
-		CHECK(du == lu && dh == lh, "p %g: dot %g, %g on the line %g, %g", p, du, dh, lu, lh);
+		// dot() is livePoint() by construction, but with the plugin's
+		// -funsafe-math-optimizations the two inlined copies may round
+		// differently (an ulp or two), so within 1e-6 of the window.
+		CHECK(std::fabs(du - lu) < 1e-6f && std::fabs(dh - lh) < 1e-6f, "p %g: dot %.9g, %.9g on the line %.9g, %.9g", p, du,
+		      dh, lu, lh);
 		CHECK(std::fabs(lu - (u0 + p * (1.f - u0))) < 1e-6f, "p %g: u %g across the widened span", p, lu);
 	}
 }
