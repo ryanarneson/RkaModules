@@ -11,20 +11,19 @@
 // absolute index and never meets the seam where the newest frame stands next
 // to the oldest.
 //
-// The fade. While recording, a gain climbs one step a frame (1 / fade frames)
-// to 1; frozen, it falls the same way and the faded frames are still written,
-// so the newest frame at a freeze is 0 and the first at a thaw is one step
-// above 0. Once the gain is 0 nothing is written and now() stands still.
-// Frozen and thawed alike, the gain is a whole number of steps, so two
-// frames of a DC input never differ by more than one step of it.
+// The fade. One gain, a whole number of steps of 1 / fade frames, climbs a
+// step a frame while recording and falls a step a frame while frozen. Frozen
+// frames are still written until the gain reaches 0: write(frozen = true)
+// writes the faded input, and now() advances, for up to `fade` frames after
+// the freeze edge. Then nothing is written and now() stands still until the
+// thaw, which writes on from the same place, one step above 0. So the newest
+// frame at a freeze is 0, the first at a thaw is one step above 0, and no two
+// neighbouring written frames of a DC input differ by more than one step of
+// it, even when a thaw cuts a fade-out short or a freeze a fade-in (the gain
+// just turns round). The frames already on the tape are never altered.
 //
-// The seam. When the fade-out ends the oldest `fade` frames, those next to
-// the write point, are ramped up from 0 by the same steps. The fade-in at the
-// thaw then writes over them step for step, so at the freeze and all through
-// the thaw's fade the newest frame and the oldest one beside it differ by no
-// more than one step of a DC input. What the ring cannot promise: a freeze
-// cut short by a thaw before its fade ended leaves the oldest audio as it
-// was (the seam is then as arbitrary as in any ring that is recording).
+// The junction between the newest frame and the oldest one (the write point)
+// is not smoothed: no reader crosses it.
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -62,6 +61,9 @@ struct Ring {
 			std::fill(store_[c].begin(), store_[c].end(), 0.f);
 	}
 	long long capacity() const { return cap_; }
+	// One past the newest frame; never falls. Frozen, it keeps advancing
+	// until the fade-out (up to `fade` frames) has been written, then stands
+	// still.
 	long long now() const { return now_; }
 
 	// The fade in frames, at least 1, at most the capacity. A fade in
@@ -74,6 +76,9 @@ struct Ring {
 		count_ = full ? fade_ : std::min(count_, fade_);
 	}
 
+	// One frame. Not frozen: the input times the gain, which climbs a step.
+	// Frozen: the same with the gain falling a step, until it is 0; from then
+	// on nothing is written and now() stands still. NaN and inf read as 0.
 	void write(float l, float r, bool frozen) {
 		if (cap_ < 1)
 			return;
@@ -89,8 +94,6 @@ struct Ring {
 		store_[0][size_t(GUARD + p)] = clean(l) * g;
 		store_[1][size_t(GUARD + p)] = clean(r) * g;
 		now_++;
-		if (frozen && count_ == 0)
-			rampOldest();
 	}
 
 	// n frames ending at absolute index `end` (exclusive), end in
@@ -136,17 +139,6 @@ private:
 		uint32_t b;
 		std::memcpy(&b, &v, sizeof b);
 		return (b & 0x7f800000u) == 0x7f800000u ? 0.f : v;
-	}
-	// The frames next to the write point, the oldest, ramped from 0 in the
-	// steps the fade-in will write over them.
-	void rampOldest() {
-		const long long n = std::min(fade_, cap_);
-		for (long long j = 0; j < n; j++) {
-			const float g = float(j) / float(fade_);
-			const size_t i = size_t(GUARD + (now_ + j) % cap_);
-			store_[0][i] *= g;
-			store_[1][i] *= g;
-		}
 	}
 
 	std::vector<float> store_[2];

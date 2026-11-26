@@ -1,5 +1,5 @@
 // Doldrums' ring tape (Ring.hpp): the wrap, the frozen standstill, the fade
-// at Freeze's edges and the seam, the bounds of copy (the buffer fenced with
+// at Freeze's edges, the bounds of copy (the buffer fenced with
 // ASan's poisoning, as Eddy's hostile test fences its tapes), hostile
 // samples, and Freeze toggled every sample.
 #include "Ring.hpp"
@@ -56,16 +56,6 @@ uint32_t bitsOf(float v) {
 // A frame's value as a function of its absolute index, distinct per channel.
 float sampleL(long long i) { return float(i % 977) * 0.01f - 4.f; }
 float sampleR(long long i) { return float((i * 7) % 1013) * -0.013f + 3.f; }
-
-// Largest step between neighbours over the whole physical ring, the seam
-// between the last physical frame and the first included.
-float cyclicStep(const Ring& r, int c) {
-	const float* ch = r.channel(c);
-	float worst = 0.f;
-	for (long long i = 0; i < r.capacity(); i++)
-		worst = std::max(worst, std::fabs(ch[(i + 1) % r.capacity()] - ch[i]));
-	return worst;
-}
 
 // Largest step between neighbours in absolute order, oldest to newest.
 float chronoStep(const Ring& r) {
@@ -161,7 +151,7 @@ void freeze_edges_fade() {
 		r.write(10.f, -10.f, false);
 	CHECK(chronoStep(r) == 0.f, "DC tape has no steps");
 	// Freeze: the tape runs 10 -> 0 in F steps and stops.
-	float worst = 0.f, seam = 0.f;
+	float worst = 0.f;
 	for (int i = 0; i < 400; i++) {
 		r.write(10.f, -10.f, true);
 		worst = std::max(worst, chronoStep(r));
@@ -172,21 +162,18 @@ void freeze_edges_fade() {
 		float l, rr;
 		CHECK(r.copy(r.now(), 1, &l, &rr) && l == 0.f && rr == 0.f, "newest frame at a freeze is 0");
 	}
-	// The seam, frozen: newest (0) beside the oldest, which was 10 V of old audio.
-	for (int c = 0; c < 2; c++)
-		seam = std::max(seam, cyclicStep(r, c));
-	CHECK(seam <= bound, "frozen: the seam and every step %g > %g", seam, bound);
-	// Thaw: through the whole fade-in, absolute order and the seam both.
+	{
+		// What was on the tape stays as it was: no taper at the write point.
+		float l, rr;
+		CHECK(r.copy(r.now() - r.capacity() + 1, 1, &l, &rr) && l == 10.f && rr == -10.f, "the oldest frame is untouched");
+	}
+	// Thaw: through the whole fade-in.
 	worst = 0.f;
-	seam = 0.f;
 	for (int i = 0; i < 400; i++) {
 		r.write(10.f, -10.f, false);
 		worst = std::max(worst, chronoStep(r));
-		for (int c = 0; c < 2; c++)
-			seam = std::max(seam, cyclicStep(r, c));
 	}
 	CHECK(worst <= bound, "largest step across the thaw %g > %g", worst, bound);
-	CHECK(seam <= bound, "thaw: the seam %g > %g", seam, bound);
 	float l, rr;
 	r.copy(r.now(), 1, &l, &rr);
 	CHECK(l == 10.f && rr == -10.f, "recording again at full level");
