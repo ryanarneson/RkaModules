@@ -166,6 +166,18 @@ build/test/doldrums/test_engine: src/doldrums/test_engine.cpp build/test/dep/pff
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@
 
+# Doldrums' hostile-input test: as the rule below (the sanitizers, pffft.o),
+# rebuilt when hadal/Random.hpp changes, and counting locks: on Linux the
+# pthread lock calls are wrapped (on macOS the test defines them itself).
+ifeq ($(shell uname -s),Darwin)
+DOLDRUMS_LOCK_LINK =
+else
+DOLDRUMS_LOCK_LINK = -Wl,--wrap=pthread_mutex_lock -Wl,--wrap=pthread_mutex_trylock
+endif
+build/test/doldrums/test_hostile: src/doldrums/test_hostile.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp src/hadal/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@ $(DOLDRUMS_LOCK_LINK)
+
 # Doldrums' tests: the sanitizers, and pffft.o linked into every one of them
 # (Fft.hpp needs it; a test that does not use it links it unused).
 build/test/doldrums/test_%: src/doldrums/test_%.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp)
@@ -422,7 +434,7 @@ engine-globals: build/test/engine_globals.o
 # tool defines the functions itself and forwards to libSystem's (see the
 # top of libm_calls.cpp). Same cases, same list, same zero on both.
 LIBM_WRAP = exp2f exp2 expf exp log2f log2 logf log powf pow sinf sin cosf cos sincosf sincos \
-	tanf tan tanhf tanh fmodf fmod lroundf lround floorf floor fminf fmin fmaxf fmax
+	tanf tan tanhf tanh fmodf fmod lroundf lround floorf floor fminf fmin fmaxf fmax sqrtf sqrt
 ifeq ($(shell uname -s),Darwin)
 LIBM_LINK =
 else

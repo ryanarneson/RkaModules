@@ -9,7 +9,10 @@
 // sample and the share of one core at 48 kHz, total and per instance, and
 // exits non-zero if an instance's share is over the case's budget (at 1
 // and at 16 instances), if 16 instances cost more each than one does, or
-// if there are no modules. Built with the plugin's optimisation and
+// if there are no modules. A declaration may also define
+// `static bool extra(const Cv&)`, something more it measures and checks
+// (Doldrums: the worst single sample), run after its cases; false fails the
+// bench. Built with the plugin's optimisation and
 // architecture flags (tests.mk).
 //
 //   bench                          every module, every case
@@ -86,6 +89,16 @@ Result run(int k, int count, double seconds, const Cv& cv) {
 	return r;
 }
 
+// A declaration's extra(), if it has one.
+template <typename M>
+auto extra(const Cv& cv, int) -> decltype(M::extra(cv), bool()) {
+	return M::extra(cv);
+}
+template <typename M>
+bool extra(const Cv&, long) {
+	return true;
+}
+
 template <typename M>
 bool bench(const char* name, double seconds, const Cv& cv) {
 	bool ok = true;
@@ -113,7 +126,7 @@ bool bench(const char* name, double seconds, const Cv& cv) {
 		}
 		std::printf("%-7s %-8s budget %.2f %% of a core per instance\n", name, c.name, budget);
 	}
-	return ok;
+	return extra<M>(cv, 0) && ok;
 }
 
 // The declaration's own checks: the three cases every module has, a budget
