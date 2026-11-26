@@ -209,7 +209,8 @@ inline void fit(const float* in, uint64_t n, float* out, long long cap) {
 		std::memcpy(out, in + (n - c), size_t(c) * sizeof(float));
 	else {
 		std::memset(out, 0, size_t(c - n) * sizeof(float));
-		std::memcpy(out + (c - n), in, size_t(n) * sizeof(float));
+		if (n > 0)   // an empty input's data() may be null, which memcpy may not be given
+			std::memcpy(out + (c - n), in, size_t(n) * sizeof(float));
 	}
 }
 

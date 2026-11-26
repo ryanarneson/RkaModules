@@ -251,7 +251,11 @@ void golden_tape_v1() {
 	m.k->start();
 	m.k->expectStored(dir);
 	const bool taken = m.until([&] { return m.e->tapesTaken() == 1; });
-	m.run(2000);
+	// The tape is taken wherever the worker's timing puts it in a hop; the new
+	// tape's pass (held: Position fully right) begins at the next boundary, a
+	// hop (8192 at Medium, 48 kHz) at most later, and the window shows it at
+	// the publish after that (every 800 samples here).
+	m.run(8192 + 2 * 800);
 	CHECK(taken && m.e->live() && goldenMismatches(*m.e->live()) == 0, "opened: the golden tape live, to the bit");
 	CHECK(!m.e->tapePending() && m.k->trouble() == TapeKeeper::FINE && m.warnCount() == 0, "nothing pending, no trouble, no warning");
 	// The window shows it: the snapshot is that of a view rebuilt from the tape.
