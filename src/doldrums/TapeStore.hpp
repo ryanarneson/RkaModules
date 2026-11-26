@@ -10,16 +10,33 @@
 // (Resample.hpp). The engine's side of the hand-over is DoldrumsEngine.hpp's
 // "Tapes handed in".
 //
-// When the file is written (savePlan). Only when the Freeze BUTTON is on (a
-// tape frozen by the gate alone is not kept: the button is what the patch
-// saves), "Keep the frozen tape" is on, and it has not been written since it
-// froze: SaveFacts::frozenSince is the engine's frozenSince(), writtenFor the
-// number it had when the file was last written (0: never). Otherwise, button
-// off or Keep off, the file is removed. A tape handed in (the stored one
-// read, or one converted at a rate change) keeps its number, so a reopened
-// patch does not write its file again until the tape is frozen anew (the
-// file read at another rate is then still at its first rate, which readTape
+// When the file is written (savePlan). First: while a tape is on its way
+// (SaveFacts::tapePending, the engine's tapePending(): the stored tape being
+// read, or a frozen tape being converted after a rate change, asked for and
+// not yet taken, refused or given up), a save leaves the file exactly as it
+// is: no write, no removal, whatever the button and Keep say. The live tape
+// is then only a silent stand-in, and the file may be the one copy of the
+// tape (Rack autosaves by itself, and on its Auto rate the rate settles just
+// after a patch opens, so such a save is ordinary). Once settled, the
+// ordinary rules: written only when the Freeze BUTTON is on (a tape frozen
+// by the gate alone is not kept: the button is what the patch saves), "Keep
+// the frozen tape" is on, and it has not been written since it froze
+// (SaveFacts::frozenSince is the engine's frozenSince(), writtenFor the
+// number it had when the file was last written, 0: never); removed if the
+// button is off or Keep is off. A tape handed in (the stored one read, or
+// one converted at a rate change) keeps its number, so a reopened patch
+// does not write its file again until the tape is frozen anew (the file
+// read at another rate is then still at its first rate, which readTape
 // converts).
+//
+// A load that fails (a bad file): the worker gives up (engine.giveUp), which
+// settles the engine on its silent stand-in, frozen if the button is on.
+// Until then the file is left alone, as above. After it the ordinary rules
+// apply to a tape that did not come from the file: with the button still on
+// the number is the one the file was given at open, so nothing is written
+// and the bad file stays (it is not replaced by silence, and can still be
+// mended by hand or read by a later build); thawed, or with Keep off, it is
+// removed; frozen anew, the new tape is written over it.
 //
 // A whole tape or none. writeTape writes whatever ring it is given; the live
 // ring is saved through saveFrozen, which holds it still (the engine's
@@ -30,8 +47,9 @@
 // holds half a tape. If the hold is not granted (not frozen, the freeze's
 // 5 ms fade-out still running after a short wait, or a tape on its way: the
 // live ring is then a silent stand-in) nothing is written and saveFrozen
-// returns false: the module removes the old file then, since it is of an
-// earlier freeze, and leaves writtenFor alone, so the next save tries again.
+// returns false: saveStep then has the module remove the old file (it is of
+// an earlier freeze; writtenFor 0, so the next save tries again), unless a
+// tape is on its way by then, when the file stays as it is.
 // The hold makes the copy race-free (no torn frames to detect after the
 // fact, as Spindrift's seqlock must), so test_threads checks it under
 // ThreadSanitizer.
@@ -54,10 +72,21 @@
 // first, never across the write point (Ring.hpp: that junction is not
 // smoothed). Every ring made here arrives frozen and faded out (Ring::fill).
 //
-// What the module (Task 12) does, in order:
-// 1. Patch opens with a stored tape (dataFromJson / onAdd says the Freeze
-//    button is on and Keep is on): engine.expectStored(); writtenFor =
-//    engine.frozenSince() (the file holds the tape that is on its way).
+// What the module (Task 12) does: every call, in order, and its thread. The
+// hold (holdStill) is taken only on the worker and only for the copy of a
+// tape's frames (saveFrozen does that); reset, allocate and setSampleRate
+// wait while it is held, so they must never be called on the thread that
+// holds it. Rings come back through retired() into eight slots; the worker
+// collects them every time it wakes (2a), so that allocate always has the
+// two free slots it needs to take a new rate.
+//
+// 1. A patch opens with a stored tape (dataFromJson / onAdd says the Freeze
+//    button is on and Keep is on). UI thread: engine.expectStored();
+//    writtenFor = engine.frozenSince() (the file holds the tape that is on
+//    its way); wake the worker. Worker: 2a, 2b (its job's `from` is null:
+//    readTape of the folder), 2c; then the audio thread 2d. From
+//    expectStored until the tape is taken, refused or given up,
+//    tapePending() is true and every save leaves the file alone (3).
 // 2. The worker, whenever it wakes (and every few ms while a job is
 //    possible):
 //    a. while (Ring* r = engine.retired()) delete r;   only the worker frees
@@ -65,9 +94,11 @@
 //       which is safe here because it collects only between jobs.
 //    b. if engine.tapeWanted(job) and job.ticket is not the last one made:
 //       Ring* r = makeWanted(job, dir, why) (the file read, or job.from
-//       converted); remember the ticket; if r: build the spare view from it
-//       (c), then engine.offer(r, job.ticket), retrying a few ms later while
-//       it returns false. A ring the engine refuses (its ticket no longer
+//       converted); remember the ticket; if !r: engine.giveUp(job.ticket)
+//       and log why (a failed load: see above; the patch opens with a silent
+//       tape and no error); if r: build the spare view from it (c), then
+//       engine.offer(r, job.ticket), retrying a few ms later while it
+//       returns false. A ring the engine refuses (its ticket no longer
 //       wanted, or a rate that has changed) comes back through retired(); a
 //       new ticket says what to make instead.
 //    c. The window. The module keeps two TapeViews: the audio thread feeds
@@ -92,16 +123,26 @@
 //    thread until offered, so building from it needs no hold of the live
 //    ring and cannot meet a thaw, a reset or a rate change; and the picture
 //    changes on the very sample the tape does.
-// 3. Save (onSave; the worker or the UI thread, but not while the module
-//    runs reset or onSampleRateChange on another thread, which wait for a
-//    hold anyway): f = {keepTape, button, engine.frozenSince(), writtenFor};
-//    savePlan(f): SAVE_WRITE: saveFrozen(dir, engine, rate, since, why):
-//    true: writtenFor = since; false: remove tape.wav. SAVE_REMOVE: remove
-//    it, writtenFor = 0. SAVE_NOTHING: nothing.
-// 4. Rate change (onSampleRateChange, Rack holding the engine's lock):
-//    engine.allocate(rate), engine.setSampleRate(rate), wake the worker. A
-//    frozen tape's ring is now the source of a job (2b) at the new rate.
-// 5. Initialize: engine.reset() (nothing on its way is wanted then).
+// 3. A save (onSave; the worker, or the UI thread, but never one that runs
+//    reset or onSampleRateChange at the same time): f = {keepTape, button,
+//    engine.frozenSince(), writtenFor, engine.tapePending()}; then
+//    saveStep(f, dir, engine, rate, writtenFor, why), which follows
+//    savePlan(f) (SAVE_WRITE: saveFrozen, writtenFor = the number written)
+//    and says what is left for the module: SAVE_REMOVE: remove tape.wav
+//    (Rack's system::remove), writtenFor is 0; otherwise nothing. A write
+//    refused because a tape went on its way meanwhile leaves the file too.
+// 4. A rate change with a frozen tape. UI thread (onSampleRateChange, Rack
+//    holding the engine's lock): engine.allocate(rate),
+//    engine.setSampleRate(rate), wake the worker. The frozen tape's ring is
+//    now the source of a job (2b, `from` set) at the new rate; tapePending()
+//    is true until its conversion is taken (or a thaw or reset ends the
+//    wait), so saves leave the file alone meanwhile. Another rate change
+//    before it lands asks for it again (a new ticket), from the same source.
+// 5. A failed load: the worker's 2b, makeWanted returning null, then
+//    engine.giveUp(job.ticket) on the worker. The engine settles on its
+//    silent stand-in; saves from then on follow the ordinary rules (above).
+// 6. Initialize. UI thread: engine.reset() (nothing on its way is wanted
+//    then).
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -122,11 +163,13 @@ namespace rka { namespace doldrums {
 constexpr const char* STORED_TAPE = "tape.wav";
 
 // What the save knows. frozenSince: DoldrumsEngine::frozenSince(); writtenFor:
-// its value when the file was last written, 0 if it was not (counters, not times).
-struct SaveFacts { bool keepTape, freezeButton; uint32_t frozenSince, writtenFor; };
+// its value when the file was last written, 0 if it was not (counters, not
+// times); tapePending: DoldrumsEngine::tapePending(), a tape on its way.
+struct SaveFacts { bool keepTape, freezeButton; uint32_t frozenSince, writtenFor; bool tapePending; };
 enum SaveAction { SAVE_NOTHING, SAVE_WRITE, SAVE_REMOVE };
 
 inline SaveAction savePlan(const SaveFacts& f) {
+	if (f.tapePending) return SAVE_NOTHING;   // the file may be the tape's one copy: as it is
 	if (!f.keepTape || !f.freezeButton) return SAVE_REMOVE;
 	return f.writtenFor == f.frozenSince ? SAVE_NOTHING : SAVE_WRITE;
 }
@@ -329,7 +372,7 @@ inline Ring* makeWanted(const DoldrumsEngine::TapeJob& job, const std::string& d
 
 // The save of the live tape (above: "A whole tape or none"): held still for
 // the copy, then written. True: tape.wav holds the tape numbered `since`.
-// False: nothing written (why says why); the module removes the old file.
+// False: nothing written (why says why); saveStep says what becomes of the old file.
 // The hold is tried for up to `waitMs` (a freeze's fade-out is 5 ms).
 inline bool saveFrozen(const std::string& dir, DoldrumsEngine& engine, float rate, uint32_t& since, std::string& why, int waitMs = 25) {
 	if (!store::usableRate(rate)) {
@@ -376,6 +419,34 @@ inline bool saveFrozen(const std::string& dir, DoldrumsEngine& engine, float rat
 		why = "not enough memory to write the tape";
 		return false;
 	}
+}
+
+// The save, as the module makes it (3 above): savePlan carried out but for
+// the removal, which is the module's (through Rack). Returns SAVE_WRITE when
+// tape.wav was written (writtenFor is then its number), SAVE_REMOVE when the
+// module is to remove tape.wav (writtenFor is then 0: by the plan, or a
+// write that could not be made of a tape that is not still), SAVE_NOTHING
+// when the file is to stay exactly as it is (the plan's nothing, or a tape
+// that went on its way between the plan and the write).
+inline SaveAction saveStep(const SaveFacts& f, const std::string& dir, DoldrumsEngine& engine, float rate, uint32_t& writtenFor,
+                           std::string& why, int waitMs = 25) {
+	switch (savePlan(f)) {
+	case SAVE_NOTHING:
+		return SAVE_NOTHING;
+	case SAVE_REMOVE:
+		writtenFor = 0;
+		return SAVE_REMOVE;
+	case SAVE_WRITE:
+		break;
+	}
+	uint32_t since = 0;
+	if (saveFrozen(dir, engine, rate, since, why, waitMs)) {
+		writtenFor = since;
+		return SAVE_WRITE;
+	}
+	if (engine.tapePending()) return SAVE_NOTHING;
+	writtenFor = 0;
+	return SAVE_REMOVE;
 }
 
 }} // namespace rka::doldrums

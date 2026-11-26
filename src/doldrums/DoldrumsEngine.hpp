@@ -125,7 +125,9 @@
 //   ring it was on, kept as the source) converted from its rate to the new
 //   one. A tape on its way is asked for again, under a new ticket, at each
 //   new rate (from the same source: never a conversion of a conversion). It
-//   stops being wanted when it is taken, at a thaw, and at reset.
+//   stops being wanted when it is taken, at a thaw, at reset, and when the
+//   worker gives up on it (giveUp: a bad file). tapePending() says whether
+//   one is wanted, for the save, which leaves the file alone meanwhile.
 // - Offered. offer(ring, ticket) hands one in; the audio thread looks at it
 //   on its next sample and takes it only if its ticket is the one wanted
 //   now, the engine is frozen, and its length is this rate's tape; otherwise
@@ -163,9 +165,9 @@
 //
 // Threads: allocate, setSampleRate, reset and seed off the audio thread, or
 // with process() held off; expectStored on the UI thread, one at a time with
-// allocate, setSampleRate and reset; tapeWanted, live, tapesTaken and
-// frozenSince on any thread; offer, retired, holdStill and letGo on one
-// worker thread; process, ring() and the other read-only calls on the audio
+// allocate, setSampleRate and reset; tapeWanted, tapePending, live,
+// tapesTaken and frozenSince on any thread; offer, retired, giveUp, holdStill
+// and letGo on one worker thread; process, ring() and the other read-only calls on the audio
 // thread. process() does no allocation, lock, free or libm (FastMath.hpp).
 #include "Grain.hpp"
 #include "Laws.hpp"
@@ -362,6 +364,7 @@ struct DoldrumsEngine {
 		float fromRate = 0.f, toRate = 0.f;
 	};
 	static constexpr int kRetireSlots = 8;
+	static constexpr uint32_t kIssuing = 0xffffffffu;   // want_ while a job's fields change (never a ticket)
 
 	// The UI thread (one thread at a time with allocate, setSampleRate and
 	// reset): the patch's stored tape is to be read and handed in. Its ticket.
@@ -371,6 +374,7 @@ struct DoldrumsEngine {
 		for (int attempt = 0; attempt < 8; attempt++) {
 			const uint32_t a = want_.load(std::memory_order_acquire);
 			if (a == 0) return false;
+			if (a == kIssuing) continue;
 			const Ring* from = jobFrom_.load(std::memory_order_acquire);
 			const float fromRate = jobFromRate_.load(std::memory_order_acquire);
 			const float toRate = jobToRate_.load(std::memory_order_acquire);
@@ -383,6 +387,18 @@ struct DoldrumsEngine {
 			}
 		}
 		return false;
+	}
+	// Any thread (the save, TapeStore.hpp's SaveFacts::tapePending): a tape
+	// is on its way (the stored one being read, or a frozen one converted),
+	// asked for and not yet taken, refused for good or given up. True too
+	// for the moment a request is being made or asked for again.
+	bool tapePending() const { return want_.load(std::memory_order_acquire) != 0; }
+	// The worker: the tape for `ticket` cannot be made (a bad file, no
+	// memory): the engine stops waiting for it, unless a newer request has
+	// taken its place.
+	void giveUp(uint32_t ticket) {
+		uint32_t t = ticket;
+		if (t != 0 && t != kIssuing) want_.compare_exchange_strong(t, 0, std::memory_order_acq_rel);
 	}
 	// The worker: a tape made for `ticket`. False (and still the caller's)
 	// if one offered before is not yet taken or refused; true: the engine's,
@@ -435,7 +451,8 @@ private:
 	DoldrumsState state_;
 
 	// Tapes handed in. The job (want_ and the three fields, a seqlock: want_
-	// is 0 while they change) is written by issue() off the audio thread and
+	// is kIssuing while they change, so a save never sees "nothing pending"
+	// in the middle of a request asked for again) is written by issue() off the audio thread and
 	// cleared by the audio thread when taken or not wanted. source_ (with its
 	// rate and the ticket it is wanted for) is written by allocate with
 	// process held off and handed back by the audio thread.
@@ -533,17 +550,17 @@ private:
 	}
 	// Off the audio thread, one at a time: a new job, under a new ticket.
 	uint32_t issue(const Ring* from, float fromRate, float toRate) {
-		want_.store(0, std::memory_order_relaxed);   // the fields change under 0 (a reader that sees a new field sees this)
+		want_.store(kIssuing, std::memory_order_relaxed);   // the fields change under this (a reader that sees a new field sees it)
 		jobFrom_.store(from, std::memory_order_release);
 		jobFromRate_.store(fromRate, std::memory_order_release);
 		jobToRate_.store(toRate, std::memory_order_release);
-		if (++tickets_ == 0) ++tickets_;
+		if (++tickets_ == kIssuing) tickets_ = 1;
 		want_.store(tickets_, std::memory_order_release);
 		return tickets_;
 	}
 	void cancelWant() {
 		uint32_t t = want_.load(std::memory_order_relaxed);
-		if (t) want_.compare_exchange_strong(t, 0, std::memory_order_acq_rel);
+		if (t && t != kIssuing) want_.compare_exchange_strong(t, 0, std::memory_order_acq_rel);
 	}
 	// While the ring changes off the audio thread: no hold is granted, and one
 	// in force is waited for (the worker holds only for a copy).

@@ -8,7 +8,7 @@
 //
 // - save_plan: the table (button on and not yet written: write; written
 //   already: nothing; button off or Keep off: remove; a freeze by the gate
-//   alone: remove).
+//   alone: remove; a tape on its way: nothing, whatever else).
 // - round_trip: a tape written and read back is the tape, to the bit, oldest
 //   frame first, with the ring wrapped; the file is 32-bit float stereo at
 //   the rate, capacity frames long.
@@ -25,6 +25,13 @@
 //   foreign_rate, absurdly_large, mono_file, too_long, too_short and
 //   hostile_samples: false with `why` set and `out` empty, or a sane tape;
 //   never a crash (ASan).
+// - save_while_a_load_is_pending_keeps_the_file and
+//   save_while_a_conversion_is_pending_keeps_the_file: while the stored tape
+//   is being read, or a frozen one converted after a rate change, every save
+//   (saveStep, as the module makes it) leaves the file to the byte, whatever
+//   the button and Keep say; settled, the ordinary rules; a failed load,
+//   given up, leaves a bad file while the button is on and removes it once
+//   thawed.
 // - save_during_swap: the live tape saved while a swap and a thaw come in the
 //   middle of the save (the hold, driven a step at a time): the file is one
 //   whole tape or there is none; nothing is written while a tape is on its
@@ -43,6 +50,7 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -265,14 +273,21 @@ void save_plan() {
 		SaveAction want;
 		const char* what;
 	} rows[] = {
-		{{true, true, 5, 0}, SAVE_WRITE, "button on, never written: write"},
-		{{true, true, 5, 4}, SAVE_WRITE, "button on, written for an earlier freeze: write"},
-		{{true, true, 5, 5}, SAVE_NOTHING, "button on, written since it froze: nothing"},
-		{{true, false, 5, 0}, SAVE_REMOVE, "button off (not frozen, or a gate-only freeze): remove"},
-		{{true, false, 5, 5}, SAVE_REMOVE, "button off, a file from before: remove"},
-		{{false, true, 5, 0}, SAVE_REMOVE, "Keep off: remove"},
-		{{false, true, 5, 5}, SAVE_REMOVE, "Keep off, written already: remove"},
-		{{false, false, 5, 4}, SAVE_REMOVE, "both off: remove"},
+		{{true, true, 5, 0, false}, SAVE_WRITE, "button on, never written: write"},
+		{{true, true, 5, 4, false}, SAVE_WRITE, "button on, written for an earlier freeze: write"},
+		{{true, true, 5, 5, false}, SAVE_NOTHING, "button on, written since it froze: nothing"},
+		{{true, false, 5, 0, false}, SAVE_REMOVE, "button off (not frozen, or a gate-only freeze): remove"},
+		{{true, false, 5, 5, false}, SAVE_REMOVE, "button off, a file from before: remove"},
+		{{false, true, 5, 0, false}, SAVE_REMOVE, "Keep off: remove"},
+		{{false, true, 5, 5, false}, SAVE_REMOVE, "Keep off, written already: remove"},
+		{{false, false, 5, 4, false}, SAVE_REMOVE, "both off: remove"},
+		// A tape on its way (the stored one being read, a frozen one converted): the file as it is, whatever else.
+		{{true, true, 5, 0, true}, SAVE_NOTHING, "pending, button on, never written: nothing"},
+		{{true, true, 5, 4, true}, SAVE_NOTHING, "pending, written for an earlier freeze: nothing"},
+		{{true, true, 5, 5, true}, SAVE_NOTHING, "pending, written since: nothing"},
+		{{true, false, 5, 5, true}, SAVE_NOTHING, "pending, button off: nothing (not removed)"},
+		{{false, true, 5, 5, true}, SAVE_NOTHING, "pending, Keep off: nothing (not removed)"},
+		{{false, false, 5, 0, true}, SAVE_NOTHING, "pending, both off: nothing"},
 	};
 	for (const Row& r : rows) CHECK(savePlan(r.f) == r.want, "%s (got %d)", r.what, int(savePlan(r.f)));
 	// And with the engine's numbers: a gate-only freeze is frozen but stores nothing.
@@ -286,9 +301,9 @@ void save_plan() {
 	f.freezeGate = 10.f;
 	for (int i = 0; i < 400; i++) e.process(f, out);
 	CHECK(out.frozen && e.frozenSince() != before, "the gate froze it: a new number");
-	CHECK(savePlan({true, f.params[F::FREEZE] >= 0.5f, e.frozenSince(), 0}) == SAVE_REMOVE, "gate-only freeze: remove");
+	CHECK(savePlan({true, f.params[F::FREEZE] >= 0.5f, e.frozenSince(), 0, e.tapePending()}) == SAVE_REMOVE, "gate-only freeze: remove");
 	f.params[F::FREEZE] = 1.f;
-	CHECK(savePlan({true, f.params[F::FREEZE] >= 0.5f, e.frozenSince(), 0}) == SAVE_WRITE, "the button on too: write");
+	CHECK(savePlan({true, f.params[F::FREEZE] >= 0.5f, e.frozenSince(), 0, e.tapePending()}) == SAVE_WRITE, "the button on too: write");
 }
 
 void round_trip() {
@@ -776,6 +791,171 @@ void save_during_swap() {
 	while (Ring* x = e.retired()) delete x;
 }
 
+
+// ---- A save while a tape is on its way leaves the file as it is.
+
+std::string fileBytes(const std::string& dir) {
+	std::ifstream in(tapeFile(dir), std::ios::binary);
+	if (!in) return "<none>";
+	return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
+// The module's save (TapeStore.hpp, 3): the facts from the engine, saveStep,
+// and the removal it asks for.
+SaveAction moduleSave(DoldrumsEngine& e, const std::string& dir, float rate, bool keep, bool button, uint32_t& writtenFor) {
+	std::string why;
+	const SaveFacts f = {keep, button, e.frozenSince(), writtenFor, e.tapePending()};
+	const SaveAction a = saveStep(f, dir, e, rate, writtenFor, why, 0);
+	if (a == SAVE_REMOVE) {
+		std::error_code ec;
+		fs::remove(tapeFile(dir), ec);
+	}
+	return a;
+}
+
+void save_while_a_load_is_pending_keeps_the_file() {
+	const float rate = 8000.f;
+	const long long cap = tapeFrames(rate);
+	const std::string dir = gTemp->sub("pending_load");
+	std::vector<float> tl((size_t) cap), tr((size_t) cap);
+	for (long long i = 0; i < cap; i++) {
+		tl[size_t(i)] = float(i % 991) * 0.01f - 5.f;
+		tr[size_t(i)] = float(i % 313) * -0.02f + 3.f;
+	}
+	std::string why;
+	CHECK(writeTape(dir, *ringOf(tl, tr), rate, why), "the stored tape written");
+	const std::string stored = fileBytes(dir);
+	{
+		// The patch opens frozen by the button, with its stored tape.
+		DoldrumsEngine e;
+		CHECK(e.allocate(rate), "allocate");
+		e.setSampleRate(rate);
+		F f;
+		f.params[F::FREEZE] = 1.f;
+		DoldrumsResult out;
+		for (int i = 0; i < 100; i++) e.process(f, out);
+		CHECK(!e.tapePending(), "nothing on its way yet");
+		e.expectStored();
+		uint32_t writtenFor = e.frozenSince();
+		CHECK(e.tapePending(), "the stored tape on its way");
+		// Every save while it is on its way: the file exactly as it is (left
+		// to the ordinary rules these would write the silent stand-in over it,
+		// or remove it).
+		uint32_t never = 0, same = writtenFor;
+		CHECK(moduleSave(e, dir, rate, true, true, never) == SAVE_NOTHING && never == 0, "pending, never written: nothing");
+		CHECK(moduleSave(e, dir, rate, true, false, same) == SAVE_NOTHING, "pending, button off: nothing");
+		CHECK(moduleSave(e, dir, rate, false, true, same) == SAVE_NOTHING, "pending, Keep off: nothing");
+		CHECK(moduleSave(e, dir, rate, true, true, writtenFor) == SAVE_NOTHING, "pending, as the module has it: nothing");
+		CHECK(fileBytes(dir) == stored, "the file is untouched while the load is pending");
+		// Read and offered, not yet taken: still on its way.
+		DoldrumsEngine::TapeJob job;
+		CHECK(e.tapeWanted(job), "wanted");
+		Ring* r = makeWanted(job, dir, why);
+		CHECK(r && e.offer(r, job.ticket), "read and offered: %s", why.c_str());
+		CHECK(e.tapePending() && moduleSave(e, dir, rate, true, true, never) == SAVE_NOTHING && fileBytes(dir) == stored,
+		      "offered, not yet taken: the file untouched");
+		// A write that finds a tape on its way between the plan and the copy: the file stays.
+		{
+			uint32_t w = 0;
+			const SaveFacts stale = {true, true, e.frozenSince(), 0, false};
+			CHECK(saveStep(stale, dir, e, rate, w, why, 0) == SAVE_NOTHING && fileBytes(dir) == stored,
+			      "a tape went on its way after the plan: the file stays");
+		}
+		e.process(f, out);
+		CHECK(!e.tapePending() && e.tapesTaken() == 1u, "taken: settled");
+		CHECK(moduleSave(e, dir, rate, true, true, writtenFor) == SAVE_NOTHING && fileBytes(dir) == stored,
+		      "settled, the file holds this tape: nothing");
+		uint32_t fresh = 0;
+		std::vector<float> fl, fr;
+		CHECK(moduleSave(e, dir, rate, true, true, fresh) == SAVE_WRITE && fresh == e.frozenSince() && fileFrames(dir, fl, fr) && fl == tl && fr == tr,
+		      "settled, never written: written, and it is the stored tape");
+		while (Ring* x = e.retired()) delete x;
+	}
+	{
+		// A stored tape that cannot be read.
+		writeBytes(tapeFile(dir), "not a tape at all");
+		const std::string bad = fileBytes(dir);
+		DoldrumsEngine e;
+		CHECK(e.allocate(rate), "allocate");
+		e.setSampleRate(rate);
+		F f;
+		f.params[F::FREEZE] = 1.f;
+		DoldrumsResult out;
+		for (int i = 0; i < 100; i++) e.process(f, out);
+		e.expectStored();
+		uint32_t writtenFor = e.frozenSince();
+		CHECK(moduleSave(e, dir, rate, true, true, writtenFor) == SAVE_NOTHING && fileBytes(dir) == bad, "pending: the bad file untouched");
+		DoldrumsEngine::TapeJob job;
+		CHECK(e.tapeWanted(job) && makeWanted(job, dir, why) == nullptr, "the load fails: %s", why.c_str());
+		// A newer request is not ended by giving up an older one.
+		const uint32_t newer = e.expectStored();
+		e.giveUp(job.ticket);
+		CHECK(e.tapePending(), "giving up an older ticket leaves a newer request");
+		e.giveUp(newer);
+		CHECK(!e.tapePending(), "given up: settled");
+		for (int i = 0; i < 100; i++) e.process(f, out);
+		CHECK(moduleSave(e, dir, rate, true, true, writtenFor) == SAVE_NOTHING && fileBytes(dir) == bad,
+		      "settled after a failed load, button on: the bad file stays (not replaced by silence)");
+		f.params[F::FREEZE] = 0.f;
+		for (int i = 0; i < 100; i++) e.process(f, out);
+		CHECK(moduleSave(e, dir, rate, true, false, writtenFor) == SAVE_REMOVE && !fs::exists(tapeFile(dir)), "thawed: removed");
+	}
+}
+
+void save_while_a_conversion_is_pending_keeps_the_file() {
+	const float rate = 8000.f, next = 16000.f;
+	const std::string dir = gTemp->sub("pending_conversion");
+	DoldrumsEngine e;
+	CHECK(e.allocate(rate), "allocate");
+	e.setSampleRate(rate);
+	F f;
+	DoldrumsResult out;
+	long long k = 0;
+	auto run = [&](long long n) {
+		for (long long i = 0; i < n; i++, k++) {
+			f.inL = float(k % 977) * 0.01f - 4.f;
+			e.process(f, out);
+		}
+	};
+	run(tapeFrames(rate) + 100);
+	f.params[F::FREEZE] = 1.f;
+	run(100);
+	uint32_t writtenFor = 0;
+	CHECK(moduleSave(e, dir, rate, true, true, writtenFor) == SAVE_WRITE, "the first freeze written");
+	const std::string first = fileBytes(dir);
+	// Frozen anew (so the ordinary rules would write), then the rate changes.
+	f.params[F::FREEZE] = 0.f;
+	run(500);
+	f.params[F::FREEZE] = 1.f;
+	run(100);
+	CHECK(e.frozenSince() != writtenFor, "a new freeze, not yet written");
+	CHECK(e.allocate(next), "allocate 16 kHz");
+	e.setSampleRate(next);
+	run(100);
+	CHECK(e.tapePending(), "the conversion on its way");
+	uint32_t w = writtenFor;
+	CHECK(moduleSave(e, dir, next, true, true, w) == SAVE_NOTHING && w == writtenFor && fileBytes(dir) == first,
+	      "pending conversion, button on: the file untouched (not written over with the silent stand-in, not removed)");
+	CHECK(moduleSave(e, dir, next, true, false, w) == SAVE_NOTHING && fileBytes(dir) == first, "pending conversion, button off: untouched");
+	CHECK(moduleSave(e, dir, next, false, true, w) == SAVE_NOTHING && fileBytes(dir) == first, "pending conversion, Keep off: untouched");
+	// Converted and taken: settled, and the new freeze written at the new rate.
+	DoldrumsEngine::TapeJob job;
+	std::string why;
+	CHECK(e.tapeWanted(job) && job.from && job.toRate == next, "the conversion wanted");
+	Ring* r = makeWanted(job, dir, why);
+	CHECK(r && e.offer(r, job.ticket), "converted and offered: %s", why.c_str());
+	run(1);
+	CHECK(!e.tapePending() && e.live() == r, "taken: settled");
+	CHECK(moduleSave(e, dir, next, true, true, writtenFor) == SAVE_WRITE && writtenFor == e.frozenSince(), "settled: written");
+	std::vector<float> fl, fr, al, ar;
+	oldestFirst(e.ring(), al, ar);
+	WavInfo info;
+	std::string wv;
+	CHECK(fileFrames(dir, fl, fr) && fl == al && fr == ar && rka::probeWav(tapeFile(dir), info, wv) && info.sampleRate == 16000,
+	      "the file is the converted tape at 16 kHz");
+	while (Ring* x = e.retired()) delete x;
+}
+
 } // namespace
 
 int main() {
@@ -798,6 +978,8 @@ int main() {
 	too_short();
 	hostile_samples();
 	save_during_swap();
+	save_while_a_load_is_pending_keeps_the_file();
+	save_while_a_conversion_is_pending_keeps_the_file();
 	gTemp = nullptr;
 	return rkatest::finish("doldrums/test_store");
 }
