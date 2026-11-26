@@ -25,15 +25,16 @@
 //   anchor is held inside these bounds, so Position fully left, recording,
 //   starts a hop in.
 // - TRIG starts a pass from the anchor at any time: mid pass, held, stopped.
-// - Stopped (only in stop) stays silent until TRIG. Freeze rising does not
-//   wake it, nor does Stretch at the stop (choice: "stays silent until a
-//   trigger at TRIG starts the next pass"; waking on Freeze would set RUN
-//   off before the trigger in the patch the design is for). Go round chosen
-//   while stopped starts a pass at once (choice: in go round something is
-//   always sounding). After reset() the first grain starts a pass, or in
-//   stop is stopped.
-// - Freeze rising starts a pass from the anchor. Freeze falling changes
+// - Freeze rising starts a pass from the anchor at any time, stopped
+//   included (ruling: the design holds a frozen tape with nothing to travel
+//   through "with either setting of At the end of a pass", and in stop the
+//   module is usually stopped when Freeze is pressed). Freeze falling changes
 //   nothing: the ordinary rules go on from where the read point is.
+// - Stopped (only in stop) stays silent until TRIG or Freeze rising. Stretch
+//   at the stop, Freeze falling or a Position move do not wake it. Go round
+//   chosen while stopped starts a pass at once (choice: in go round
+//   something is always sounding). After reset() the first grain starts a
+//   pass, or in stop is stopped.
 // - A Position move (a change in the position after the NaN rule) moves the
 //   read point by the change in lag, at once, held to the edges of the tape,
 //   and does not start a pass. The distance is reckoned at the current
@@ -125,15 +126,13 @@ struct PassLogic {
 		const long long shift = moved ? lagFrames(pos_, in.capacity, grain) - lag : 0;
 		pos_ = pos;
 
-		bool start = in.trig;
+		bool start = in.trig || in.freezeRose;
 		if (fresh_) {
 			fresh_ = false;
 			stopped_ = in.stopAtEnd;
 			start = start || !stopped_;
 		}
 		if (stopped_ && !in.stopAtEnd)
-			start = true;
-		if (!stopped_ && in.freezeRose)
 			start = true;
 		if (start)
 			return begin(anchor, held, o);
