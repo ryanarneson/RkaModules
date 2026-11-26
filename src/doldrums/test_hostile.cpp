@@ -20,6 +20,8 @@
 // - instances_independent: an engine run beside another fed the fuzz makes
 //   the same output to the bit as one run alone; another seed, another
 //   output.
+// - nan_reads_as_zero_volts_on_the_tape: NaN, +-inf and -0 on every door
+//   give the output, to the bit, of 0 V there.
 // - position_cv_at_audio_rate (Review Focus 1): Position and Stretch by CV
 //   at audio rate, stepped, huge and NaN, with the attenuverters at either
 //   end, frozen and recording, in both settings, at each grain size.
@@ -531,6 +533,101 @@ void instances_independent() {
 	CHECK(differ > n / 2, "another seed gives another output (%ld of %lld samples differ)", differ, n);
 }
 
+// ---- NaN, infinity and -0 read as 0 V (the plan's Global Constraints).
+
+// Two engines, the same seed and the same patch, sample for sample; at
+// scattered samples one is given NaN, +inf, -inf or -0 on a door and the
+// other 0 V there. Every door: IN L, IN R (patched), the three CVs (the
+// attenuverters open), the Freeze gate, TRIG and a V/OCT channel (Harmonics
+// up, so the comb reads it). At Mix 1 the output is the wet sound alone, so
+// what the tape recorded and what the controls read are all that differ:
+// the outputs must be equal to the bit. Recording, and frozen with a pass
+// travelling (Position 0.5).
+void nan_reads_as_zero_volts_on_the_tape() {
+	const float bad[4] = {NaN, INF, -INF, -0.f};
+	for (int frozen = 0; frozen < 2; frozen++) {
+		Host a(48000.f, 51), z(48000.f, 51);
+		for (Host* h : {&a, &z}) {
+			F& f = h->f;
+			f.inRPatched = true;
+			f.params[F::FREEZE] = float(frozen);
+			f.params[F::POSITION] = frozen ? 0.5f : 1.f;
+			f.params[F::STRETCH_ATT] = 0.3f;
+			f.params[F::POSITION_ATT] = 0.05f;
+			f.params[F::HARMONICS] = 0.5f;
+			f.params[F::HARMONICS_ATT] = 0.5f;
+			f.voct = h->voct;
+			f.voctChannels = 2;
+		}
+		if (frozen)   // a tape of noise and a tone to travel through
+			for (Host* h : {&a, &z}) {
+				Random n;
+				n.seed(8);
+				Ring& ring = h->e->ring();
+				for (long long k = 0; k < ring.capacity(); k++) {
+					const float x = float(2.0 * std::sin(2.0 * kPi * 440.0 * double(k) / 48000.0));
+					ring.write(x + n.uniform(), x - n.uniform(), false);
+				}
+			}
+		Random g;
+		g.seed(77);
+		const long long n = 6 * 48000;
+		long hostile = 0, differ = 0;
+		double energy = 0.0;
+		for (long long t = 0; t < n; t++) {
+			const double s = double(t) / 48000.0;
+			float v[9];
+			v[0] = float(3.0 * std::sin(2.0 * kPi * 220.0 * s)) + 0.5f * g.uniform();         // IN L
+			v[1] = float(2.0 * std::sin(2.0 * kPi * 331.0 * s)) + 0.5f * g.uniform();         // IN R
+			v[2] = float(4.0 * std::sin(2.0 * kPi * 0.4 * s));                                // Stretch CV
+			v[3] = float(-4.0 + 3.0 * std::sin(2.0 * kPi * 0.3 * s));                          // Position CV
+			v[4] = float(3.0 * std::sin(2.0 * kPi * 0.2 * s));                                // Harmonics CV
+			v[5] = frozen ? 0.f : ((t % 60000) < 2000 ? 10.f : 0.f);                         // Freeze gate
+			v[6] = (t % 20000) < 200 ? 10.f : 0.f;                                            // TRIG
+			v[7] = float(0.5 * std::sin(2.0 * kPi * 0.25 * s));                               // V/OCT 1
+			v[8] = 7.f / 12.f;                                                                 // V/OCT 2
+			float w[9];
+			std::memcpy(w, v, sizeof v);
+			float zv[9];
+			std::memcpy(zv, v, sizeof v);
+			for (int d = 0; d < 8; d++)
+				if (g.next() % 16 == 0) {
+					w[d] = bad[g.next() % 4];
+					zv[d] = 0.f;
+					hostile++;
+				}
+			float* sets[2] = {w, zv};
+			Host* hs[2] = {&a, &z};
+			for (int k = 0; k < 2; k++) {
+				F& f = hs[k]->f;
+				const float* x = sets[k];
+				f.inL = x[0];
+				f.inR = x[1];
+				f.stretchCv = x[2];
+				f.positionCv = x[3];
+				f.harmonicsCv = x[4];
+				f.freezeGate = x[5];
+				f.trig = x[6];
+				hs[k]->voct[0] = x[7];
+				hs[k]->voct[1] = x[8];
+				hs[k]->step();
+			}
+			std::uint32_t la, lz, ra, rz;
+			std::memcpy(&la, &a.r.outL, 4);
+			std::memcpy(&lz, &z.r.outL, 4);
+			std::memcpy(&ra, &a.r.outR, 4);
+			std::memcpy(&rz, &z.r.outR, 4);
+			differ += la != lz || ra != rz || a.r.run != z.r.run;
+			energy += double(z.r.outL) * z.r.outL;
+		}
+		const char* what = frozen ? "nan_reads_as_zero_volts_on_the_tape (frozen, travelling)" : "nan_reads_as_zero_volts_on_the_tape (recording)";
+		a.sane(what);
+		z.sane(what);
+		CHECK(energy > 0.0 && hostile > 10000, "%s: the patch sounds and the doors were hit (%ld hostile samples)", what, hostile);
+		CHECK(differ == 0, "%s: NaN, +-inf and -0 read as 0 V: %ld of %lld samples differ from the engine given 0 V", what, differ, n);
+	}
+}
+
 // ---- Review Focus 1: Position and Stretch by CV at audio rate.
 
 void position_cv_at_audio_rate() {
@@ -719,6 +816,7 @@ int main() {
 	}
 	fuzz();
 	instances_independent();
+	nan_reads_as_zero_volts_on_the_tape();
 	position_cv_at_audio_rate();
 	hot_sine_on_a_tooth();
 	empty_comb_is_silent();

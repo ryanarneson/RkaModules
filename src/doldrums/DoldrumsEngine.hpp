@@ -4,8 +4,8 @@
 // inputs, a sample at a time. Rack-free, header-only, C++11; Doldrums.cpp
 // only maps params, ports, lights and the menu onto it.
 //
-// Each sample: the inputs (NaN and inf read as 0 V; IN R unpatched takes IN
-// L); Freeze = the button or the gate (Schmitt 0.1 V / 1 V); the input
+// Each sample: the inputs, the Freeze gate and TRIG (NaN and inf read as
+// 0 V; IN R unpatched takes IN L); Freeze = the button or the gate (Schmitt 0.1 V / 1 V); the input
 // written to the tape (faded over 5 ms at Freeze's edges, Ring.hpp); TRIG's
 // rising edge; the pace from Stretch and its CV; then at most one piece of
 // staged work (below); the overlap's next sample; RUN; Mix (equal power,
@@ -218,13 +218,14 @@ struct DoldrumsEngine {
 	void process(const DoldrumsFrame& f, DoldrumsResult& out) {
 		typedef DoldrumsFrame F;
 		const float inL = finite(f.inL), inR = f.inRPatched ? finite(f.inR) : inL;
-		if (!armed_) trigHigh_ = f.trig >= 1.f;   // the first sample after a restart: levels, no edges
-		const bool gate = schmitt(f.freezeGate, gateHigh_);
+		const float gateV = finite(f.freezeGate), trigV = finite(f.trig);   // +inf is 0 V, not high
+		if (!armed_) trigHigh_ = trigV >= 1.f;   // the first sample after a restart: levels, no edges
+		const bool gate = schmitt(gateV, gateHigh_);
 		const bool frozen = f.params[F::FREEZE] >= 0.5f || gate;
 		if (frozen && !frozen_ && armed_) rose_ = true;
 		frozen_ = frozen;
 		const bool wasTrig = trigHigh_;
-		if (schmitt(f.trig, trigHigh_) && !wasTrig) trig_ = true;
+		if (schmitt(trigV, trigHigh_) && !wasTrig) trig_ = true;
 		armed_ = true;
 		pace_ = paceFromDial(cvValue(f.params[F::STRETCH], f.params[F::STRETCH_ATT], f.stretchCv));
 		staged_ = 0;
