@@ -73,7 +73,8 @@ void handoff() {
 		TapeSnapshot s;
 		std::memset(&s, 0x5a, sizeof s);
 		if (!view.read(s)) {
-			// Giving up leaves `out` as it was.
+			// Giving up leaves `out` as it was (test_view pins it deterministically;
+			// whether a read collides here depends on the machine, so it is not required).
 			unsigned char* b = (unsigned char*) &s;
 			bool same = true;
 			for (size_t i = 0; i < sizeof s; i++) same = same && b[i] == 0x5a;
@@ -112,7 +113,6 @@ void handoff() {
 	audio.join();
 	CHECK(bad == 0, "%lld of %lld snapshots were not whole", bad, reads);
 	CHECK(untouched, "a read that gave up changed its output");
-	CHECK(failed > 0, "no read ever gave up, so `out` untouched was not exercised");
 	CHECK(reads > 1000, "the reader got %lld snapshots", reads);
 	CHECK(changes > 100, "the reader saw the value change %lld times", changes);
 	CHECK(published.load() > 100, "the writer published %lld times", (long long) published.load());

@@ -229,6 +229,11 @@ struct TapeView {
 	}
 
 private:
+	// test_view.cpp's access to the counter, to put the view in the state a
+	// reader meets in the middle of a publish (the counter odd). It exists for
+	// that test; the audio path does not use it.
+	friend struct TapeViewTestAccess;
+
 	static_assert(sizeof(TapeSnapshot) % 4 == 0, "the snapshot is copied in words");
 	static_assert(std::is_trivially_copyable<TapeSnapshot>::value, "the snapshot is copied as bytes");
 	enum { kWords = int(sizeof(TapeSnapshot) / 4) };

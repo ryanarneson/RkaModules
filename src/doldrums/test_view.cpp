@@ -13,6 +13,13 @@
 
 using namespace rka::doldrums;
 
+namespace rka { namespace doldrums {
+// The seam TapeView.hpp names: the view as a reader meets it mid-publish.
+struct TapeViewTestAccess {
+	static void setCounter(TapeView& v, uint32_t q) { v.seq_.store(q); }
+};
+}}
+
 namespace {
 
 uint32_t rng = 12345;
@@ -361,8 +368,30 @@ void read_before_publish_and_hostile() {
 	TapeView v;
 	TapeSnapshot s;
 	std::memset(&s, 0x5a, sizeof s);
+	TapeSnapshot kept;
+	std::memcpy(&kept, &s, sizeof s);
 	CHECK(!v.read(s), "nothing published: false");
-	CHECK(s.low[3] != 0.f || ((unsigned char*) &s)[12] == 0x5a, "out untouched");
+	CHECK(std::memcmp(&s, &kept, sizeof s) == 0, "out untouched before the first publish");
+
+	// A reader that meets a publish under way (the counter odd) gives up after
+	// its tries: false, and `out` exactly as it was, even though a whole snapshot
+	// is in the words from before.
+	{
+		TapeView w;
+		w.configure(1000, 0);
+		DoldrumsState ws;
+		ws.capacity = 1000;
+		w.publish(ws);
+		TapeSnapshot got;
+		CHECK(w.read(got), "a published view reads");
+		std::memset(&s, 0x5a, sizeof s);
+		std::memcpy(&kept, &s, sizeof s);
+		TapeViewTestAccess::setCounter(w, 3);
+		CHECK(!w.read(s), "mid-publish: read gives up with false");
+		CHECK(std::memcmp(&s, &kept, sizeof s) == 0, "mid-publish: a read that gave up leaves out as it was");
+		TapeViewTestAccess::setCounter(w, 4);
+		CHECK(w.read(s), "the counter even again: it reads");
+	}
 	v.configure(100000, 0);   // 195 frames a column: both frames below are in the open one
 	v.wrote(std::nanf(""), INFINITY);
 	v.wrote(1e30f, -1e30f);
