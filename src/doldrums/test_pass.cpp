@@ -261,13 +261,15 @@ void position_turn_stops_at_the_edge() {
 	o = r.next();
 	CHECK(o.newPass && o.end == r.anchorFor(0.1f), "the oldest sound catches it: the pass is over");
 
-	// Held, recording, ridden off the tape; a turn takes the slice at the edge.
+	// Held, recording, still on the tape (1 121 408 behind now after 50
+	// grains); a turn left by 427 085 would take it off: it stops at the edge.
 	Sim h(0.5f, 0, false);
-	for (int i = 0; i < 400; i++)
+	for (int i = 0; i < 51; i++)
 		h.next();
-	h.in.position = 0.55f;
+	CHECK(h.o.end >= h.low(true), "the held place is still on the tape");
+	h.in.position = 0.2f;
 	o = h.next();
-	CHECK(o.end == h.low(true) && o.take && o.held, "held: a turn that would leave the tape stops at its edge");
+	CHECK(o.end == h.low(true) && o.take && o.held && !o.newPass, "held: a turn that would leave the tape stops at its edge");
 
 	// Frozen, the read point never falls behind its anchor, so a turn left
 	// cannot take it off; a turn right past now ends the pass.
@@ -396,6 +398,65 @@ void held_at_the_stop() {
 	f.in.position = 0.2f;
 	o = f.next();
 	CHECK(o.take && o.end == f.anchorFor(0.2f), "frozen: a scrub to the new place");
+}
+
+// A move is decided in frames: a change in Position's last bit is no move.
+void position_wobble_is_no_move() {
+	// Held, recording, the held place long since recorded over.
+	Sim h(0.5f, 0, false);
+	for (int i = 0; i < 400; i++)
+		h.next();
+	const long long here = h.o.end;
+	CHECK(here < h.low(true), "recorded over");
+	h.in.position = std::nextafter(0.5f, 2.f);
+	PassOut o = h.next();
+	CHECK(!o.take && o.held && o.end == here, "one float step up: kept, not retaken (end %lld, was %lld)", o.end, here);
+	h.in.position = 0.5f;
+	o = h.next();
+	CHECK(!o.take && o.end == here, "and back: kept");
+	// Travelling: a wobble does not move the read point.
+	Sim f(0.5f, 8, true);
+	f.next();
+	for (int i = 1; i <= 20; i++) {
+		f.in.position = (i & 1) ? std::nextafter(0.5f, 2.f) : 0.5f;
+		f.next();
+	}
+	CHECK(f.o.end == f.anchorFor(0.5f) + 20 * 1024, "a frozen pass under a wobbling Position travels at its pace");
+	// A slow drift, under a frame a grain, is not lost: it is applied once it
+	// adds up to a frame.
+	Sim d(0.5f, 8, true);
+	const long long a = d.next().end;
+	float p = 0.5f;
+	for (int i = 1; i <= 100; i++) {
+		p += 1e-7f;   // about 0.14 frames a grain
+		d.in.position = p;
+		d.next();
+	}
+	const long long drift = lagFrames(0.5f, C, G) - lagFrames(p, C, G);
+	CHECK(drift >= 10 && d.o.end == a + 100 * 1024 + drift, "a slow drift moves the read point by all of it (%lld)", drift);
+}
+
+// Ruling: held, the held place recorded over, a real Position move takes the
+// new slice at the anchor, still held, with no new pass.
+void held_off_tape_position_move_takes_at_the_anchor() {
+	Sim h(0.5f, 0, false);
+	for (int i = 0; i < 400; i++)
+		h.next();
+	CHECK(h.o.end < h.low(true), "recorded over");
+	h.in.position = 0.55f;
+	PassOut o = h.next();
+	CHECK(o.end == h.anchorFor(0.55f) && o.end == o.anchor && o.take && o.held && o.sound && !o.newPass && !o.stopped,
+	      "taken at the anchor, held, no new pass (end %lld, anchor %lld)", o.end, o.anchor);
+	o = h.next();
+	CHECK(!o.take && o.held && o.end == h.anchorFor(0.55f) - H, "then kept there while the tape runs on");
+	// The same in stop.
+	Sim s(0.5f, 0, false, true);
+	s.in.trig = true;
+	for (int i = 0; i < 400; i++)
+		s.next();
+	s.in.position = 0.3f;
+	o = s.next();
+	CHECK(o.end == s.anchorFor(0.3f) && o.take && o.held && !o.newPass && !o.stopped, "in stop too");
 }
 
 void leaving_held_on_tape() {
@@ -780,6 +841,8 @@ int main() {
 	freeze_on_restarts();
 	freeze_off_changes_nothing();
 	held_at_the_stop();
+	position_wobble_is_no_move();
+	held_off_tape_position_move_takes_at_the_anchor();
 	leaving_held_on_tape();
 	leaving_held_off_tape();
 	nothing_to_travel_frozen();

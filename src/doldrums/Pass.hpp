@@ -35,16 +35,23 @@
 //   chosen while stopped starts a pass at once (choice: in go round
 //   something is always sounding). After reset() the first grain starts a
 //   pass, or in stop is stopped.
-// - A Position move (a change in the position after the NaN rule) moves the
-//   read point by the change in lag, at once, held to the edges of the tape,
-//   and does not start a pass. The distance is reckoned at the current
-//   capacity and grain, so a change of Grain alone moves nothing.
+// - A Position move moves the read point by the change in lag, at once,
+//   held to the edges of the tape, and does not start a pass. It is decided
+//   in frames: a move is a change of at least a frame in the rounded lag
+//   since the last grain, so a wobble in a CV's last bit is no move. A slow
+//   drift is not lost: the rounded lags' differences add up to all of it.
+//   The lag is reckoned at the current capacity and grain, so a change of
+//   Grain alone moves nothing.
 // - Held: Stretch at its stop (pace 0), or the tape frozen with the anchor
 //   less than a grain from now (nothing to travel through). The read point
 //   stands still, the grain sounds, a pass never ends, in either setting.
 //   `take` is true on the grain held begins if the read point is still on
 //   the tape, on a Position move, and on a change of Grain if the slice is
-//   on the tape at the new size; false otherwise, frozen too (choice: one
+//   on the tape at the new size. A Position move while the held place is
+//   still on the tape moves it as above; once that place has been recorded
+//   over, the move takes the new slice at the anchor, Position's own place,
+//   still held and with no new pass (ruling: as leaving held off the tape
+//   goes from the anchor). `take` is false otherwise, frozen too (choice: one
 //   rule for both causes; retaking a still tape would be harmless, but
 //   keeping the slice also keeps the faded frames written just after a
 //   freeze out of the held moment).
@@ -122,8 +129,8 @@ struct PassLogic {
 
 		const bool held = pace == 0.0 || (in.frozen && now - anchor < grain);
 		const bool noRoom = !in.frozen && anchor - low < grain;
-		const bool moved = !fresh_ && pos != pos_;
-		const long long shift = moved ? lagFrames(pos_, in.capacity, grain) - lag : 0;
+		const long long shift = fresh_ ? 0 : lagFrames(pos_, in.capacity, grain) - lag;
+		const bool moved = shift != 0;
 		pos_ = pos;
 
 		bool start = in.trig || in.freezeRose;
@@ -143,7 +150,7 @@ struct PassLogic {
 
 		if (held) {
 			if (moved) {
-				end_ = clamp(end_ + shift, low, now);
+				end_ = onTape(end_) ? clamp(end_ + shift, low, now) : anchor;
 				o.take = true;
 			}
 			else
