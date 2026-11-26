@@ -50,6 +50,27 @@
 
 ## 2.0.0 (unreleased)
 
+- New module: **Doldrums**, a 16 HP stereo freeze and stretch in the
+  Instrument look, after PaulStretch's method (written afresh):
+  - A 30 s stereo tape of the input, always recording unless frozen, with
+    a window on it: the tape's peaks, the anchor, the read point and the
+    slice, and the state in the corner (FROZEN, HELD, STOPPED, FROZEN
+    HELD, FROZEN STOPPED). Drag in the window to set Position.
+  - Freeze by a latching button or a gate; with Position fully right a
+    freeze holds what is playing. Position sets where a pass starts,
+    Stretch how slowly it moves on (x1 to x32 on the lettered dial, then
+    rising without limit to a true stop, held), each with CV.
+  - Grains of 0.17, 0.34 or 0.68 s, resynthesised with random phases;
+    stereo image kept, or Wide (menu). Blur, Tilt and Shift on the
+    spectrum.
+  - Harmonics: a tuned comb (Root, Partials, Width) with CV, played from
+    V/OCT, a chord from a polyphonic cable, its loudness made up.
+  - TRIG starts a pass; RUN is high while a pass sounds; "At the end of a
+    pass: Stop (until TRIG)" plays one pass per trigger, for recording into
+    Eddy.
+  - A tape frozen by the button is kept with the patch (`tape.wav`) and
+    converted at a rate change.
+  - The FFT is PFFFT, vendored unchanged in `src/dep/pffft/`.
 - New module: **Neap**, an 8 HP source of eight slow cycles in the Instrument
   look, after the Instruō øchd, with **Spring**, a 6 HP expander:
   - Eight cycles about an octave apart in uneven steps (2.16, 1.93, 2.25,

@@ -1,10 +1,18 @@
 # Doldrums: freeze and stretch: design
 
-Status: design, 2026-11-26, approved by the user ("yes approved"). Panel:
-`2026-11-26-doldrums-mockup.png`, drawn through `tools/gen_panels.py` from
-a draft description that is not in the repo; its positions are listed
-under Panel. Grows from the idea and the PaulXStretch notes in
-`docs/future/doldrums.md`.
+Status: built, 2026-11-26 (see below). Designed 2026-11-26, approved by
+the user ("yes approved"). Panel: `2026-11-26-doldrums-mockup.png`,
+drawn through `tools/gen_panels.py` from a draft description that is not
+in the repo; its positions are listed under Panel. Grows from the idea
+and the PaulXStretch notes in `docs/future/doldrums.md`.
+
+(2026-11-26: built, on branch `doldrums`; not yet heard by the user, whose
+listening stop comes with the first test build. Notes marked "As built"
+below say where the build differs from or settles what this design says,
+from the build's ledger (`.superpowers/sdd/2026-11-26-doldrums/progress.md`);
+the manual is `docs/doldrums/README.md`, the listening guide
+`docs/doldrums/listening.html`, the technical reference
+`docs/doldrums/technical-reference.md`.)
 
 Lines marked *(call)* are the designer's choices, not things the user
 asked for; the user saw most of them in conversation and let them stand.
@@ -47,6 +55,13 @@ field recording comes out as a tuned drone.
   `~/ws/plugins/paulxstretch`.
 - **The FFT** is pffft, which Rack's SDK already ships (`pffft.h`, in
   `libRack`); nothing is vendored.
+  (As built, 2026-11-26: pffft is vendored, unchanged, in
+  `src/dep/pffft/` (upstream commit 67a4a6a, provenance in its
+  `README.md`), its symbols renamed `rka_pffft_*` by `rka_prefix.h` so they
+  cannot meet libRack's copy. The SDK ships only the header; the code is
+  inside libRack, which the offline tests and CI cannot link, and this way
+  the plugin and the tests run the same transform. Licence FFTPACK's,
+  BSD-like, compatible with GPL-3.0-or-later.)
 - **Cost, measured 2026-11-26** on the development Mac (Apple M5 Pro),
   one real forward transform through `pffft_transform_ordered`:
   10 µs at 16384 points, 28 µs at 32768, 56 µs at 65536 (medians; worst
@@ -192,6 +207,11 @@ As the mockup, which passes the generator's checks at these positions
   16384 and 32768 at 44.1 and 48 kHz; twice those at 88.2 and 96 kHz),
   capped where the builder finds it must be. *(call; in PaulStretch the
   grain's length is the setting that most changes the character)*
+  (As built, 2026-11-26: capped at 131072 samples, so above 192 kHz Long
+  is shorter than 0.68 s; at 384 kHz and up Medium and Long are one size.
+  The windows: Hann to take a grain, the sine window to lay it down (its
+  squares at half a grain apart sum to 1, so noise has no ripple at the
+  hop's rate: measured 0.09 to 0.18 dB).)
 - A new grain starts every half grain, and each overlaps the last by
   half. Because every grain has its own random phases, two grains never
   line up, and the overlap is a crossfade between two unrelated sounds:
@@ -238,6 +258,22 @@ The read point is the end of the slice that the next grain will take.
   have to creep to the end of the tape before the frozen moment was
   reached. Freeze going off changes nothing: the read point goes on
   from where it is. *(call, after the builder's read of this document)*
+  (As built, 2026-11-26, a ruling during the build: in *stop*, Freeze
+  going on starts a pass while a pass is running, but wakes a STOPPED
+  module only when the result is held (the anchor within a grain of the
+  end of the frozen tape, as at Position fully right); with a pass to
+  travel it stays stopped until TRIG. This meets both "stays silent until
+  a trigger at TRIG" and "held ... with either setting", and gives the
+  Eddy patch a clean RUN: nothing sounds or gates between the freeze and
+  the trigger. In *go round* Freeze always starts a pass. Also: a stopped
+  module is not woken by a Position move, so frozen and stopped, turning
+  Position fully right stays silent until TRIG or a new freeze, though
+  the same state opened from a patch is held at once. Freeze going on
+  while held at the Stretch stop starts a pass from the anchor like any
+  freeze, so the held slice is replaced by the anchor's. And a thaw from
+  a hold at Position fully right goes on from the frozen moment and
+  returns to now only when that pass ends, 30 / (1 - pace) s later (34 s
+  at x8). All for the listening stop.)
 - **Frozen**, the tape stands still and the read point travels right,
   towards now. When it arrives at the end of the tape, the pass is over
   and it returns to the anchor and goes again.
@@ -256,6 +292,16 @@ The read point is the end of the slice that the next grain will take.
   is high, and the window says held. The same goes for any pass that
   would be shorter than one grain. This is the plain "hold what is
   playing" use and the manual leads with it. *(call)*
+  (As built, 2026-11-26: the same is NOT true of a tape that is not
+  frozen with Position fully left, which has less than a grain to travel
+  before the oldest sound catches it (the plan's second deliberate
+  difference): such a pass takes its slice at the anchor every grain, so
+  the output follows the input about 30 s late at any Stretch; it is not
+  held (the window says nothing), it never ends, even in stop, and RUN
+  stays high. For the listening stop.)
+  (As built, 2026-11-26: frozen, a turn of Position far enough right to
+  push the read point past the end of the tape ends the pass at once, with
+  no grain at the very edge. For the listening stop.)
 
 **The Stretch dial.**
 
@@ -265,6 +311,10 @@ The read point is the end of the slice that the next grain will take.
   with room to set them, rising without limit, and at the end of the
   travel the read point does not move at all. A CV that pushes past the
   end is also a stop. The law in this stretch is the builder's.
+  (As built, 2026-11-26: with u = 6t - 5 over the last sixth, stretch =
+  32 / (1 - u)^2, written as pace = 1.125 (1 - t)^2 so it is exactly 0 at
+  the end: 64 at u = 0.293, 128 at u = 0.5. The Listening stop below says
+  "last eighth"; it is this last sixth.)
 - The tooltip gives the figure ("x8.0", "x128") and, at the stop,
   "held".
 - CV: at full attenuverter, 10 V crosses the dial. *(call; the builder
@@ -279,11 +329,18 @@ The read point is the end of the slice that the next grain will take.
   tape under it has been recorded over. *(call)*
 - Moving Position while held takes a new slice at the new place: with
   the tape frozen this is a scrub through the 30 s, by hand or by CV.
+  (As built, 2026-11-26: a move is decided in whole frames of lag, so a
+  CV that is not moving moves nothing. If the held place has already been
+  recorded over, the move takes the new slice at the anchor, Position's
+  own place, rather than at the oldest edge; so a held sound under a
+  modulated Position follows it. For the listening stop.)
 - When Stretch leaves the stop the read point goes on from where it is
   if that place is still on the tape, and from the anchor if not.
 - A change of Grain while held takes the slice again at the new size if
   its place is still on the tape, by a dissolve; if not, the held slice
   keeps its size until it is let go. *(call)*
+  (As built, 2026-11-26: while recording, "still on the tape" keeps a
+  margin of half the new grain and four Long grains for the rebuild.)
 
 ### Play once, and RUN
 
@@ -304,6 +361,10 @@ The read point is the end of the slice that the next grain will take.
 - Eddy's REC gate acts on its edges, and a recording shorter than 50 ms
   is treated specially (`docs/specs/2026-11-21-eddy-design.md`, "Rec"):
   the builder reads that before fixing RUN's timing.
+  (As built, 2026-11-26: the dip is max(1, round(0.001 x rate))
+  samples. Every high stretch of RUN lasts at least a hop less 1 ms
+  (92 ms at Short, 44.1 kHz), so Eddy's 50 ms rule never throws away a
+  recording RUN gates.)
 - The patch this is for: Eddy A's outputs into Doldrums; Freeze once the
   clip is on the tape; Position to the clip's start; RUN into Eddy B's
   REC gate and the outputs into its inputs; *stop* chosen; a trigger at
@@ -319,6 +380,15 @@ Knobs only. Each is read once a grain.
   with a detent at noon. What would pass the top of the band is dropped,
   not folded back. A frequency lands between the lines of the transform
   and is shared between its neighbours, so a shifted tone stays one tone.
+  (As built, 2026-11-26: down, a bin's power is shared between the two
+  bins either side of where it lands (a scatter). Up, each output bin
+  gathers the power at its frequency divided by the ratio, interpolated,
+  scaled to keep the energy: a scatter upward left every other bin empty
+  on noise, which with random phases repeats within the grain. The cost:
+  a tone shifted up is widened in proportion to the ratio, about 47 Hz at
+  +24 with the Medium grain, rough at large upward shifts. A lone tone
+  shifted by a ratio that is not whole is up to 0.5 dB off. "Nothing at
+  all at noon" is exact within +-0.25 semitone.)
 - **Blur** smooths the spectrum along a scale of pitch (so it is as wide
   in the bass as in the treble). At 0 it does nothing at all; at full it
   is about an octave wide and a chord has become coloured noise. It
@@ -327,6 +397,9 @@ Knobs only. Each is read once a grain.
   noon is flat and does nothing at all, left is darker, right brighter,
   to about 6 dB per octave either way, with the gain held within a
   bound. *(call)*
+  (As built, 2026-11-26: Tilt's gain is held within +-24 dB. Blur's knob
+  runs 0 to 1 octave; at full its half-power points measured 0.9996
+  octaves apart.)
 
 ### Harmonics
 
@@ -349,6 +422,13 @@ Knobs only. Each is read once a grain.
   pitch) to about 300 (the source comes back through). Default about 25.
   A tooth is never narrower than the transform can show, so no tooth
   disappears on a low note. *(call)*
+  (As built, 2026-11-26: the distance of a bin from a tooth is measured
+  to the bin's nearer edge, so the bin that holds a tooth passes whole;
+  sigma is never less than one bin's width at the tooth. So the narrowest
+  tooth is about 2.7 bins wide at -3 dB: about 200 cents at 65 Hz with
+  the Medium grain at 48 kHz. Low roots want the Long grain; for the
+  listening stop. Teeth under 16 Hz are left out, as the low cut would
+  remove them anyway.)
 - A tooth has a soft, bell-shaped edge.
 - A change of note, Partials or Width dissolves in; a V/OCT step never
   clicks or jumps. It reaches the sound at the next grain's start, or at
@@ -361,6 +441,8 @@ Knobs only. Each is read once a grain.
   alone (how much of a flat spectrum it would pass), held within a
   bound, so that turning Harmonics up does not make the sound sink away.
   *(call; the amount and the bound are for the listening stop)*
+  (As built, 2026-11-26: as the plan: g = min(8, 1 / sqrt(mean of mask^2
+  over the band)), the gain (1 - h) + h g mask.)
 
 ### Mix, inputs and outputs
 
@@ -373,8 +455,21 @@ Knobs only. Each is read once a grain.
   grains overlap, their random phases may add or cancel. That waver is
   part of this method's sound on pure tones and is not removed; noise
   and dense chords do not show it.
+  (As built, 2026-11-26: "within 1 dB over ten seconds" cannot hold for
+  a pure sine at the Long grain, which has only 29 hops in 10 s: over 200
+  seeds its worst 10 s window reached 2.09 dB, though the mean over a
+  minute stays within 0.5 dB. Noise holds the 10 s rule (worst 0.02 dB).
+  So for a sine the test bounds the 60 s mean and pins the worst 10 s
+  window per grain size at its measured worst; the user is told.)
+  (As built, 2026-11-26: a held full-scale (5 V) sine comes out at the
+  same RMS as narrow-band noise with peaks of 13 to 14 V, so the soft
+  bound below works on it; its products measure -37 dB (pinned at
+  -34). Any held sound has a noise-like crest. Equal loudness was kept;
+  for the listening stop, the alternative being a quieter wet level.)
 - The output is softly bounded as Wake's and Eddy's are, and untouched
   below the bound.
+  (As built, 2026-11-26: Eddy's bound, lifted to `src/SoftBound.hpp` and
+  shared: the identity up to 8 V, a ceiling of 10 V.)
 - NaN or infinite input samples and CVs read as 0 V.
 - Bypassed, the inputs pass to the outputs.
 
@@ -390,11 +485,21 @@ Knobs only. Each is read once a grain.
   not plain running: frozen, held, stopped (waiting for a trigger). The
   builder chooses the words and marks; every one of these states must
   be readable at Rack's usual zoom.
+  (As built, 2026-11-26: top right, FROZEN, HELD, STOPPED, and where two
+  apply both, FROZEN HELD or FROZEN STOPPED; nothing when plainly running.
+  Top left, the stored tape's trouble: TAPE NOT READ (a file there that
+  could not be read; kept while the button is on) or TAPE NOT SAVED (a
+  save meant to write the frozen tape and could not). Each sits on a patch
+  of the glass's colour. The anchor is a cyan line with a flag, the read
+  point an ivory line, the slice a pale band with a bar at its foot.)
 - Held with the tape not frozen, the read point's mark rides left with
   its sound and off the edge; the corner still says held.
 - **Dragging in the window sets Position** (the knob follows), as
   Eddy's window sets Start: Eddy's listening stop found that this was
   missed when absent. *(call)*
+  (As built, 2026-11-26: a press puts the anchor under the mouse, a
+  drag follows, one undo step per gesture; with a Position CV the knob is
+  set so knob plus CV lands there. Not yet tried in a live Rack.)
 - The ruler printed under the glass marks tenths: 3 s each.
 - Drawing takes nothing from the audio thread: the waveform is a reduced
   copy (a few hundred columns of peaks), kept up to date as the tape is
@@ -420,9 +525,24 @@ Knobs only. Each is read once a grain.
 - When the engine's rate changes, a frozen tape is converted off the
   audio thread, as Eddy's is; a tape that is not frozen starts again
   from silence.
+  (As built, 2026-11-26: the stored file stays at its old rate until
+  the tape is frozen anew; reading it again converts once, which is
+  better than converting a conversion. While a tape is being read or
+  converted, a save leaves the file exactly as it is (an autosave during
+  a patch's load would otherwise lose it).)
 - A patch saved without its tape file opens with a silent tape and no
   error.
+  (As built, 2026-11-26: and a file that is there but cannot be read
+  opens silent too, but says TAPE NOT READ in the window and why in the
+  log, and is kept while the button is on. Deleting the module while its
+  tape is being read holds Rack's audio until the read ends (the worker
+  is joined under Rack's lock); the manual says so. Whether a duplicated
+  frozen module (Ctrl+D) carries its tape was not tried.)
 - Initialize silences the tape and returns everything to its default.
+  (As built, 2026-11-26: the menu too. Open at the first test build: the
+  recording starts again at full level after Initialize or a rate change,
+  with no fade in, so a step can be written to the tape and heard as a
+  short puff; deferred by the build's ledger to the final review.)
 
 ## Aliasing
 
@@ -432,6 +552,10 @@ By the three kinds in `docs/DSP-ALIASING.md`:
    the tape's own edges at Freeze are faded.
 2. **Nonlinearities:** only the soft bound at the output, which acts
    above the bound and is the one Wake and Eddy use.
+   (As built, 2026-11-26, measured by `test_alias` at 44.1 and 48 kHz:
+   at 1 V everything outside a skirt of 32 grain bins at least 60 dB down,
+   worst -64.1 dB; a tone shifted past the top -130 dB or less; at 5 V the
+   bound's products pinned at -34 dB, worst -37.0 dB.)
 3. **Variable-rate reads:** none. Grains are taken at whole samples at
    the tape's own rate; Stretch changes where they are taken, not how
    fast they are read. Shift moves loudnesses between frequencies and
@@ -464,6 +588,18 @@ As every module (CLAUDE.md, TESTING.md "Adding a module"):
   small fixed amount more, under 100 µs on the development Mac at 96 kHz
   with the long grain (one transform there measures 56 µs), which is
   under a tenth of a 64-sample block at 48 kHz. The bench measures it.
+  (As built, 2026-11-26: nine grain steps and the add, ten pieces a gap
+  apart, so a grain sounds ten gaps after its boundary: 640 samples at
+  44.1 and 48 kHz, 1280 at 96 kHz. The tables are fed half way between
+  gaps, 32 gap units of work a call. Worst single sample measured 68.7 to
+  70.7 µs at 96 kHz, Long (an inverse transform and its pass), 32.4 to
+  33.3 µs at 48 kHz, nothing split. That is at the core's working clock:
+  from a light load the first grains took up to 1.7 times as long (about
+  115 µs), which no split of a transform could bring under the bound. At
+  8.0 to 8.5 kHz with the Short grain the pieces are (hop - 1) / 10 = 51
+  samples apart, under the 64 asked for. A change of Grain overlaps the
+  two sizes for one grain: a bump of up to about 3 dB (most from Long to
+  Short), no click; against the anti-goal's "level jump", accepted.)
   The tables are rebuilt a part at a time on the same path, never in one
   go; any one rebuild is finished within half a grain; and a new table
   takes over at a grain boundary. If the controls keep moving, a rebuild
@@ -473,6 +609,8 @@ As every module (CLAUDE.md, TESTING.md "Adding a module"):
   three grain sizes, are made off the per-sample path (when the module
   is added and when the rate changes). No allocation on the audio
   thread.
+  (As built, 2026-11-26: the vendored pffft (see Research), wrapped by
+  `src/Fft.hpp` as `rka::RealFft`.)
 - No libm on the per-sample path (`src/FastMath.hpp`, tables): the
   random phases come from the generator and a sine table.
 - **The worker**, for the tape's file only: write at save, read at load,
@@ -598,6 +736,15 @@ Before these are fixed, the user listens on a numbered test build:
 - whether the 30 s is the right length;
 - whether CV on Tilt or Blur is missed;
 - the Eddy to Doldrums to Eddy patch, end to end.
+
+(As built, 2026-11-26: the listening guide, `docs/doldrums/listening.html`,
+adds the build's own items: Freeze in stop waiting for TRIG; Position
+fully left while recording; a held sound under a moving Position; Freeze
+while held; a thaw from a hold; the comb at low roots; Shift's roughness
+upward; the pure tone's waver; a full-level sound's peaks; the bump at a
+Grain change; and what could not be tried without a live Rack: the drag
+and its undo, the menu, dark panels, a rate change while running and
+duplicating a frozen module.)
 
 ## Left to the builder
 

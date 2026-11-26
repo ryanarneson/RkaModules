@@ -72,7 +72,7 @@ are Doldrums, Rigging, Hadal and Sluice.
 
 | Module | What it does | The instrument | Width |
 |--------|--------------|----------------|-------|
-| [Doldrums](doldrums.md) | Spectral freeze and stretch | A ship becalmed | 10 HP |
+| [Doldrums](doldrums.md) | Spectral freeze and stretch: a 30 s tape held or drawn out, with a tuned comb (built) | A ship becalmed | 16 HP |
 | [Rigging](rigging.md) | Six tuned strings (built) | Wind in the rigging | 14 HP |
 | [Hadal](hadal.md) | Rumble and noise bed (built) | The deepest ocean zone | 10 HP |
 | [Sluice](sluice.md) | Four VCAs (built) | A sluice gate | 10 HP |

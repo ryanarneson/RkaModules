@@ -18,7 +18,7 @@ process and a plain panel; **M** needs real DSP work or tuning by ear;
 The existing three are already in the Instrument look
 (`docs/specs/2026-11-15-instrument-look-design.md`): Sway, Fathom and
 Shoal moved to it in PR #7, after Shoal's friendly mode landed in PR #6
-(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging, Wake, Narrows, Eddy, Spindrift, Beacon, Neap and Spring were built in it from the start.
+(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging, Wake, Narrows, Eddy, Spindrift, Beacon, Neap, Spring and Doldrums were built in it from the start.
 
 **Changes since (the user, 2026-11-18):** Squall was built next, ahead of
 Plimsoll and Lull. Plimsoll is skipped for now, since Ballast's soft limit
@@ -106,6 +106,22 @@ mode and Squall's Swell cover it) and Reef (Tackle covers it); the user
 has not ruled on either. Doldrums is the suggested next large build,
 with the small utilities filling in round it.
 
+**Changes since (2026-11-26, later):** Doldrums was built (16 HP), the
+last of the texture modules in the original order. Against the idea: a
+30 s tape of the input with a window and a Position control, not a freeze
+of the present alone; Stretch from x1 to a true stop; the tuned comb
+(Harmonics) played from polyphonic V/OCT; a trigger, a RUN gate and a
+play-once setting so a pass can be recorded into Eddy; a frozen tape kept
+with the patch. It did not need a worker thread for the audio (each
+grain's work is spread over the samples after it), only for the tape's
+file. It vendors PFFFT (`src/dep/pffft/`, wrapped as `rka::RealFft` in
+`src/Fft.hpp`), the plugin's first FFT, and lifted Eddy's soft bound to
+`src/SoftBound.hpp`. Its window is its own (`src/doldrums/TapeView.hpp`, a
+ring that scrolls), not Eddy's `TapeWindow`. Not yet heard by the user: the
+listening stop comes with the first test build. The manual is
+`docs/doldrums/README.md`; the design is
+`docs/specs/2026-11-26-doldrums-design.md`.
+
 ## 1. A whole patch from RKA alone
 
 With Sway, Fathom and Shoal these six make a complete dark ambient patch:
@@ -136,7 +152,7 @@ window's approach and the waveform overview from Eddy (2026-11-22).
 | new | [Narrows](narrows.md) (built) | M | Polyphonic stereo filter: low-pass, band-pass or high-pass on a Mode sweep, with a comb and a ping input. The collection had no filter outside Fathom's voice, and every texture module here wants one after it. Two cores on a switch: Fathom's ladder, now shared code (`src/fathom/LadderCore.hpp`), and a state-variable filter. Its four-wide float type (`src/Float4.hpp`) is there for the next polyphonic module. |
 | 9 | [Eddy](eddy.md) (built) | L | Tape loop that also loads and saves files, up to 5 minutes, with a waveform window (drag in it to set Start and Length), wear in the loop and a Restore to the original. Larger than first guessed: its tape and write head are new code (Wake's read point did not carry over), and it paid for the first drawn window. Built 2026-11-22, 16 HP. |
 | 10 | [Spindrift](spindrift.md) (built) | L | Grain cloud; the user singled it out. Built 2026-11-22, 20 HP, as Mutable Instruments Beads (its DSP vendored and run unchanged) with a window showing the buffer and every grain. It took Eddy's window approach and `src/Overview.hpp`, not its tape or read: Beads has its own. |
-| 11 | [Doldrums](doldrums.md) | L | Spectral freeze and stretch. The highest reward and the highest risk here, so it comes last; how a window is drawn is settled already (Eddy's `TapeWindow`). |
+| 11 | [Doldrums](doldrums.md) (built) | L | Spectral freeze and stretch. The highest reward and the highest risk here, so it came last. Built 2026-11-26, 16 HP: a 30 s tape held or drawn out from x1 to a true stop, Blur, Tilt and Shift, a tuned comb from polyphonic V/OCT, one pass on a trigger with a RUN gate for recording into Eddy. It drew its own window (a scrolling ring), not Eddy's `TapeWindow`, and vendored PFFFT. |
 
 ## 3. Slow movement and long form
 
