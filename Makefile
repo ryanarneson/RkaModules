@@ -18,6 +18,7 @@ LDFLAGS +=
 # Add .cpp files to the build
 SOURCES += $(wildcard src/*.cpp)
 SOURCES += $(filter-out $(wildcard $(MODULES:%=src/%/test_*.cpp)),$(wildcard $(MODULES:%=src/%/*.cpp)))
+SOURCES += src/dep/pffft/pffft.c
 
 # Add files to the ZIP package when running `make dist`
 # The compiled plugin and "plugin.json" are automatically added.
@@ -78,6 +79,14 @@ build/src/shoal/Firmware.cpp.o: FLAGS += $(SHOAL_FW_FLAGS) -fvisibility=hidden
 SPINDRIFT_PLUGIN_FLAGS = $(SPINDRIFT_FW_FLAGS) -isystem src/spindrift -Dstmlib=spindrift_stmlib
 build/src/spindrift/BeadsFirmware.cpp.o: FLAGS += $(SPINDRIFT_PLUGIN_FLAGS) -fvisibility=hidden
 build/src/spindrift/Spindrift.cpp.o: FLAGS += $(SPINDRIFT_PLUGIN_FLAGS)
+
+# The vendored pffft (src/dep/pffft/, upstream unchanged; Fft.hpp). The SDK
+# has pffft.h and the code inside libRack, which the tests cannot link, so
+# the plugin carries its own copy; rka_prefix.h renames its symbols
+# rka_pffft_* so it never meets libRack's (nm -g plugin.dylib | grep ' _pffft_'
+# must find none), and they stay hidden. Upstream is not clean under the
+# plugin's warnings and is built without them as errors.
+build/src/dep/pffft/pffft.c.o: FLAGS += -include src/dep/pffft/rka_prefix.h -fvisibility=hidden
 
 .PHONY: shoal-bench
 shoal-bench:

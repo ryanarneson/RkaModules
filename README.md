@@ -338,6 +338,12 @@ GPL-3.0-or-later. See `LICENSE-GPLv3.txt`.
 Attribution), copied unedited from the Fundamental plugin; Eddy uses it to
 read and write WAV files.
 
+`src/dep/pffft/pffft.c` and `pffft.h` are PFFFT by Julien Pommier (BSD-like
+licence, in the file header), unchanged, from
+https://bitbucket.org/jpommier/pffft at commit
+67a4a6a113179ab4ac398298f46fce8dd60498dc (2026-10-16); `rka_prefix.h` renames
+its symbols so they cannot meet libRack's copy. Doldrums' FFT runs on it.
+
 `src/spindrift/beads/` and `src/spindrift/stmlib/` are Mutable Instruments'
 Beads DSP and the parts of stmlib it uses, by Emilie Gillet (MIT; see
 `LICENSE-beads.md`), vendored with every change marked; Spindrift runs on

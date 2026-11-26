@@ -144,6 +144,22 @@ build/test/eddy/test_jobs: src/eddy/test_jobs.cpp src/testing.hpp $(wildcard src
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/eddy $< -o $@
 
+# The vendored pffft (src/dep/pffft/; Fft.hpp wraps it as rka::RealFft), built
+# once as C, as the Makefile builds it for the plugin: its symbols renamed
+# rka_pffft_* (rka_prefix.h) so they cannot meet libRack's pffft, no warnings
+# as errors (upstream is not clean under -Wall). -O2: the same transform code
+# the plugin runs, without the fast-maths flags.
+PFFFT_DEPS = src/dep/pffft/pffft.c src/dep/pffft/pffft.h src/dep/pffft/rka_prefix.h
+build/test/dep/pffft.o: $(PFFFT_DEPS)
+	@mkdir -p $(@D)
+	$(CC) -O2 -include src/dep/pffft/rka_prefix.h -c src/dep/pffft/pffft.c -o $@
+
+# Doldrums' tests: the sanitizers, and pffft.o linked into every one of them
+# (Fft.hpp needs it; a test that does not use it links it unused).
+build/test/doldrums/test_%: src/doldrums/test_%.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@
+
 # Eddy's worker bookkeeping (WorkerBook.hpp): the sanitizers.
 build/test/eddy/test_book: src/eddy/test_book.cpp src/testing.hpp src/eddy/WorkerBook.hpp
 	@mkdir -p $(@D)
@@ -315,11 +331,17 @@ build/bench/modules.inc: bench-modules-list
 # plugin runs; Beads' own processing, in the object, is. test_engine and
 # test_alias check what it computes, built strict.
 BENCH_VENDOR_FLAGS = -isystem src/spindrift -DTEST
-BENCH_VENDOR_OBJS = build/bench/BeadsFirmware.o
+BENCH_VENDOR_OBJS = build/bench/BeadsFirmware.o build/bench/pffft.o
 BENCH_DEPS += $(SPINDRIFT_FW_DEPS)
 build/bench/BeadsFirmware.o: src/spindrift/BeadsFirmware.cpp src/spindrift/BeadsContext.hpp src/spindrift/GrainView.hpp $(SPINDRIFT_FW_DEPS)
 	@mkdir -p $(@D)
 	$(CXX) $(BENCH_FLAGS) $(SPINDRIFT_FW_FLAGS) -Isrc/spindrift -c $< -o $@
+
+# pffft (Doldrums' transform), as the plugin builds it: compile.mk's C flags
+# (-O3, fast maths, the architecture), the renaming header, hidden names.
+build/bench/pffft.o: $(PFFFT_DEPS)
+	@mkdir -p $(@D)
+	$(CC) -O3 -funsafe-math-optimizations $(BENCH_ARCH) -include src/dep/pffft/rka_prefix.h -c src/dep/pffft/pffft.c -o $@
 
 # The guard (in `make test`): a module folder with a *Engine.hpp must have
 # a bench.inc, and every declaration must be complete (idle, outputs and
