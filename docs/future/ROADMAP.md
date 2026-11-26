@@ -89,6 +89,23 @@ listening stop (test builds 2.0.38 and 2.0.39) nothing was changed: every
 first guess stands. The manual is `docs/neap/README.md`; the design is
 `docs/specs/2026-11-24-neap-design.md`.
 
+**Changes since (2026-11-26):** With Neap built, the user asked what
+the list was missing and named a Bernoulli gate, a sample and hold and a
+true clock. Five ideas were added, none with a number in the original
+order: Fluke (the Bernoulli gate), Semaphore (logic and a comparator),
+Tender (aux sends for Ballast), Ebb (mutes and slow fades) and Beam
+(stereo width). Sextant gained a stepped mode in its page, in place of a
+sequential switch of its own. Hold moves to the head of the utilities.
+Knot moves up from "only if wanted" into the utilities: Sway, Squall,
+Wake and Shoal now all take a clock and nothing in the collection is
+one (Shoal's thirteen apps are clocked, and none is a clock, against
+what this page said of Knot before); it should be designed round slow ratios (/16 to /64) more than
+round the sketch's multiples. The utilities table below is in the new
+suggested order. The designer suggests dropping Lull (Beacon's HOLD
+mode and Squall's Swell cover it) and Reef (Tackle covers it); the user
+has not ruled on either. Doldrums is the suggested next large build,
+with the small utilities filling in round it.
+
 ## 1. A whole patch from RKA alone
 
 With Sway, Fathom and Shoal these six make a complete dark ambient patch:
@@ -100,7 +117,9 @@ sound, space, loudness under control, stereo, and a safe output.
 | 2 | [Fog](fog.md) (built) | L | Reverb. The largest single gain for this music: Fathom into Fog is already a piece. |
 | 3 | [Hadal](hadal.md) (built) | S | Rumble and noise. Cheap, immediately in genre, and the noise source Rigging will want. |
 | 4 | [Ballast](ballast.md) (built) | M | Stereo mixer with level CV; pan in its Pan expander (built). From here a patch needs no other maker's mixer. |
-| 6 | [Lull](lull.md) (low priority) | S | Slew. Slowing everything down is half of this music, and it is 2 HP of work. Squall's Swell covers much of it for now. |
+| 6 | [Lull](lull.md) (low priority) | S | Slew. Slowing everything down is half of this music, and it is 2 HP of work. Squall's Swell covers much of it for now, and Beacon's HOLD mode is a slew limiter; a candidate to drop (2026-11-26). |
+| new | [Tender](tender.md) | M | Aux sends and returns for Ballast, as an expander. Fog, Wake, Spindrift and Eddy are most useful shared between channels, and today each channel needs its own. Probably the most useful missing piece for a real patch. Added 2026-11-26. |
+| new | [Ebb](ebb.md) | S | Mutes and slow fades on a button or a gate, as a Ballast expander or alone. Bringing layers in and out by hand is the commonest gesture in a long piece. Added 2026-11-26. |
 
 ## 2. Texture
 
@@ -156,6 +175,7 @@ Processes that change the character of what is already there.
 | 24 | [Doppler](doppler.md) | M | Frequency shifter. Slow inharmonic beating; could move earlier if space ambient leads. |
 | 25 | [Rust](rust.md) | M | Wear and decay. Eddy's Wear now does much of it inside a loop; Rust would be the same on any sound as it passes, with wow and flutter. |
 | 26 | [Thermocline](thermocline.md) | S | Crossover, to treat lows and highs apart. |
+| new | [Beam](beam.md) | S | Stereo width, mono lows, mid and side. Everything recent is stereo and nothing narrows, widens or checks it. May be built into Thermocline instead. Added 2026-11-26. |
 
 ## 6. Utilities, as a patch calls for them
 
@@ -164,12 +184,15 @@ a gap between larger builds.
 
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
+| 29 | [Hold](hold.md) | S | Sample and hold, with track. Nothing built samples a signal patched into it: Sway's RAND and Squall's STEP sample their own noise. First of the utilities (2026-11-26). |
+| new | [Fluke](fluke.md) | S | Bernoulli gate: each trigger to A or B by chance. Squall clocked is half of one, with no second output, toggle or latch. Splits one stream of events between two voices. Added 2026-11-26. |
+| 34 | [Knot](knot.md) | M | Clock and divider. Moved up from "only if wanted" (2026-11-26): four built modules take a clock and none is one. For beatless music the long divisions matter more than the tempo dial. |
+| new | [Semaphore](semaphore.md) | S | Logic and a comparator. Makes events conditional ("only while the tide is high"); Neap's HIGH gate is the only comparator so far. Added 2026-11-26. |
 | 27 | [Cleat](cleat.md) | S | Multiple. |
 | 28 | [Splice](splice.md) | S | Adder. |
-| 29 | [Hold](hold.md) | S | Sample and hold. |
-| 30 | [Reef](reef.md) | S | Attenuators. Tackle may make it unnecessary. |
 | 31 | [Bell](bell.md) | S | Manual trigger. |
-| 32 | [Sextant](sextant.md) | S | Scanner between four sources. |
+| 32 | [Sextant](sextant.md) | S | Scanner between four sources; with the stepped mode added to its page (2026-11-26) it is also the sequential switch. |
+| 30 | [Reef](reef.md) | S | Attenuators. Tackle may make it unnecessary; a candidate to drop (2026-11-26). |
 | 5 | [Plimsoll](plimsoll.md) | M | Limiter. Skipped for now: Ballast's soft limit and DC blocker keep the output safe; built when long drones into reverb call for real limiting. |
 
 ## 7. Only if wanted
@@ -179,7 +202,6 @@ Good ideas that this music does not need, or that Shoal already covers.
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
 | 33 | [Signal](signal.md) | M | Morse rhythm. A numbers-station moment in a horror piece, but a narrow use. |
-| 34 | [Knot](knot.md) | S | Clock and divider. Little call for it in beatless music; Shoal has clock apps. |
 | 35 | [Sounding](sounding.md) | M | Step sequencer. Shoal covers it. |
 | 36 | [Bearing](bearing.md) | M | Quantiser. Shoal covers it. |
 | 37 | [Seastate](seastate.md) | S | Wavefolder. The weakest idea in the set. |

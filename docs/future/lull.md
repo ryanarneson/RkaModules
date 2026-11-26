@@ -12,3 +12,7 @@ Status: idea, 2026-11-15. Not designed. One of six 2 HP utilities. Low priority 
 **Sketched controls.** Rise and Fall knobs, an input, a light, an output.
 
 **Open questions.** Time ranges; linear or exponential curves; CV over the times, which would not fit at 2 HP; overlap with Squall's Slew.
+
+**Since (2026-11-26).** Beacon's HOLD mode, built 2026-11-23, is a slew
+limiter, so with Squall's Swell the ground is covered twice. The
+designer suggests dropping Lull; the user has not ruled.

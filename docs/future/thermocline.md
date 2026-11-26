@@ -11,3 +11,8 @@ Status: idea, 2026-11-15. Not designed. 8 HP in the sketch.
 **Sketched controls.** Depth (the hero, numbered in hertz) with CV and attenuverter traced straight down; Slope and Edge (resonance at the split) on the limb. One input. Outputs: Surf (above) and Deep (below).
 
 **Open questions.** Whether the two bands sum back flat; stereo; a third, middle band; whether 'Surf' and 'Deep' read clearly as high and low. The name is long for an 8 HP panel and is drawn smaller than other names.
+
+**Stereo width (2026-11-26).** [Beam](beam.md), a stereo width idea,
+asks whether it belongs here: a stereo Thermocline with a width for each
+band would make the lows mono and leave the highs wide in one module.
+Settle the two together.
