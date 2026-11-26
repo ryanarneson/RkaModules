@@ -154,6 +154,12 @@ build/test/dep/pffft.o: $(PFFFT_DEPS)
 	@mkdir -p $(@D)
 	$(CC) -O2 -include src/dep/pffft/rka_prefix.h -c src/dep/pffft/pffft.c -o $@
 
+# Doldrums' ring tape: the sanitizers (the test fences the buffer with ASan's
+# poisoning). No pffft.o; it does not use it.
+build/test/doldrums/test_ring: src/doldrums/test_ring.cpp src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $< -o $@
+
 # Doldrums' tests: the sanitizers, and pffft.o linked into every one of them
 # (Fft.hpp needs it; a test that does not use it links it unused).
 build/test/doldrums/test_%: src/doldrums/test_%.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp)
