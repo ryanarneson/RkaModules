@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="81.28mm" height="128.5mm" viewBox="0 0 81.28 128.5">
+<rect width="81.28" height="128.5" fill="#15171c"/>
+<path d="M40.64 86L40.64 78L40.64 70.35" fill="none" stroke="#8a8474" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M7.8 69L7.8 61L7.8 52.3" fill="none" stroke="#8a8474" stroke-width="0.25" stroke-linejoin="round"/>
+<path d="M73.48 69L73.48 61L73.48 52.3" fill="none" stroke="#8a8474" stroke-width="0.25" stroke-linejoin="round"/>
+<circle cx="40.64" cy="78" r="3.1" fill="#15171c"/>
+<circle cx="40.64" cy="90" r="4.3" fill="#15171c"/>
+<circle cx="7.8" cy="48" r="4.6" fill="#15171c"/>
+<circle cx="7.8" cy="61" r="3.1" fill="#15171c"/>
+<circle cx="7.8" cy="73" r="4.3" fill="#15171c"/>
+<circle cx="73.48" cy="48" r="4.6" fill="#15171c"/>
+<circle cx="73.48" cy="61" r="3.1" fill="#15171c"/>
+<circle cx="73.48" cy="73" r="4.3" fill="#15171c"/>
+<circle cx="24.22" cy="74.5" r="4.6" fill="#15171c"/>
+<circle cx="57.06" cy="74.5" r="4.6" fill="#15171c"/>
+<circle cx="7.8" cy="88" r="4.6" fill="#15171c"/>
+<circle cx="24.22" cy="88" r="4.6" fill="#15171c"/>
+<circle cx="57.06" cy="88" r="4.6" fill="#15171c"/>
+<circle cx="73.48" cy="88" r="4.6" fill="#15171c"/>
+<circle cx="7.8" cy="102" r="4.3" fill="#15171c"/>
+<circle cx="7.8" cy="116" r="4.3" fill="#15171c"/>
+<circle cx="24.22" cy="102" r="3.5" fill="#15171c"/>
+<circle cx="24.22" cy="116" r="4.3" fill="#15171c"/>
+<circle cx="40.64" cy="104" r="3.1" fill="#15171c"/>
+<circle cx="40.64" cy="116" r="4.3" fill="#15171c"/>
+<circle cx="57.06" cy="102" r="4.3" fill="#15171c"/>
+<rect x="4.775" y="19.275" width="71.73" height="14.45" rx="0.8" fill="#05080c" stroke="#c9a46a" stroke-width="0.45"/>
+<path d="M6.782 34.35L6.782 34.95 M8.564 34.35L8.564 34.95 M10.346 34.35L10.346 34.95 M13.91 34.35L13.91 34.95 M15.692 34.35L15.692 34.95 M17.474 34.35L17.474 34.95 M21.038 34.35L21.038 34.95 M22.82 34.35L22.82 34.95 M24.602 34.35L24.602 34.95 M28.166 34.35L28.166 34.95 M29.948 34.35L29.948 34.95 M31.73 34.35L31.73 34.95 M35.294 34.35L35.294 34.95 M37.076 34.35L37.076 34.95 M38.858 34.35L38.858 34.95 M42.422 34.35L42.422 34.95 M44.204 34.35L44.204 34.95 M45.986 34.35L45.986 34.95 M49.55 34.35L49.55 34.95 M51.332 34.35L51.332 34.95 M53.114 34.35L53.114 34.95 M56.678 34.35L56.678 34.95 M58.46 34.35L58.46 34.95 M60.242 34.35L60.242 34.95 M63.806 34.35L63.806 34.95 M65.588 34.35L65.588 34.95 M67.37 34.35L67.37 34.95 M70.934 34.35L70.934 34.95 M72.716 34.35L72.716 34.95 M74.498 34.35L74.498 34.95" fill="none" stroke="#c9a46a" stroke-width="0.15"/>
+<path d="M5 34.35L5 35.65 M12.128 34.35L12.128 35.65 M19.256 34.35L19.256 35.65 M26.384 34.35L26.384 35.65 M33.512 34.35L33.512 35.65 M40.64 34.35L40.64 35.65 M47.768 34.35L47.768 35.65 M54.896 34.35L54.896 35.65 M62.024 34.35L62.024 35.65 M69.152 34.35L69.152 35.65 M76.28 34.35L76.28 35.65" fill="none" stroke="#c9a46a" stroke-width="0.25"/>
+<circle cx="40.64" cy="54" r="16" fill="#efe6d2" stroke="#c9a46a" stroke-width="0.7"/>
+<path d="M32.786 60.027L32.072 60.575 M32.066 58.95L31.287 59.4 M31.494 57.789L30.662 58.133 M31.077 56.562L30.208 56.795 M30.825 55.292L29.932 55.41 M30.825 52.708L29.932 52.59 M31.077 51.438L30.208 51.205 M31.494 50.211L30.662 49.867 M32.066 49.05L31.287 48.6 M32.786 47.973L32.072 47.425 M34.613 46.146L34.065 45.432 M35.69 45.426L35.24 44.647 M36.851 44.854L36.507 44.022 M38.078 44.437L37.845 43.568 M39.348 44.185L39.23 43.292 M41.932 44.185L42.05 43.292 M43.202 44.437L43.435 43.568 M44.429 44.854L44.773 44.022 M45.59 45.426L46.04 44.647 M46.667 46.146L47.215 45.432 M48.494 47.973L49.208 47.425 M49.214 49.05L49.993 48.6 M49.786 50.211L50.618 49.867 M50.203 51.438L51.072 51.205 M50.455 52.708L51.348 52.59 M50.455 55.292L51.348 55.41 M50.203 56.562L51.072 56.795 M49.786 57.789L50.618 58.133 M49.214 58.95L49.993 59.4 M48.494 60.027L49.208 60.575" fill="none" stroke="#1c1a16" stroke-width="0.16"/>
+<path d="M33.64 61L32.438 62.202 M30.74 54L29.04 54 M33.64 47L32.438 45.798 M40.64 44.1L40.64 42.4 M47.64 47L48.842 45.798 M50.54 54L52.24 54 M47.64 61L48.842 62.202" fill="none" stroke="#1c1a16" stroke-width="0.28"/>
+<rect x="69.08" y="94.8" width="8.8" height="11.8" rx="0.7" fill="#efe6d2"/>
+<rect x="69.08" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#efe6d2"/>
+<rect x="52.66" y="108.8" width="8.8" height="11.8" rx="0.7" fill="#efe6d2"/>
+<text x="5.00" y="10.00" font-family="D-DIN Condensed" font-size="5.2" font-weight="normal" letter-spacing="1.4" text-anchor="start" fill="#efe6d2">DOLDRUMS</text>
+<text x="5.00" y="13.80" font-family="D-DIN Condensed" font-size="1.7" font-weight="normal" letter-spacing="0.45" text-anchor="start" fill="#8a8474">FREEZE &amp; STRETCH</text>
+<text x="31.99" y="62.78" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(-135 31.86 62.78)">1</text>
+<text x="28.35" y="54.00" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(-90 28.23 54.00)">2</text>
+<text x="31.99" y="45.22" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(-45 31.86 45.22)">4</text>
+<text x="40.77" y="41.59" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">8</text>
+<text x="49.54" y="45.22" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(45 49.42 45.22)">16</text>
+<text x="53.18" y="54.00" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(90 53.05 54.00)">32</text>
+<path d="M0,0 C0.47,-0.85 1.4,-0.85 1.4,0 C1.4,0.85 0.47,0.85 0,0 C-0.47,-0.85 -1.4,-0.85 -1.4,0 C-1.4,0.85 -0.47,0.85 0,0 Z" transform="translate(49.83 63.19) rotate(135)" fill="none" stroke="#1c1a16" stroke-width="0.32" stroke-linejoin="round"/>
+<text x="40.94" y="68.00" font-family="D-DIN Condensed" font-size="2.3" font-weight="bold" letter-spacing="0.6" text-anchor="middle" fill="#1c1a16">STRETCH</text>
+<text x="7.92" y="42.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">POSITION</text>
+<text x="73.61" y="42.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">HARMONICS</text>
+<text x="24.34" y="69.00" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">BLUR</text>
+<text x="57.19" y="69.00" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">ROOT</text>
+<text x="7.92" y="82.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">TILT</text>
+<text x="24.34" y="82.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">SHIFT</text>
+<text x="57.19" y="82.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">PARTIALS</text>
+<text x="73.61" y="82.50" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">WIDTH</text>
+<text x="7.92" y="96.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">IN L</text>
+<text x="7.92" y="110.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">IN R</text>
+<text x="24.34" y="97.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">FREEZE</text>
+<text x="24.34" y="110.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">GATE</text>
+<text x="40.77" y="100.00" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">MIX</text>
+<text x="40.77" y="110.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">TRIG</text>
+<text x="57.19" y="96.80" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#8a8474">V/OCT</text>
+<text x="57.19" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">RUN</text>
+<text x="73.61" y="97.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">L</text>
+<text x="73.61" y="111.30" font-family="D-DIN Condensed" font-size="2" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">R</text>
+<text x="13.40" y="73.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#8a8474">CV</text>
+<text x="68.13" y="73.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="end" fill="#8a8474">CV</text>
+<text x="46.24" y="90.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#8a8474">CV</text>
+<text x="40.89" y="125.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.5" text-anchor="middle" fill="#8a8474">R K A · INSTRUMENTS</text>
+<g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">
+<circle id="param-STRETCH" cx="40.64" cy="54.0" r="1" fill="#ff0000"/>
+<circle id="param-STRETCH_ATT" cx="40.64" cy="78.0" r="1" fill="#ff0000"/>
+<circle id="input-STRETCH_CV" cx="40.64" cy="90.0" r="1" fill="#00ff00"/>
+<circle id="param-POSITION" cx="7.8" cy="48.0" r="1" fill="#ff0000"/>
+<circle id="param-POSITION_ATT" cx="7.8" cy="61.0" r="1" fill="#ff0000"/>
+<circle id="input-POSITION_CV" cx="7.8" cy="73.0" r="1" fill="#00ff00"/>
+<circle id="param-HARMONICS" cx="73.48" cy="48.0" r="1" fill="#ff0000"/>
+<circle id="param-HARMONICS_ATT" cx="73.48" cy="61.0" r="1" fill="#ff0000"/>
+<circle id="input-HARMONICS_CV" cx="73.48" cy="73.0" r="1" fill="#00ff00"/>
+<circle id="param-BLUR" cx="24.22" cy="74.5" r="1" fill="#ff0000"/>
+<circle id="param-ROOT" cx="57.06" cy="74.5" r="1" fill="#ff0000"/>
+<circle id="param-TILT" cx="7.8" cy="88.0" r="1" fill="#ff0000"/>
+<circle id="param-SHIFT" cx="24.22" cy="88.0" r="1" fill="#ff0000"/>
+<circle id="param-PARTIALS" cx="57.06" cy="88.0" r="1" fill="#ff0000"/>
+<circle id="param-WIDTH" cx="73.48" cy="88.0" r="1" fill="#ff0000"/>
+<circle id="input-L" cx="7.8" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="input-R" cx="7.8" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="param-FREEZE" cx="24.22" cy="102.0" r="1" fill="#ff0000"/>
+<circle id="input-FREEZE" cx="24.22" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="param-MIX" cx="40.64" cy="104.0" r="1" fill="#ff0000"/>
+<circle id="input-TRIG" cx="40.64" cy="116.0" r="1" fill="#00ff00"/>
+<circle id="input-VOCT" cx="57.06" cy="102.0" r="1" fill="#00ff00"/>
+<circle id="output-RUN" cx="57.06" cy="116.0" r="1" fill="#0000ff"/>
+<circle id="output-L" cx="73.48" cy="102.0" r="1" fill="#0000ff"/>
+<circle id="output-R" cx="73.48" cy="116.0" r="1" fill="#0000ff"/>
+</g>
+</svg>
