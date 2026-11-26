@@ -172,7 +172,7 @@ void rebuilt_hands_over() {
 		std::thread ui([&]() {
 			while (!done.load(std::memory_order_acquire)) {
 				const bool before = !ready.load(std::memory_order_acquire);
-				TapeSnapshot t;
+				TapeSnapshot t{};   // zeroed: GCC cannot see that read() fills it
 				if (!view.read(t))
 					continue;
 				reads++;
@@ -189,7 +189,7 @@ void rebuilt_hands_over() {
 		ui.join();
 		CHECK(early == 0, "round %d: %ld snapshots were read before anything was published", round, early.load());
 		CHECK(wrong == 0, "round %d: %ld snapshots were not the published one", round, wrong.load());
-		TapeSnapshot last;
+		TapeSnapshot last{};
 		CHECK(view.read(last), "read after the hand-over");
 		CHECK(last.high[511] == 100.f && last.low[511] == -100.f, "the new frames are in the open column: %g", last.high[511]);
 		CHECK(last.high[300] != 100.f && last.high[300] > 0.f, "the tape's columns are still there");
