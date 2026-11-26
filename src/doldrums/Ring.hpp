@@ -3,8 +3,8 @@
 // input, with the input faded out and in at Freeze's edges so that no step is
 // written to it. Rack-free.
 //
-// Safe per sample: write and copy (no allocation, no lock, no libm).
-// allocate and release are for off the audio thread.
+// Safe per sample: write, copy and fadedOut (no allocation, no lock, no
+// libm). allocate, release and fill are for off the audio thread.
 //
 // Frames have absolute indices that only grow: now() is one past the newest,
 // and frame i lives at physical(i) in channel(). A reader asks for frames by
@@ -24,6 +24,12 @@
 //
 // The junction between the newest frame and the oldest one (the write point)
 // is not smoothed: no reader crosses it.
+//
+// A tape handed in (TapeStore.hpp: from the patch's file, or converted at a
+// rate change) is put in whole by fill(): the frames oldest first, now() =
+// capacity, and the fade state that of a tape frozen and faded out (gain 0).
+// So, frozen, nothing is written after it (no faded live input lands on its
+// oldest frames), and a thaw fades in from one step above 0 as any thaw does.
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -94,6 +100,23 @@ struct Ring {
 		store_[0][size_t(GUARD + p)] = clean(l) * g;
 		store_[1][size_t(GUARD + p)] = clean(r) * g;
 		now_++;
+	}
+
+	// The gain is 0: frozen, write() writes nothing and now() stands still.
+	bool fadedOut() const { return count_ == 0; }
+
+	// The whole tape at once, off the audio thread: `capacity` frames of l and
+	// r, oldest first (NaN and inf as 0), at absolute [0, capacity), so now()
+	// = capacity; frozen and faded out (above). The fade's length is kept.
+	void fill(const float* l, const float* r) {
+		if (cap_ < 1)
+			return;
+		for (long long i = 0; i < cap_; i++) {
+			store_[0][size_t(GUARD + i)] = clean(l[i]);
+			store_[1][size_t(GUARD + i)] = clean(r[i]);
+		}
+		now_ = cap_;
+		count_ = 0;
 	}
 
 	// n frames ending at absolute index `end` (exclusive), end in

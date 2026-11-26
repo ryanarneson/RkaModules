@@ -87,18 +87,21 @@
 // must not run while process() does (Rack holds the engine's lock round
 // onSampleRateChange); at the rate it already holds it does nothing. The
 // engine then makes no sound of its own until setSampleRate(rate) adopts it:
-// the tape starts again from silence (a frozen one too, for now: its 5 ms
-// fade-out is written as silence, so it stays silent until Freeze is let
-// go; Task 11 converts a frozen tape on a worker), the pass starts from
-// reset, the tables are
-// rebuilt at the new rate. What the overlap already holds plays out, so the
-// wet sound fades with its last grains rather than stopping. setSampleRate at
-// the running rate, or at one allocate has not made, does nothing. Rates
-// outside [8 kHz, 768 kHz] are refused.
+// the tape starts again from silence, the pass starts from reset, the tables
+// are rebuilt at the new rate. A frozen tape is not lost: the ring it was on
+// is kept as the source of a conversion the worker makes (below), and until
+// that arrives the new tape is silent and stands frozen (its 5 ms fade-out is
+// written as silence). What the overlap already holds plays out, so the wet
+// sound fades with its last grains rather than stopping. setSampleRate at the
+// running rate, or at one allocate has not made, does nothing. Rates outside
+// [8 kHz, 768 kHz] are refused, and so is a new rate while fewer than two of
+// the slots for rings handed back are free (the worker has stopped
+// collecting them).
 //
 // reset() (Initialize): a silent tape and a new pass; the params are the
 // frame's, so their defaults are the module's. The grains already laid down
-// play out (no click). The seed is kept; seed() sets it.
+// play out (no click). The seed is kept; seed() sets it. A tape on its way is
+// no longer wanted.
 //
 // Edges. After setSampleRate and reset, the first sample arms Freeze's and
 // TRIG's detectors from its levels and reports no edge: a patch opened with
@@ -108,12 +111,62 @@
 // from the anchor, in stop waiting for a trigger unless there is nothing to
 // travel through (then held).
 //
-// The ring is reached through a pointer (ring()), so that a later task can
-// hand one in under a running engine.
+// Tapes handed in (TapeStore.hpp is the worker's side and says what the
+// module does). The engine owns every ring it holds and frees none but in its
+// destructor: the live ring, the source of a conversion, one offered and not
+// yet looked at, and those handed back and not yet collected (eight slots).
+// Every ring it lets go of comes back through retired(), and only the worker
+// frees rings, so a ring the worker is reading (a source it converts, the
+// live ring it holds still to save) cannot be freed under it.
+// - Wanted. The engine says which tape it is waiting for, if any
+//   (tapeWanted: a TapeJob, with a ticket): the patch's stored tape, after
+//   expectStored() (the module, when a patch opens with a stored tape); or,
+//   after allocate at a new rate while frozen, the frozen tape (`from`, the
+//   ring it was on, kept as the source) converted from its rate to the new
+//   one. A tape on its way is asked for again, under a new ticket, at each
+//   new rate (from the same source: never a conversion of a conversion). It
+//   stops being wanted when it is taken, at a thaw, and at reset.
+// - Offered. offer(ring, ticket) hands one in; the audio thread looks at it
+//   on its next sample and takes it only if its ticket is the one wanted
+//   now, the engine is frozen, and its length is this rate's tape; otherwise
+//   it is handed back at once, unused. So a ring made for a rate no longer in
+//   force, or for a wait that a thaw, a reset or a newer request ended, never
+//   goes live. (The ticket is why offer takes two arguments where the plan
+//   wrote one: a ring's length tells its rate, not which wait it was made
+//   for.) A taken ring replaces the live one (handed back), the source of its
+//   conversion is handed back on the next sample (no longer wanted), tapesTaken() counts it and live() shows it
+//   (release; the worker acquires).
+// - Taken. A swap is not a restart. The new tape's pass begins from reset at
+//   the next boundary (Pass.hpp: in go round from the anchor; in stop
+//   waiting for a trigger unless held), and the read point and marks are of
+//   the new tape from then on. The grain in flight is laid and the overlap
+//   plays out, so the old sound dissolves into the new one through the
+//   grains' windows (no click); RUN follows what is heard as always (a new
+//   pass begun while RUN is high dips it); Mix goes on; the edge detectors
+//   are not re-armed: Freeze has stayed on throughout (a tape is taken only
+//   frozen), so no Freeze edge is seen, and a TRIG latched just before is
+//   kept. The ring arrives frozen and faded out (Ring::fill), so nothing is
+//   written onto it while Freeze stays on.
+// - Held still. For the save, the worker may hold the live ring still
+//   (holdStill, then letGo): granted only while it stands still (frozen and
+//   faded out) with no tape on its way, and while held nothing writes it: a
+//   thaw meanwhile is put off until letGo (the recording starts that much
+//   later, fading in as ever). The hold is a pair of seq_cst flags (the
+//   worker sets hold_ then reads still_; the audio thread, before it writes
+//   a ring it said was still, clears still_ then reads hold_), so either the
+//   hold is refused or the write waits: never both. allocate, setSampleRate
+//   and reset grant no hold while they run and wait for one in force.
+// - frozenSince() numbers the frozen tape for the save: new at every Freeze
+//   rising edge, at reset, and with a new silent tape at a rate change; the
+//   same through a tape handed in and a conversion (the same tape at another
+//   rate).
 //
 // Threads: allocate, setSampleRate, reset and seed off the audio thread, or
-// with process() held off; process and the read-only calls on it. process()
-// does no allocation, lock, free or libm (FastMath.hpp).
+// with process() held off; expectStored on the UI thread, one at a time with
+// allocate, setSampleRate and reset; tapeWanted, live, tapesTaken and
+// frozenSince on any thread; offer, retired, holdStill and letGo on one
+// worker thread; process, ring() and the other read-only calls on the audio
+// thread. process() does no allocation, lock, free or libm (FastMath.hpp).
 #include "Grain.hpp"
 #include "Laws.hpp"
 #include "Pass.hpp"
@@ -122,8 +175,10 @@
 #include "Tables.hpp"
 #include "hadal/Random.hpp"
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
+#include <thread>
 #include <vector>
 
 namespace rka { namespace doldrums {
@@ -171,48 +226,73 @@ struct DoldrumsEngine {
 	DoldrumsEngine(const DoldrumsEngine&) = delete;
 	DoldrumsEngine& operator=(const DoldrumsEngine&) = delete;
 
+	~DoldrumsEngine() {
+		if (ring_ != &none_) delete ring_;
+		delete source_;
+		delete incoming_.load(std::memory_order_acquire);
+		for (int i = 0; i < kRetireSlots; i++) delete retired_[i].load(std::memory_order_acquire);
+	}
+
 	bool allocate(float rate) {
 		if (!(rate >= kMinRate && rate <= kMaxRate)) return false;
 		if (rate == allocRate_) return true;
+		if (freeSlots() < 2) return false;   // the worker has not collected (see "Tapes handed in")
+		Ring* fresh = new Ring;
+		if (!fresh->allocate(tapeFrames(rate))) {
+			delete fresh;
+			return false;
+		}
+		const bool wasRunning = running_;
 		running_ = false;
 		inFlight_ = false;
 		allocRate_ = 0.f;
 		for (int i = 0; i < 3; i++) frames_[i] = grainFrames(GrainSize(i), rate);
-		if (!tape_.allocate(tapeFrames(rate))) return false;
-		ring_ = &tape_;
-		for (int i = 0; i < 3; i++)
-			if (!buffers_[i].allocate(frames_[i])) return false;
-		tables_.allocate(frames_[GRAIN_LONG] / 2);
-		sliceL_.assign(size_t(frames_[GRAIN_LONG]), 0.f);
-		sliceR_.assign(size_t(frames_[GRAIN_LONG]), 0.f);
-		if (!overlapMade_) overlapMade_ = overlap_.allocate(kMaxGrain);
+		bool ok = true;
+		for (int i = 0; i < 3; i++) ok = ok && buffers_[i].allocate(frames_[i]);
+		if (ok) {
+			tables_.allocate(frames_[GRAIN_LONG] / 2);
+			sliceL_.assign(size_t(frames_[GRAIN_LONG]), 0.f);
+			sliceR_.assign(size_t(frames_[GRAIN_LONG]), 0.f);
+			if (!overlapMade_) overlapMade_ = overlap_.allocate(kMaxGrain);
+		}
+		exclude();
+		changeRing(fresh, rate, wasRunning);
+		admit();
+		if (!ok) return false;
 		allocRate_ = rate;
 		return true;
 	}
 
 	void setSampleRate(float rate) {
 		if (rate != allocRate_ || (running_ && rate == rate_)) return;
+		exclude();
 		rate_ = rate;
 		gap_ = stepGap(rate);
 		dip_ = runDipFrames(rate);
 		budget_ = 32 * gap_;
 		mixStep_ = 1.f / (0.01f * rate);
-		const int fade = int(detail::roundHalfUp(0.005 * double(rate)));
-		ring_->setFadeFrames(fade);
+		fade_ = int(detail::roundHalfUp(0.005 * double(rate)));
+		ring_->setFadeFrames(fade_);
 		ring_->clear();
 		if (frozen_)   // frozen, the new tape is silent: its fade-out is written now, as silence
-			for (int i = 0; i < fade; i++) ring_->write(0.f, 0.f, true);
+			for (int i = 0; i < fade_; i++) ring_->write(0.f, 0.f, true);
+		if (want_.load(std::memory_order_relaxed) == 0) bumpEpoch();   // a new (silent) tape, unless one is on its way
 		primed_ = false;
 		active_ = GRAIN_MEDIUM;
 		restart();
 		running_ = true;
+		admit();
 	}
 
 	void seed(uint32_t s) { rng_.seed(s); }
 
 	void reset() {
-		if (ring_) ring_->clear();
+		exclude();
+		want_.store(0, std::memory_order_release);   // a tape on its way is not wanted now
+		ring_->clear();
+		bumpEpoch();
 		restart();
+		admit();
 	}
 
 	void process(const DoldrumsFrame& f, DoldrumsResult& out) {
@@ -222,7 +302,11 @@ struct DoldrumsEngine {
 		if (!armed_) trigHigh_ = trigV >= 1.f;   // the first sample after a restart: levels, no edges
 		const bool gate = schmitt(gateV, gateHigh_);
 		const bool frozen = f.params[F::FREEZE] >= 0.5f || gate;
-		if (frozen && !frozen_ && armed_) rose_ = true;
+		if (frozen && !frozen_ && armed_) {
+			rose_ = true;
+			bumpEpoch();
+		}
+		if (!frozen && frozen_) cancelWant();   // thawed: a tape on its way is not wanted now
 		frozen_ = frozen;
 		const bool wasTrig = trigHigh_;
 		if (schmitt(trigV, trigHigh_) && !wasTrig) trig_ = true;
@@ -230,7 +314,8 @@ struct DoldrumsEngine {
 		pace_ = paceFromDial(cvValue(f.params[F::STRETCH], f.params[F::STRETCH_ATT], f.stretchCv));
 		staged_ = 0;
 		if (running_) {
-			ring_->write(inL, inR, frozen);
+			handOff(frozen);
+			record(inL, inR, frozen);
 			stage(f);
 		}
 
@@ -267,9 +352,79 @@ struct DoldrumsEngine {
 	int staged() const { return staged_; }              // for the tests and the bench
 	long long tableSwaps() const { return swaps_; }     // likewise
 
+	// ---- Tapes handed in (see "Tapes handed in" above; TapeStore.hpp is the worker's side).
+
+	// What the worker is to make: the stored tape read (from null) or `from`
+	// converted, at toRate, for `ticket`.
+	struct TapeJob {
+		uint32_t ticket = 0;
+		const Ring* from = nullptr;
+		float fromRate = 0.f, toRate = 0.f;
+	};
+	static constexpr int kRetireSlots = 8;
+
+	// The UI thread (one thread at a time with allocate, setSampleRate and
+	// reset): the patch's stored tape is to be read and handed in. Its ticket.
+	uint32_t expectStored() { return issue(nullptr, 0.f, allocRate_ > 0.f ? allocRate_ : rate_); }
+	// Any thread: the tape wanted now, if one is; false if none.
+	bool tapeWanted(TapeJob& j) const {
+		for (int attempt = 0; attempt < 8; attempt++) {
+			const uint32_t a = want_.load(std::memory_order_acquire);
+			if (a == 0) return false;
+			const Ring* from = jobFrom_.load(std::memory_order_acquire);
+			const float fromRate = jobFromRate_.load(std::memory_order_acquire);
+			const float toRate = jobToRate_.load(std::memory_order_acquire);
+			if (want_.load(std::memory_order_acquire) == a) {
+				j.ticket = a;
+				j.from = from;
+				j.fromRate = fromRate;
+				j.toRate = toRate;
+				return true;
+			}
+		}
+		return false;
+	}
+	// The worker: a tape made for `ticket`. False (and still the caller's)
+	// if one offered before is not yet taken or refused; true: the engine's,
+	// until it comes back through retired().
+	bool offer(Ring* fresh, uint32_t ticket) {
+		if (!fresh || incoming_.load(std::memory_order_acquire)) return false;
+		offerTicket_.store(ticket, std::memory_order_relaxed);
+		incoming_.store(fresh, std::memory_order_release);
+		return true;
+	}
+	// The worker: a ring the engine is done with (the caller's to delete), or null.
+	Ring* retired() {
+		for (int i = 0; i < kRetireSlots; i++)
+			if (Ring* r = retired_[i].exchange(nullptr, std::memory_order_acq_rel)) return r;
+		return nullptr;
+	}
+	// Any thread: the ring live now (null before allocate), and how many
+	// offers have gone live. The ring stays valid until it comes back
+	// through retired().
+	const Ring* live() const { return livePub_.load(std::memory_order_acquire); }
+	uint32_t tapesTaken() const { return taken_.load(std::memory_order_acquire); }
+	// Any thread: the frozen tape's number, for the save (TapeStore.hpp's
+	// SaveFacts::frozenSince): a new one at every freeze, reset and new
+	// silent tape; the same through a tape handed in. Never 0.
+	uint32_t frozenSince() const { return epoch_.load(std::memory_order_acquire); }
+	// The worker: the live ring, held still (frozen, faded out, nothing on
+	// its way), or null; while held nothing writes it. letGo() soon after.
+	const Ring* holdStill(uint32_t* since = nullptr) {
+		hold_.store(true, std::memory_order_seq_cst);
+		if (blocked_.load(std::memory_order_seq_cst) || !still_.load(std::memory_order_seq_cst) ||
+		    want_.load(std::memory_order_seq_cst) != 0) {
+			hold_.store(false, std::memory_order_release);
+			return nullptr;
+		}
+		if (since) *since = epoch_.load(std::memory_order_acquire);
+		return livePub_.load(std::memory_order_acquire);
+	}
+	void letGo() { hold_.store(false, std::memory_order_release); }
+
 private:
-	Ring tape_;
-	Ring* ring_ = &tape_;
+	Ring none_;           // before allocate
+	Ring* ring_ = &none_; // the live ring (the engine's while live)
 	GrainBuffers buffers_[3];
 	Tables tables_;
 	Grain grain_;
@@ -278,6 +433,30 @@ private:
 	rka::hadal::Random rng_;
 	std::vector<float> sliceL_, sliceR_;
 	DoldrumsState state_;
+
+	// Tapes handed in. The job (want_ and the three fields, a seqlock: want_
+	// is 0 while they change) is written by issue() off the audio thread and
+	// cleared by the audio thread when taken or not wanted. source_ (with its
+	// rate and the ticket it is wanted for) is written by allocate with
+	// process held off and handed back by the audio thread.
+	std::atomic<uint32_t> want_{0};
+	std::atomic<const Ring*> jobFrom_{nullptr};
+	std::atomic<float> jobFromRate_{0.f}, jobToRate_{0.f};
+	uint32_t tickets_ = 0;
+	Ring* source_ = nullptr;
+	float sourceRate_ = 0.f;
+	uint32_t sourceTicket_ = 0;
+	std::atomic<Ring*> incoming_{nullptr};
+	std::atomic<uint32_t> offerTicket_{0};
+	std::atomic<Ring*> retired_[kRetireSlots] = {};
+	std::atomic<const Ring*> livePub_{nullptr};
+	std::atomic<uint32_t> taken_{0}, epoch_{1};
+	// The hold: hold_ the worker's, still_ the audio thread's (the live ring
+	// stands still: frozen and faded out), blocked_ set while allocate,
+	// setSampleRate or reset change the ring (no hold is granted meanwhile).
+	std::atomic<bool> hold_{false}, still_{false}, blocked_{false};
+	bool stillPub_ = false;   // the audio thread's copy of still_
+	int fade_ = 240;
 
 	float allocRate_ = 0.f, rate_ = 0.f;
 	bool running_ = false, overlapMade_ = false, primed_ = false;
@@ -328,6 +507,127 @@ private:
 		} else if (v >= 1.f)
 			high = true;
 		return high;
+	}
+
+	// ---- Tapes handed in: the engine's side.
+
+	int freeSlots() const {
+		int n = 0;
+		for (int i = 0; i < kRetireSlots; i++) n += retired_[i].load(std::memory_order_relaxed) == nullptr;
+		return n;
+	}
+	// Hands a ring back to the worker; false if every slot is full.
+	bool retire(Ring* r) {
+		if (!r || r == &none_) return true;
+		for (int i = 0; i < kRetireSlots; i++)
+			if (!retired_[i].load(std::memory_order_relaxed)) {
+				retired_[i].store(r, std::memory_order_release);
+				return true;
+			}
+		return false;
+	}
+	void bumpEpoch() {
+		uint32_t e = epoch_.load(std::memory_order_relaxed) + 1;
+		if (e == 0) e = 1;
+		epoch_.store(e, std::memory_order_release);
+	}
+	// Off the audio thread, one at a time: a new job, under a new ticket.
+	uint32_t issue(const Ring* from, float fromRate, float toRate) {
+		want_.store(0, std::memory_order_relaxed);   // the fields change under 0 (a reader that sees a new field sees this)
+		jobFrom_.store(from, std::memory_order_release);
+		jobFromRate_.store(fromRate, std::memory_order_release);
+		jobToRate_.store(toRate, std::memory_order_release);
+		if (++tickets_ == 0) ++tickets_;
+		want_.store(tickets_, std::memory_order_release);
+		return tickets_;
+	}
+	void cancelWant() {
+		uint32_t t = want_.load(std::memory_order_relaxed);
+		if (t) want_.compare_exchange_strong(t, 0, std::memory_order_acq_rel);
+	}
+	// While the ring changes off the audio thread: no hold is granted, and one
+	// in force is waited for (the worker holds only for a copy).
+	void exclude() {
+		blocked_.store(true, std::memory_order_seq_cst);
+		while (hold_.load(std::memory_order_seq_cst)) std::this_thread::yield();
+	}
+	void admit() { blocked_.store(false, std::memory_order_release); }
+
+	// allocate: `fresh` (silent, at `rate`) goes live. The ring it replaces is
+	// handed back, or kept as the source of a conversion if it holds a frozen
+	// tape; a tape already on its way is asked for again at the new rate.
+	void changeRing(Ring* fresh, float rate, bool wasRunning) {
+		Ring* old = ring_ != &none_ ? ring_ : nullptr;
+		const uint32_t w = want_.load(std::memory_order_acquire);
+		const bool converting = w != 0 && source_ && sourceTicket_ == w;
+		if (source_ && !converting) {
+			retire(source_);
+			source_ = nullptr;
+		}
+		if (w != 0) {
+			const uint32_t t = issue(converting ? source_ : nullptr, converting ? sourceRate_ : 0.f, rate);
+			if (converting) sourceTicket_ = t;
+			retire(old);
+		} else if (old && wasRunning && frozen_) {
+			source_ = old;
+			sourceRate_ = rate_;
+			sourceTicket_ = issue(old, rate_, rate);
+		} else
+			retire(old);
+		still_.store(false, std::memory_order_seq_cst);
+		stillPub_ = false;
+		ring_ = fresh;
+		livePub_.store(fresh, std::memory_order_release);
+	}
+
+	// The audio thread, each sample: a source no longer wanted goes back; an
+	// offer is taken if it is for the tape wanted now, frozen, at this tape's
+	// length, else handed back at once.
+	void handOff(bool frozen) {
+		if (source_ && want_.load(std::memory_order_acquire) != sourceTicket_ && retire(source_)) source_ = nullptr;
+		Ring* in = incoming_.load(std::memory_order_acquire);
+		if (!in || freeSlots() < 2) return;
+		const uint32_t ticket = offerTicket_.load(std::memory_order_relaxed);
+		incoming_.store(nullptr, std::memory_order_release);   // only this thread empties it
+		uint32_t w = want_.load(std::memory_order_acquire);
+		if (w == 0 || ticket != w || !frozen || in->capacity() != ring_->capacity()) {
+			retire(in);
+			return;
+		}
+		want_.compare_exchange_strong(w, 0, std::memory_order_acq_rel);
+		in->setFadeFrames(fade_);
+		Ring* old = ring_;
+		ring_ = in;
+		livePub_.store(in, std::memory_order_release);
+		retire(old);   // (the source of its conversion goes back next sample: no longer wanted)
+		// The new tape's pass starts from the anchor (Pass.hpp's reset); the
+		// grain in flight, the overlap, RUN, Mix and the edge detectors go on.
+		pass_.reset();
+		last_ = PassOut{};
+		heldSize_ = -1;
+		state_.anchor = state_.end = in->now();
+		state_.held = state_.stopped = false;
+		taken_.fetch_add(1, std::memory_order_release);
+	}
+
+	// The audio thread: the input onto the tape, unless the worker holds it
+	// still (then a thaw is put off until it lets go).
+	void record(float l, float r, bool frozen) {
+		Ring& g = *ring_;
+		if (stillPub_) {
+			if (frozen && g.fadedOut()) return;
+			still_.store(false, std::memory_order_seq_cst);
+			if (hold_.load(std::memory_order_seq_cst)) {
+				still_.store(true, std::memory_order_seq_cst);
+				return;
+			}
+			stillPub_ = false;
+		}
+		g.write(l, r, frozen);
+		if (frozen && g.fadedOut()) {
+			still_.store(true, std::memory_order_release);
+			stillPub_ = true;
+		}
 	}
 
 	void restart() {

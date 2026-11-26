@@ -204,9 +204,16 @@ struct Host {
 	}
 	// Off the audio thread, as the module's onSampleRateChange: allocate,
 	// then adopt. The fence is down while they run (a new tape is cleared
-	// whole, guard frames too) and up while process() does.
+	// whole, guard frames too) and up while process() does. Each also
+	// collects and frees the rings the engine has handed back, as the
+	// module's worker does (a frozen tape's ring is kept as the source of a
+	// conversion, which nobody makes here, until a thaw or reset).
+	void collect() {
+		while (Ring* old = e->retired()) delete old;
+	}
 	bool allocate(float fs) {
 		fence(false);
+		collect();
 		const bool ok = e->allocate(fs);
 		fence(true);
 		return ok;
@@ -214,11 +221,13 @@ struct Host {
 	void setSampleRate(float fs) {
 		fence(false);
 		e->setSampleRate(fs);
+		collect();
 		fence(true);
 	}
 	void reset() {
 		fence(false);
 		e->reset();
+		collect();
 		fence(true);
 	}
 	bool use(float fs) {

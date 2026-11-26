@@ -14,14 +14,37 @@
 // Task 11's arrival of a tape does; the audio thread carries on from it and
 // the columns it publishes are the tape's and then the new frames'. A rebuild
 // that touched what the reader or the audio thread uses would be a race.
+//
+// swap_race() (Task 11): the engine runs on the audio thread, frozen, with a
+// thaw now and then, and the module's window code after each process()
+// (TapeStore.hpp's sequence: two views, the fed one switched when a tape is
+// taken); a worker asks for the stored tape, makes rings, rebuilds the spare
+// view from each before offering it, and collects and frees what comes back;
+// the UI thread reads the shown view throughout. Whichever way the threads
+// meet: no race (ThreadSanitizer), every ring made is freed once or is live
+// at the end, every take is seen once, and the fed view is the live tape's.
+//
+// save_race() (Task 11): the engine freezes and thaws on the audio thread,
+// which, each time the tape comes to stand still, notes a hash of it under
+// the frozen tape's number; a worker saves (saveFrozen) as fast as it can and
+// hashes each file written. Every file must be the whole tape of the number
+// the save gave it (none torn by a thaw), whichever saves succeed.
+#define RKA_WAV_IMPLEMENTATION
+#include "TapeStore.hpp"
 #include "TapeView.hpp"
 #include "testing.hpp"
 
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
+#include <filesystem>
+#include <map>
 #include <thread>
+#include <utility>
+#include <vector>
 
 extern "C" const char* __tsan_default_options() {
 	return "halt_on_error=1";
@@ -173,10 +196,253 @@ void rebuilt_hands_over() {
 	}
 }
 
+
+// ---- Task 11: tapes handed in, and the save.
+
+typedef DoldrumsFrame F;
+
+// The module's window code, as TapeStore.hpp's sequence has it: after each
+// process(), switch to the spare view when a tape has been taken, feed the
+// fed view each frame written, publish now and then.
+struct WindowModel {
+	TapeView views[2];
+	std::atomic<int> shown{0};
+	std::atomic<uint32_t> switchedAt{0};
+	int fed = 0;
+	uint32_t seen = 0;
+	long long fedTo = 0;   // the frames fed so far (an absolute index)
+	long long k = 0;
+
+	void after(DoldrumsEngine& e) {
+		if (e.tapesTaken() != seen) {
+			seen = e.tapesTaken();
+			fed = 1 - fed;
+			fedTo = e.ring().now();   // the spare was rebuilt from the ring as it was offered
+			shown.store(fed, std::memory_order_release);
+			switchedAt.store(seen, std::memory_order_release);
+		}
+		const Ring& g = e.ring();
+		for (; fedTo < g.now(); fedTo++) {
+			const long long p = g.physical(fedTo);
+			views[fed].wrote(g.channel(0)[p], g.channel(1)[p]);
+		}
+		if (++k % 64 == 0) views[fed].publish(e.state());
+	}
+};
+
+void swap_race() {
+	const float rate = 8000.f;
+	DoldrumsEngine e;
+	CHECK(e.allocate(rate), "allocate");
+	e.setSampleRate(rate);
+	const long long cap = tapeFrames(rate);
+	WindowModel win;
+	win.views[0].configure(cap, 0);
+	std::atomic<bool> stop{false};
+	long long made = 0, freed = 0, takes = 0, offers = 0;
+	Ring* outstanding = nullptr;
+	uint32_t takenAt = 0;
+
+	long long samples = 0;
+	std::thread audio([&]() {
+		F f;
+		DoldrumsResult out;
+		const auto start = std::chrono::steady_clock::now();
+		while (!stop.load(std::memory_order_relaxed)) {
+			samples++;
+			// A thaw for 5 ms in every 150 (by the clock, so that the worker,
+			// whatever its speed, has offers land frozen and thawed).
+			const long long ms = (long long) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+			f.params[F::FREEZE] = ms % 150 < 145 ? 1.f : 0.f;
+			f.inL = float(samples % 50 - 25) * 0.1f;
+			e.process(f, out);
+			win.after(e);
+		}
+	});
+	std::thread worker([&]() {
+		float v = 1.f;
+		while (!stop.load(std::memory_order_relaxed)) {
+			while (Ring* r = e.retired()) {
+				if (r == outstanding && e.tapesTaken() == takenAt) outstanding = nullptr;   // refused
+				delete r;
+				freed++;
+			}
+			if (outstanding && e.tapesTaken() != takenAt) {
+				// Taken: the spare is the audio thread's once it has switched to it.
+				if (win.switchedAt.load(std::memory_order_acquire) != e.tapesTaken()) {
+					std::this_thread::yield();
+					continue;
+				}
+				outstanding = nullptr;
+				takes++;
+			}
+			if (outstanding) {
+				std::this_thread::yield();
+				continue;
+			}
+			DoldrumsEngine::TapeJob job;
+			if (!e.tapeWanted(job)) {
+				e.expectStored();   // the UI thread's call; nothing else changes the rings meanwhile
+				continue;
+			}
+			Ring* r = new Ring;
+			r->allocate(cap);
+			std::vector<float> l(size_t(cap), v), rr(size_t(cap), -v);
+			v += 1.f;
+			r->fill(l.data(), rr.data());
+			made++;
+			win.views[1 - win.shown.load(std::memory_order_acquire)].rebuild(*r);
+			takenAt = e.tapesTaken();
+			while (!e.offer(r, job.ticket)) std::this_thread::yield();
+			offers++;
+			outstanding = r;
+		}
+	});
+	long long reads = 0;
+	const auto t0 = std::chrono::steady_clock::now();
+	while (std::chrono::steady_clock::now() - t0 < std::chrono::seconds(3)) {
+		TapeSnapshot s;
+		if (win.views[win.shown.load(std::memory_order_acquire)].read(s)) reads++;
+	}
+	stop = true;
+	audio.join();
+	worker.join();
+	// Settle on this thread (the audio and worker threads are done): the
+	// engine looks at an offer still waiting, and the module switches if it
+	// was taken.
+	F f;
+	f.params[F::FREEZE] = 1.f;
+	DoldrumsResult out;
+	for (int i = 0; i < 10; i++) {
+		e.process(f, out);
+		win.after(e);
+	}
+	if (outstanding && e.tapesTaken() != takenAt) takes++;
+	while (Ring* r = e.retired()) {
+		delete r;
+		freed++;
+	}
+	// The rings made here and the engine's first are freed once each, but for
+	// the one live (the first, or one made here): made + 1 = freed + 1.
+	CHECK(made == freed, "every ring is freed once or live: %lld made, %lld freed", made, freed);
+	CHECK(e.live() != nullptr && e.retired() == nullptr, "one ring live, none left over");
+	CHECK(takes == (long long) e.tapesTaken(), "every take seen once: %lld seen, %u taken", takes, e.tapesTaken());
+	// The fed view is the live tape's.
+	TapeView ref;
+	ref.rebuild(e.ring());
+	win.views[win.fed].publish(e.state());
+	ref.publish(e.state());
+	TapeSnapshot a, b;
+	CHECK(win.views[win.fed].read(a) && ref.read(b), "both views read");
+	int cols = 0;
+	for (int i = 0; i < TapeSnapshot::COLS; i++) cols += a.low[i] != b.low[i] || a.high[i] != b.high[i];
+	CHECK(cols == 0, "the fed view is the live tape's (%d columns differ)", cols);
+	std::printf("swap_race: %lld samples, %lld rings made, %lld offered, %u taken, %lld snapshots read\n", samples, made, offers, e.tapesTaken(), reads);
+}
+
+uint64_t hashTape(const float* l, const float* r, size_t n) {
+	uint64_t h = 1469598103934665603ull;
+	const float* ch[2] = {l, r};
+	for (const float* c : ch)
+		for (size_t i = 0; i < n; i++) {
+			uint32_t b;
+			std::memcpy(&b, &c[i], 4);
+			h = (h ^ b) * 1099511628211ull;
+		}
+	return h;
+}
+
+void save_race() {
+	namespace fs = std::filesystem;
+	const fs::path dir = fs::temp_directory_path() /
+	                     ("rka_doldrums_save_race_" + std::to_string((long long) std::rand()) + "_" + std::to_string((long long) std::time(nullptr)));
+	fs::create_directories(dir);
+	const float rate = 8000.f;
+	DoldrumsEngine e;
+	CHECK(e.allocate(rate), "allocate");
+	e.setSampleRate(rate);
+	const long long cap = tapeFrames(rate);
+	std::map<uint32_t, uint64_t> still;   // the audio thread's: the frozen tape's number -> its hash
+	F f;
+	DoldrumsResult out;
+	long long k = 0;
+	uint32_t lastNoted = 0;
+	auto step = [&]() {
+		k++;
+		f.inL = float(k % 977) * 0.01f - 4.f;
+		f.inR = float(k % 331) * -0.02f + 3.f;
+		f.inRPatched = true;
+		e.process(f, out);
+		if (out.frozen && e.ring().fadedOut() && e.frozenSince() != lastNoted) {
+			lastNoted = e.frozenSince();
+			std::vector<float> l((size_t) cap), r((size_t) cap);
+			store::image(e.ring(), l.data(), r.data());
+			still[lastNoted] = hashTape(l.data(), r.data(), l.size());
+		}
+	};
+	auto fileHash = [&](uint64_t& h) {
+		std::vector<float> l((size_t) cap), r((size_t) cap);
+		rka::WavInfo info;
+		std::string w;
+		if (!rka::readWav((dir / STORED_TAPE).string(), l.data(), r.data(), l.size(), info, w) || info.frames != uint64_t(cap)) return false;
+		h = hashTape(l.data(), r.data(), l.size());
+		return true;
+	};
+	// First, on one thread: a save of a still tape is that tape.
+	for (long long i = 0; i < cap; i++) step();
+	f.params[F::FREEZE] = 1.f;
+	for (int i = 0; i < 100; i++) step();
+	uint32_t since = 0;
+	std::string why;
+	uint64_t h = 0;
+	CHECK(saveFrozen(dir.string(), e, rate, since, why) && fileHash(h) && still.count(since) && still[since] == h, "a still tape saved whole");
+
+	std::atomic<bool> stop{false};
+	std::vector<std::pair<uint32_t, uint64_t>> saved;
+	long long refused = 0, unreadable = 0;
+	std::thread audio([&]() {
+		long long n = 0;
+		while (!stop.load(std::memory_order_relaxed)) {
+			n++;
+			f.params[F::FREEZE] = n % 2500 < 2000 ? 1.f : 0.f;   // frozen 250 ms, thawed 62 ms
+			step();
+		}
+	});
+	std::thread worker([&]() {
+		while (!stop.load(std::memory_order_relaxed)) {
+			uint32_t s = 0;
+			std::string w;
+			if (saveFrozen(dir.string(), e, rate, s, w, 0)) {
+				uint64_t fh = 0;
+				if (fileHash(fh)) saved.push_back({s, fh});
+				else unreadable++;
+			} else {
+				std::error_code ec;
+				fs::remove(dir / STORED_TAPE, ec);   // the module's part: none, then
+				refused++;
+			}
+		}
+	});
+	std::this_thread::sleep_for(std::chrono::seconds(3));
+	stop = true;
+	audio.join();
+	worker.join();
+	long long bad = 0;
+	for (const auto& x : saved) bad += !(still.count(x.first) && still[x.first] == x.second);
+	CHECK(bad == 0 && unreadable == 0, "every file written is the whole tape of its number (%lld of %zu not; %lld unreadable)", bad, saved.size(),
+	      unreadable);
+	std::printf("save_race: %zu saves written, %lld refused, %zu still tapes noted\n", saved.size(), refused, still.size());
+	std::error_code ec;
+	fs::remove_all(dir, ec);
+}
+
 } // namespace
 
 int main() {
 	handoff();
 	rebuilt_hands_over();
+	std::srand((unsigned) std::time(nullptr));
+	swap_race();
+	save_race();
 	return rkatest::finish("doldrums/test_threads");
 }

@@ -1,7 +1,7 @@
 // Doldrums' ring tape (Ring.hpp): the wrap, the frozen standstill, the fade
 // at Freeze's edges, the bounds of copy (the buffer fenced with
 // ASan's poisoning, as Eddy's hostile test fences its tapes), hostile
-// samples, and Freeze toggled every sample.
+// samples, Freeze toggled every sample, and a whole tape handed in (fill).
 #include "Ring.hpp"
 #include "testing.hpp"
 #include <cmath>
@@ -353,6 +353,53 @@ void rapid_freeze() {
 	}
 }
 
+// fill(): a tape handed in whole (TapeStore.hpp) over one that was recording:
+// its frames oldest first at [0, capacity), NaN and inf as 0, now() = capacity,
+// frozen and faded out, so a frozen write writes nothing (its oldest frames
+// stay as they are) and a thaw fades in from one step above 0; the engine's
+// setFadeFrames at the take keeps that.
+void fill_hands_in_a_frozen_tape() {
+	const long long cap = 1000;
+	Ring r;
+	CHECK(r.allocate(cap), "allocate");
+	r.setFadeFrames(10);
+	for (long long i = 0; i < 1234; i++)
+		r.write(sampleL(i), sampleR(i), false);
+	CHECK(!r.fadedOut(), "recording: not faded out");
+	std::vector<float> l(cap), rr(cap);
+	for (long long i = 0; i < cap; i++) {
+		l[size_t(i)] = float(i) * 0.25f - 100.f;
+		rr[size_t(i)] = -float(i) * 0.125f + 7.f;
+	}
+	l[3] = std::numeric_limits<float>::quiet_NaN();
+	rr[5] = std::numeric_limits<float>::infinity();
+	l[7] = -std::numeric_limits<float>::infinity();
+	r.fill(l.data(), rr.data());
+	CHECK(r.now() == cap && r.fadedOut(), "now() %lld = capacity, faded out", r.now());
+	r.setFadeFrames(10);
+	CHECK(r.fadedOut(), "setFadeFrames keeps it faded out");
+	auto same = [&](const char* when) {
+		std::vector<float> a(cap), b(cap);
+		CHECK(r.copy(cap, int(cap), a.data(), b.data()), "%s: the whole tape is readable", when);
+		long long bad = 0;
+		for (long long i = 0; i < cap; i++) {
+			const float wl = i == 3 || i == 7 ? 0.f : l[size_t(i)], wr = i == 5 ? 0.f : rr[size_t(i)];
+			bad += bitsOf(a[size_t(i)]) != bitsOf(wl) || bitsOf(b[size_t(i)]) != bitsOf(wr);
+		}
+		CHECK(bad == 0, "%s: %lld frames not as handed in (oldest first, NaN and inf as 0)", when, bad);
+	};
+	same("filled");
+	fence(r, true);
+	for (int i = 0; i < 50; i++)
+		r.write(9.f, -9.f, true);
+	fence(r, false);
+	CHECK(r.now() == cap, "frozen: nothing written after it (now %lld)", r.now());
+	same("frozen after the fill");
+	r.write(10.f, -10.f, false);
+	float a = 0.f, b = 0.f;
+	CHECK(r.now() == cap + 1 && r.copy(cap + 1, 1, &a, &b) && a == 1.f && b == -1.f, "a thaw fades in from one step (%g, %g)", a, b);
+}
+
 } // namespace
 
 int main() {
@@ -362,5 +409,6 @@ int main() {
 	copy_bounds();
 	hostile_samples();
 	rapid_freeze();
+	fill_hands_in_a_frozen_tape();
 	return rkatest::finish("test_ring");
 }

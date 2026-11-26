@@ -2,7 +2,9 @@
 // tied to a frame of params and inputs, the staging, RUN, Mix and the rate,
 // against the design's "Controls and behaviour", "Staging" and "Testing"
 // (Repeatable, Stretch, Held, No clicks, the patch it was asked for, Staging)
-// and the plan's Global Constraints. 48 kHz and the Medium grain unless a
+// and the plan's Global Constraints; and Task 11's tapes handed in (a swap
+// under the running engine, its tickets, the conversion at a rate change, the
+// hold for the save, the frozen tape's number). 48 kHz and the Medium grain unless a
 // test says otherwise; fixed seeds. Where a test needs a full tape it writes
 // it straight through ring() (fast), then drives the engine sample by sample.
 #include "doldrums/DoldrumsEngine.hpp"
@@ -1310,6 +1312,363 @@ void initialize_and_rate() {
 	CHECK(g.run.back() > 5.f && g.e->state().now > now, "reset: a new pass, the tape recording");
 }
 
+
+// ---- Tapes handed in (Task 11; DoldrumsEngine.hpp, "Tapes handed in").
+
+// A ring of the tape's length at `rate`, every frame (v, -v), as TapeStore makes them.
+Ring* flatTape(float rate, float v) {
+	Ring* r = new Ring;
+	r->allocate(tapeFrames(rate));
+	std::vector<float> l(size_t(r->capacity()), v), rr(l.size(), -v);
+	r->fill(l.data(), rr.data());
+	return r;
+}
+// The same with a 5 V tone at hz (DC is cut from the sound).
+Ring* toneTape(float rate, double hz) {
+	Ring* r = new Ring;
+	r->allocate(tapeFrames(rate));
+	std::vector<float> l(size_t(r->capacity()));
+	for (size_t i = 0; i < l.size(); i++) l[i] = float(5.0 * std::sin(2.0 * kPi * hz * double(i) / rate));
+	r->fill(l.data(), l.data());
+	return r;
+}
+void image(const Ring& r, std::vector<float>& l, std::vector<float>& rr) {
+	l.assign(size_t(r.capacity()), 0.f);
+	rr.assign(l.size(), 0.f);
+	r.copy(r.now(), int(r.capacity()), l.data(), rr.data());
+}
+// Every ring handed back, in order (the caller owns them).
+std::vector<Ring*> collect(DoldrumsEngine& e) {
+	std::vector<Ring*> v;
+	while (Ring* r = e.retired()) v.push_back(r);
+	return v;
+}
+bool has(const std::vector<Ring*>& v, const Ring* r) { return std::find(v.begin(), v.end(), r) != v.end(); }
+void drop(std::vector<Ring*>& v) {
+	for (Ring* r : v) delete r;
+	v.clear();
+}
+
+// An offer is taken only for the ticket wanted now, frozen, at this rate's
+// length; otherwise handed back at once, unused, and what is live stays.
+void offers_are_checked() {
+	const float rate = 48000.f;
+	Rig g(rate, 201);
+	g.go(g.secs(0.5), [&](long long t) { g.f.inL = chord(t, rate); });
+	g.f.params[F::FREEZE] = 1.f;
+	g.go(g.secs(0.2));
+	const Ring* a = g.e->live();
+	DoldrumsEngine::TapeJob job;
+	CHECK(a == &g.e->ring() && !g.e->tapeWanted(job), "frozen, nothing wanted yet");
+	auto tryOffer = [&](Ring* r, uint32_t ticket, const char* what) {
+		CHECK(g.e->offer(r, ticket), "%s: offered", what);
+		g.step();
+		std::vector<Ring*> back = collect(*g.e);
+		const bool refused = back.size() == 1 && back[0] == r && g.e->live() == a;
+		drop(back);
+		return refused;
+	};
+	CHECK(tryOffer(flatTape(rate, 1.f), 1, "nothing wanted"), "nothing wanted: handed back, A stays live");
+	const uint32_t t = g.e->expectStored();
+	CHECK(g.e->tapeWanted(job) && job.ticket == t && job.from == nullptr && job.toRate == rate, "the stored tape wanted");
+	CHECK(tryOffer(flatTape(44100.f, 1.f), t, "another rate's length"), "another rate's length: handed back");
+	CHECK(tryOffer(flatTape(rate, 1.f), t + 1, "another ticket"), "another ticket: handed back");
+	CHECK(g.e->tapeWanted(job) && job.ticket == t, "still wanted after the refusals");
+	// A thaw ends the wait: an offer for it is refused even once frozen again.
+	g.f.params[F::FREEZE] = 0.f;
+	g.go(1);
+	CHECK(!g.e->tapeWanted(job), "thawed: not wanted");
+	g.f.params[F::FREEZE] = 1.f;
+	g.go(g.secs(0.1));
+	a = g.e->live();
+	CHECK(tryOffer(flatTape(rate, 1.f), t, "a wait a thaw ended"), "a wait the thaw ended: handed back");
+	// Wanted while recording: refused until frozen.
+	g.f.params[F::FREEZE] = 0.f;
+	g.go(10);
+	const uint32_t t2 = g.e->expectStored();
+	CHECK(tryOffer(flatTape(rate, 1.f), t2, "not frozen"), "not frozen: handed back");
+	g.f.params[F::FREEZE] = 1.f;
+	g.go(g.secs(0.1));
+	a = g.e->live();
+	Ring* b = flatTape(rate, 2.f);
+	CHECK(g.e->offer(b, t2), "offered");
+	const uint32_t taken = g.e->tapesTaken();
+	g.step();
+	std::vector<Ring*> back = collect(*g.e);
+	CHECK(g.e->live() == b && &g.e->ring() == b && g.e->tapesTaken() == taken + 1 && back.size() == 1 && back[0] == a,
+	      "frozen, the right ticket and length: taken, the old ring handed back");
+	CHECK(!g.e->tapeWanted(job) && g.e->state().now == b->capacity(), "no longer wanted; the state is B's");
+	drop(back);
+	CHECK(b->now() == b->capacity(), "frozen: nothing written onto it");
+	// Thawed, it records from where it stands, fading in over the engine's 5 ms.
+	g.f.params[F::FREEZE] = 0.f;
+	g.f.inL = 5.f;
+	g.go(1);
+	float l = 0.f, r = 0.f;
+	CHECK(b->now() == b->capacity() + 1 && b->copy(b->now(), 1, &l, &r) && std::fabs(l - 5.f / 240.f) < 1e-6f,
+	      "thawed: one step of the 5 ms fade-in (%g)", l);
+}
+
+// A rate change while frozen: the frozen ring is kept as the source, a
+// conversion is wanted, asked for again at each new rate from the same source,
+// and only the one for the rate in force goes live; the source then comes
+// back. A thaw or reset ends the wait; not frozen, nothing is wanted.
+void rate_change_converts_frozen_tape() {
+	const float rate = 48000.f;
+	{
+		Rig g(rate, 203);
+		g.go(g.secs(1.0), [&](long long t) { g.f.inL = chord(t, rate); });
+		g.f.params[F::FREEZE] = 1.f;
+		g.go(g.secs(0.1));
+		const uint32_t since = g.e->frozenSince();
+		const Ring* a = g.e->live();
+		std::vector<float> al, ar;
+		image(*a, al, ar);
+		CHECK(g.e->allocate(44100.f), "allocate 44.1 kHz");
+		g.e->setSampleRate(44100.f);
+		std::vector<Ring*> back = collect(*g.e);
+		DoldrumsEngine::TapeJob j1;
+		CHECK(back.empty() && g.e->tapeWanted(j1) && j1.from == a && j1.fromRate == rate && j1.toRate == 44100.f,
+		      "44.1 kHz: A kept and wanted converted from 48 kHz (%zu back)", back.size());
+		g.rate = 44100.f;
+		g.go(g.secs(1.5));
+		const Ring* p441 = g.e->live();
+		CHECK(meanSquare(g.L, (long long) g.L.size() - g.secs(0.5), g.secs(0.5)) == 0.0, "silent until it arrives (the old grains heard out)");
+		// Again before it lands.
+		CHECK(g.e->allocate(96000.f), "allocate 96 kHz");
+		g.e->setSampleRate(96000.f);
+		g.rate = 96000.f;
+		back = collect(*g.e);
+		DoldrumsEngine::TapeJob j2;
+		CHECK(back.size() == 1 && back[0] == p441 && g.e->tapeWanted(j2) && j2.ticket != j1.ticket && j2.from == a && j2.fromRate == rate &&
+		          j2.toRate == 96000.f,
+		      "96 kHz: asked for again, from A at 48 kHz (not from the silent 44.1 kHz stand-in)");
+		drop(back);
+		g.go(10);
+		Ring* late = new Ring;
+		late->allocate(tapeFrames(44100.f));
+		CHECK(g.e->offer(late, j1.ticket), "the 44.1 kHz conversion lands late");
+		g.go(1);
+		back = collect(*g.e);
+		CHECK(back.size() == 1 && back[0] == late && g.e->tapeWanted(j2), "refused: made for a rate no longer in force");
+		drop(back);
+		// Same length, old ticket: still refused (a ring for an older wait never goes live).
+		Ring* oldTicket = flatTape(96000.f, 1.f);
+		CHECK(g.e->offer(oldTicket, j1.ticket), "offered");
+		g.go(1);
+		back = collect(*g.e);
+		CHECK(back.size() == 1 && back[0] == oldTicket, "an old ticket at the right length: refused");
+		drop(back);
+		Ring* c = flatTape(96000.f, 0.f);
+		{
+			std::vector<float> l(size_t(c->capacity()), 0.f), r(l.size(), 0.f);
+			// The chord's frames, newest last, as a conversion would put them (not resampled: the content is the test's).
+			for (size_t i = 0; i < al.size(); i++) {
+				l[l.size() - al.size() + i] = al[i];
+				r[r.size() - ar.size() + i] = ar[i];
+			}
+			c->fill(l.data(), r.data());
+		}
+		const Ring* p96 = g.e->live();
+		CHECK(g.e->offer(c, j2.ticket), "the 96 kHz conversion offered");
+		const size_t T = g.L.size();
+		g.go(g.secs(2.0));
+		back = collect(*g.e);
+		CHECK(g.e->live() == c && back.size() == 2 && has(back, a) && has(back, p96) && !g.e->tapeWanted(j2),
+		      "taken: the stand-in and the source A handed back");
+		drop(back);
+		CHECK(meanSquare(g.L, (long long) g.L.size() - g.secs(0.5), g.secs(0.5)) > 0.05, "the frozen tape sounds again");
+		CHECK(g.e->frozenSince() == since, "the same frozen tape's number throughout");
+		(void) T;
+	}
+	{
+		// There and back: 48, 44.1, 48 kHz. The wait at 48 kHz is from A itself; A
+		// converted to its own rate is A to the bit.
+		Rig g(rate, 205);
+		g.go(g.secs(1.0), [&](long long t) { g.f.inL = chord(t, rate); });
+		g.f.params[F::FREEZE] = 1.f;
+		g.go(g.secs(0.1));
+		const Ring* a = g.e->live();
+		CHECK(g.e->allocate(44100.f), "allocate");
+		g.e->setSampleRate(44100.f);
+		g.go(100);
+		CHECK(g.e->allocate(rate), "allocate");
+		g.e->setSampleRate(rate);
+		DoldrumsEngine::TapeJob j;
+		CHECK(g.e->tapeWanted(j) && j.from == a && j.fromRate == rate && j.toRate == rate, "back at 48 kHz: A wanted at its own rate");
+		std::vector<Ring*> back = collect(*g.e);
+		drop(back);
+	}
+	{
+		// A thaw ends the wait, and the source comes back.
+		Rig g(rate, 207);
+		g.go(g.secs(0.5), [&](long long t) { g.f.inL = chord(t, rate); });
+		g.f.params[F::FREEZE] = 1.f;
+		g.go(g.secs(0.1));
+		const Ring* a = g.e->live();
+		CHECK(g.e->allocate(44100.f), "allocate");
+		g.e->setSampleRate(44100.f);
+		DoldrumsEngine::TapeJob j;
+		CHECK(g.e->tapeWanted(j), "wanted");
+		g.f.params[F::FREEZE] = 0.f;
+		g.go(1);
+		std::vector<Ring*> back = collect(*g.e);
+		CHECK(!g.e->tapeWanted(j) && back.size() == 1 && back[0] == a, "thawed: not wanted, A handed back");
+		drop(back);
+		Ring* late = flatTape(44100.f, 1.f);
+		g.f.params[F::FREEZE] = 1.f;
+		g.go(100);
+		CHECK(g.e->offer(late, j.ticket), "offered");
+		g.go(1);
+		back = collect(*g.e);
+		CHECK(back.size() == 1 && back[0] == late, "the conversion for the ended wait: refused");
+		drop(back);
+	}
+	{
+		// reset ends the wait.
+		Rig g(rate, 209);
+		g.f.params[F::FREEZE] = 1.f;
+		g.go(g.secs(0.2));
+		const Ring* a = g.e->live();
+		CHECK(g.e->allocate(44100.f), "allocate");
+		g.e->setSampleRate(44100.f);
+		DoldrumsEngine::TapeJob j;
+		CHECK(g.e->tapeWanted(j) && j.from == a, "wanted");
+		g.e->reset();
+		g.go(1);
+		std::vector<Ring*> back = collect(*g.e);
+		CHECK(!g.e->tapeWanted(j) && back.size() == 1 && back[0] == a, "reset: not wanted, A handed back");
+		drop(back);
+	}
+	{
+		// Not frozen: no conversion; the old ring comes back at once.
+		Rig g(rate, 211);
+		g.go(g.secs(0.2), [&](long long t) { g.f.inL = chord(t, rate); });
+		const Ring* a = g.e->live();
+		const uint32_t since = g.e->frozenSince();
+		CHECK(g.e->allocate(44100.f), "allocate");
+		g.e->setSampleRate(44100.f);
+		DoldrumsEngine::TapeJob j;
+		std::vector<Ring*> back = collect(*g.e);
+		CHECK(!g.e->tapeWanted(j) && back.size() == 1 && back[0] == a && g.e->frozenSince() != since,
+		      "recording: nothing wanted, the old ring handed back, a new tape's number");
+		drop(back);
+	}
+}
+
+// The hold for the save: granted only while the live ring stands still with
+// nothing on its way; a thaw while held writes nothing until letGo, then the
+// recording fades in as after any thaw.
+void hold_puts_off_a_thaw() {
+	const float rate = 48000.f;
+	Rig g(rate, 213);
+	g.f.inL = 5.f;
+	g.go(g.secs(0.5));
+	CHECK(g.e->holdStill() == nullptr, "recording: no hold");
+	g.f.params[F::FREEZE] = 1.f;
+	g.go(10);
+	CHECK(g.e->holdStill() == nullptr, "frozen 10 samples, still fading: no hold");
+	g.go(300);
+	uint32_t since = 0;
+	const Ring* h = g.e->holdStill(&since);
+	CHECK(h == g.e->live() && since == g.e->frozenSince(), "frozen and still: held, numbered");
+	const long long now = g.e->ring().now();
+	g.f.params[F::FREEZE] = 0.f;
+	g.go(1000);
+	CHECK(g.e->ring().now() == now, "thawed while held: nothing written (%lld frames)", g.e->ring().now() - now);
+	g.e->letGo();
+	g.go(1);
+	float l = 0.f, r = 0.f;
+	CHECK(g.e->ring().now() == now + 1 && g.e->ring().copy(now + 1, 1, &l, &r) && std::fabs(l - 5.f / 240.f) < 1e-6f,
+	      "let go: the thaw goes on, fading in from one step (%g)", l);
+	g.go(100);
+	CHECK(g.e->holdStill() == nullptr, "recording again: no hold");
+	g.f.params[F::FREEZE] = 1.f;
+	g.go(300);
+	g.e->expectStored();
+	CHECK(g.e->holdStill() == nullptr, "a tape on its way: no hold");
+	g.e->reset();
+	g.go(300);
+	CHECK(g.e->holdStill() != nullptr, "nothing on its way, frozen and still: held");
+	g.e->letGo();
+}
+
+// The frozen tape's number: new at a Freeze edge (button or gate), at reset
+// and with a new silent tape at a rate change; not at a thaw, at the first
+// sample's arming, at a take or at a conversion.
+void frozen_since_numbers() {
+	const float rate = 48000.f;
+	Rig g(rate, 215);
+	g.f.params[F::FREEZE] = 1.f;
+	const uint32_t n0 = g.e->frozenSince();
+	g.go(100);
+	CHECK(g.e->frozenSince() == n0, "opened frozen: no edge, the same number");
+	g.f.params[F::FREEZE] = 0.f;
+	g.go(100);
+	CHECK(g.e->frozenSince() == n0, "a thaw: the same number");
+	g.f.params[F::FREEZE] = 1.f;
+	g.go(100);
+	const uint32_t n1 = g.e->frozenSince();
+	CHECK(n1 != n0, "the button: a new number");
+	g.f.params[F::FREEZE] = 0.f;
+	g.go(100);
+	g.f.freezeGate = 10.f;
+	g.go(100);
+	const uint32_t n2 = g.e->frozenSince();
+	CHECK(n2 != n1, "the gate: a new number");
+	g.e->expectStored();
+	DoldrumsEngine::TapeJob j;
+	g.e->tapeWanted(j);
+	CHECK(g.e->offer(flatTape(rate, 1.f), j.ticket), "offered");
+	g.go(100);
+	CHECK(g.e->tapesTaken() == 1u && g.e->frozenSince() == n2, "a tape taken: the same number");
+	CHECK(g.e->allocate(44100.f), "allocate");
+	g.e->setSampleRate(44100.f);
+	CHECK(g.e->frozenSince() == n2, "frozen at a rate change (a conversion on its way): the same number");
+	g.e->reset();
+	const uint32_t n3 = g.e->frozenSince();
+	CHECK(n3 != n2, "reset: a new number");
+	g.f.freezeGate = 0.f;
+	g.go(100);
+	CHECK(g.e->allocate(rate), "allocate");
+	g.e->setSampleRate(rate);
+	CHECK(g.e->frozenSince() != n3 && g.e->frozenSince() != 0u, "recording at a rate change: a new number, never 0");
+	std::vector<Ring*> back = collect(*g.e);
+	drop(back);
+}
+
+// A swap in stop: the new tape's pass waits for a trigger, as a patch opened
+// frozen does; RUN falls once the old grains are heard out, and the trigger
+// starts one pass of the new tape.
+void swap_in_stop_waits() {
+	const float rate = 48000.f;
+	Rig g(rate, 217);
+	g.f.stopAtEnd = true;
+	g.f.params[F::POSITION] = 0.5f;
+	g.go(g.secs(1.0), [&](long long t) { g.f.inL = chord(t, rate); });
+	g.f.params[F::FREEZE] = 1.f;
+	g.go(g.secs(0.2));
+	const long long T0 = g.t;
+	g.go(g.secs(1.0), [&](long long t) { g.f.trig = t >= T0 && t < T0 + 48 ? 10.f : 0.f; });
+	CHECK(g.run.back() > 5.f, "a pass of A under way");
+	g.e->expectStored();
+	DoldrumsEngine::TapeJob j;
+	g.e->tapeWanted(j);
+	CHECK(g.e->offer(toneTape(rate, 330.0), j.ticket), "offered");
+	const long long T = g.t;
+	g.go(g.secs(2.0));
+	const auto e1 = edges(g.run, T);
+	CHECK(g.e->tapesTaken() == 1u && e1.size() == 1 && !e1[0].second && e1[0].first < T + g.grain() + g.e->latencyFrames() + 2 * g.hop(),
+	      "taken in stop: RUN falls when the old grains are heard out (%zu edges)", e1.size());
+	CHECK(meanSquare(g.L, (long long) g.L.size() - g.secs(0.5), g.secs(0.5)) == 0.0 && g.e->state().stopped, "waiting, silent");
+	const long long T2 = g.t;
+	g.go(g.secs(2.0), [&](long long t) { g.f.trig = t >= T2 && t < T2 + 48 ? 10.f : 0.f; });
+	const auto e2 = edges(g.run, T2);
+	CHECK(e2.size() == 1 && e2[0].second && meanSquare(g.L, (long long) g.L.size() - g.secs(0.5), g.secs(0.5)) > 0.01, "a trigger: B's pass");
+	std::vector<Ring*> back = collect(*g.e);
+	drop(back);
+}
+
 } // namespace
 
 int main() {
@@ -1329,5 +1688,10 @@ int main() {
 	opened_frozen_waits_in_stop();
 	opened_frozen_and_held_sounds();
 	trig_high_at_start_fires_nothing();
+	offers_are_checked();
+	rate_change_converts_frozen_tape();
+	hold_puts_off_a_thaw();
+	frozen_since_numbers();
+	swap_in_stop_waits();
 	return rkatest::finish("test_engine");
 }
