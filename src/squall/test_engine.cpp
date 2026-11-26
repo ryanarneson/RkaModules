@@ -463,6 +463,39 @@ static void history_survives_clock_change() {
 		CHECK(std::find(loop.begin(), loop.end(), x) != loop.end(), "clocked value %g is not one of the loop's", x);
 }
 
+// Issue #78: a clocked gate is a whole number of ticks at the dial words, so
+// it can end on the very sample the next event arrives. Every event must
+// still be its own rising edge, after a low a 0.1 V / 1 V Schmitt sees.
+static void clocked_gate_ending_on_event_retriggers() {
+	for (float w : {0.5f, 0.75f, 0.25f}) {
+		Rig rig(23u, 48000.f);
+		rig.set(w, 0.f, 0.f);
+		rig.f.clockPatched = true;
+		const int per = 480;   // 100 Hz
+		const int want = w < 0.3f ? 800 : 3000;
+		int edges = 0;
+		long long events = 0, lowRun = 0, shortestLow = 1LL << 40;
+		bool prev = false;
+		for (long long t = 0; t < 200000 && events < want; t++)
+			for (int i = 0; i < per; i++) {
+				rig.f.clock = i < per / 2 ? 10.f : 0.f;
+				if (rig.step())
+					events++;
+				const bool high = rig.r.gate > 5.f;
+				if (high && !prev) {
+					edges++;
+					if (edges > 1 && lowRun < shortestLow)
+						shortestLow = lowRun;
+				}
+				lowRun = high ? 0 : lowRun + 1;
+				prev = high;
+			}
+		CHECK(events >= want, "weather %g: only %lld events", w, events);
+		CHECK(edges == events, "weather %g: %d gate rising edges for %lld events", w, edges, events);
+		CHECK(shortestLow >= 40, "weather %g: shortest low before a rise %lld samples, want about 48 (1 ms)", w, shortestLow);
+	}
+}
+
 static void fast_clock_gate() {
 	Rig rig(22u, 48000.f);
 	rig.set(1.f, 1.f, 0.5f);
@@ -832,6 +865,7 @@ int main() {
 	clocked_first_gate_10ms();
 	clock_unpatch_mid_replay();
 	history_survives_clock_change();
+	clocked_gate_ending_on_event_retriggers();
 	fast_clock_gate();
 	freeze_holds();
 	freeze_resumes();

@@ -439,7 +439,7 @@ void mode_switch() {
 		             tr = stageSeconds(g.f.params[F::RELEASE]);
 		const double a = std::fabs(2.0 * g.f.params[F::SHAPE] - 1.0);
 		const double pole = 1.0 - std::exp(-1.0 / (0.002 * fs));
-		const int order[3] = {0, 2, 1};   // GATE, HOLD, TRIG
+		const int order[3] = {0, 2, 1};   // ADSR, HOLD, AD
 		int prevStage = IDLE, prevMode = 0;
 		float prevPhase = 0.f, prevOut = 0.f;
 		double start = 0.0, goal = 0.0;
@@ -461,14 +461,18 @@ void mode_switch() {
 			} else {
 				if (s != prevStage || ph < prevPhase || prevMode == 2) {
 					start = prevOut;
-					goal = s == ATTACK ? 10.0 : s == DECAY ? sus : 0.0;
+					goal = s == ATTACK ? 10.0 : s == DECAY ? (mode == 1 ? 0.0 : sus) : 0.0;
 				}
 				if (s == SUSTAIN)
 					bound = std::fabs(sus - prevOut) * pole;
 				else if (s == IDLE)
 					bound = 0.0;
+				else if (s == ATTACK)
+					// Attack from 0..10 V resumes its full 0 to 10 V curve:
+					// its slope is that curve's, wherever it picked up.
+					bound = std::fmax(10.0, std::fabs(goal - start)) * (1.0 + 3.0 * a) * dt / ta;
 				else
-					bound = std::fabs(goal - start) * (1.0 + 3.0 * a) * dt / (s == ATTACK ? ta : s == DECAY ? td : tr);
+					bound = std::fabs(goal - start) * (1.0 + 3.0 * a) * dt / (s == DECAY ? td : tr);
 			}
 			const double step = std::fabs(double(out) - prevOut);
 			if (step > bound * 1.5 + 1e-4) {
@@ -494,10 +498,15 @@ void mode_switch() {
 		CHECK(holds > 30000 && stages[ATTACK] > 1000 && stages[DECAY] > 1000 && stages[SUSTAIN] > 1000,
 		      "every mode and stage visited (hold %ld, A %ld, D %ld, S %ld)", holds, stages[ATTACK], stages[DECAY],
 		      stages[SUSTAIN]);
+		// Back to ADSR: a new gate, held, settles in Sustain. (A gate held
+		// through a switch from AD is no new edge: AD's Decay may run on.)
 		g.f.params[F::MODE] = 0.f;
 		g.scv[0] = 0.f;
+		g.gate[0] = 0.f;
+		g.run(10);
+		g.gate[0] = 5.f;
 		g.run(24000);
-		CHECK(g.stage() == SUSTAIN && std::fabs(g.r.out[0] - 5.f) < 1e-3f, "then GATE, held: Sustain at 5 V (%s, %g)",
+		CHECK(g.stage() == SUSTAIN && std::fabs(g.r.out[0] - 5.f) < 1e-3f, "then ADSR, a gate held: Sustain at 5 V (%s, %g)",
 		      stageName(g.stage()), g.r.out[0]);
 	}
 	// HOLD -> GATE with the gate low and the level at -3 V: Release rises to
@@ -538,6 +547,7 @@ void inv_exact() {
 	Eng g;
 	g.f.gate.channels = 3;
 	g.f.sustainCv.channels = 3;
+	g.f.params[F::DECAY] = stageKnob(0.02f);   // Hold falls fast enough to go negative in its stretch
 	long bad = 0, negative = 0;
 	for (long i = 0; i < 60000; i++) {
 		g.f.params[F::MODE] = float((i / 9000) % 3);
@@ -560,7 +570,7 @@ void inv_exact() {
 void published() {
 	Eng g;
 	g.f.gate.channels = 2;
-	g.f.params[F::MODE] = 1.2f;   // rounds to TRIG
+	g.f.params[F::MODE] = 1.2f;   // rounds to AD
 	g.acv[1] = 5.f;               // channel 2: a longer Attack, so it differs
 	g.f.attackCv.channels = 2;
 	g.gate[0] = g.gate[1] = 5.f;
@@ -578,18 +588,18 @@ void published() {
 		levelBad += p.level.load() != g.r.out[0];
 		const float ph = p.phase.load();
 		phaseBad += !(ph >= 0.f && ph <= 1.f);
-		modeBad += p.mode.load() != TRIG_MODE;
+		modeBad += p.mode.load() != AD_MODE;
 	}
-	const int want[5] = {ATTACK, DECAY, SUSTAIN, RELEASE, IDLE};
-	bool ok = n == 5;
-	for (int k = 0; ok && k < 5; k++)
+	// AD, the gate held half a second: Attack, Decay, idle (a one-shot).
+	const int want[3] = {ATTACK, DECAY, IDLE};
+	bool ok = n == 3;
+	for (int k = 0; ok && k < 3; k++)
 		ok = seq[k] == want[k];
-	CHECK(ok, "published stage walks A, D, S, R, IDLE (%d stages: %s %s %s %s %s)", n, stageName(seq[0]),
-	      n > 1 ? stageName(seq[1]) : "-", n > 2 ? stageName(seq[2]) : "-", n > 3 ? stageName(seq[3]) : "-",
-	      n > 4 ? stageName(seq[4]) : "-");
+	CHECK(ok, "published stage walks A, D, IDLE in AD (%d stages: %s %s %s %s)", n, stageName(seq[0]),
+	      n > 1 ? stageName(seq[1]) : "-", n > 2 ? stageName(seq[2]) : "-", n > 3 ? stageName(seq[3]) : "-");
 	CHECK(levelBad == 0, "published level is channel 1's OUT (%ld samples not)", levelBad);
 	CHECK(phaseBad == 0, "published phase within 0..1 (%ld samples not)", phaseBad);
-	CHECK(modeBad == 0, "published mode: TRIG (%ld samples not)", modeBad);
+	CHECK(modeBad == 0, "published mode: AD (%ld samples not)", modeBad);
 	// Phase mid-Attack is the voice's.
 	Eng h;
 	h.f.params[F::ATTACK] = stageKnob(0.1f);
@@ -761,14 +771,14 @@ void published_prev_stage() {
 		g.run(10);
 		g.gate[0] = 0.f;
 		g.run(100);
-		CHECK(g.stage() == ATTACK, "TRIG: Attack runs on past the trigger (%s)", stageName(g.stage()));
+		CHECK(g.stage() == ATTACK, "AD: Attack runs on past the trigger (%s)", stageName(g.stage()));
 		long k = 0;
 		while (g.stage() == ATTACK && k < 100000) {
 			g.step();
 			k++;
 		}
-		CHECK(g.stage() == RELEASE && g.e.published().prevStage.load() == ATTACK,
-		      "TRIG: Attack completes into %s after %s (want RELEASE after ATTACK)", stageName(g.stage()),
+		CHECK(g.stage() == DECAY && g.e.published().prevStage.load() == ATTACK,
+		      "AD: Attack completes into %s after %s (want DECAY after ATTACK)", stageName(g.stage()),
 		      stageName(g.e.published().prevStage.load()));
 	}
 	// A fall half-way up Attack: Release after Attack, cut off at ~0.5.
@@ -957,6 +967,95 @@ void shape_smoothing() {
 	CHECK(bad == 0, "settled Shape is the target: a new envelope equals a lone Voice at Shape 1 (%ld differ)", bad);
 }
 
+
+// #83: a 10 s Attack, Shape 0 -> 1 in one sample at phase 0.1 and 0.5. A
+// Shape change is a breakpoint: no sample-to-sample step beyond the stage's
+// own (the largest at Shape 0 or 1, or the new curve's steepest from the
+// breakpoint, 4 x the distance left over the samples left) x 1.5 + 0.1 mV;
+// once Shape settles OUT is Shape 1's curve rescaled from the published
+// breakpoint to 10 V by the phase the test counts; Attack still takes its
+// set time.
+void shape_long_stage() {
+	const float fs = 48000.f;
+	const float knob = stageKnob(10.f);
+	const double T = stageSeconds(knob), len = std::ceil(T * fs);
+	auto ownMax = [&](float shape) {
+		Eng g(fs);
+		g.f.params[F::ATTACK] = knob;
+		g.f.params[F::SHAPE] = shape;
+		g.f.params[F::PUSH] = 1.f;
+		float prev = 0.f, worst = 0.f;
+		for (long i = 0; i < 600000; i++) {
+			g.step();
+			if (g.stage() != ATTACK)
+				break;
+			worst = std::fmax(worst, std::fabs(g.r.out[0] - prev));
+			prev = g.r.out[0];
+		}
+		return worst;
+	};
+	const float own = std::fmax(ownMax(0.f), ownMax(1.f));
+	const double at[2] = {0.1, 0.5};
+	for (double ph : at) {
+		Eng g(fs);
+		g.f.params[F::ATTACK] = knob;
+		g.f.params[F::SHAPE] = 0.f;
+		g.f.params[F::PUSH] = 1.f;
+		const long before = long(ph * T * fs);
+		g.run(before);
+		CHECK(g.stage() == ATTACK && std::fabs(g.e.published().phase.load() - ph) < 1e-4,
+		      "phase %g before the change (%s, %g)", ph, stageName(g.stage()), g.e.published().phase.load());
+		g.f.params[F::SHAPE] = 1.f;
+		const float atChange = g.r.out[0];
+		const double bound = 1.5 * std::fmax(own, 4.0 * (10.0 - atChange) / (len - before)) + 1e-4;
+		float prev = atChange, worst = 0.f;
+		long n = before, curveBad = 0, checked = 0;
+		double curveWorst = 0.0, bLast = -1.0;
+		while (g.stage() == ATTACK && n < 700000) {
+			g.step();
+			n++;
+			if (g.stage() == ATTACK || g.r.out[0] == 10.f)
+				worst = std::fmax(worst, std::fabs(g.r.out[0] - prev));
+			prev = g.r.out[0];
+			// 0.25 s on (Shape settled to the bit, about 0.15 s: the 5 ms pole in
+			// double), every 1000th sample of the Attack.
+			if (g.stage() == ATTACK && n - before > long(0.25 * fs) && n % 1000 == 0) {
+				const rka::BeaconPublished& p = g.e.published();
+				const double b = p.bpPhase.load(), L = p.bpLevel.load();
+				const double phase = n / (T * fs);
+				const double want = L + (10.0 - L) * curveRise(float((phase - b) / (1.0 - b)), 1.f);
+				const double err = std::fabs(g.r.out[0] - want);
+				curveWorst = std::fmax(curveWorst, err);
+				bLast = b;
+				curveBad += !(err < 1e-4 && b > ph && b < ph + 0.2 / T);
+				checked++;
+			}
+		}
+		CHECK(worst <= bound, "10 s Attack, Shape 0 -> 1 at phase %g: largest step %g V (bound %g V)", ph, worst, bound);
+		CHECK((n - 1) == long(len), "and Attack takes its time: %ld samples (want %.0f)", n - 1, len);
+		CHECK(checked > 100 && curveBad == 0,
+		      "then Shape 1's curve from the breakpoint at phase %.6f: %ld of %ld points off (worst %g V)", bLast, curveBad,
+		      checked, curveWorst);
+	}
+	// A new stage starts its curve afresh: the breakpoint is its start.
+	Eng g(fs);
+	g.f.params[F::ATTACK] = knob;
+	g.f.params[F::SHAPE] = 0.f;
+	g.f.params[F::PUSH] = 1.f;
+	g.run(48000);
+	g.f.params[F::SHAPE] = 1.f;
+	g.run(4800);
+	CHECK(g.e.published().bpPhase.load() > 0.1f, "a breakpoint mid-Attack (%g)", g.e.published().bpPhase.load());
+	g.f.params[F::PUSH] = 0.f;
+	g.step();
+	const rka::BeaconPublished& p = g.e.published();
+	CHECK(g.stage() == RELEASE && p.bpPhase.load() == 0.f && p.bpLevel.load() == p.start.load(),
+	      "Release's breakpoint is its start (%s, %g, %g V, start %g V)", stageName(g.stage()), p.bpPhase.load(),
+	      p.bpLevel.load(), p.start.load());
+	g.e.reset();
+	CHECK(p.bpPhase.load() == 0.f && p.bpLevel.load() == 0.f, "reset clears it (%g, %g)", p.bpPhase.load(), p.bpLevel.load());
+}
+
 } // namespace
 
 int main() {
@@ -975,5 +1074,6 @@ int main() {
 	stage_lights();
 	rate_change();
 	shape_smoothing();
+	shape_long_stage();
 	return rkatest::finish("test_engine");
 }

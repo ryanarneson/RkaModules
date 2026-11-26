@@ -68,10 +68,25 @@ inline int clockStepNamed(const char* s) {
 	return -1;
 }
 
-// The knob for a step (typed multiples): the middle of the step's travel.
+// The clock's steps on the knob. x1 is centred on noon, 0.45 to 0.55, so a
+// knob set to noon by eye, and the default (noon, 316 ms), are x1. The
+// five slower steps share 0 to 0.45 (0.1 each, half that for 1/4 at the
+// end); the four faster share 0.55 to 1 (0.1286 each, half for x4).
+// stepPosition is the knob as a position along the steps: step n is
+// n - 0.5 .. n + 0.5.
+constexpr float kX1Top = 0.55f, kFastSlope = 3.5f / 0.45f;
+
+inline float stepPosition(float k) {
+	return k <= kX1Top ? k * 10.f : 5.5f + (k - kX1Top) * kFastSlope;
+}
+
+// The knob for a step (typed multiples): the middle of the step's travel
+// (the end, for the steps at the ends).
 inline float clockKnob(int step) {
 	const int st = step < 0 ? 0 : step >= kMultiples ? kMultiples - 1 : step;
-	return (float) st / (float) (kMultiples - 1);
+	if (st >= kMultiples - 1)
+		return 1.f;
+	return st <= 5 ? (float) st * 0.1f : kX1Top + ((float) st - 5.5f) / kFastSlope;
 }
 
 // The step for the knob plus the CV (volts times the attenuverter; 10 V is
@@ -79,7 +94,8 @@ inline float clockKnob(int step) {
 inline int clockStep(float knob, float cvTimesAtt) {
 	float k = knob + cvTimesAtt * 0.1f;
 	k = k >= 0.f ? (k <= 1.f ? k : 1.f) : 0.f;   // NaN -> 0
-	return (int) (k * (kMultiples - 1) + 0.5f);
+	const int st = (int) (stepPosition(k) + 0.5f);
+	return st < kMultiples ? st : kMultiples - 1;
 }
 
 // The two sides' times for a Ratio setting 0..6 (3 is equal). Left of 3 the
@@ -121,16 +137,18 @@ inline float fitTime(float seconds, float tMax) {
 // 1 V Schmitt trigger). A stopped clock keeps its period, and when it
 // starts again the pause is not taken for a period: an edge more than
 // PAUSE_PERIODS periods after the last one only starts the count afresh.
-// (A clock that really slows by more than that is followed a beat late.)
+// A clock that really slows by more than that is followed a tick late: a
+// second long interval in a row, within SAME_TEMPO of the first, is the
+// new period.
 struct ClockFollower {
 	void reset() {
 		high_ = seen_ = locked_ = false;
 		count_ = 0;
-		period_ = 0.f;
+		period_ = longGap_ = 0.f;
 	}
 
 	static constexpr uint32_t COUNT_MAX = 1u << 30;
-	static constexpr float PAUSE_PERIODS = 4.f;
+	static constexpr float PAUSE_PERIODS = 4.f, SAME_TEMPO = 2.f;
 
 	void process(float volts) {
 		if (count_ < COUNT_MAX)
@@ -142,10 +160,21 @@ struct ClockFollower {
 		}
 		if (volts >= 1.f) {
 			high_ = true;
-			const bool pause = count_ >= COUNT_MAX || (locked_ && (float) count_ > PAUSE_PERIODS * period_);
+			const float n = (float) count_;
+			const bool pause = count_ >= COUNT_MAX || (locked_ && n > PAUSE_PERIODS * period_);
 			if (seen_ && !pause) {
-				period_ = (float) count_;
+				period_ = n;
 				locked_ = true;
+				longGap_ = 0.f;
+			}
+			else if (pause && count_ < COUNT_MAX) {
+				if (longGap_ > 0.f && n <= SAME_TEMPO * longGap_ && n * SAME_TEMPO >= longGap_) {
+					period_ = n;   // twice running: the clock has slowed
+					longGap_ = 0.f;
+				}
+				else {
+					longGap_ = n;
+				}
 			}
 			seen_ = true;
 			count_ = 0;
@@ -163,6 +192,7 @@ private:
 	bool high_ = false, seen_ = false, locked_ = false;
 	uint32_t count_ = 0;   // 32 bits everywhere (long is 32 bits on Windows)
 	float period_ = 0.f;
+	float longGap_ = 0.f;   // the last interval taken for a pause; 0 if none
 };
 
 } // namespace wake

@@ -3,8 +3,8 @@
 // per-channel port voltages in, per-channel volts out; Beacon.cpp only maps
 // params, ports and lights onto it.
 //
-// Each sample: MODE (rounded, 0..2), the channel count (GATE's in GATE and
-// TRIG, the Sustain CV's in HOLD; 1 unpatched; at most 16), then per
+// Each sample: MODE (rounded, 0..2: ADSR, AD, HOLD), the channel count
+// (GATE's in ADSR and AD, the Sustain CV's in HOLD; 1 unpatched; at most 16), then per
 // channel: GATE and RETRIG through Schmitt triggers (0.1 V / 1 V; PUSH or's
 // into every channel's gate, and is the gate when GATE is unpatched), the
 // times (knob + CV / 10 through stageSecondsCv), the sustain volts, Shape
@@ -12,8 +12,9 @@
 // channel its own volts (0 V past its count), a mono one every channel.
 // Channels that appear (the count rising) start idle at 0 V; channels past
 // the count read 0 V. Channel 1's stage, phase, level, the running
-// stage's start and goal levels, and the stage before it and how far it
-// got, are published for the window with relaxed stores. BeaconLights (below) turns channel 1's
+// stage's start and goal levels, its breakpoint (where Shape last changed
+// during it), and the stage before it and how far it got (no longer drawn,
+// kept for tests), are published for the window with relaxed stores. BeaconLights (below) turns channel 1's
 // stage gates into lights.
 //
 // No libm and no allocation in process(). Non-copyable (the atomics).
@@ -51,6 +52,9 @@ struct BeaconPublished {
 	std::atomic<float> start{0.f}, goal{0.f};   // the running stage's, volts
 	std::atomic<int> prevStage{0};              // the stage that ran before it
 	std::atomic<float> prevPhase{0.f};          // how far it had got, 0..1
+	// Where the running stage's curve runs from: its start at phase 0, or
+	// where Shape last changed during it (Voice::bpPhase, bpLevel).
+	std::atomic<float> bpPhase{0.f}, bpLevel{0.f};   // 0..1, volts
 };
 
 // The four stage lights, from channel 1's stage gates: note() every sample,
@@ -130,12 +134,14 @@ public:
 		pub_.goal.store(0.f, std::memory_order_relaxed);
 		pub_.prevStage.store(beacon::IDLE, std::memory_order_relaxed);
 		pub_.prevPhase.store(0.f, std::memory_order_relaxed);
+		pub_.bpPhase.store(0.f, std::memory_order_relaxed);
+		pub_.bpLevel.store(0.f, std::memory_order_relaxed);
 	}
 
 	void process(const BeaconFrame& f, BeaconResult& out) {
 		typedef BeaconFrame F;
 		const float m = f.params[F::MODE];
-		const beacon::Mode mode = m >= 1.5f ? beacon::HOLD_MODE : m >= 0.5f ? beacon::TRIG_MODE : beacon::GATE_MODE;
+		const beacon::Mode mode = m >= 1.5f ? beacon::HOLD_MODE : m >= 0.5f ? beacon::AD_MODE : beacon::GATE_MODE;
 		const BeaconPort& countPort = mode == beacon::HOLD_MODE ? f.sustainCv : f.gate;
 		int n = countPort.channels;
 		n = n < 1 ? 1 : n > MAX_CHANNELS ? MAX_CHANNELS : n;
@@ -206,6 +212,8 @@ public:
 		pub_.goal.store(float(v.goal()), std::memory_order_relaxed);
 		pub_.prevStage.store(int(v.prevStage()), std::memory_order_relaxed);
 		pub_.prevPhase.store(float(v.prevPhase()), std::memory_order_relaxed);
+		pub_.bpPhase.store(float(v.bpPhase()), std::memory_order_relaxed);
+		pub_.bpLevel.store(float(v.bpLevel()), std::memory_order_relaxed);
 	}
 
 	const BeaconPublished& published() const { return pub_; }

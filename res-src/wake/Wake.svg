@@ -36,11 +36,11 @@
 <text x="5.00" y="10.00" font-family="D-DIN Condensed" font-size="5.2" font-weight="normal" letter-spacing="1.4" text-anchor="start" fill="#efe6d2">WAKE</text>
 <text x="5.00" y="13.80" font-family="D-DIN Condensed" font-size="1.7" font-weight="normal" letter-spacing="0.45" text-anchor="start" fill="#8a8474">STEREO ECHO</text>
 <text x="26.20" y="46.48" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(-135 26.08 46.48)">10</text>
-<text x="22.27" y="37.00" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(-90 22.15 37.00)">30</text>
+<text x="22.27" y="37.00" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(-90 22.15 37.00)">32</text>
 <text x="26.20" y="27.52" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(-45 26.08 27.52)">100</text>
-<text x="35.69" y="23.59" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">300</text>
+<text x="35.69" y="23.59" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16">316</text>
 <text x="45.17" y="27.52" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(45 45.04 27.52)">1S</text>
-<text x="49.10" y="37.00" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(90 48.97 37.00)">3S</text>
+<text x="49.10" y="37.00" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(90 48.97 37.00)">3.16S</text>
 <text x="45.17" y="46.48" font-family="D-DIN Condensed" font-size="1.7" font-weight="bold" letter-spacing="0.25" text-anchor="middle" fill="#1c1a16" transform="rotate(135 45.04 46.48)">10S</text>
 <text x="35.86" y="52.00" font-family="D-DIN Condensed" font-size="2.3" font-weight="bold" letter-spacing="0.6" text-anchor="middle" fill="#1c1a16">TIME</text>
 <text x="63.12" y="19.60" font-family="D-DIN Condensed" font-size="2" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#efe6d2">STYLE</text>

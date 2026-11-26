@@ -151,8 +151,12 @@ struct Wake : Module {
 		engine.setSampleRate(APP ? APP->engine->getSampleRate() : 48000.f);
 	}
 
+	// A sample-rate change empties the delay, and a patch loads with it
+	// empty: Freeze is released, or the latch would freeze the empty line
+	// at once and hold silence.
 	void onSampleRateChange(const SampleRateChangeEvent& e) override {
 		engine.setSampleRate(e.sampleRate);
+		params[FREEZE_PARAM].setValue(0.f);
 	}
 
 	void onReset() override {
@@ -170,6 +174,8 @@ struct Wake : Module {
 		json_t* s = json_object_get(root, "style");
 		const json_int_t v = s && json_is_integer(s) ? json_integer_value(s) : 0;
 		style = v >= 0 && v <= 2 ? (int) v : 0;
+		// Rack has set the params already; the delay is empty.
+		params[FREEZE_PARAM].setValue(0.f);
 	}
 
 	void process(const ProcessArgs& args) override {

@@ -50,8 +50,8 @@
 <text x="19.73" y="82.50" font-family="D-DIN Condensed" font-size="1.4" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CV</text>
 <text x="31.32" y="82.50" font-family="D-DIN Condensed" font-size="1.4" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CV</text>
 <text x="42.92" y="82.50" font-family="D-DIN Condensed" font-size="1.4" font-weight="normal" letter-spacing="0.25" text-anchor="middle" fill="#757062">CV</text>
-<text x="34.20" y="41.10" font-family="D-DIN Condensed" font-size="1.3" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#757062">GATE</text>
-<text x="34.20" y="45.90" font-family="D-DIN Condensed" font-size="1.3" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#757062">TRIG</text>
+<text x="34.20" y="41.10" font-family="D-DIN Condensed" font-size="1.3" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#757062">ADSR</text>
+<text x="34.20" y="45.90" font-family="D-DIN Condensed" font-size="1.3" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#757062">AD</text>
 <text x="34.20" y="50.70" font-family="D-DIN Condensed" font-size="1.3" font-weight="normal" letter-spacing="0.25" text-anchor="start" fill="#757062">HOLD</text>
 <text x="25.65" y="125.60" font-family="D-DIN Condensed" font-size="1.6" font-weight="normal" letter-spacing="0.5" text-anchor="middle" fill="#757062">R K A · INSTRUMENTS</text>
 <g inkscape:groupmode="layer" inkscape:label="components" id="components" style="display:none">

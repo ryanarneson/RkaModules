@@ -711,7 +711,7 @@ PANELS = {
         sizes={"PARAM_TIME": "hero", "PARAM_STYLE": "cap", "PARAM_FREEZE": "cap", "PARAM_PINGPONG": "cap"},
         circles=[(35.56, 37.0, r) for r in (26, 42, 58, 74)],
         faces={"PARAM_TIME": dict(r=17.0, ticks=30, major=5, words_size=1.7,
-                                  words=[(-135, "10"), (-90, "30"), (-45, "100"), (0, "300"), (45, "1S"), (90, "3S"),
+                                  words=[(-135, "10"), (-90, "32"), (-45, "100"), (0, "316"), (45, "1S"), (90, "3.16S"),
                                          (135, "10S")])},
         tiles=[dict(port="OUTPUT_L"), dict(port="OUTPUT_R")],
         traces=[["INPUT_FEEDBACK_CV", "PARAM_FEEDBACK"], ["INPUT_TIME_CV", "PARAM_TIME_ATT", "PARAM_TIME"],
@@ -722,9 +722,9 @@ PANELS = {
            (60.2, 33.5, "TAPE", 1.4, "dim", "start"), (60.2, 39.5, "ANALOG", 1.4, "dim", "start"),
            (60.2, 45.5, "DIGITAL", 1.4, "dim", "start"),
            (14.9, 67.0, "100", 1.1, "dim")],
-        # As it opens: Time 300 ms, Feedback 40 %, Tone and Ratio at noon,
+        # As it opens: Time 316 ms (noon), Feedback 40 %, Tone and Ratio at noon,
         # Mix 35 %, Diffuse 0, Drift 15 %, Tape.
-        preview={"PARAM_TIME": dict(turn=-2), "PARAM_FEEDBACK": dict(turn=-36.8), "PARAM_TONE": dict(turn=0),
+        preview={"PARAM_TIME": dict(turn=0), "PARAM_FEEDBACK": dict(turn=-36.8), "PARAM_TONE": dict(turn=0),
                  "PARAM_TIME_ATT": dict(turn=0), "PARAM_RATIO": dict(turn=0), "PARAM_MIX": dict(turn=-40.5),
                  "PARAM_DIFFUSE": dict(turn=-135), "PARAM_DRIFT": dict(turn=-94.5), "LIGHT_TAPE": dict(lit=True)},
         screws=screws_at(14, "tr", "bl"),
@@ -874,8 +874,8 @@ PANELS = {
         screws=screws_at(20, "tr", "bl"),
     ),
     # Beacon, an envelope (docs/specs/2026-11-23-beacon-design.md): a window
-    # that draws the envelope at the top; Shape and the GATE / TRIG / HOLD
-    # switch; the four stage knobs, each with its stage light, over their CVs
+    # that draws the envelope at the top; Shape and the ADSR / AD / HOLD
+    # switch (GATE / TRIG / HOLD until 2026-11-25); the four stage knobs, each with its stage light, over their CVs
     # and their stage gates; GATE, RETRIG, the push button and the outputs.
     "Beacon": dict(
         dir="beacon",
@@ -899,7 +899,7 @@ PANELS = {
         tiles=[dict(port=f"OUTPUT_{n}") for n in _BC_STAGES + ["TRIG", "OUT", "INV"]],
         traces=[[f"INPUT_{n}_CV", f"PARAM_{n}"] for n in _BC_STAGES],
         notes=[(x, 82.5, "CV", 1.4, "dim") for x in _BC_X]
-        + [(34.2, 41.1, "GATE", 1.3, "dim", "start"), (34.2, 45.9, "TRIG", 1.3, "dim", "start"),
+        + [(34.2, 41.1, "ADSR", 1.3, "dim", "start"), (34.2, 45.9, "AD", 1.3, "dim", "start"),
            (34.2, 50.7, "HOLD", 1.3, "dim", "start")],
         preview={"PARAM_ATTACK": dict(turn=-78.49), "PARAM_DECAY": dict(turn=4.97),
                  "PARAM_SUSTAIN": dict(turn=0), "PARAM_RELEASE": dict(turn=34.53),

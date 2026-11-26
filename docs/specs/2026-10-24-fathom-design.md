@@ -165,8 +165,9 @@ Per sample, mono pitch → stereo out:
    equal-power panning; the sub is centred.
 7. **Mix and cutoff.** `L/R = body + SUB · sub`, into the cutoff SVF in LP
    mode, one instance per side sharing coefficients.
-8. **Output.** `tanh` soft clip, a one-pole DC blocker at ~2 Hz, scaled so
-   the mix at default settings peaks near ±5 V. OUT L/R are ±5 V audio.
+8. **Output.** `tanh` soft clip, a one-pole DC blocker at ~2 Hz, an output
+   limit (identity below 0.95, a knee into ±1 above; see the filter
+   spec), scaled so the mix at default settings peaks near ±5 V. OUT L/R are ±5 V audio.
    SUB OUT is the sub sine alone at ±5 V, before SUB, cutoff and clip, so
    it can feed a sub bus however the L/R mix is set.
 

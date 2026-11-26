@@ -362,7 +362,47 @@ void bounds() {
 
 } // namespace
 
+// A big change bends for at most the glide's limit, then crossfades the
+// rest of the way: 300 ms to 10 s at two octaves down would take 13 s of
+// bass. A turn that bends for less than the limit is untouched: no fade.
+void bend_is_capped() {
+	for (int dir = 0; dir < 2; dir++) {
+		Rig g(490000);
+		g.tap.setGlideLimit(1.f);
+		const float from = dir ? 480000.f : 14400.f, to = dir ? 14400.f : 480000.f;
+		g.tap.snap(from);
+		for (int i = 0; i < 2000; i++)
+			g.sine(440.0);
+		g.tap.setTarget(to, false);
+		long n = 0;
+		bool faded = false;
+		while (g.tap.moving() && n < 30L * 48000) {
+			g.sine(440.0);
+			faded = faded || g.tap.fading();
+			n++;
+		}
+		std::printf("  bend %.0f -> %.0f samples with a 1 s limit: lands after %.2f s, crossfaded %d\n", from, to, n / FS,
+		            (int) faded);
+		CHECK(faded && g.tap.delay() == to, "a big change crossfades to its target (%.0f, faded %d)", g.tap.delay(), (int) faded);
+		CHECK(n < (long) (1.1f * FS), "a big change lands within the limit and a fade (%.2f s)", n / FS);
+	}
+	// 4800 -> 9600 bends for about a quarter of a second: no fade.
+	Rig g;
+	g.tap.setGlideLimit(1.f);
+	g.tap.snap(4800.f);
+	for (int i = 0; i < 2000; i++)
+		g.sine(440.0);
+	g.tap.setTarget(9600.f, false);
+	bool faded = false;
+	for (int i = 0; i < 5 * 48000; i++) {
+		g.sine(440.0);
+		faded = faded || g.tap.fading();
+	}
+	CHECK(!faded && g.tap.delay() == 9600.f, "a medium change glides as before (%.3f, faded %d)", g.tap.delay(), (int) faded);
+}
+
 int main() {
+	bend_is_capped();
 	steady();
 	glide_bends_and_lands();
 	crossfade_no_bend();

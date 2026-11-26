@@ -23,8 +23,8 @@
 //   fundamental: 10 cents at C2 for a 3 Hz blocker). So the gain is never
 //   more than a 60 s Ring's, DC in the loop dies as fast as that at worst,
 //   and whoever uses a string blocks DC at its output.
-// - A new pitch glides; the delay's length and the gain move a little each
-//   sample, never in a step.
+// - A new pitch or Damp glides; the delay's length and the gain move a
+//   little each sample, never in a step.
 // - The bound is the identity below its knee, so a quiet string rings for
 //   exactly as long as the gain says.
 #include <cmath>
@@ -68,8 +68,8 @@ public:
 	}
 	void setDamp(float damp01) {
 		damp01 = !(damp01 > 0.f) ? 0.f : damp01 > 1.f ? 1.f : damp01;
-		if (damp01 != damp_) {
-			damp_ = damp01;
+		if (damp01 != dampTarget_) {
+			dampTarget_ = damp01;
 			dirty_ = true;
 		}
 	}
@@ -77,6 +77,7 @@ public:
 	// Jump to the targets (at the start, and after a rate change).
 	void snap() {
 		hz_ = targetHz_;
+		damp_ = dampTarget_;
 		coefficients();
 		length_ = lengthGoal_ = lengthTarget_;
 		gain_ = gainGoal_ = gainTarget_;
@@ -142,14 +143,14 @@ public:
 private:
 	enum { kControl = 16 };
 
-	// One control tick while something moved: glide the pitch, then the
+	// One control tick while something moved: glide the pitch and Damp, then the
 	// coefficients for where it is now; the delay's length and the gain
 	// reach them over the next kControl samples, so neither a new pitch nor
 	// a new Ring is a step in the sound. The glide arrives: when a step is
 	// too small to register, it is taken whole.
 	void control() {
+		const double k = 1.0 - std::exp(-(double) kControl / ((double) GLIDE_TAU_S * fs_));
 		if (hz_ != targetHz_) {
-			const double k = 1.0 - std::exp(-(double) kControl / ((double) GLIDE_TAU_S * fs_));
 			const double logNow = std::log2((double) hz_), logTarget = std::log2((double) targetHz_);
 			const double next = logNow + (logTarget - logNow) * k;
 			const float hzNext = (float) std::exp2(next);
@@ -159,13 +160,20 @@ private:
 			else
 				hz_ = hzNext;
 		}
+		// Damp glides the same way, in the knob's units: a step would open
+		// the low-pass on the raw input the delay line holds, a click.
+		if (damp_ != dampTarget_) {
+			const float next = damp_ + (dampTarget_ - damp_) * (float) k;
+			const float d = dampTarget_ - next;
+			damp_ = (d < 1e-4f && d > -1e-4f) || next == damp_ ? dampTarget_ : next;
+		}
 		coefficients();
 		gainGoal_ = gainTarget_;
 		lengthGoal_ = lengthTarget_;
 		gainStep_ = (gainGoal_ - gain_) / (float) kControl;
 		lengthStep_ = (lengthGoal_ - length_) / (float) kControl;
 		steps_ = kControl;
-		dirty_ = hz_ != targetHz_;
+		dirty_ = hz_ != targetHz_ || damp_ != dampTarget_;
 	}
 
 	void coefficients() {
@@ -180,6 +188,12 @@ private:
 		double dampRate = DAMP_MAX_RATE;
 		for (int i = 0; i < DAMP_POWER; i++)
 			dampRate *= damp_;
+		// And air's, the same n^2 loss pinned to AIR_HZ: the fundamental's
+		// share of it is (hz / AIR_HZ)^2, held at the pivot's above it.
+		const double airRel = (double) (hz_ < AIR_PIVOT_HZ ? hz_ : AIR_PIVOT_HZ) / AIR_HZ;
+		const double airRate = 6.907755278982137 / AIR_T60_S * airRel * airRel;
+		dampRate += airRate;
+		gain = std::exp(-(ringRate - airRate) / hz_);   // the fundamental's air given back
 		double lpDelay = 0.0;
 		if (dampRate > 0.0) {
 			double keep = std::exp(-dampRate / hz_);
@@ -189,8 +203,11 @@ private:
 			const double G = keep * keep, c = std::cos(w0);
 			const double A = G - 1.0, B = 2.0 - 2.0 * G * c;
 			const double disc = B * B - 4.0 * A * A;
-			double r = disc > 0.0 ? (-B + std::sqrt(disc)) / (2.0 * A) : 0.0;
-			r = r < 0.0 ? 0.0 : r > 0.9999 ? 0.9999 : r;
+			// The smaller root, as 2 A / (-B - sqrt(disc)): the same number
+			// as (-B + sqrt(disc)) / 2 A, without its 0 / 0 when the loss is
+			// too small to register and A rounds to 0 (Damp just off 0).
+			double r = disc > 0.0 ? 2.0 * A / (-B - std::sqrt(disc)) : 0.0;
+			r = r > 0.0 ? (r > 0.9999 ? 0.9999 : r) : 0.0;   // a NaN comes out 0
 			a_ = (float) (1.0 - r);
 			lpDelay = std::atan2(r * std::sin(w0), 1.0 - r * std::cos(w0)) / w0;
 		}
@@ -254,7 +271,7 @@ private:
 
 	DelayLine delay_;
 	float fs_ = 48000.f;
-	float targetHz_ = 65.40639f, hz_ = 65.40639f, ring_ = 4.f, damp_ = 0.f;
+	float targetHz_ = 65.40639f, hz_ = 65.40639f, ring_ = 4.f, damp_ = 0.f, dampTarget_ = 0.f;
 	float length_ = 100.f, lengthTarget_ = 100.f, lengthStep_ = 0.f;
 	float gain_ = 0.f, gainTarget_ = 0.f, gainStep_ = 0.f, a_ = 1.f, lp_ = 0.f, share_ = 1.f;
 	float lengthGoal_ = 100.f, gainGoal_ = 0.f;

@@ -383,19 +383,26 @@ engine-globals: build/test/engine_globals.o
 # No C maths-library call per sample on any declared engine's still-knob
 # cases
 # (src/bench/libm_calls.cpp): MinGW's libm is slow, and timing on macOS
-# or Linux cannot see a call creeping back. Needs GNU ld's --wrap, so it
-# runs on Linux (CI) and is skipped elsewhere.
+# or Linux cannot see a call creeping back. On Linux GNU ld's --wrap sends
+# each call to a counting wrapper; on macOS, whose ld has no --wrap, the
+# tool defines the functions itself and forwards to libSystem's (see the
+# top of libm_calls.cpp). Same cases, same list, same zero on both.
 LIBM_WRAP = exp2f exp2 expf exp log2f log2 logf log powf pow sinf sin cosf cos sincosf sincos \
 	tanf tan tanhf tanh fmodf fmod lroundf lround floorf floor fminf fmin fmaxf fmax
+ifeq ($(shell uname -s),Darwin)
+LIBM_LINK =
+else
+LIBM_LINK = $(LIBM_WRAP:%=-Wl,--wrap=%) -lm
+endif
 build/test/libm_calls: src/bench/libm_calls.cpp $(BENCH_DEPS) $(BENCH_VENDOR_OBJS)
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR) -Isrc -Ibuild/bench \
-		$(BENCH_VENDOR_FLAGS) $< $(BENCH_VENDOR_OBJS) -o $@ $(LIBM_WRAP:%=-Wl,--wrap=%) -lm
+		$(BENCH_VENDOR_FLAGS) $< $(BENCH_VENDOR_OBJS) -o $@ $(LIBM_LINK)
 .PHONY: libm-calls
-ifeq ($(shell uname -s),Linux)
+ifneq ($(filter Linux Darwin,$(shell uname -s)),)
 libm-calls: build/test/libm_calls
 	./build/test/libm_calls
 else
 libm-calls:
-	@echo "libm-calls: skipped (needs GNU ld's --wrap; runs on Linux and in CI)"
+	@echo "libm-calls: skipped (runs on Linux, in CI, and on macOS)"
 endif

@@ -2,6 +2,7 @@
 // the weights, the drawn curve, and where the dot sits.
 #include "beacon/Curve.hpp"
 #include "beacon/EnvelopeView.hpp"
+#include "beacon/Voice.hpp"
 #include "testing.hpp"
 
 #include <cmath>
@@ -63,21 +64,21 @@ void heights() {
 void dots() {
 	const EnvelopeLayout e = layoutEnvelope({0.01f, 0.3f, 0.4f, 1.f, 0.75f});
 	float u = -1.f, h = -1.f;
-	e.dot(DECAY, IDLE, 1.f, 0.5f, 0.7f, 1.f, 0.4f, u, h);
+	e.dot(DECAY, 0.5f, 0.7f, 1.f, 0.4f, u, h);
 	CHECK(std::fabs(u - 0.5f * (e.x[1] + e.x[2])) < 1e-6f, "decay dot at %g, %g", u, h);
-	e.dot(ATTACK, IDLE, 1.f, 0.25f, 0.1f, 0.f, 1.f, u, h);
+	e.dot(ATTACK, 0.25f, 0.1f, 0.f, 1.f, u, h);
 	CHECK(std::fabs(u - (e.x[0] + 0.25f * (e.x[1] - e.x[0]))) < 1e-6f, "attack dot at %g, %g", u, h);
-	e.dot(RELEASE, SUSTAIN, 1.f, 0.5f, 0.2f, 0.4f, 0.f, u, h);
+	e.dot(RELEASE, 0.5f, 0.2f, 0.4f, 0.f, u, h);
 	CHECK(std::fabs(u - 0.5f * (e.x[3] + e.x[4])) < 1e-6f, "release dot at %g, %g", u, h);
-	e.dot(SUSTAIN, IDLE, 1.f, 0.f, 0.4f, 1.f, 0.4f, u, h);
+	e.dot(SUSTAIN, 0.f, 0.4f, 1.f, 0.4f, u, h);
 	CHECK(std::fabs(u - 0.5f * (e.x[2] + e.x[3])) < 1e-6f && h == 0.4f, "sustain dot at %g, %g", u, h);
-	e.dot(IDLE, IDLE, 1.f, 0.7f, 0.9f, 0.3f, 0.6f, u, h);
+	e.dot(IDLE, 0.7f, 0.9f, 0.3f, 0.6f, u, h);
 	CHECK(u == 0.f && h == 0.f, "idle dot at %g, %g", u, h);
-	e.dot(DECAY, IDLE, 1.f, std::nanf(""), 0.7f, 1.f, 0.4f, u, h);
+	e.dot(DECAY, std::nanf(""), 0.7f, 1.f, 0.4f, u, h);
 	CHECK(u >= e.x[1] && u <= e.x[2] && h >= 0.f && h <= 1.f, "NaN phase stays in the stage: %g, %g", u, h);
-	e.dot(DECAY, IDLE, 1.f, 3.f, 7.f, 1.f, 0.4f, u, h);
+	e.dot(DECAY, 3.f, 7.f, 1.f, 0.4f, u, h);
 	CHECK(u == e.x[2] && h == 0.4f, "phase clamps to the stage's end: %g, %g", u, h);
-	e.dot(RELEASE, SUSTAIN, 1.f, 0.5f, 0.5f, std::nanf(""), 9.f, u, h);
+	e.dot(RELEASE, 0.5f, 0.5f, std::nanf(""), 9.f, u, h);
 	CHECK(h >= 0.f && h <= 1.f, "garbage start and goal clamp: %g", h);
 }
 
@@ -118,7 +119,7 @@ void live_dot_on_line() {
 		for (int i = 0; i <= 10; i++) {
 			const float p = i / 10.f;
 			float u = -1.f, h = -1.f;
-			e.dot(stages[k], stages[k] == RELEASE ? SUSTAIN : stages[k] == DECAY ? ATTACK : IDLE, 1.f, p, 0.123f, ends[k][0], ends[k][1], u, h);
+			e.dot(stages[k], p, 0.123f, ends[k][0], ends[k][1], u, h);
 			const float want = liveStageHeight(p, ends[k][0], ends[k][1], e.shape);
 			CHECK(h == want, "stage %d p %g: dot height %g, line %g", int(stages[k]), p, h, want);
 			CHECK(std::fabs(u - (a + p * (b - a))) < 1e-6f, "stage %d p %g: dot at u %g", int(stages[k]), p, u);
@@ -126,68 +127,109 @@ void live_dot_on_line() {
 	}
 }
 
-// A stage that skipped others is drawn from where the last stage was cut
-// off (its phase then, across its span) to the end of its own span (issue
-// #76); a cut-off Sustain counts as its span's end; otherwise the stage's
-// own span.
-void live_span_after_skip() {
+// Each running stage is drawn over its own span, whatever ran before it
+// (revised 2026-11-25: a Release that cut Attack short no longer sweeps
+// back across the A, D and S spans; it runs over the R span from the
+// level it started at).
+void live_span_own() {
 	const EnvelopeLayout e = layoutEnvelope({0.01f, 0.3f, 0.4f, 1.f, 0.75f});
-	const float midA = e.x[0] + 0.5f * (e.x[1] - e.x[0]), midD = e.x[1] + 0.5f * (e.x[2] - e.x[1]);
-	struct Case { Stage s, prev; float prevPhase, u0, u1; } cases[] = {
-		{RELEASE, ATTACK, 1.f, e.x[1], 1.f}, {RELEASE, DECAY, 1.f, e.x[2], 1.f},
-		{RELEASE, ATTACK, 0.5f, midA, 1.f}, {RELEASE, DECAY, 0.5f, midD, 1.f},
-		{RELEASE, DECAY, 0.f, e.x[1], 1.f},
-		{RELEASE, SUSTAIN, 1.f, e.x[3], 1.f}, {RELEASE, SUSTAIN, 0.3f, e.x[3], 1.f}, {RELEASE, SUSTAIN, 0.f, e.x[3], 1.f},
-		{RELEASE, RELEASE, 0.5f, e.x[3], 1.f}, {RELEASE, IDLE, 0.5f, e.x[3], 1.f},
-		{ATTACK, RELEASE, 0.5f, e.x[0], e.x[1]}, {ATTACK, IDLE, 0.f, e.x[0], e.x[1]}, {ATTACK, DECAY, 0.5f, e.x[0], e.x[1]},
-		{DECAY, ATTACK, 1.f, e.x[1], e.x[2]}, {DECAY, RELEASE, 0.5f, e.x[1], e.x[2]},
-	};
-	for (const Case& c : cases) {
+	for (int s = ATTACK; s <= RELEASE; s++) {
 		float u0 = -1.f, u1 = -1.f;
-		e.liveSpan(c.s, c.prev, c.prevPhase, u0, u1);
-		CHECK(std::fabs(u0 - c.u0) < 1e-6f && u1 == c.u1, "%d after %d at %g: span %g..%g (want %g..%g)", int(c.s),
-		      int(c.prev), c.prevPhase, u0, u1, c.u0, c.u1);
+		e.liveSpan(Stage(s), u0, u1);
+		CHECK(u0 == e.x[s - 1] && u1 == e.x[s], "stage %d: span %g..%g (want %g..%g)", s, u0, u1, e.x[s - 1], e.x[s]);
 	}
-	// A garbage phase stays inside the cut-off stage's span.
-	const float bad[3] = {std::nanf(""), -2.f, 7.f};
-	for (float b : bad) {
-		float u0 = -1.f, u1 = -1.f;
-		e.liveSpan(RELEASE, DECAY, b, u0, u1);
-		CHECK(u0 >= e.x[1] && u0 <= e.x[2] && u1 == 1.f, "prevPhase %g: span %g..%g", b, u0, u1);
-	}
-	// The user's case (build 2.0.36): A 4.64 s, D 0.3 s, S 5 V, R 6 s, the
-	// gate falling 1.3 ms into Decay (phase 0.0043, ~9.95 V): Release drawn
-	// from just after the end of Attack, not from the end of the D span.
-	const EnvelopeLayout l = layoutEnvelope({4.64f, 0.3f, 0.5f, 6.f, 0.75f});
-	const float start01 = 0.995f, goal01 = 0.f, cut = 0.0043f;
-	const float dSpan = l.x[2] - l.x[1];
-	float u = -1.f, h = -1.f;
-	l.livePoint(RELEASE, DECAY, cut, 0.f, start01, goal01, u, h);
-	CHECK(u >= l.x[1] && u - l.x[1] < 0.005f * dSpan && h == liveStageHeight(0.f, start01, goal01, l.shape) &&
-	          std::fabs(h - start01) < 1e-6f,
-	      "bright Release starts just after Attack's end: u %g (x[1] %g, D span %g), h %g (want ~%g)", u, l.x[1], dSpan, h,
-	      start01);
-	l.livePoint(RELEASE, DECAY, cut, 1.f, start01, goal01, u, h);
+	// A Release from 9.7 V (Attack cut short): from the R span's start at
+	// 9.7 V to its end at 0 V.
+	float u, h;
+	e.livePoint(RELEASE, 0.f, 0.97f, 0.f, u, h);
+	CHECK(u == e.x[3] && h == 0.97f, "Release from 9.7 V starts at the R span at that level: %g, %g", u, h);
+	e.livePoint(RELEASE, 1.f, 0.97f, 0.f, u, h);
 	CHECK(u == 1.f && h == 0.f, "and ends at the right edge at 0: %g, %g", u, h);
-	const float u0 = l.x[1] + cut * dSpan;
+}
+
+// AD mode draws only Attack and Decay, as the voice runs there: Decay
+// falls from the top to 0 V; no S or R span; A and D keep their ADSR
+// weights' ratio.
+void ad_layout() {
+	const ViewParams p{0.05f, 0.3f, 0.4f, 1.f, 0.75f};
+	const EnvelopeLayout adsr = layoutEnvelope(p), ad = layoutEnvelope(p, true);
+	CHECK(ad.ad && !adsr.ad, "the AD flag");
+	CHECK(ad.x[0] == 0.f && ad.x[2] == 1.f && ad.x[3] == 1.f && ad.x[4] == 1.f && ad.x[1] > 0.f && ad.x[1] < 1.f,
+	      "AD: A and D only (%g %g %g %g %g)", ad.x[0], ad.x[1], ad.x[2], ad.x[3], ad.x[4]);
+	const float rAdsr = (adsr.x[1] - adsr.x[0]) / (adsr.x[2] - adsr.x[1]), rAd = (ad.x[1] - ad.x[0]) / (ad.x[2] - ad.x[1]);
+	CHECK(std::fabs(rAdsr - rAd) < 1e-5f, "A to D width ratio kept: %g (ADSR %g)", rAd, rAdsr);
+	CHECK(ad.heightAt(ad.x[1] - 1e-6f) > 0.999f && std::fabs(ad.heightAt(ad.x[1] + 1e-6f) - 1.f) < 1e-3f && ad.heightAt(1.f) == 0.f &&
+	          ad.heightAt(0.999999f) < 1e-3f,
+	      "AD: up to the top, Decay from the top to 0 (%g, %g, %g)", ad.heightAt(ad.x[1] - 1e-6f), ad.heightAt(ad.x[1] + 1e-6f),
+	      ad.heightAt(0.999999f));
+	// An AD envelope's dot rides that outline.
+	long off = 0;
 	for (int i = 0; i <= 20; i++) {
-		const float p = i / 20.f;
-		float du, dh, lu, lh;
-		l.dot(RELEASE, DECAY, cut, p, 0.123f, start01, goal01, du, dh);
-		l.livePoint(RELEASE, DECAY, cut, p, start01, goal01, lu, lh);
-		CHECK(du == lu && dh == lh, "p %g: dot %g, %g on the line %g, %g", p, du, dh, lu, lh);
-		CHECK(std::fabs(lu - (u0 + p * (1.f - u0))) < 1e-6f, "p %g: u %g across the widened span", p, lu);
+		const float ph = i / 20.f;
+		float u, h;
+		ad.dot(ATTACK, ph, 0.f, 0.f, 1.f, u, h);
+		off += std::fabs(ad.heightAt(u < ad.x[1] ? u : ad.x[1] - 1e-6f) - h) > 1e-4f;
+		ad.dot(DECAY, ph, 0.f, 1.f, 0.f, u, h);
+		off += std::fabs(ad.heightAt(u > ad.x[1] ? (u < 1.f ? u : 0.999999f) : ad.x[1] + 1e-6f) - h) > 1e-3f;
 	}
+	CHECK(off == 0, "AD's dot leaves its outline at %ld points", off);
+}
+
+// After a Shape change mid-stage (#83) the bright line runs from the
+// voice's breakpoint: a real Voice, 10 s Attack at Shape 0, Shape to 1 at
+// phase 0.3. The dot, from the voice's phase and breakpoint, is at the
+// voice's level and still moves across the span with the phase; the line
+// starts at the breakpoint and ends at the span's end at 10 V. Drawn from
+// the stage's start instead (the old way), it would be volts off.
+void live_breakpoint() {
+	Voice v;
+	VoiceIn in = {10.f, 0.3f, 1.f, 10.f, 0.f, true, false, GATE_MODE};
+	VoiceOut o;
+	while (v.phase() < 0.3)
+		v.process(in, o);
+	in.shape = 1.f;
+	v.process(in, o);
+	const float b = float(v.bpPhase()), bp01 = float(v.bpLevel()) * 0.1f;
+	CHECK(v.stage() == ATTACK && b > 0.29f && b < 0.31f && bp01 > 0.f && bp01 < 0.01f,
+	      "a breakpoint at phase %g, %g of the height (%d)", b, bp01, int(v.stage()));
+	const EnvelopeLayout e = layoutEnvelope({10.f, 0.3f, 1.f, 1.f, 1.f});
+	float u, h;
+	e.livePoint(ATTACK, 0.f, bp01, 1.f, u, h, b);
+	CHECK(std::fabs(u - b * e.x[1]) < 1e-6f && h == bp01, "the line starts at the breakpoint: %g, %g (want %g, %g)", u,
+	      h, b * e.x[1], bp01);
+	e.livePoint(ATTACK, 1.f, bp01, 1.f, u, h, b);
+	CHECK(u == e.x[1] && h == 1.f, "and ends at the span's end at 10 V: %g, %g", u, h);
+	float worstH = 0.f, worstU = 0.f, oldOff = 0.f;
+	long n = 0;
+	while (v.stage() == ATTACK) {
+		if (++n % 4800 == 0) {
+			const float p = float(v.phase()), level01 = v.level() * 0.1f;
+			e.dot(ATTACK, p, 0.5f, bp01, 1.f, u, h, b);
+			worstH = std::fmax(worstH, std::fabs(h - level01));
+			worstU = std::fmax(worstU, std::fabs(u - p * e.x[1]));
+			e.dot(ATTACK, p, 0.5f, float(v.start()) * 0.1f, 1.f, u, h);
+			oldOff = std::fmax(oldOff, std::fabs(h - level01));
+		}
+		v.process(in, o);
+	}
+	CHECK(n > 300000 && worstH < 1e-5f, "the dot is at the voice's level within %g of the height (%ld samples)", worstH, n);
+	CHECK(worstU < 1e-6f, "and across the span by phase within %g", worstU);
+	CHECK(oldOff > 0.3f, "drawn from the stage's start it would be %g of the height off", oldOff);
+	// A NaN breakpoint phase reads 0: the whole span, as before.
+	float u2, h2;
+	e.livePoint(ATTACK, 0.5f, 0.f, 1.f, u, h);
+	e.livePoint(ATTACK, 0.5f, 0.f, 1.f, u2, h2, std::nanf(""));
+	CHECK(u == u2 && h == h2, "NaN bpPhase is 0: %g, %g (want %g, %g)", u2, h2, u, h);
 }
 
 // Sustain at 0: the dot at the end of the line; above 0, mid-span at the level.
 void sustain_zero() {
 	const EnvelopeLayout z = layoutEnvelope({0.01f, 0.3f, 0.f, 1.f, 0.75f});
 	float u = -1.f, h = -1.f;
-	z.dot(SUSTAIN, IDLE, 1.f, 0.f, 0.f, 1.f, 0.f, u, h);
+	z.dot(SUSTAIN, 0.f, 0.f, 1.f, 0.f, u, h);
 	CHECK(u == 1.f && h == 0.f, "sustain 0: dot at %g, %g (want 1, 0)", u, h);
 	const EnvelopeLayout e = layoutEnvelope({0.01f, 0.3f, 0.3f, 1.f, 0.75f});
-	e.dot(SUSTAIN, IDLE, 1.f, 0.f, 0.3f, 1.f, 0.3f, u, h);
+	e.dot(SUSTAIN, 0.f, 0.3f, 1.f, 0.3f, u, h);
 	CHECK(std::fabs(u - 0.5f * (e.x[2] + e.x[3])) < 1e-6f && h == 0.3f, "sustain 0.3: dot at %g, %g (mid-span)", u, h);
 }
 
@@ -253,15 +295,125 @@ void hold_ring_time() {
 	CHECK(r.at(0) == -2.f && r.at(HoldRing::RING - 1) == -2.f && r.pushed == 0, "a restart after stop() is flat again");
 }
 
+// The window lines up with the output. Beacon's own voice runs through
+// the patches people make: both modes; a one-sample trigger, a gate
+// shorter than Attack, one ending in Decay, one held, a square faster
+// than Attack, triggers faster than Attack; a RETRIG in Sustain; at four
+// Shapes. Every sample the window's dot is taken from what the voice
+// publishes, as the module does. It must sit at the output's level, and
+// inside its own stage's span (a Release that cut Attack short runs over
+// the R span). And the bright line drawn at any moment must be what the
+// output then does: every 97 samples the line is kept, and while that
+// stage runs on with Shape unchanged, the output must stay on it.
+void window_lines_up() {
+	const float fs = 48000.f, A = 0.04f, D = 0.06f, R = 0.08f;
+	const long nA = 1920;
+	struct Gate { const char* name; long period, width; } gates[] = {
+		{"a 1-sample trigger", 0, 1},       {"a gate shorter than Attack", 0, nA / 2},
+		{"a gate ending in Decay", 0, nA + 1400}, {"a held gate", 0, 20000},
+		{"a square faster than Attack", 700, 350}, {"triggers faster than Attack", 480, 24}};
+	long offLevel = 0, offSpan = 0, offLine = 0, checked = 0;
+	for (Mode mode : {GATE_MODE, AD_MODE})
+		for (float shape : {0.f, 0.5f, 0.75f, 1.f})
+			for (float sus : {5.f, 0.f})
+				for (const Gate& g : gates) {
+					Voice v;
+					v.setSampleRate(fs);
+					v.reset();
+					const EnvelopeLayout e = layoutEnvelope({A, D, sus * 0.1f, R, shape}, mode == AD_MODE);
+					// The kept line: its stage instance and what it was drawn from.
+					long instance = 0, keptInstance = -1;
+					Stage lastStage = IDLE;
+					double lastPhase = 0.0;
+					float kStart = 0.f, kGoal = 0.f, kBp = 0.f;
+					Stage kStage = IDLE;
+					for (long i = 0; i < 30000; i++) {
+						VoiceIn in{A, D, R, sus, shape, false, false, mode};
+						in.gate = g.period ? (i % g.period) < g.width : i < g.width;
+						in.retrig = g.width == 20000 && i == 12000;   // a RETRIG in Sustain
+						VoiceOut o;
+						v.process(in, o);
+						const Stage st = v.stage();
+						if (st != lastStage || v.phase() < lastPhase)
+							instance++;
+						lastStage = st;
+						lastPhase = v.phase();
+						const float level01 = o.level * 0.1f, start01 = float(v.bpLevel()) * 0.1f, goal01 = float(v.goal()) * 0.1f;
+						float u, h;
+						e.dot(st, float(v.phase()), level01, start01, goal01, u, h, float(v.bpPhase()));
+						if (st == IDLE)
+							continue;
+						checked++;
+						if (std::fabs(h - level01) > 2e-4f) {
+							if (offLevel++ < 3)
+								std::printf("  mode %d shape %g S %g, %s, sample %ld (%d): dot at %g, OUT %g\n", int(mode), shape, sus, g.name, i, int(st), h * 10.f, o.level);
+						}
+						const float lo = st == SUSTAIN ? e.x[2] : e.x[st - 1], hi = st == SUSTAIN ? e.x[3] : e.x[st];
+						if (!(hi > lo) || (st != SUSTAIN && (u < lo - 1e-5f || u > hi + 1e-5f))) {
+							if (offSpan++ < 3)
+								std::printf("  mode %d shape %g S %g, %s, sample %ld: stage %d's dot at u %g, outside its span %g..%g (or the span is empty)\n", int(mode), shape, sus, g.name, i, int(st), u, lo, hi);
+						}
+						if (st == ATTACK || st == DECAY || st == RELEASE) {
+							if (instance == keptInstance && kStage == st && kBp == float(v.bpPhase())) {
+								const float f = kBp < 1.f ? float((v.phase() - kBp) / (1.0 - kBp)) : 1.f;
+								const float want = liveStageHeight(f, kStart, kGoal, shape);
+								if (std::fabs(want - level01) > 2e-4f && offLine++ < 3)
+									std::printf("  mode %d shape %g S %g, %s, sample %ld: the line drawn earlier says %g, OUT %g\n", int(mode), shape, sus, g.name, i, want * 10.f, o.level);
+							}
+							if (i % 97 == 0) {
+								keptInstance = instance;
+								kStage = st;
+								kStart = start01;
+								kGoal = goal01;
+								kBp = float(v.bpPhase());
+							}
+						}
+					}
+				}
+	// And across mode switches: the switch flips between ADSR and AD every
+	// 1100 samples under a gate held 1.6 s, then pulses; the window takes
+	// the mode's layout each sample, as the module does.
+	for (float shape : {0.f, 0.75f}) {
+		Voice v;
+		v.setSampleRate(fs);
+		v.reset();
+		for (long i = 0; i < 60000; i++) {
+			const Mode mode = (i / 1100) % 2 ? AD_MODE : GATE_MODE;
+			const EnvelopeLayout e = layoutEnvelope({A, D, 0.5f, R, shape}, mode == AD_MODE);
+			VoiceIn in{A, D, R, 5.f, shape, i < 76800 && (i < 30000 || i % 4000 < 900), false, mode};
+			VoiceOut o;
+			v.process(in, o);
+			const Stage st = v.stage();
+			if (st == IDLE)
+				continue;
+			checked++;
+			float u, h;
+			e.dot(st, float(v.phase()), o.level * 0.1f, float(v.bpLevel()) * 0.1f, float(v.goal()) * 0.1f, u, h, float(v.bpPhase()));
+			if (std::fabs(h - o.level * 0.1f) > 2e-4f && offLevel++ < 3)
+				std::printf("  switching, shape %g, sample %ld (%d): dot at %g, OUT %g\n", shape, i, int(st), h * 10.f, o.level);
+			const float lo = st == SUSTAIN ? e.x[2] : e.x[st - 1], hi = st == SUSTAIN ? e.x[3] : e.x[st];
+			if ((!(hi > lo) || (st != SUSTAIN && (u < lo - 1e-5f || u > hi + 1e-5f))) && offSpan++ < 3)
+				std::printf("  switching, shape %g, sample %ld: stage %d's dot at u %g, span %g..%g\n", shape, i, int(st), u, lo, hi);
+		}
+	}
+	CHECK(checked > 100000, "the window was checked on %ld samples", checked);
+	CHECK(offLevel == 0, "the dot left the output's level on %ld samples", offLevel);
+	CHECK(offSpan == 0, "the dot left its stage's span on %ld samples", offSpan);
+	CHECK(offLine == 0, "the output left the line drawn for it on %ld samples", offLine);
+}
+
 } // namespace
 
 int main() {
+	window_lines_up();
 	widths();
 	heights();
 	dots();
 	live_stage_curve();
 	live_dot_on_line();
-	live_span_after_skip();
+	live_span_own();
+	ad_layout();
+	live_breakpoint();
 	sustain_zero();
 	hold_ring_time();
 	return rkatest::finish("beacon/test_view");

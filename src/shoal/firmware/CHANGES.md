@@ -183,6 +183,14 @@ is marked `// SHOAL:`.
   through `OC::DAC::set_all`, by the user's decision of 2026-11-15. No
   firmware file changes: `Core::Impl` (`../CoreImpl.inc`) does it after
   `shoal_boot()`.
+- `APP_REFS.ino` (`ReferenceChannel` settings; #81): "Mod range oct"
+  (-3..3) is stored as `STORAGE_TYPE_I8`, not upstream's `STORAGE_TYPE_U8`.
+  Upstream saved -2 as byte 254 and restored it clamped to +3, so a negative
+  value never survived a save. The saved bytes are unchanged (one byte, same
+  offset; -1..-3 are 255..253 either way), so an image saved before the fix
+  with a negative value now restores it. One that was restored (as +3) and
+  saved again holds a real 3 and stays +3. Test: `test_state` `testRoundTripEveryApp(true)` and
+  `testRefsNegativeModRange`.
 
 ## Desktop-CPU guards
 

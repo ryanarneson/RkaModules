@@ -21,6 +21,15 @@ constexpr float GLIDE_TAU_S = 0.008f;
 // that is 0.11 a second: a 60 s Ring keeps half its time.
 constexpr float DAMP_MAX_RATE = 3.f;
 constexpr int DAMP_POWER = 3;
+// Air: whatever Damp is, a partial at AIR_HZ also falls 60 dB in about
+// AIR_T60_S (and one at f by (f / AIR_HZ)^2 as fast), as a real string's
+// top dies early. Without it Damp 0 kept every partial to 20 kHz as long
+// as the fundamental: a metallic sizzle. Below a few kHz it is nothing.
+// Ring's gain gives the fundamental back what air takes from it, where
+// the gain has room; and above AIR_PIVOT_HZ a string's air is held at
+// the pivot's (in its own harmonics), so it never shortens a long Ring
+// much: a high string's top is already short, its delay's read takes it.
+constexpr float AIR_HZ = 10000.f, AIR_T60_S = 0.4f, AIR_PIVOT_HZ = 250.f;
 
 // A string's loop is untouched to LOOP_KNEE volts and never passes
 // LOOP_CEIL (Ballast's curve).

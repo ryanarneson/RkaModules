@@ -707,9 +707,6 @@ checking how well they track.
   playing (the scale sequencer or the aux CV can move that one).
 - **Quadraturia, Coarse and Fine** do nothing while Tap tempo is on: the
   firmware ignores the left encoder then, as on the hardware.
-- **References, "Mod range oct".** Negative values are lost when the
-  patch is saved: a bug in the firmware itself, kept as the hardware has
-  it.
 - **Edits during a fast encoder spin.** List edits made while a long,
   fast encoder spin is still being played out apply once the turns have
   reached the app, up to about half a second later, so they land in the

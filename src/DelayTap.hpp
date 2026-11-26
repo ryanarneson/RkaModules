@@ -7,6 +7,7 @@
 // - Glide: the delay slides to its target, so pitch bends and settles, as a
 //   tape machine changing speed. The slide is exponential (a time constant)
 //   and its slope is held so pitch stays within a set number of octaves.
+//   Held there longer than the glide's limit, it crossfades the rest.
 // - Crossfade: the output fades from the old delay to the new one, so there
 //   is no bend. A target that arrives during a fade waits; the latest wins.
 //   The fade is linear: its two gains sum to 1, so it can dip but never
@@ -37,6 +38,7 @@ struct DelayTap {
 		fs_ = fs;
 		setGlide(glideSeconds_, glideOctaves_);
 		setCrossfade(fadeSeconds_);
+		setGlideLimit(limitSeconds_);
 	}
 
 	// The delays the tap may take, in samples: keep `hi` inside the line,
@@ -57,6 +59,14 @@ struct DelayTap {
 		down_ = std::pow(2.0, (double) glideOctaves_) - 1.0;
 	}
 
+	// The longest a glide may bend at its steepest (the octave limit): past
+	// that it crossfades the rest of the way, so a big change of time is a
+	// short dip and then the new delay, not seconds of bend. 0 is no limit.
+	void setGlideLimit(float seconds) {
+		limitSeconds_ = seconds > 0.f ? seconds : 0.f;
+		limit_ = (long) ((double) limitSeconds_ * fs_);
+	}
+
 	void setCrossfade(float seconds) {
 		fadeSeconds_ = seconds > 0.f ? seconds : 0.f;
 		const float n = fadeSeconds_ * fs_;
@@ -66,6 +76,7 @@ struct DelayTap {
 	void snap(float delaySamples) {
 		d_ = target_ = clampD(delaySamples);
 		fading_ = pending_ = frozen_ = false;
+		steep_ = 0;
 	}
 
 	// The delay to move to; call as often as wanted. Frozen, it is kept
@@ -102,13 +113,20 @@ struct DelayTap {
 		if (d_ != target_) {
 			const double gap = target_ - d_;
 			double step = gap * coef_;
+			const bool steep = step > up_ || step < -down_;
 			step = step > up_ ? up_ : step < -down_ ? -down_ : step;
 			// Landed: the step no longer moves the delay, or what is left
 			// is under a thousandth of a sample.
-			if (std::fabs(gap) < 1e-3 || d_ + step == d_)
+			if (std::fabs(gap) < 1e-3 || d_ + step == d_) {
 				d_ = target_;
-			else
+				steep_ = 0;
+			}
+			else if (steep && limit_ > 0 && ++steep_ >= limit_ && !fading_) {
+				startFade(target_);   // bent long enough: fade the rest
+			}
+			else {
 				d_ += step;
+			}
 		}
 		const float live = line.read((float) d_ + mod);
 		if (!fading_)
@@ -189,6 +207,10 @@ struct DelayTap {
 	bool frozen() const {
 		return frozen_;
 	}
+	// The frozen loop's length in samples (the last one, once released).
+	double loopSamples() const {
+		return loop_;
+	}
 	float delay() const {
 		return (float) d_;
 	}
@@ -208,6 +230,7 @@ private:
 	}
 
 	void startFade(double to) {
+		steep_ = 0;
 		fadeFrom_ = d_;
 		d_ = to;
 		fade_ = 0.f;
@@ -239,7 +262,8 @@ private:
 
 	float fs_ = 48000.f;
 	float lo_ = 1.f, hi_ = 1.f;
-	float glideSeconds_ = 0.15f, glideOctaves_ = 2.f, fadeSeconds_ = 0.04f;
+	float glideSeconds_ = 0.15f, glideOctaves_ = 2.f, fadeSeconds_ = 0.04f, limitSeconds_ = 0.f;
+	long limit_ = 0, steep_ = 0;   // the limit, and how long this glide has bent at its steepest
 	double coef_ = 1.0, up_ = 0.75, down_ = 3.0;
 	double d_ = 1.0, target_ = 1.0;
 	// The crossfade.

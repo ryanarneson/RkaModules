@@ -1,7 +1,7 @@
 # Beacon
 
 A polyphonic envelope, 10 HP: the light that comes up, holds and fades.
-Gate, Trig and Hold on a switch (after the Instruō cèis), Attack, Decay
+ADSR, a one-shot AD and Hold on a switch (after the Instruō cèis), Attack, Decay
 and Release from 1 ms to 60 s, Shape from a slow swell through linear to
 the classic analog curve, a gate for every stage, a trigger at each stage
 start, and a window that draws the envelope with a dot riding it.
@@ -12,10 +12,10 @@ start, and a window that draws the envelope with a dot riding it.
 
 From the top:
 
-- The **window**: the envelope the knobs make, lettered A D S R.
-- **SHAPE**, and the **GATE / TRIG / HOLD** switch. Click its upper half
+- The **window**: the envelope the knobs make, lettered A D S R (A and D in AD).
+- **SHAPE**, and the **ADSR / AD / HOLD** switch. Click its upper half
   to move it up one position, its lower half to move it down one, or drag
-  it; it stops at the ends, so going from Trig to Gate never passes
+  it; it stops at the ends, so going from AD to ADSR never passes
   through Hold.
 - **A**, **D**, **S** and **R**, each with its stage light, over its
   **CV** input and its stage **gate** output (on the ivory tiles).
@@ -24,14 +24,19 @@ From the top:
 
 ## Modes
 
-- **Gate** (switch up, the default): a rising edge starts Attack; Attack
-  and Decay run while the gate is high, then Sustain holds. When the gate
-  falls, Release runs from wherever the envelope is, even in the middle of
-  Attack.
-- **Trig**: Attack always runs to the end. If the gate is still high,
-  Decay and Sustain follow; if not, Release starts from the top. A trigger
-  gives an AR (AD) envelope, a long gate the full ADSR.
-- **Hold**: the envelope stops and Beacon is a slew limiter. The
+- **ADSR** (switch up, the default): a rising edge on GATE starts Attack.
+  Attack and Decay run while the gate is high, then Sustain holds. When the
+  gate falls, Release runs from wherever the envelope is, even in the
+  middle of Attack. How long the gate stays high decides how much of the
+  envelope you get (below).
+- **AD**: a one-shot, as a trigger into Maths. A rising edge on GATE runs
+  Attack all the way to 10 V, then falls back to 0 V over the **Decay**
+  time. How long the gate stays high makes no difference; the S and R
+  knobs and gates play no part, and the window draws only A and D. Use it
+  for triggers, clock pulses, and any time you want the same envelope from
+  every edge. (For an AR that holds at the top while the gate is high, use
+  ADSR with D at its minimum and S fully up.)
+- **HOLD**: the envelope stops and Beacon is a slew limiter. The
   **Sustain CV** input is the signal; the Sustain knob adds 0 to 10 V.
   OUT follows it, rising at Attack's rate and falling at Decay's (the knob
   sets the time for a 10 V move). Release, Shape, GATE, RETRIG and the
@@ -40,28 +45,57 @@ From the top:
   In Hold the A, D and S gates mean "rising", "falling" and "caught up";
   an input that moves slower than the slew reads as S.
 
-### Gate or Trig with a trigger
+(Patches saved with the switch on Trig, or on 2.0.44's AR, open in AD.
+The fall after Attack is now set by the D knob, not R, so turn D to where
+R was to get the same envelope. A longer gate now gives the same AD
+instead of running on into Sustain, and a pulse that arrives while the
+envelope is still moving picks Attack up from where it is, so it reaches
+the top sooner than it did.)
 
-Patch a short trigger into GATE and the two modes part. In **Gate** a
-trigger shorter than Attack gives only a blip: the gate falls, and
-Release starts from wherever Attack had got to. In **Trig** Attack runs
-to the top, then Release. For an AR envelope from triggers, use Trig.
+### Gates, pulses and triggers: what you get
 
-The gate matters in Trig too. If it is still high when Attack ends,
-Decay and Sustain follow; so for an AR, the gate must fall before Attack
-ends. A Sway square wave with an 11.3 s cycle holds the gate for about
-5.7 s: with a 6 s Attack the gate falls during Attack, so Decay and
-Sustain never run; with a 4 s Attack the gate outlasts it and they do.
+What reaches GATE, and how long it stays high compared with Attack and
+Decay, decides the envelope in ADSR mode. In AD mode it never matters.
 
-In Gate and Trig, a new rising edge while the envelope runs restarts
-Attack from where the envelope is, and **RETRIG** does the same without a
-new gate (only while the gate is high). Every stage takes exactly its set
-time, wherever it starts: an Attack begun from half way up takes as long
-as one from the bottom, so it covers less level in the same time.
+| Into GATE | ADSR | AD |
+|---|---|---|
+| A trigger, or a pulse shorter than Attack | A blip: it rises only while the pulse is high, then releases from there. A 1 ms trigger into a 100 ms Attack barely moves. | Up to 10 V, then down over Decay |
+| A pulse longer than Attack, shorter than Attack + Decay | Up to 10 V, part of the way down Decay, then Release from there | Up to 10 V, then down over Decay |
+| A gate longer than Attack + Decay | The full ADSR: Sustain holds until the gate falls, then Release | Up to 10 V, then down over Decay (the rest of the gate is ignored) |
 
-Moving the switch never moves the output: from Hold back to Gate or Trig,
+Pulse widths are easy to misjudge. A Sway square at 1 % width is high for
+1 % of its cycle: 10 ms at 1 Hz, 100 ms at 0.1 Hz. Into ADSR with a 50 ms
+Attack, the first is a blip and the second rises to the top and starts to
+decay before it releases. Into AD both give the same envelope. If you want
+every pulse to give the whole shape, use AD; if you want the gate's length
+to shape the envelope (a key held longer sustains longer), use ADSR.
+
+### Edges while it runs, and RETRIG
+
+In ADSR and AD, a new rising edge while the envelope runs starts Attack
+again from where the envelope is, and **RETRIG** does the same without a
+new gate (only while the gate is high). The level never jumps.
+
+An Attack that starts part of the way up finishes the curve it would have
+drawn from the bottom: it picks it up at the present level and takes only
+the time that is left. So a retrigger from Sustain at 6 V takes 40 % of
+Attack at Shape noon (about 64 % at the default Shape, 80 % fully right,
+12 % fully left, where the curve's slow start is already behind it). Fast
+triggers into a long Attack climb steadily and reach the top in Attack's
+time, as on an analog envelope. Decay and Release always take their set
+time, from wherever they start, as an analog release does.
+
+Moving the switch never moves the output: from Hold back to ADSR or AD,
 Attack starts from the present level with the gate high, Release with it
-low.
+low (in AD, its fall, Decay). Switching to AD: an Attack that is running
+goes on to the top and then falls; a Decay, Sustain or Release falls from
+where it is to 0 V over Decay. Switching to ADSR: an Attack carries on; AD's
+fall heads for Sustain while the gate is high (rising to it, if it had
+already fallen below), else Release takes over. A Release switched to AD
+becomes AD's fall and takes Decay's time. If
+AD's envelope has
+already finished while you still hold the gate, nothing starts until the
+next rising edge (a held gate is not a new note).
 
 ## Controls
 
@@ -75,7 +109,9 @@ low.
 - **SHAPE**: one curve for every stage. Noon is linear; right, the
   classic contour (a fast, rounded attack, decays with a long tail); left,
   the mirror (an attack that swells, decays that hold and then fall).
-  Default three quarters right.
+  Default three quarters right. Turned while a stage runs, the rest of
+  the stage takes the new curve from where the level is, so the level
+  does not jump and the stage still ends on time.
 - **Push button**: a gate on every channel while held (shift-click
   latches it).
 - **GATE, RETRIG**: gates at the plugin's usual thresholds (high at 1 V,
@@ -104,21 +140,26 @@ while the gate is low.
 
 ## The window
 
-The envelope drawn from the knobs (with channel 1's CVs) and Shape. It
-is a picture of the envelope, not a meter.
-Each stage's width grows with the log of its time, so a 1 ms Attack stays
+The envelope drawn from the knobs (with channel 1's CVs) and Shape, as the
+mode will run it: in ADSR the four stages, lettered A D S R; in AD only
+Attack and Decay. It is a picture of the envelope, not a meter. Each
+stage's width grows with the log of its time, so a 1 ms Attack stays
 visible beside a 60 s Release; the window shows shape and position, not a
-ruler. The knobs' shape is drawn dim. The running stage's letter is
-bright, and an Attack, Decay or Release that is running is drawn bright
-from the level where it really started. A gate that rises while
-releasing draws Attack over its own span, from that level up to 10 V. A
-stage that skipped others is drawn from where the last one was cut off:
-a gate that falls mid-Attack draws Release from that level at that point
-in the Attack span down to 0 V at the right edge, and one that falls just
-after Attack completes, from just after the Attack span. A dot rides the
-bright line where channel 1 is. Sustain is bright while it runs; with
-Sustain at 0 V its span stays dim and the dot waits at the end of the
-line. In Hold the window shows a scrolling line of the output.
+ruler, and a scope beside it will not line up in time. The curve in each
+stage is the curve the output follows: at Shape noon both are straight.
+
+The knobs' shape is drawn dim. The running stage, and its letter, are
+bright, and a dot rides it where channel 1 is: always at the output's
+level, always in the running stage's own span.
+- An Attack that starts part-way (a retrigger, a gate back during
+  Release) is the drawn Attack curve itself: the dot joins it at the
+  present level and rides it to the top.
+- A Release that cuts a stage short (a gate falling mid-Attack) is drawn
+  in the R span, bright, from the level it started at down to 0 V.
+- Sustain is bright while it runs; with Sustain at 0 V its span stays dim
+  and the dot waits at the end of the line.
+
+In Hold the window shows a scrolling line of the output.
 
 ## Patches to try
 
@@ -128,7 +169,7 @@ line. In Hold the window shows a scrolling line of the output.
   right on the same times.
 - **Legato.** MIDI-CV's trigger into RETRIG as well as its gate into
   GATE. Overlapping notes each climb from where the envelope is.
-- **Slow swells.** Squall's GATE into GATE, Trig, A about 8 s, R 20 s,
+- **Slow swells.** Squall's GATE into GATE, AD, A about 8 s, D 20 s,
   Shape left; OUT into Sluice's level CV on a Fathom drone, into Fog.
   Each gate swells the drone in and lets it fade. Try Shape right.
 - **Events from the stage gates.** The A gate into Rigging's STRUM (a
@@ -143,13 +184,17 @@ line. In Hold the window shows a scrolling line of the output.
 - **Chords.** MIDI-CV with four voices: GATE into GATE, OUT into a
   polyphonic Sluice. Each voice has its own envelope; the window and
   lights follow voice 1.
+- **The same pluck from any pulse.** A Sway square at 1 % width into
+  GATE, AD, A 5 ms, D 300 ms, OUT into Sluice. Change Sway's rate: every
+  pulse gives the same pluck. Switch to ADSR to hear the pulse's width
+  shape it instead.
 - **Pulses on a held sound.** Hold the push button (or send a long gate)
   and put Squall's GATE or a clock into RETRIG: the envelope re-swells
   from where it is. D and S set how far each pulse falls back.
 
 ## Polyphony
 
-In Gate and Trig, one envelope for each channel of GATE (one when it is
+In ADSR and AD, one envelope for each channel of GATE (one when it is
 unpatched); in Hold, one for each channel of the Sustain CV. RETRIG and
 the CVs take a channel each from a polyphonic cable, or one value for all
 from a mono one. Every output carries the channel count.

@@ -9,7 +9,7 @@ last section lists where they fall short.
 
 | Command | What it does | Needs |
 |---|---|---|
-| `make test` | Builds and runs every `src/<module>/test_*.cpp`, the Shoal and engine globals checks, the libm check (Linux) and the bench declarations check | A C++17 compiler |
+| `make test` | Builds and runs every `src/<module>/test_*.cpp`, the Shoal and engine globals checks, the libm check and the bench declarations check | A C++17 compiler |
 | `make -f tests.mk test TEST_WERROR=-Werror CXX=g++ TSAN_REQUIRED=1` | The same, as CI runs it on Linux (`TSAN_REQUIRED=1`: fail, not skip, if the ThreadSanitizer test cannot start; rule 7) | No Rack SDK |
 | `make` | Builds the plugin | Rack SDK (`RACK_DIR`) |
 | `make smoke` | Loads the plugin in Rack with a temporary user folder and screenshots every module to `build/screenshots/` | Rack SDK, Rack |
@@ -17,7 +17,7 @@ last section lists where they fall short.
 | `make shoal-fuzz` | 50 more seeds of the random fault sweep | |
 | `make shoal-bench` | CPU share per app, including drawing and saving | |
 | `make bench` | CPU share of every module's engine that has a `src/<module>/bench.inc`, in each of its cases at 1, 4 and 16 instances; fails over a case's budget, if cost grows with the count, or if there are no modules | A C++ compiler |
-| `make libm-calls` | Fails if any declared engine calls libm per sample in a case its `bench.inc` marks knobs-still (in `make test`) | Linux (GNU ld) |
+| `make libm-calls` | Fails if any declared engine calls libm per sample in a case its `bench.inc` marks knobs-still (in `make test`) | Linux or macOS |
 | `make engine-globals` | Fails if any declared engine holds writable global state (in `make test`) | |
 | `make bench-modules` | Fails if a folder has a `*Engine.hpp` but no `bench.inc`, or a `bench.inc` lacks idle/outputs/busy, a budget, or a knobs-still libm case (in `make test`) | |
 | `tools/cross_build.sh` | Linux and Windows builds in Docker | Colima running |
@@ -300,10 +300,14 @@ before and after there (macOS's libm is fast), so those budgets catch
 only a gross regression.
 
 Timing on macOS or Linux cannot see what made Windows slow, so
-`make libm-calls` (part of `make test`, Linux only: it needs GNU ld's
-`--wrap`, and is skipped with a message elsewhere) counts the C maths
+`make libm-calls` (part of `make test`, on Linux and macOS) counts the C maths
 library calls every declared engine makes, with every libm entry point it
-could reach wrapped, in the cases its `bench.inc` lists for it. In a case
+could reach wrapped, in the cases its `bench.inc` lists for it. On Linux
+GNU ld's `--wrap` sends each call to a counter; on macOS, whose ld has no
+`--wrap`, the tool defines those functions itself, so ld binds the engine
+code's calls to them before libSystem's, and they count the call and
+forward it (`src/bench/libm_calls.cpp`). The functions, the cases and the
+pass mean the same on both. In a case
 marked knobs-still it requires zero per sample after a warm-up (today:
 Fathom idle and with outputs patched; Sluice idle, outputs and busy;
 Sway idle, with outputs patched and
@@ -420,7 +424,7 @@ the globals check by declaring its engine; nothing in `src/bench/` or
    (`docs/DSP-ALIASING.md`) and add a `test_alias.cpp` as rule 16 says,
    or say in the table below why it needs none.
 6. Then, with no other change: `make test` runs `bench-modules`,
-   `engine-globals` and (on Linux, so in CI) `libm-calls` for it, and
+   `engine-globals` and `libm-calls` for it, and
    `make bench` times it and checks its budgets. Add the folder to
    `MODULES` in the Makefile and fill in its column of the table below.
 
