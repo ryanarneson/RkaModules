@@ -160,6 +160,12 @@ build/test/doldrums/test_ring: src/doldrums/test_ring.cpp src/testing.hpp $(wild
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $< -o $@
 
+# Doldrums' engine: as the rule below (the sanitizers, pffft.o), and rebuilt
+# when the generator the grains' phases come from (hadal/Random.hpp) changes.
+build/test/doldrums/test_engine: src/doldrums/test_engine.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp src/hadal/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@
+
 # Doldrums' tests: the sanitizers, and pffft.o linked into every one of them
 # (Fft.hpp needs it; a test that does not use it links it unused).
 build/test/doldrums/test_%: src/doldrums/test_%.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp)
