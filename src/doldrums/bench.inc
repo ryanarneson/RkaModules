@@ -9,6 +9,7 @@
 // with the Long grain), piece by piece, and fails over that bound.
 #include "bench/BenchModule.hpp"
 #include "doldrums/DoldrumsEngine.hpp"
+#include "doldrums/TapeView.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -25,6 +26,8 @@ struct doldrums {
 
 	struct Instance {
 		Engine engine;
+		::rka::doldrums::TapeView view;   // fed as the module feeds it: wrote() for each frame written, publish() 60 times a second
+		long long viewGap = 0, viewEvery = 800;
 		F frame;
 		::rka::doldrums::DoldrumsResult result;
 		float voct[16];
@@ -39,6 +42,8 @@ struct doldrums {
 			engine.allocate(rate);
 			engine.setSampleRate(rate);
 			engine.seed(0x5eed);
+			view.configure(engine.state().capacity, 0);
+			viewEvery = (long long) (rate / 60.f);
 			for (int c = 0; c < 16; c++) {
 				voct[c] = 0.f;
 				voctCur[c] = Cv::cursor(c, 0);
@@ -48,13 +53,24 @@ struct doldrums {
 		Instance& operator=(const Instance&) = delete;
 
 		void process(float) {
+			::rka::doldrums::Ring& ring = engine.ring();
+			const long long before = ring.now();
 			engine.process(frame, result);
+			if (ring.now() > before) {
+				const long long p = ring.physical(ring.now() - 1);
+				view.wrote(ring.channel(0)[p], ring.channel(1)[p]);
+			}
+			if (++viewGap >= viewEvery) {
+				viewGap = 0;
+				view.publish(engine.state());
+			}
 		}
 		// The module's Initialize: a silent tape, the params and the menu at
 		// their defaults.
 		void reset() {
 			frame = F();
 			engine.reset();
+			view.clear();
 		}
 		float probe() const {
 			return result.outL + result.outR + result.run;
@@ -119,14 +135,16 @@ struct doldrums {
 	static const int BENCH_CASES = 3;
 	static BenchCase<Instance> benchCase(int k) {
 		// Budgets: 1.5 times the most an Apple M-series Mac (M5 Pro) measured
-		// in three runs at 1, 4 or 16 instances (2026-11-26: idle 0.100,
-		// outputs 0.100, busy 0.308), rounded up to the next 0.05; elsewhere
+		// in three runs at 1, 4 or 16 instances (2026-11-26, with the window's
+		// view fed as the module feeds it, wrote() each frame written and
+		// publish() 60 times a second, which costs about 0.008: idle 0.111,
+		// outputs 0.112, busy 0.326; before the view 0.100, 0.100, 0.308), rounded up to the next 0.05; elsewhere
 		// three times the Mac's, provisional (not measured on x86-64). Idle
 		// costs what outputs does: the grains run on silence as on a tone.
 		const BenchCase<Instance> cases[BENCH_CASES] = {
 			// name     inputs   Apple arm64  elsewhere
-			{"idle", idle, 0.15, 0.45},
-			{"outputs", outputs, 0.15, 0.45},
+			{"idle", idle, 0.2, 0.6},
+			{"outputs", outputs, 0.2, 0.6},
 			{"busy", busy, 0.5, 1.5},
 		};
 		return cases[k];

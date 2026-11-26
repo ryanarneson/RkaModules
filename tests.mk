@@ -180,6 +180,13 @@ build/test/doldrums/test_hostile: src/doldrums/test_hostile.cpp build/test/dep/p
 
 # Doldrums' tests: the sanitizers, and pffft.o linked into every one of them
 # (Fft.hpp needs it; a test that does not use it links it unused).
+# Doldrums' thread test (the window's view): ThreadSanitizer, which cannot be
+# combined with ASan. Fails, saying why, where the compiler cannot build with it.
+build/test/doldrums/test_threads: src/doldrums/test_threads.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=thread -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@ || \
+		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Doldrums' thread test needs it" >&2; exit 1; }
+
 build/test/doldrums/test_%: src/doldrums/test_%.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp)
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@
