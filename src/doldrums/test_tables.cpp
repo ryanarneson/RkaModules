@@ -680,6 +680,18 @@ void harmonics_zero_is_out() {
 	L.set(s);
 	const std::vector<float> out = L.run(in);
 	CHECK(std::memcmp(rest.data(), out.data(), kBins * sizeof(float)) == 0, "h = 0: the comb is out to the bit");
+	// Out of the path altogether: nothing of the comb is kept, and a moving
+	// V/OCT (or Partials, or Width) with h at 0 starts no rebuild.
+	CHECK(L.t.live().roots == 0 && L.t.live().partials == 0 && L.t.live().widthCents == 0.f && L.t.makeup() == 1.f,
+	      "h = 0: the comb's settings cleared: %d roots, %d partials, %g cents, makeup %g", L.t.live().roots,
+	      L.t.live().partials, L.t.live().widthCents, L.t.makeup());
+	TableSpec moved = s;
+	for (int i = 0; i < 16; i++) moved.rootHz[i] *= 1.0594631f;
+	moved.partials = 7;
+	moved.widthCents = 300.f;
+	L.t.start(moved);
+	CHECK(L.t.work(1), "h = 0, V/OCT, Partials and Width moved: nothing to build");
+	CHECK(!L.t.swapIfReady(), "h = 0, V/OCT, Partials and Width moved: no swap");
 	// A tilt with the comb out: the tilt's gains alone.
 	s.tiltDbPerOct = 3.f;
 	L.set(s);
