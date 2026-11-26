@@ -22,6 +22,10 @@
 // (sqrt(8/3) for Hann) brings it back to s^2. The same holds for a tone, whose
 // energy in the grain is the same sum. pffft's inverse is N times the true one,
 // so the laying-down window holds gain / N as well.
+// A pure tone fills only a few bins, so its random-phase sound changes only
+// every few grains' worth of samples: its level averaged over 10 s can waver
+// by up to about 2 dB at the Long grain (the mean over a minute stays within
+// about half a dB); noise and dense material hold within a few hundredths.
 //
 // Steps. begin() starts a grain; step() does one part of it. None is larger
 // than one transform or one pass over the bins (or over the grain's frames):
