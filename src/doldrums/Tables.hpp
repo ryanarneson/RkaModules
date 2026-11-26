@@ -5,16 +5,25 @@
 // design's order applies Shift, Blur, Tilt and the comb (Harmonics), then the
 // 16 Hz cut. Rack-free, header-only.
 //
-// - Shift (ratio r): bin k's power is shared between the two bins either side
-//   of k r, in proportion to how near each is (a power-weighted centroid at
-//   k r exactly), so a shifted tone stays one tone and noise keeps its power.
-//   A share past the top bin is dropped, never folded back. Stored as the
-//   lower bin and the upper one's share, per source bin. (Written the other
-//   way round, two source bins and a weight per output bin, the map would
-//   lose a tone shifted down, where several source bins land between two
-//   output bins.) Bins under the cut
-//   are dropped before they move, so a DC offset's skirt is not shifted up
-//   into the band.
+// - Shift (ratio r), on power, so that noise keeps its power either way.
+//   Down (r < 1), a scatter: bin k's power is shared between the two bins
+//   either side of k r, in proportion to how near each is (a power-weighted
+//   centroid at k r exactly), so a shifted tone stays one tone; stored per
+//   source bin as the lower bin and the upper one's share. Several source
+//   bins land between two output bins, so a map per output bin would lose
+//   some of them. Up (r > 1), a gather: output bin j takes the power at j / r,
+//   interpolated between the two source bins either side, times 1 / r;
+//   stored per output bin as the lower source bin and the two bins' weights
+//   (1 / r in them, and 0 for a source that is cut or lands past the top),
+//   and done in place. Scattered upward, only one output bin in r would be filled, and
+//   noise made of every r-th bin is periodic within the grain: a repetition
+//   heard at the grain's rate. Gathered, a flat spectrum stays flat up to
+//   where the source's top bin lands, and a tone is spread over about 2 r
+//   bins round k r, as a true pitch shift would spread its window's lobe.
+//   What would land past the top bin is dropped, never folded back: up, the
+//   source bins with k r >= bins are left out before the gather. Bins
+//   under the cut are dropped before they move, so a DC offset's skirt is
+//   not shifted up into the band.
 // - Blur (w octaves): the power is smoothed along log frequency and the
 //   loudness is its root. The smoothing is a pair of one-pole passes, up the
 //   band and back down, each written so that it moves power and never makes
@@ -67,9 +76,10 @@
 // a budget of at least 2817 to finish within half a grain on 512 calls.
 //
 // apply() is one call over the bins: at 65536 bins it measured 6 us with
-// Tilt and the comb, 20 to 45 us with Shift (by the ratio) and 75 us with
-// every table in use; Blur's passes run as eight chains side by side (one
-// chain is 5x slower: each bin waits on the last).
+// Tilt and the comb, 37 to 42 us with Shift down (by the ratio), 50 us with
+// Shift up, 71 us with Blur and 88 us with every table in use (Shift up);
+// Blur's passes run as eight chains side by side (one chain is 5x slower:
+// each bin waits on the last).
 //
 // Threads: allocate() off the audio thread; start, work, swapIfReady and
 // apply on it, with no allocation, lock or libm (FastMath.hpp; std::sqrt and
@@ -144,6 +154,7 @@ struct Tables {
 		for (Set& s : sets_) {
 			s.lower.assign(maxBins_, -1);
 			s.upperShare.assign(maxBins_, 0.f);
+			s.lowerShare.assign(maxBins_, 0.f);
 			s.carryUp.assign(maxBins_, 0.f);
 			s.carryDown.assign(maxBins_, 0.f);
 			s.joinUp.assign(maxBins_, 0.f);
@@ -229,7 +240,17 @@ struct Tables {
 		const int bins = s.spec.bins, cut = s.cut;
 		if (s.shiftOn || s.blurOn) {
 			float* p = loud;
-			if (s.shiftOn) {
+			if (s.shiftOn && s.spec.shiftRatio > 1.f) {
+				// Up: gathered in place from the top down. Output j reads source
+				// bins i and i + 1 with i < j for j >= 1, so neither has been
+				// written yet (i + 1 = j is read before it is); bin 0 reads bin 1,
+				// already written, with both weights 0.
+				for (int j = bins - 1; j >= 0; j--) {
+					const int i = s.lower[j];
+					const float a = loud[i], b = loud[i + 1];
+					loud[j] = s.lowerShare[j] * a * a + s.upperShare[j] * b * b;
+				}
+			} else if (s.shiftOn) {
 				p = scratch;
 				std::fill(p, p + bins, 0.f);
 				// k r only grows with k, so the two bins being filled are kept in
@@ -290,9 +311,11 @@ private:
 		TableSpec spec;
 		int cut = 0;
 		bool shiftOn = false, blurOn = false, combOn = false, gainOn = false;
+		int shiftTop = 0;   // Shift up: the first source bin that lands past the top
 		float makeup = 1.f;
 		std::vector<int32_t> lower;     // Shift: the bin below k r, -1 dropped
 		std::vector<float> upperShare;  // and the share of the bin above
+		std::vector<float> lowerShare;  // Shift up only: the lower source bin's weight
 		std::vector<float> carryUp;     // Blur: a_k up the band
 		std::vector<float> carryDown;   // and down
 		// The passes run as `segments` chains side by side, each from a carry of
@@ -332,7 +355,9 @@ private:
 		int cut = int(c);
 		if (cut < c) cut++;
 		s.cut = std::min(std::max(cut, 0), p.bins);
-		s.shiftOn = p.shiftRatio != 1.f;
+		s.shiftOn = p.shiftRatio != 1.f && p.bins >= 2;
+		const double top = double(p.bins) / p.shiftRatio;   // k r >= bins from here
+		s.shiftTop = std::min(p.bins, int(top) + (int(top) < top ? 1 : 0));
 		s.blurOn = p.blurOctaves > 0.f;
 		s.combOn = p.harmonics > 0.f;
 		s.gainOn = s.combOn || p.tiltDbPerOct != 0.f;
@@ -408,6 +433,25 @@ private:
 
 	void shiftBins(Set& s, int from, int to) {
 		const double r = s.spec.shiftRatio;
+		if (r > 1.0) {
+			// Up: output j reads between source bins floor(j / r) and the one
+			// above, both inside the band: j / r < bins - 1 for j < bins (Shift is
+			// off below 2 bins).
+			// The weights carry the 1 / r that keeps the power, and are 0 for a
+			// source under the cut or one that lands past the top.
+			const int top = s.spec.bins - 2;
+			const float inv = float(1.0 / r);
+			auto kept = [&s](int k) { return k >= s.cut && k < s.shiftTop; };
+			for (int j = from; j < to; j++) {
+				const double at = j / r;
+				const int lo = std::min(int(at), top);
+				const float up = float(std::min(1.0, at - lo));
+				s.lower[j] = lo;
+				s.lowerShare[j] = j >= 1 && kept(lo) ? inv * (1.f - up) : 0.f;
+				s.upperShare[j] = j >= 1 && kept(lo + 1) ? inv * up : 0.f;
+			}
+			return;
+		}
 		for (int k = from; k < to; k++) {
 			const double at = k * r;
 			const int lo = int(at);

@@ -230,21 +230,35 @@ void checkShiftedBin(Live& L, int k, float ratio, const char* what) {
 	CHECK(std::fabs(moment / sum - target) < 0.1, "%s: bin %d: centroid %g, wanted %g", what, k, moment / sum, target);
 }
 
+// Up, a gather: one bin in at k comes out spread round k * ratio, its power
+// kept within 1 dB, its centroid at k * ratio within 0.1 bin, all of it
+// within +-ratio bins of that. Measured: exact at whole ratios; at +7 the
+// power is -0.49 .. +0.35 dB by where k r falls between bins, the centroid
+// within 0.03 bin.
+void checkShiftedUp(Live& L, int k, float ratio, const char* what) {
+	const std::vector<float> out = L.run(oneBin(kBins, k));
+	const double target = double(k) * ratio;
+	double sum = 0, moment = 0, far = 0;
+	for (int i = 0; i < kBins; i++) {
+		const double p = double(out[i]) * out[i];
+		sum += p;
+		moment += p * i;
+		if (std::fabs(i - target) > ratio) far += p;
+	}
+	CHECK(sum > 0, "%s: bin %d: nothing out", what, k);
+	if (!(sum > 0)) return;
+	CHECK(std::fabs(dB(sum)) < 1.0, "%s: bin %d: power %+.3f dB", what, k, dB(sum));
+	CHECK(std::fabs(moment / sum - target) < 0.1, "%s: bin %d: centroid %g, wanted %g", what, k, moment / sum, target);
+	CHECK(far == 0.0, "%s: bin %d: %g of the power further than %g bins from %g", what, k, far / sum, ratio, target);
+}
+
 void shift_octave_up() {
 	Live L;
 	TableSpec s = restSpec();
 	s.shiftRatio = 2.f;
 	L.set(s);
-	const int ks[] = {10, 100, 341, 1000, 2047, 4095};
-	for (int k : ks) checkShiftedBin(L, k, 2.f, "octave up");
-	// A tone between bins stays one tone: two neighbours in, two or three out,
-	// with the power kept.
-	std::vector<float> in(kBins, 0.f);
-	in[700] = 0.8f;
-	in[701] = 0.6f;
-	const std::vector<float> out = L.run(in);
-	CHECK(std::fabs(energy(out) - 1.0) < 1e-5, "two bins: energy %g", energy(out));
-	CHECK(out[1400] == 0.8f && out[1402] == 0.6f, "two bins: %g %g", out[1400], out[1402]);
+	const int ks[] = {10, 100, 341, 1000, 2047, 4094};
+	for (int k : ks) checkShiftedUp(L, k, 2.f, "octave up");
 }
 
 void shift_octave_down() {
@@ -270,15 +284,15 @@ void shift_seven_semitones() {
 	s.shiftRatio = std::pow(2.f, 7.f / 12.f);
 	L.set(s);
 	const int ks[] = {7, 50, 333, 1000, 3000, 5000};
-	for (int k : ks) checkShiftedBin(L, k, s.shiftRatio, "+7");
+	for (int k : ks) checkShiftedUp(L, k, s.shiftRatio, "+7");
 	s.shiftRatio = std::pow(2.f, -7.f / 12.f);
 	L.set(s);
 	const int ksDown[] = {10, 50, 333, 1000, 3000, 8000};   // each lands over the cut
 	for (int k : ksDown) checkShiftedBin(L, k, s.shiftRatio, "-7");
 	s.shiftRatio = std::pow(2.f, 24.f / 12.f);
 	L.set(s);
-	const int ks2[] = {11, 999, 2047};
-	for (int k : ks2) checkShiftedBin(L, k, s.shiftRatio, "+24");
+	const int ks2[] = {11, 999, 2046};
+	for (int k : ks2) checkShiftedUp(L, k, s.shiftRatio, "+24");
 }
 
 void shift_past_nyquist_is_dropped() {
@@ -302,15 +316,55 @@ void shift_past_nyquist_is_dropped() {
 	sum = 0;
 	for (float x : out) sum += x;
 	CHECK(sum == 0.0, "top three quarters up two octaves: output sums to %g", sum);
-	// A bin just under the top whose upper neighbour is past it: only its share
-	// inside the band comes out, nothing at the bottom.
+	// Up, nothing past where the source's top bin could land and nothing at
+	// the bottom: a band near the top, up a fifth, lands only in the band's
+	// image and the top, and the bins under it stay empty.
 	s.shiftRatio = 1.5f;
 	L.set(s);
-	out = L.run(oneBin(kBins, 5461));  // lands at 8191.5
-	CHECK(std::fabs(double(out[kBins - 1]) * out[kBins - 1] - 0.5) < 1e-5, "half kept at the top: %g", out[kBins - 1]);
-	double rest = 0;
-	for (int k = 0; k < kBins - 1; k++) rest += out[k];
-	CHECK(rest == 0.0, "nothing elsewhere: %g", rest);
+	in.assign(kBins, 0.f);
+	for (int k = 5000; k < kBins; k++) in[k] = 1.f;
+	out = L.run(in);
+	double below = 0;
+	for (int k = 0; k < int(5000 * 1.5) - 2; k++) below += out[k];
+	CHECK(below == 0.0, "a fifth up: %g under where the band lands", below);
+	CHECK(out[kBins - 1] > 0.f, "a fifth up: the top bin filled");
+}
+
+// A flat spectrum shifted up: no gaps, no alternating bins, up to where the
+// source's top lands; the power of the part that stays in band kept.
+// Measured 2026-11-26 at +7, +12, +24: every bin 1.000000 of the mean, the
+// power within 0.0003 dB; pinned at 1e-4 and 0.001 dB.
+void shift_up_leaves_no_gaps() {
+	Live L;
+	const int cut = cutOf(kBins, kRate);
+	for (float semis : {12.f, 7.f, 24.f}) {
+		TableSpec s = restSpec();
+		s.shiftRatio = std::pow(2.f, semis / 12.f);
+		L.set(s);
+		std::vector<float> in(kBins, 1.f);
+		for (int k = 0; k < cut; k++) in[k] = 0.f;
+		const std::vector<float> out = L.run(in);
+		// From clear of the cut's image to where the last source bin kept lands
+		// (shift_past_nyquist_is_dropped checks there is nothing beyond).
+		int lastKept = cut;
+		while ((lastKept + 1) * double(s.shiftRatio) < kBins) lastKept++;
+		const int from = int(std::ceil(cut * s.shiftRatio)) + 1, to = int(lastKept * double(s.shiftRatio));
+		double mean = 0;
+		for (int k = from; k <= to; k++) mean += double(out[k]) * out[k];
+		mean /= (to - from + 1);
+		double lo = 1e9, hi = 0;
+		for (int k = from; k <= to; k++) {
+			const double p = double(out[k]) * out[k];
+			lo = std::min(lo, p / mean);
+			hi = std::max(hi, p / mean);
+		}
+		CHECK(lo > 0.9999 && hi < 1.0001, "+%g semitones: power per bin %.5f .. %.5f of the mean", semis, lo, hi);
+		// What stays in band: source bins below bins / ratio.
+		double kept = 0;
+		for (int k = cut; k < kBins && k * s.shiftRatio < kBins; k++) kept += 1.0;
+		const double got = dB(energy(out) / kept);
+		CHECK(std::fabs(got) < 0.001, "+%g semitones: %+.4f dB of the part kept in band", semis, got);
+	}
 }
 
 // Shift acts first: what moves meets the comb, the tilt and the blur at its
@@ -328,6 +382,14 @@ void shift_comes_first() {
 	// A bin at the tooth itself shifted away does not.
 	out = L.run(oneBin(kBins, int(std::lround(binOf(1000.0)))));
 	CHECK(energy(out) == 0.0, "1 kHz moved to 2 kHz misses the tooth: %g", energy(out));
+	// And down: 2 kHz down an octave meets the 1 kHz tooth; 1 kHz misses it.
+	s.shiftRatio = 0.5f;
+	L.set(s);
+	out = L.run(oneBin(kBins, int(std::lround(binOf(2000.0)))));
+	e = energy(out);
+	CHECK(e > 0.5 * L.t.makeup() * L.t.makeup(), "2 kHz down an octave meets the 1 kHz tooth: %g", e);
+	out = L.run(oneBin(kBins, int(std::lround(binOf(1000.0)))));
+	CHECK(energy(out) == 0.0, "1 kHz moved to 500 Hz misses the tooth: %g", energy(out));
 	// Tilt at the new frequency: 1 kHz up an octave gets +6 dB at 6 dB/oct.
 	s = restSpec();
 	s.shiftRatio = 2.f;
@@ -872,6 +934,7 @@ int main() {
 	shift_octave_down();
 	shift_seven_semitones();
 	shift_past_nyquist_is_dropped();
+	shift_up_leaves_no_gaps();
 	shift_comes_first();
 	blur_keeps_energy();
 	blur_width_at_full();
