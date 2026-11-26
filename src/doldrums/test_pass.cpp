@@ -322,12 +322,15 @@ void freeze_on_restarts() {
 	r.next();
 	CHECK(r.o.end == a + 2048, "the tape now still");
 
-	// In stop, stopped: Freeze on starts a pass too.
+	// In stop, a pass running: Freeze on restarts it from the anchor.
 	Sim s(0.5f, 8, false, true);
-	CHECK(s.next().stopped, "stopped from reset");
+	s.in.trig = true;
+	for (int i = 0; i < 20; i++)
+		s.next();
+	CHECK(!s.o.stopped && s.o.sound, "in stop, a pass running");
 	s.in.frozen = s.in.freezeRose = true;
 	o = s.next();
-	CHECK(o.end == s.anchorFor(0.5f) && o.newPass && o.take && o.sound && !o.stopped, "stopped: Freeze on, a new pass");
+	CHECK(o.end == s.anchorFor(0.5f) && o.newPass && o.take && o.sound && !o.stopped, "in stop, running: Freeze on, a new pass");
 
 	// Position 0: the pass starts a hop in, so the faded frames written after
 	// the edge do not reach its slice.
@@ -561,7 +564,8 @@ void stop_at_end() {
 	}
 	CHECK(stopped, "then silent and stopped");
 	// Freeze going off, Stretch at the stop and a Position move do not wake a
-	// stopped module (Freeze going on does: freeze_wakes_a_stopped_module).
+	// stopped module (nor does Freeze going on with a pass to travel:
+	// freeze_wakes_a_stopped_module_only_when_held).
 	f.in.frozen = false;
 	o = f.next();
 	CHECK(o.stopped && !o.sound, "stopped: Freeze off waits for the trigger");
@@ -608,9 +612,10 @@ void stop_at_end() {
 	CHECK(o.stopped && !o.sound, "reset() then stop: stopped from the start");
 }
 
-// The ruling: Freeze going on starts a pass from the anchor even when
-// stopped, so "hold what is playing" works in stop too.
-void freeze_wakes_a_stopped_module() {
+// The ruling: in stop, Freeze going on wakes a stopped module only when the
+// frozen tape has nothing to travel through (held); with a pass to travel it
+// waits for TRIG.
+void freeze_wakes_a_stopped_module_only_when_held() {
 	// Stopped from reset, Position fully right: Freeze holds the moment.
 	Sim h(1.f, 8, false, true);
 	for (int i = 0; i < 3; i++)
@@ -618,7 +623,7 @@ void freeze_wakes_a_stopped_module() {
 	CHECK(h.o.stopped && !h.o.sound, "stopped from reset");
 	h.in.frozen = h.in.freezeRose = true;
 	PassOut o = h.next();
-	CHECK(o.newPass && o.held && o.sound && o.take && !o.stopped && o.end == h.nowWas, "Freeze on: held at now");
+	CHECK(o.newPass && o.held && o.sound && o.take && !o.stopped && o.end == h.nowWas, "Freeze on, nothing to travel: held at now");
 	bool ok = true;
 	for (int i = 0; i < 1000; i++) {
 		o = h.next();
@@ -626,8 +631,8 @@ void freeze_wakes_a_stopped_module() {
 	}
 	CHECK(ok, "and held, never stopped");
 
-	// Stopped after a pass ended, Position 0.5: Freeze on plays one pass from
-	// the anchor, then stops again.
+	// Stopped after a pass ended, Position 0.5: Freeze on leaves it stopped,
+	// silent, until TRIG; then one pass from the anchor, and stopped again.
 	Sim f(0.5f, 8, false, true);
 	f.in.trig = true;
 	f.next();
@@ -636,19 +641,41 @@ void freeze_wakes_a_stopped_module() {
 	CHECK(f.o.stopped, "the recording pass ended: stopped");
 	f.in.frozen = f.in.freezeRose = true;
 	o = f.next();
-	CHECK(o.newPass && o.sound && !o.stopped && o.end == f.anchorFor(0.5f), "Freeze on: a new pass from the anchor");
+	CHECK(o.stopped && !o.sound && !o.newPass && !o.take && !o.held, "Freeze on, a pass to travel: still stopped");
+	f.in.now += 240;
+	ok = true;
+	for (int i = 0; i < 100; i++) {
+		o = f.next();
+		ok = ok && o.stopped && !o.sound && !o.newPass;
+	}
+	CHECK(ok, "and silent until a trigger");
+	f.in.trig = true;
+	o = f.next();
+	CHECK(o.newPass && o.sound && !o.stopped && o.end == f.anchorFor(0.5f), "TRIG: a new pass from the anchor");
 	const long long n = frozenPassGrains(711808, 1024);
 	for (long long i = 1; i < n; i++)
 		f.next();
 	CHECK(f.o.sound && !f.o.stopped, "the pass sounds whole");
 	o = f.next();
 	CHECK(o.stopped && !o.sound, "and in stop, stops at its end");
-	// Freeze off and on again wakes it again.
+	// Freeze off and on again: still waiting.
 	f.in.frozen = false;
 	f.next();
 	f.in.frozen = f.in.freezeRose = true;
 	o = f.next();
-	CHECK(o.newPass && o.sound && !o.stopped, "every Freeze on starts a pass");
+	CHECK(o.stopped && !o.sound, "Freeze on again, a pass to travel: still waiting");
+	// Frozen already at reset (a patch opened frozen): in stop it waits with a
+	// pass to travel, and is held with nothing to travel through; in go round
+	// it starts a pass.
+	Sim w(0.5f, 8, true, true);
+	o = w.next();
+	CHECK(o.stopped && !o.sound, "opened frozen in stop, a pass to travel: waits");
+	Sim x(1.f, 8, true, true);
+	o = x.next();
+	CHECK(o.held && o.sound && o.newPass && !o.stopped, "opened frozen in stop, nothing to travel: held");
+	Sim y(0.5f, 8, true, false);
+	o = y.next();
+	CHECK(o.newPass && o.sound && !o.held, "opened frozen in go round: a pass");
 }
 
 void grain_change_while_held() {
@@ -743,7 +770,7 @@ void fuzz() {
 	const int grains[] = {8192, 16384, 32768, 65536};
 	const long long caps[] = {1440000, 1323000, 2880000};
 	long long bad = 0, badAnchor = 0, both = 0, other = 0;
-	long long seenTake = 0, seenPass = 0, seenHeld = 0, seenStopped = 0, seenKept = 0;
+	long long seenTake = 0, seenPass = 0, seenHeld = 0, seenStopped = 0, seenKept = 0, seenWait = 0, seenWake = 0;
 	int steps = 0;
 	for (int run = 0; run < 3; run++) {
 		PassLogic p;
@@ -756,6 +783,7 @@ void fuzz() {
 		in.position = 1.f;
 		in.pace = 0.125;
 		int tail = 0;
+		bool wasStopped = false, first = true;
 		for (int i = 0; i < 333334; i++, steps++) {
 			const double u = unit();
 			in.trig = unit() < 0.01;
@@ -800,9 +828,20 @@ void fuzz() {
 			seenKept += o.sound && !o.take;
 			if (o.sound && o.stopped)
 				both++;
+			// TRIG always starts a pass, and so does Freeze rising unless the
+			// module was stopped (fresh in stop counts as stopped): then it
+			// starts one only onto nothing to travel through (held), else stays
+			// stopped.
+			const bool stoppedBefore = (first ? in.stopAtEnd : wasStopped) && in.stopAtEnd;
+			const bool mustStart = in.trig || (in.freezeRose && !stoppedBefore);
+			const bool wakeOrWait = in.freezeRose && stoppedBefore && !in.trig;
 			if ((o.take && !o.sound) || (o.held && !o.sound) || (o.newPass && !(o.take && o.sound)) ||
-			    ((in.trig || in.freezeRose) && (o.stopped || !o.newPass)))
+			    (mustStart && (o.stopped || !o.newPass)) || (wakeOrWait && !(o.newPass && o.held) && !(o.stopped && !o.sound)))
 				other++;
+			seenWait += wakeOrWait && o.stopped;
+			seenWake += wakeOrWait && o.newPass;
+			wasStopped = o.stopped;
+			first = false;
 			// The tape: a hop a grain, give or take, while recording; the
 			// faded frames on the grain after a freeze edge; now and then a
 			// jump.
@@ -820,6 +859,7 @@ void fuzz() {
 	CHECK(badAnchor == 0, "%lld anchors off the tape", badAnchor);
 	CHECK(both == 0, "%lld grains both sounding and stopped", both);
 	CHECK(other == 0, "%lld grains taking or held while silent, a new pass not taken, or TRIG ignored", other);
+	CHECK(seenWait > 0 && seenWake > 0, "Freeze rising while stopped: %lld waited, %lld woke held", seenWait, seenWake);
 	CHECK(steps == 1000002 && seenTake > 100000 && seenPass > 10000 && seenHeld > 10000 && seenStopped > 10000 && seenKept > 10000,
 	      "the fuzz reached every state: %d steps, %lld taken, %lld passes, %lld held, %lld stopped, %lld kept", steps,
 	      seenTake, seenPass, seenHeld, seenStopped, seenKept);
@@ -848,7 +888,7 @@ int main() {
 	nothing_to_travel_frozen();
 	full_left_recording();
 	stop_at_end();
-	freeze_wakes_a_stopped_module();
+	freeze_wakes_a_stopped_module_only_when_held();
 	grain_change_while_held();
 	bad_input();
 	fuzz();

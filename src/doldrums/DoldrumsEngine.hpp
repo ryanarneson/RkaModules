@@ -100,6 +100,14 @@
 // frame's, so their defaults are the module's. The grains already laid down
 // play out (no click). The seed is kept; seed() sets it.
 //
+// Edges. After setSampleRate and reset, the first sample arms Freeze's and
+// TRIG's detectors from its levels and reports no edge: a patch opened with
+// Freeze on, or with a high cable at TRIG, has not just been pressed or
+// triggered (Rack's own SchmittTrigger starts high for the same reason).
+// Opened frozen, the pass starts as after any reset (Pass.hpp): in go round
+// from the anchor, in stop waiting for a trigger unless there is nothing to
+// travel through (then held).
+//
 // The ring is reached through a pointer (ring()), so that a later task can
 // hand one in under a running engine.
 //
@@ -210,12 +218,14 @@ struct DoldrumsEngine {
 	void process(const DoldrumsFrame& f, DoldrumsResult& out) {
 		typedef DoldrumsFrame F;
 		const float inL = finite(f.inL), inR = f.inRPatched ? finite(f.inR) : inL;
+		if (!armed_) trigHigh_ = f.trig >= 1.f;   // the first sample after a restart: levels, no edges
 		const bool gate = schmitt(f.freezeGate, gateHigh_);
 		const bool frozen = f.params[F::FREEZE] >= 0.5f || gate;
-		if (frozen && !frozen_) rose_ = true;
+		if (frozen && !frozen_ && armed_) rose_ = true;
 		frozen_ = frozen;
 		const bool wasTrig = trigHigh_;
 		if (schmitt(f.trig, trigHigh_) && !wasTrig) trig_ = true;
+		armed_ = true;
 		pace_ = paceFromDial(cvValue(f.params[F::STRETCH], f.params[F::STRETCH_ATT], f.stretchCv));
 		staged_ = 0;
 		if (running_) {
@@ -288,6 +298,7 @@ private:
 
 	// Edges and gates.
 	bool gateHigh_ = false, trigHigh_ = false, frozen_ = false, rose_ = false, trig_ = false;
+	bool armed_ = false;   // the edge detectors have seen a sample since the restart
 	double pace_ = 1.0;
 
 	// RUN.
@@ -328,6 +339,7 @@ private:
 		heldSize_ = -1;
 		last_ = PassOut{};
 		rose_ = trig_ = false;
+		armed_ = false;
 		runOn_ = false;
 		dipLeft_ = soundLeft_ = 0;
 		snapMix_ = true;

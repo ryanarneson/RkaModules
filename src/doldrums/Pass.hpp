@@ -25,16 +25,23 @@
 //   anchor is held inside these bounds, so Position fully left, recording,
 //   starts a hop in.
 // - TRIG starts a pass from the anchor at any time: mid pass, held, stopped.
-// - Freeze rising starts a pass from the anchor at any time, stopped
-//   included (ruling: the design holds a frozen tape with nothing to travel
-//   through "with either setting of At the end of a pass", and in stop the
-//   module is usually stopped when Freeze is pressed). Freeze falling changes
-//   nothing: the ordinary rules go on from where the read point is.
-// - Stopped (only in stop) stays silent until TRIG or Freeze rising. Stretch
-//   at the stop, Freeze falling or a Position move do not wake it. Go round
-//   chosen while stopped starts a pass at once (choice: in go round
-//   something is always sounding). After reset() the first grain starts a
-//   pass, or in stop is stopped.
+// - Freeze rising starts a pass from the anchor: in go round always; in stop
+//   while a pass is running, and while stopped only when the frozen tape has
+//   nothing to travel through (the anchor less than a grain from now), so
+//   that the module is then held (ruling, superseding "Freeze going on wakes
+//   a stopped module": the design says both that a stopped module "stays
+//   silent until a trigger at TRIG starts the next pass" and that a tape
+//   with nothing to travel through is held "with either setting of At the
+//   end of a pass"; with a pass to travel, nothing sounds or gates between
+//   the freeze and the trigger). Freeze falling changes nothing: the
+//   ordinary rules go on from where the read point is.
+// - Stopped (only in stop) stays silent until TRIG, or Freeze rising onto
+//   nothing to travel through. Stretch at the stop, Freeze falling or a
+//   Position move do not wake it. Go round chosen while stopped starts a
+//   pass at once (choice: in go round something is always sounding). After
+//   reset() the first grain starts a pass; in stop it is stopped, unless
+//   the tape is frozen with nothing to travel through (then held), so a
+//   patch opened frozen in stop waits for a trigger unless it is held.
 // - A Position move moves the read point by the change in lag, at once,
 //   held to the edges of the tape, and does not start a pass. It is decided
 //   in frames: a move is a change of at least a frame in the rounded lag
@@ -127,18 +134,21 @@ struct PassLogic {
 		const long long anchor = clamp(now - lag, low, now);
 		o.anchor = anchor;
 
-		const bool held = pace == 0.0 || (in.frozen && now - anchor < grain);
+		const bool nothing = in.frozen && now - anchor < grain;   // nothing to travel through
+		const bool held = pace == 0.0 || nothing;
 		const bool noRoom = !in.frozen && anchor - low < grain;
 		const long long shift = fresh_ ? 0 : lagFrames(pos_, in.capacity, grain) - lag;
 		const bool moved = shift != 0;
 		pos_ = pos;
 
-		bool start = in.trig || in.freezeRose;
+		bool start = in.trig;
 		if (fresh_) {
 			fresh_ = false;
-			stopped_ = in.stopAtEnd;
+			stopped_ = in.stopAtEnd && !nothing;
 			start = start || !stopped_;
 		}
+		if (in.freezeRose && (!stopped_ || nothing))
+			start = true;
 		if (stopped_ && !in.stopAtEnd)
 			start = true;
 		if (start)

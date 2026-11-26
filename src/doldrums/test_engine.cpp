@@ -443,22 +443,34 @@ void run_gate() {
 		compare("go round", want, edges(g.run));
 		CHECK(want.size() >= 5, "go round: at least two returns (%zu edges)", want.size());
 	}
-	{   // stop: the pass the freeze starts, then one from a trigger
+	{   // stop, frozen from the first sample: waits; a trigger, one pass; Freeze
+		// pressed again while stopped (a pass to travel): nothing; a trigger, one more
 		Rig g(rate);
 		noiseTape(g);
 		int P;
 		setPass(g, P);
 		g.f.stopAtEnd = true;
 		const long long H = g.hop();
+		auto firstBoundaryFrom = [&](long long T) {
+			const std::vector<long long> b = g.boundaries();
+			return *std::lower_bound(b.begin(), b.end(), T);
+		};
 		g.go(g.secs(0.5));
-		const long long R0 = g.boundaries().at(1) + lat;
-		const long long T = R0 + (P + 3) * H + 1234;
+		const long long T = g.t + 1234;
 		g.go(T - g.t + g.secs(6.0), [&](long long t) { g.f.trig = t >= T && t < T + 100 ? 10.f : 0.f; });
-		const long long B = R0 - lat + ((T - (R0 - lat)) + H - 1) / H * H;
-		compare("stop", {{R0, true}, {R0 + (P + 1) * H, false}, {B + lat, true}, {B + lat + (P + 1) * H, false}}, edges(g.run));
+		const long long B = firstBoundaryFrom(T);
+		g.f.params[F::FREEZE] = 0.f;
+		g.go(g.secs(1.0));
+		g.f.params[F::FREEZE] = 1.f;
+		g.go(g.secs(2.0));
+		const long long T2 = g.t + 77;
+		g.go(T2 - g.t + g.secs(6.0), [&](long long t) { g.f.trig = t >= T2 && t < T2 + 100 ? 10.f : 0.f; });
+		const long long B2 = firstBoundaryFrom(T2);
+		compare("stop", {{B + lat, true}, {B + lat + (P + 1) * H, false}, {B2 + lat, true}, {B2 + lat + (P + 1) * H, false}}, edges(g.run));
 		long long loud = 0;
-		for (long long t = R0 + (P + 1) * H; t < B + lat; t++) loud += g.L[size_t(t)] != 0.f;
-		CHECK(loud == 0, "stop: silent between the passes (%lld samples not)", loud);
+		for (long long t = 0; t < B + lat; t++) loud += g.L[size_t(t)] != 0.f;
+		for (long long t = B + lat + (P + 1) * H; t < B2 + lat; t++) loud += g.L[size_t(t)] != 0.f;
+		CHECK(loud == 0, "stop: silent before the trigger and between the passes (%lld samples not)", loud);
 	}
 	for (int stop = 0; stop < 2; stop++) {   // TRIG in mid pass
 		Rig g(rate);
@@ -467,7 +479,7 @@ void run_gate() {
 		setPass(g, P);
 		g.f.stopAtEnd = stop == 1;
 		const long long H = g.hop();
-		g.go(2000);
+		g.go(2000, [&](long long t) { g.f.trig = stop && t >= 10 && t < 58 ? 10.f : 0.f; });   // in stop, a trigger starts the first pass
 		const long long R0 = g.boundaries().at(1) + lat;
 		const long long T = R0 + 2 * H + 100;
 		g.go(T - g.t + P * H + 3 * H, [&](long long t) { g.f.trig = t >= T && t < T + 100 ? 10.f : 0.f; });
@@ -525,22 +537,23 @@ void the_patch_it_was_asked_for() {
 	g.f.stopAtEnd = true;
 	g.f.params[F::STRETCH] = float(2.0 / 6.0);   // x4
 	g.f.params[F::POSITION] = float(1.0 - double(lag) / double(cap - g.grain()));
-	g.go(clipEnd + g.secs(20.0), [&](long long t) {
+	g.go(clipEnd + g.secs(3.0), [&](long long t) {
 		g.f.inL = t >= clipAt && t < clipEnd + fade ? float(n.uniform() * (1.0 + std::sin(2.0 * kPi * 3.0 * double(t) / rate))) : 0.f;
 		g.f.params[F::FREEZE] = t >= clipEnd ? 1.f : 0.f;
 	});
-	// The freeze woke the stopped module (Pass.hpp's ruling): that pass is over by now.
+	// Frozen with a pass to travel, in stop: nothing sounds or gates between the
+	// freeze and the trigger (Pass.hpp's ruling).
 	const long long T = g.t;
-	CHECK(g.run.back() < 5.f && g.e->state().stopped, "the freeze's own pass has ended before the trigger");
+	CHECK(edges(g.run).empty() && g.e->state().stopped && g.e->state().frozen, "RUN low from the start, through the freeze, until the trigger");
 	g.go(g.secs(30.0), [&](long long t) { g.f.trig = t >= T && t < T + 48 ? 10.f : 0.f; });
-	const auto e = edges(g.run, T);
+	const auto e = edges(g.run);
 	CHECK(e.size() == 2 && e[0].second && !e[1].second, "RUN high once (%zu edges)", e.size());
 	if (e.size() == 2) {
 		const double len = double(e[1].first - e[0].first) / rate;
 		CHECK(std::fabs(len - 12.0) * rate <= 2.0 * g.grain(), "for 12 s within two grains (%.3f s)", len);
 		long long first = -1, last = -1;
 		double in = 0, out = 0;
-		for (long long t = T; t < (long long) g.L.size(); t++) {
+		for (long long t = 0; t < (long long) g.L.size(); t++) {
 			const double p = double(g.L[size_t(t)]) * g.L[size_t(t)] + double(g.R[size_t(t)]) * g.R[size_t(t)];
 			if (p > 0) {
 				if (first < 0) first = t;
@@ -803,7 +816,7 @@ void mix_and_latency() {
 		g.f.stopAtEnd = true;
 		const int lat = g.e->latencyFrames();
 		CHECK(lat == (Grain::kSteps + 1) * stepGap(rate2), "%g Hz: latency %d is %d steps of %d", rate2, lat, Grain::kSteps + 1, stepGap(rate2));
-		g.go(g.secs(17.0));
+		g.go(g.secs(17.0), [&](long long t) { g.f.trig = t >= 100 && t < 148 ? 10.f : 0.f; });
 		const std::vector<long long> b = g.boundaries();
 		// First sound at a boundary plus the latency, and RUN up on that sample.
 		long long first = -1;
@@ -1181,6 +1194,93 @@ void rate_and_grain_change_mid_grain() {
 		}
 }
 
+// A patch opened with Freeze on (the button or the gate) and stop chosen, with a
+// pass to travel: silent, RUN low, until a trigger; then exactly one pass.
+void opened_frozen_waits_in_stop() {
+	const float rate = 48000.f;
+	for (int byGate = 0; byGate < 2; byGate++) {
+		Rig g(rate, 121);
+		Random n;
+		n.seed(19);
+		g.tape([&](long long, float& l, float& r) { l = r = n.uniform(); });
+		g.f.stopAtEnd = true;
+		g.f.params[F::POSITION] = 0.9f;   // a pass of about 3 s at Stretch 1
+		g.f.params[F::STRETCH] = 0.f;
+		(byGate ? g.f.freezeGate : g.f.params[F::FREEZE]) = byGate ? 10.f : 1.f;
+		g.go(g.secs(2.0));
+		const char* how = byGate ? "the gate" : "the button";
+		CHECK(edges(g.run).empty() && meanSquare(g.L, 0, (long long) g.L.size()) == 0.0, "opened frozen by %s, stop: silent, RUN low", how);
+		CHECK(g.e->state().stopped && g.e->state().frozen, "opened frozen by %s: stopped, frozen", how);
+		const long long T = g.t;
+		g.go(g.secs(6.0), [&](long long t) { g.f.trig = t >= T && t < T + 48 ? 10.f : 0.f; });
+		const auto e = edges(g.run);
+		CHECK(e.size() == 2 && e[0].second && !e[1].second && e[0].first > T, "opened frozen by %s: one pass on the trigger (%zu edges)", how, e.size());
+		CHECK(e.size() == 2 && meanSquare(g.L, e[0].first, e[1].first - e[0].first) > 0.01, "opened frozen by %s: the pass sounds", how);
+	}
+	{
+		// Opened frozen in go round at Position 0: the pass starts as after any
+		// reset, at the oldest whole grain. Read as a Freeze edge, it would start
+		// a hop further in (Pass.hpp's guard for a tape moving after the edge).
+		Rig g(rate, 124);
+		g.tape([](long long, float& l, float& r) { l = r = 0.5f; });
+		g.f.params[F::FREEZE] = 1.f;
+		g.f.params[F::POSITION] = 0.f;
+		long long end = -1, oldest = -1;
+		g.go(g.secs(0.5), [&](long long) {
+			if (end < 0 && g.t > 0 && (g.staged.back() & DoldrumsEngine::STAGED_BOUNDARY) && g.e->state().grain > 0) {
+				end = g.e->state().end;
+				oldest = g.e->state().now - g.e->state().capacity;
+			}
+		});
+		CHECK(end == oldest + g.grain(), "opened frozen, go round, Position 0: the first slice ends a grain past the oldest frame (%lld, want %lld)",
+		      end - oldest, (long long) g.grain());
+	}
+}
+
+// Opened with Freeze on and Position fully right: nothing to travel through, so
+// the tape's last moment sounds, held, RUN high, in either setting.
+void opened_frozen_and_held_sounds() {
+	const float rate = 48000.f;
+	for (int stop = 0; stop < 2; stop++) {
+		Rig g(rate, 122);
+		g.tape([&](long long i, float& l, float& r) { l = r = chord(i, rate); });
+		g.f.stopAtEnd = stop == 1;
+		g.f.params[F::FREEZE] = 1.f;
+		g.go(g.secs(3.0));
+		const auto e = edges(g.run);
+		CHECK(e.size() == 1 && e[0].second && e[0].first <= g.hop() + g.e->latencyFrames(), "%s: RUN up at once and never down (%zu edges)",
+		      stop ? "stop" : "go round", e.size());
+		CHECK(chordShare(spectrum(g.L, g.secs(1.0), g.secs(2.0), rate)) > 0.97 && g.e->state().held, "%s: the tape's last moment, held",
+		      stop ? "stop" : "go round");
+	}
+}
+
+// A cable already high at TRIG when the engine starts is no trigger.
+void trig_high_at_start_fires_nothing() {
+	const float rate = 48000.f;
+	for (int stop = 0; stop < 2; stop++) {
+		Rig g(rate, 123);
+		Random n;
+		n.seed(20);
+		g.f.stopAtEnd = stop == 1;
+		g.go(g.secs(2.0), [&](long long t) {
+			g.f.inL = n.uniform();
+			g.f.trig = t < g.secs(1.0) ? 10.f : 0.f;
+		});
+		const auto e = edges(g.run);
+		if (stop)
+			CHECK(e.empty() && g.e->state().stopped, "stop: a high TRIG at the start starts nothing (%zu edges)", e.size());
+		else
+			CHECK(e.size() == 1 && e[0].second, "go round: the first pass only, no dip (%zu edges)", e.size());
+		const long long T = g.t;
+		g.go(g.secs(1.0), [&](long long t) {
+			g.f.inL = n.uniform();
+			g.f.trig = t >= T && t < T + 48 ? 10.f : 0.f;
+		});
+		CHECK(edges(g.run, T).size() == (stop ? 1u : 2u), "%s: a real trigger afterwards is heard", stop ? "stop" : "go round");
+	}
+}
+
 // Initialize: a silent tape and a new pass; setSampleRate needs allocate first.
 void initialize_and_rate() {
 	const float rate = 48000.f;
@@ -1226,5 +1326,8 @@ int main() {
 	rapid_freeze_and_trig();
 	rate_and_grain_change_mid_grain();
 	initialize_and_rate();
+	opened_frozen_waits_in_stop();
+	opened_frozen_and_held_sounds();
+	trig_high_at_start_fires_nothing();
 	return rkatest::finish("test_engine");
 }
