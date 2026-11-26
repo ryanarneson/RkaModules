@@ -3,6 +3,8 @@
 Status: idea, 2026-11-15. Not designed. 10 HP in the sketch. One of nine
 added to fill gaps for dark, space and horror ambient. Notes from a
 reading of PaulXStretch added 2026-11-23 (below); still not designed.
+(2026-11-26: designed, as a tape of the last 30 s with a Position control,
+16 HP: `docs/specs/2026-11-26-doldrums-design.md`. Not yet built.)
 
 ![mockup](doldrums-mockup.svg)
 
