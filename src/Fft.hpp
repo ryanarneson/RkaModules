@@ -3,8 +3,24 @@
 // compiled once as pffft.o with its symbols renamed rka_pffft_*). Shared by
 // the plugin and the Rack-free tests, so both run the same transform.
 // Needs pffft.o linked (tests.mk builds it for every Doldrums test).
+#ifdef PFFFT_H
+// In the plugin, rack.hpp has already included the SDK's pffft.h, whose
+// guard is the vendored header's own, so that one would be skipped and the
+// renamed functions left undeclared: they are declared here instead, as the
+// vendored header has them (rka_prefix.h gives them their rka_ names).
+#include "dep/pffft/rka_prefix.h"
+#include <cstddef>
+extern "C" {
+PFFFT_Setup* pffft_new_setup(int N, pffft_transform_t transform);
+void pffft_destroy_setup(PFFFT_Setup*);
+void pffft_transform_ordered(const PFFFT_Setup* setup, const float* input, float* output, float* work, pffft_direction_t direction);
+void* pffft_aligned_malloc(size_t nb_bytes);
+void pffft_aligned_free(void*);
+}
+#else
 #include "dep/pffft/rka_prefix.h"
 #include "dep/pffft/pffft.h"
+#endif
 
 namespace rka {
 

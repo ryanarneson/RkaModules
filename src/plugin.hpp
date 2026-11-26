@@ -25,3 +25,4 @@ extern Model* modelSpindrift;
 extern Model* modelBeacon;
 extern Model* modelNeap;
 extern Model* modelSpring;
+extern Model* modelDoldrums;

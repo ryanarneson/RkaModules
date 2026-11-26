@@ -316,6 +316,7 @@ struct DoldrumsEngine {
 			bumpEpoch();
 		}
 		if (!frozen && frozen_) cancelWant();   // thawed: a tape on its way is not wanted now
+		const bool opened = !armed_ && frozen && !frozen_;   // the first sample, Freeze already on
 		frozen_ = frozen;
 		const bool wasTrig = trigHigh_;
 		if (schmitt(trigV, trigHigh_) && !wasTrig) trig_ = true;
@@ -324,6 +325,12 @@ struct DoldrumsEngine {
 		staged_ = 0;
 		if (running_) {
 			handOff(frozen);
+			// Opened frozen (the first sample after setSampleRate or reset, Freeze
+			// already on): the tape is the patch's stand-in, so its fade-out is
+			// written as silence, as setSampleRate does for a frozen tape, and no
+			// live input lands on it (a patch saved without its tape opens silent).
+			if (opened && !stillPub_)
+				for (int i = 0; i < fade_; i++) ring_->write(0.f, 0.f, true);
 			record(inL, inR, frozen);
 			stage(f);
 		}

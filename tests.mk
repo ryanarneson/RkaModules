@@ -16,7 +16,7 @@ TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_
 # start that way either is it skipped, saying why. Any other failure fails.
 # With TSAN_REQUIRED set (to anything but empty or 0; CI sets it) a test that
 # cannot start fails `make test` instead of being skipped.
-TSAN_TESTS = $(filter %/test_threads,$(TEST_BINS))
+TSAN_TESTS = $(filter %/test_threads %/doldrums/test_keeper,$(TEST_BINS))
 TSAN_START_FAILED = ThreadSanitizer: unexpected memory mapping
 TSAN_REQUIRED ?=
 .PHONY: test
@@ -193,6 +193,13 @@ build/test/doldrums/test_threads: src/doldrums/test_threads.cpp build/test/dep/p
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=thread -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@ || \
 		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Doldrums' thread test needs it" >&2; exit 1; }
+
+# Doldrums' module side of the hand-over (TapeKeeper.hpp) under Rack's lock
+# modelled: ThreadSanitizer, as test_threads.
+build/test/doldrums/test_keeper: src/doldrums/test_keeper.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp src/hadal/*.hpp src/dep/*.h)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=thread -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@ || \
+		{ echo "test_keeper: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Doldrums' keeper test needs it" >&2; exit 1; }
 
 build/test/doldrums/test_%: src/doldrums/test_%.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp)
 	@mkdir -p $(@D)

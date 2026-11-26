@@ -68,7 +68,9 @@ if [ "$(uname -s)" = Linux ] && [ -z "${DISPLAY:-}" ]; then
 	run=(xvfb-run -a -s "-screen 0 1280x720x24" "${run[@]}")
 fi
 # The Linux build's RPATH is ".", so Rack must start from its own folder.
-(cd "$(dirname "$RACK_BIN")" && RKA_EDDY_PREVIEW_WAV="$wav" "${run[@]}" >/dev/null 2>&1) || true
+# Doldrums' browser picture comes from a real engine run offline in the state
+# RKA_DOLDRUMS_PREVIEW names (its widget); the other states are rendered below.
+(cd "$(dirname "$RACK_BIN")" && RKA_EDDY_PREVIEW_WAV="$wav" RKA_DOLDRUMS_PREVIEW=frozen "${run[@]}" >/dev/null 2>&1) || true
 
 log="$user/log.txt"
 cp "$log" build/smoke/log-screenshots.txt
@@ -171,11 +173,57 @@ EOF3
 	echo "ok: Spindrift headless, a stored buffer ($case)"
 done
 
+# Doldrums' stored tape, from the patch's storage: an autosave whose Doldrums
+# was saved frozen by the button, with tape.wav made here at 48 kHz (1 s, so
+# the 44.1 kHz headless engine reads it converted and padded): read. Then
+# the file cut short: not read, a warning naming it, no crash. Then no file
+# at all: a silent tape and a line of INFO, no warning.
+for case in whole truncated missing; do
+	rm -rf "$auto"
+	mkdir -p "$auto/modules/1"
+	jq -n --arg ver "$ver" --arg slug "$slug" '{version: "2.6.6", modules: [{id: 1, plugin: $slug, model: "Doldrums",
+		version: $ver, params: [{id: 12, value: 1}], data: {grain: 1, wide: false, atEnd: 0, keepTape: true},
+		pos: [0, 0]}], cables: []}' > "$auto/patch.json"
+	python3 - "$auto/modules/1/tape.wav" "$case" <<'EOF4'
+import math, struct, sys
+if sys.argv[2] == "missing":
+    sys.exit(0)
+n = 48000
+data = b"".join(struct.pack("<ff", 3 * math.sin(i * 0.01), 3 * math.sin(i * 0.011)) for i in range(n))
+hdr = b"RIFF" + struct.pack("<I", 36 + len(data)) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 3, 2, 48000, 48000 * 8, 8, 32)
+blob = hdr + b"data" + struct.pack("<I", len(data)) + data
+open(sys.argv[1], "wb").write(blob if sys.argv[2] == "whole" else blob[:len(blob) // 3])
+EOF4
+	status=0
+	(cd "$(dirname "$RACK_BIN")" && (sleep 3; echo) | ${limit[@]+"${limit[@]}"} "$RACK_BIN" -u "$user" -h >/dev/null 2>&1) || status=$?
+	cp "$log" "build/smoke/log-headless-doldrums-$case.txt"
+	if [ "$status" != 0 ] || grep -iqE "fatal|crash" "$log"; then
+		echo "FAIL: headless Rack with Doldrums' stored tape ($case, exit $status)"; grep -iE "fatal|crash|doldrums" "$log" | tail; exit 1
+	fi
+	case "$case" in
+	whole) grep -q "Doldrums: read the stored tape in [0-9]* ms: converted from 48000 Hz" "$log" ;;
+	truncated) grep -qE "warn.*Doldrums: the stored tape .* was not read" "$log" ;;
+	missing) grep -q "Doldrums: the patch has no stored tape" "$log" && ! grep -iE "\[[0-9.]+ (warn|fatal)" "$log" | grep -iq doldrums ;;
+	esac || { echo "FAIL: Doldrums' stored tape ($case) not handled as expected"; grep -i doldrums "$log" | tail; exit 1; }
+	echo "ok: Doldrums headless, a stored tape ($case)"
+done
+
 mkdir -p build/screenshots
 missing=0
 for m in $(jq -r '.modules[].slug' plugin.json); do
 	png="$user/screenshots/$slug/$m.png"
 	if [ -s "$png" ]; then cp "$png" build/screenshots/; echo "ok: $m -> build/screenshots/$m.png"
 	else echo "FAIL: no screenshot for $m"; missing=1; fi
+done
+
+# Doldrums' window in its other states (TESTING.md rule 12), each from its
+# own run of the screenshot mode; the default screenshot above is frozen.
+for state in running held stopped frozen-held frozen-stopped; do
+	rm -f "$user/screenshots/$slug/Doldrums.png"
+	(cd "$(dirname "$RACK_BIN")" && RKA_DOLDRUMS_PREVIEW=$state "${run[@]}" >/dev/null 2>&1) || true
+	png="$user/screenshots/$slug/Doldrums.png"
+	if [ -s "$png" ]; then cp "$png" "build/screenshots/Doldrums-$state.png"; echo "ok: Doldrums ($state) -> build/screenshots/Doldrums-$state.png"
+	else echo "FAIL: no screenshot of Doldrums ($state)"; missing=1; fi
+	if grep -iE "\[[0-9.]+ (warn|fatal)" "$user/log.txt" | grep -iq doldrums; then echo "FAIL: Doldrums warned ($state)"; missing=1; fi
 done
 exit $missing
