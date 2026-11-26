@@ -1,6 +1,6 @@
 # Doldrums: freeze and stretch: design
 
-Status: design, 2026-11-26, not yet approved by the user. Panel:
+Status: design, 2026-11-26, approved by the user ("yes approved"). Panel:
 `2026-11-26-doldrums-mockup.png`, drawn through `tools/gen_panels.py` from
 a draft description that is not in the repo; its positions are listed
 under Panel. Grows from the idea and the PaulXStretch notes in
