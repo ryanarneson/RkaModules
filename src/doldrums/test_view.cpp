@@ -292,6 +292,14 @@ void marks() {
 	v.read(s2);
 	CHECK(s.readStart == s2.readStart && s.readEnd == s2.readEnd, "no motion with nothing new");
 
+	// A mark past now (a state that has run ahead of the view's frames) is held to 1.
+	st.held = false;
+	st.frozen = false;
+	st.anchor = st.now + 5 * cap;
+	st.end = st.now + cap;
+	v.publish(st);
+	CHECK(v.read(s) && s.anchor == 1.f && s.readEnd == 1.f, "held to 1: %g %g", s.anchor, s.readEnd);
+
 	// No tape: finite and 0.
 	DoldrumsState none;
 	v.publish(none);
@@ -355,11 +363,11 @@ void read_before_publish_and_hostile() {
 	std::memset(&s, 0x5a, sizeof s);
 	CHECK(!v.read(s), "nothing published: false");
 	CHECK(s.low[3] != 0.f || ((unsigned char*) &s)[12] == 0x5a, "out untouched");
-	v.configure(1000, 0);
+	v.configure(100000, 0);   // 195 frames a column: both frames below are in the open one
 	v.wrote(std::nanf(""), INFINITY);
 	v.wrote(1e30f, -1e30f);
 	DoldrumsState st;
-	st.capacity = 1000;
+	st.capacity = 100000;
 	st.now = 2;
 	v.publish(st);
 	CHECK(v.read(s), "read");

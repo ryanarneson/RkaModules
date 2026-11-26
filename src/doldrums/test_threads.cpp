@@ -66,11 +66,19 @@ void handoff() {
 		}
 	});
 
+	bool untouched = true;
 	long long reads = 0, failed = 0, bad = 0, lastK = 0, changes = 0;
 	const auto t0 = std::chrono::steady_clock::now();
 	while (std::chrono::steady_clock::now() - t0 < std::chrono::seconds(2)) {
 		TapeSnapshot s;
+		std::memset(&s, 0x5a, sizeof s);
 		if (!view.read(s)) {
+			// Giving up leaves `out` as it was.
+			unsigned char* b = (unsigned char*) &s;
+			bool same = true;
+			for (size_t i = 0; i < sizeof s; i++) same = same && b[i] == 0x5a;
+			if (!same)
+				untouched = false;
 			failed++;
 			continue;
 		}
@@ -103,6 +111,8 @@ void handoff() {
 	stop = true;
 	audio.join();
 	CHECK(bad == 0, "%lld of %lld snapshots were not whole", bad, reads);
+	CHECK(untouched, "a read that gave up changed its output");
+	CHECK(failed > 0, "no read ever gave up, so `out` untouched was not exercised");
 	CHECK(reads > 1000, "the reader got %lld snapshots", reads);
 	CHECK(changes > 100, "the reader saw the value change %lld times", changes);
 	CHECK(published.load() > 100, "the writer published %lld times", (long long) published.load());
@@ -119,8 +129,7 @@ void rebuilt_hands_over() {
 			ring.write(float(i % 13) - 6.f, float(i % 7) - 3.f, false);
 		TapeView view;
 		std::atomic<bool> ready{false}, done{false};
-		TapeSnapshot first, last;
-		bool gotFirst = false;
+		std::atomic<long> early{0}, wrong{0}, reads{0};
 
 		std::thread audio([&]() {
 			while (!ready.load(std::memory_order_acquire))
@@ -133,22 +142,34 @@ void rebuilt_hands_over() {
 			view.publish(s);
 			done.store(true, std::memory_order_release);
 		});
+		// The UI thread reads throughout. Nothing is published until the audio
+		// thread does, so before the hand-over every read must be false, and
+		// after it every snapshot is the one publish: the tape's columns, then the
+		// new frames in the open column.
+		std::thread ui([&]() {
+			while (!done.load(std::memory_order_acquire)) {
+				const bool before = !ready.load(std::memory_order_acquire);
+				TapeSnapshot t;
+				if (!view.read(t))
+					continue;
+				reads++;
+				if (before)
+					early++;
+				if (!(t.high[511] == 100.f && t.low[511] == -100.f && t.high[300] > 0.f && t.high[300] != 100.f))
+					wrong++;
+			}
+		});
 		// The worker: rebuild, publish nothing (the audio thread's), hand over.
 		view.rebuild(ring);
 		ready.store(true, std::memory_order_release);
-		while (!done.load(std::memory_order_acquire)) {
-			TapeSnapshot t;
-			if (view.read(t)) {
-				first = t;
-				gotFirst = true;
-			}
-		}
 		audio.join();
+		ui.join();
+		CHECK(early == 0, "round %d: %ld snapshots were read before anything was published", round, early.load());
+		CHECK(wrong == 0, "round %d: %ld snapshots were not the published one", round, wrong.load());
+		TapeSnapshot last;
 		CHECK(view.read(last), "read after the hand-over");
 		CHECK(last.high[511] == 100.f && last.low[511] == -100.f, "the new frames are in the open column: %g", last.high[511]);
 		CHECK(last.high[300] != 100.f && last.high[300] > 0.f, "the tape's columns are still there");
-		(void) first;
-		(void) gotFirst;
 	}
 }
 
