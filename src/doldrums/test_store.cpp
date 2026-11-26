@@ -714,6 +714,12 @@ bool fileFrames(const std::string& dir, std::vector<float>& l, std::vector<float
 	return rka::readWav(tapeFile(dir), l.data(), r.data(), info.frames, info, w);
 }
 
+std::string fileBytes(const std::string& dir) {
+	std::ifstream in(tapeFile(dir), std::ios::binary);
+	if (!in) return "<none>";
+	return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
 void save_during_swap() {
 	const float rate = 8000.f;
 	const std::string dir = gTemp->sub("save_during_swap");
@@ -743,34 +749,52 @@ void save_during_swap() {
 	std::vector<float> fl, fr;
 	CHECK(fileFrames(dir, fl, fr) && fl == al && fr == ar, "the file is tape A, whole");
 
-	// Now the hold driven by hand, with a swap and a thaw in the middle of it.
-	const Ring* held = e.holdStill(&since);
-	CHECK(held == e.live() && held == &e.ring(), "held: the live ring");
-	// A stored tape B arrives while A is held.
-	e.expectStored();
+	// A save under way while a stored tape B is asked for, handed in and taken,
+	// and the input thawed, all while A is held for the copy (the seam runs
+	// after the copy, before letGo). The copy is A's frames, but the number the
+	// save would give it is the one B carries now (a tape handed in keeps the
+	// number), so nothing may be written: the file stays A's, as it was.
+	const std::string before = fileBytes(dir);
+	uint32_t writtenFor = 0;   // as if A's file had not been written: the plan says write
+	const Ring* a = e.live();
+	Ring* b = nullptr;
+	std::vector<float> bl((size_t) cap, 3.f), br((size_t) cap, -3.f);
 	DoldrumsEngine::TapeJob job;
-	CHECK(e.tapeWanted(job), "wanted");
-	std::vector<float> bl(size_t(cap), 3.f), br(size_t(cap), -3.f);
-	Ring* b = new Ring;
-	b->allocate(cap);
-	b->fill(bl.data(), br.data());
-	CHECK(e.offer(b, job.ticket), "B offered");
+	auto swapAndThaw = [&]() {
+		e.expectStored();
+		CHECK(e.tapeWanted(job), "wanted");
+		b = new Ring;
+		b->allocate(cap);
+		b->fill(bl.data(), br.data());
+		CHECK(e.offer(b, job.ticket), "B offered");
+		run(1);
+		CHECK(e.live() == b, "B taken while A is held");
+		f.params[F::FREEZE] = 0.f;
+		run(500);
+		CHECK(b->now() == cap, "thawed while held: nothing written (now %lld)", b->now());
+	};
+	const SaveFacts facts = {true, true, e.frozenSince(), writtenFor, e.tapePending()};
+	CHECK(savePlan(facts) == SAVE_WRITE, "the plan: write");
+	CHECK(saveStep(facts, dir, e, rate, writtenFor, why, 0, swapAndThaw) == SAVE_NOTHING && writtenFor == 0,
+	      "a tape taken during the copy: nothing written (%s)", why.c_str());
+	CHECK(fileBytes(dir) == before, "the file is as it was (tape A), not A's frames under B's number");
+	CHECK(e.frozenSince() == facts.frozenSince, "B carries the number the save read");
 	run(1);
-	CHECK(e.live() == b, "B taken while A is held");
-	// The thaw, held off: nothing is written to B while the hold stands.
+	CHECK(b && b->now() == cap + 1, "let go: the thaw goes on (now %lld)", b ? b->now() : -1);
+	Ring* old = e.retired();
+	CHECK(old == a, "A handed back after the swap");
+	delete old;
+	// A later save writes the tape that is live.
+	f.params[F::FREEZE] = 1.f;
+	run(100);
+	CHECK(saveStep({true, true, e.frozenSince(), writtenFor, e.tapePending()}, dir, e, rate, writtenFor, why) == SAVE_WRITE &&
+	          writtenFor == e.frozenSince(),
+	      "frozen again: written (%s)", why.c_str());
+	std::vector<float> ll, lr;
+	oldestFirst(e.ring(), ll, lr);
+	CHECK(fileFrames(dir, fl, fr) && fl == ll && fr == lr && ll[0] == 3.f, "the file is the live tape (B, recorded on)");
 	f.params[F::FREEZE] = 0.f;
-	run(500);
-	CHECK(b->now() == cap, "thawed while held: nothing written (now %lld)", b->now());
-	// The copy, of the ring that was held: A, unchanged, whole.
-	std::vector<float> hl((size_t) cap), hr((size_t) cap);
-	rka::doldrums::store::image(*held, hl.data(), hr.data());
-	e.letGo();
-	CHECK(hl == al && hr == ar, "the held ring is A, whole, after the swap and the thaw");
-	run(1);
-	CHECK(b->now() == cap + 1, "let go: the thaw goes on (now %lld)", b->now());
-	Ring* a = e.retired();
-	CHECK(a == held, "A handed back after the swap");
-	delete a;
+	run(10);
 	// Recording: no save. Frozen again, with a tape on its way: no save either.
 	CHECK(!saveFrozen(dir, e, rate, since, why, 0), "recording B: not written");
 	f.params[F::FREEZE] = 1.f;
@@ -794,11 +818,6 @@ void save_during_swap() {
 
 // ---- A save while a tape is on its way leaves the file as it is.
 
-std::string fileBytes(const std::string& dir) {
-	std::ifstream in(tapeFile(dir), std::ios::binary);
-	if (!in) return "<none>";
-	return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-}
 
 // The module's save (TapeStore.hpp, 3): the facts from the engine, saveStep,
 // and the removal it asks for.

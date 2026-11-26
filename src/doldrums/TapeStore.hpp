@@ -130,7 +130,8 @@
 //    savePlan(f) (SAVE_WRITE: saveFrozen, writtenFor = the number written)
 //    and says what is left for the module: SAVE_REMOVE: remove tape.wav
 //    (Rack's system::remove), writtenFor is 0; otherwise nothing. A write
-//    refused because a tape went on its way meanwhile leaves the file too.
+//    refused because a tape went on its way, or was handed in, meanwhile
+//    leaves the file too.
 // 4. A rate change with a frozen tape. UI thread (onSampleRateChange, Rack
 //    holding the engine's lock): engine.allocate(rate),
 //    engine.setSampleRate(rate), wake the worker. The frozen tape's ring is
@@ -374,7 +375,25 @@ inline Ring* makeWanted(const DoldrumsEngine::TapeJob& job, const std::string& d
 // the copy, then written. True: tape.wav holds the tape numbered `since`.
 // False: nothing written (why says why); saveStep says what becomes of the old file.
 // The hold is tried for up to `waitMs` (a freeze's fade-out is 5 ms).
-inline bool saveFrozen(const std::string& dir, DoldrumsEngine& engine, float rate, uint32_t& since, std::string& why, int waitMs = 25) {
+// Nothing is written either if a tape was taken while the save was under way
+// (tapesTaken() read before the hold and again after letGo differ): the
+// number read under the hold could then be the new tape's (a tape handed in
+// keeps the number) while the frames copied are the outgoing ring's, and
+// the file must never hold one tape under another's number. The take after
+// the first read and before the hold, or during the copy, is the window this
+// closes; a take before the first read is seen by the hold itself (the
+// engine publishes the new ring before it clears the wait).
+// `duringCopy` is called with the ring held, after the copy (a seam for the
+// tests, which make a take land there; the module passes nothing).
+namespace store {
+struct NoHook {
+	void operator()() const {}
+};
+} // namespace store
+
+template <class Hook>
+inline bool saveFrozen(const std::string& dir, DoldrumsEngine& engine, float rate, uint32_t& since, std::string& why, int waitMs,
+                       const Hook& duringCopy) {
 	if (!store::usableRate(rate)) {
 		why = "unusable sample rate";
 		return false;
@@ -385,6 +404,7 @@ inline bool saveFrozen(const std::string& dir, DoldrumsEngine& engine, float rat
 		const long long cap = live ? live->capacity() : 0;
 		l.resize(size_t(cap));
 		r.resize(size_t(cap));
+		const uint32_t takenBefore = engine.tapesTaken();
 		uint32_t at = 0;
 		const Ring* held = engine.holdStill(&at);
 		for (int i = 0; !held && i < waitMs; i++) {
@@ -411,7 +431,12 @@ inline bool saveFrozen(const std::string& dir, DoldrumsEngine& engine, float rat
 			return false;
 		}
 		store::image(*held, l.data(), r.data());
+		duringCopy();
 		engine.letGo();
+		if (engine.tapesTaken() != takenBefore) {
+			why = "a tape was handed in while saving: not written";
+			return false;
+		}
 		if (!store::writeImage(dir, l.data(), r.data(), (long long) l.size(), rate, why)) return false;
 		since = at;
 		return true;
@@ -420,6 +445,9 @@ inline bool saveFrozen(const std::string& dir, DoldrumsEngine& engine, float rat
 		return false;
 	}
 }
+inline bool saveFrozen(const std::string& dir, DoldrumsEngine& engine, float rate, uint32_t& since, std::string& why, int waitMs = 25) {
+	return saveFrozen(dir, engine, rate, since, why, waitMs, store::NoHook());
+}
 
 // The save, as the module makes it (3 above): savePlan carried out but for
 // the removal, which is the module's (through Rack). Returns SAVE_WRITE when
@@ -427,9 +455,10 @@ inline bool saveFrozen(const std::string& dir, DoldrumsEngine& engine, float rat
 // module is to remove tape.wav (writtenFor is then 0: by the plan, or a
 // write that could not be made of a tape that is not still), SAVE_NOTHING
 // when the file is to stay exactly as it is (the plan's nothing, or a tape
-// that went on its way between the plan and the write).
+// that went on its way, or was handed in, between the plan and the write).
+template <class Hook>
 inline SaveAction saveStep(const SaveFacts& f, const std::string& dir, DoldrumsEngine& engine, float rate, uint32_t& writtenFor,
-                           std::string& why, int waitMs = 25) {
+                           std::string& why, int waitMs, const Hook& duringCopy) {
 	switch (savePlan(f)) {
 	case SAVE_NOTHING:
 		return SAVE_NOTHING;
@@ -439,14 +468,21 @@ inline SaveAction saveStep(const SaveFacts& f, const std::string& dir, DoldrumsE
 	case SAVE_WRITE:
 		break;
 	}
+	const uint32_t takenBefore = engine.tapesTaken();
 	uint32_t since = 0;
-	if (saveFrozen(dir, engine, rate, since, why, waitMs)) {
+	if (saveFrozen(dir, engine, rate, since, why, waitMs, duringCopy)) {
 		writtenFor = since;
 		return SAVE_WRITE;
 	}
-	if (engine.tapePending()) return SAVE_NOTHING;
+	// A tape on its way, or handed in, since the plan: the file as it is (it
+	// may hold that tape); the next save decides again.
+	if (engine.tapePending() || engine.tapesTaken() != takenBefore) return SAVE_NOTHING;
 	writtenFor = 0;
 	return SAVE_REMOVE;
+}
+inline SaveAction saveStep(const SaveFacts& f, const std::string& dir, DoldrumsEngine& engine, float rate, uint32_t& writtenFor,
+                           std::string& why, int waitMs = 25) {
+	return saveStep(f, dir, engine, rate, writtenFor, why, waitMs, store::NoHook());
 }
 
 }} // namespace rka::doldrums

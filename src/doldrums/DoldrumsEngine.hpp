@@ -133,7 +133,14 @@
 //   now, the engine is frozen, and its length is this rate's tape; otherwise
 //   it is handed back at once, unused. So a ring made for a rate no longer in
 //   force, or for a wait that a thaw, a reset or a newer request ended, never
-//   goes live. (The ticket is why offer takes two arguments where the plan
+//   goes live. On a take the new ring is published (live(), tapesTaken())
+//   before the wait is cleared, so whoever sees nothing wanted any more also
+//   sees the new ring; between the two stores a reader may see the new ring
+//   with the wait still set, which only makes a save leave the file alone
+//   once more (tapePending), shows the worker a ticket it has already made
+//   (it does not make it again), or refuses a hold; a second offer for that
+//   ticket is looked at on a later sample, after the wait is cleared, and is
+//   refused. (The ticket is why offer takes two arguments where the plan
 //   wrote one: a ring's length tells its rate, not which wait it was made
 //   for.) A taken ring replaces the live one (handed back), the source of its
 //   conversion is handed back on the next sample (no longer wanted), tapesTaken() counts it and live() shows it
@@ -611,11 +618,19 @@ private:
 			retire(in);
 			return;
 		}
-		want_.compare_exchange_strong(w, 0, std::memory_order_acq_rel);
 		in->setFadeFrames(fade_);
 		Ring* old = ring_;
 		ring_ = in;
+		// The new ring is published, and counted, BEFORE the wait is cleared:
+		// a thread that reads the 0 this CAS writes (it is a release RMW, the
+		// reader's load an acquire or seq_cst one) is synchronised with it,
+		// so the two stores above happen before its later loads of livePub_
+		// and taken_, which must then see the new ring and the new count.
+		// (The other way round, holdStill could see no tape on its way and
+		// still be handed the outgoing stand-in.)
 		livePub_.store(in, std::memory_order_release);
+		taken_.fetch_add(1, std::memory_order_release);
+		want_.compare_exchange_strong(w, 0, std::memory_order_acq_rel);
 		retire(old);   // (the source of its conversion goes back next sample: no longer wanted)
 		// The new tape's pass starts from the anchor (Pass.hpp's reset); the
 		// grain in flight, the overlap, RUN, Mix and the edge detectors go on.
@@ -624,7 +639,6 @@ private:
 		heldSize_ = -1;
 		state_.anchor = state_.end = in->now();
 		state_.held = state_.stopped = false;
-		taken_.fetch_add(1, std::memory_order_release);
 	}
 
 	// The audio thread: the input onto the tape, unless the worker holds it
