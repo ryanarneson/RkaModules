@@ -188,8 +188,10 @@
 //   frozen), so no Freeze edge is seen, and a TRIG latched just before is
 //   kept. The ring arrives frozen and faded out (Ring::fill), so nothing is
 //   written onto it while Freeze stays on.
-// - Held still. For the save, the worker may hold the live ring still
-//   (holdStill, then letGo): granted only while it stands still (frozen and
+// - Held still. To write it (a save, or the freeze's own write: TapeStore.hpp
+//   3 and 7), the worker may hold the live ring still (holdStill, then
+//   letGo; standsStill says beforehand, taking nothing, whether it would be
+//   granted): granted only while it stands still (frozen and
 //   faded out) with no tape on its way, and while held nothing writes it: a
 //   thaw meanwhile is put off until letGo (the recording starts that much
 //   later, fading in as ever). The hold is a pair of seq_cst flags (the
@@ -205,7 +207,7 @@
 // Threads: allocate, setSampleRate, reset and seed off the audio thread, or
 // with process() held off; expectStored on the UI thread, one at a time with
 // allocate, setSampleRate and reset; tapeWanted, tapePending, live,
-// tapesTaken and frozenSince on any thread; offer, retired, giveUp, holdStill
+// tapesTaken, frozenSince and standsStill on any thread; offer, retired, giveUp, holdStill
 // and letGo on one worker thread; process, ring() and the other read-only calls on the audio
 // thread. process() does no allocation, lock, free or libm (FastMath.hpp).
 #include "Grain.hpp"
@@ -371,7 +373,8 @@ struct DoldrumsEngine {
 			// Opened frozen (the first sample after setSampleRate or reset, Freeze
 			// already on): the tape is the patch's stand-in, so its fade-out is
 			// written as silence, as setSampleRate does for a frozen tape, and no
-			// live input lands on it (a patch saved without its tape opens silent).
+			// live input lands on it (while its stored tape is read; a patch with
+			// none to read has its button let go before this: TapeStore.hpp 1).
 			if (opened && !stillPub_)
 				for (int i = 0; i < fade_; i++) ring_->write(0.f, 0.f, true);
 			record(inL, inR, frozen);
@@ -452,10 +455,12 @@ struct DoldrumsEngine {
 	bool tapePending() const { return want_.load(std::memory_order_acquire) != 0; }
 	// The worker: the tape for `ticket` cannot be made (a bad file, no
 	// memory): the engine stops waiting for it, unless a newer request has
-	// taken its place.
-	void giveUp(uint32_t ticket) {
+	// taken its place. True if this ended the wait: it was still in force,
+	// so no sample since it was asked for was thawed (a thawed sample ends
+	// the wait itself) and no newer request replaced it.
+	bool giveUp(uint32_t ticket) {
 		uint32_t t = ticket;
-		if (t != 0 && t != kIssuing) want_.compare_exchange_strong(t, 0, std::memory_order_acq_rel);
+		return t != 0 && t != kIssuing && want_.compare_exchange_strong(t, 0, std::memory_order_acq_rel);
 	}
 	// The worker: a tape made for `ticket`. False (and still the caller's)
 	// if one offered before is not yet taken or refused; true: the engine's,
@@ -494,6 +499,14 @@ struct DoldrumsEngine {
 		return livePub_.load(std::memory_order_acquire);
 	}
 	void letGo() { hold_.store(false, std::memory_order_release); }
+	// Any thread: whether holdStill would be granted now (frozen and faded
+	// out, nothing on its way, the ring not changing). Only a hint, read
+	// without taking anything, so that the worker does not make ready a
+	// copy of a tape it cannot hold: holdStill decides.
+	bool standsStill() const {
+		return !blocked_.load(std::memory_order_acquire) && still_.load(std::memory_order_acquire) &&
+		       want_.load(std::memory_order_acquire) == 0;
+	}
 
 private:
 	Ring none_;           // before allocate

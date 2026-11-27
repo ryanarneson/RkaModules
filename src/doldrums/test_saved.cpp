@@ -12,16 +12,27 @@
 //   of the wrong kind or out of range takes its default alone.
 // - golden_tape_v1: the golden file, made from its header and formulas,
 //   reads to the bit; a patch opened frozen with it in its folder gets it
-//   live through the keeper, its window shows it, and the next save leaves
-//   the file alone (not written again for the same freeze).
+//   live through the keeper (openFrozen, as onAdd), its window shows it,
+//   and neither the freeze's own write nor the next save writes it again
+//   (it already holds this freeze).
 // - writer_is_golden: what the save writes today is the golden format, byte
 //   for byte.
-// - saved_without_tape_opens_silent: a patch saved frozen without tape.wav
-//   opens with a silent tape (with a live input patched), no tape pending,
-//   a line of information and no warning, nothing in the window's corner.
-// - bad_file_is_shown: a cut file is a warning and TAPE NOT READ; the file
-//   stays while the button is on; thawed, the save removes it and the
-//   trouble goes.
+// - opened_frozen_without_a_file_opens_thawed: a patch saved frozen without
+//   tape.wav (quit with no save, before this build) asks for no read: the
+//   Freeze button is let go, the tape records the live input and the output
+//   is not silence; a line of information, no warning, nothing in the
+//   window's corner.
+// - opened_frozen_with_keep_off_opens_thawed: likewise with Keep off.
+// - opened_frozen_with_a_bad_file_opens_thawed: a cut file, refused by its
+//   header at open: a warning and TAPE NOT READ, the button let go, the
+//   tape records; the next save removes the file and the trouble goes.
+// - a_read_that_fails_late_lets_go: a file that looked like a tape at open
+//   but cannot be read on the worker: the engine waits frozen only until the
+//   read fails, then the UI is told, once, to let go; let go, the tape
+//   records and the output is not silence.
+// - a_press_during_the_read_keeps_the_button: the user pressed Freeze off and
+//   on again while the read was under way (the gate holding the tape frozen
+//   meanwhile): the failed read lets nothing go.
 // - save_round_trip: a tape recorded, frozen by the button, saved through
 //   the keeper and opened in a new module: the same tape to the bit.
 // - save_not_written_is_shown: a save that cannot write is a warning and
@@ -34,7 +45,9 @@
 #include "doldrums/testdata/GoldenTapeV1.hpp"
 #include "testing.hpp"
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -43,6 +56,7 @@
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -141,6 +155,7 @@ struct Module {
 		e->allocate(rate);
 		e->setSampleRate(rate);
 		k->configured();
+		k->tapeRate(rate);
 		f.inRPatched = true;
 	}
 	~Module() { k->stop(); }
@@ -149,6 +164,7 @@ struct Module {
 		for (long long i = 0; i < n; i++) {
 			f.inL = inL;
 			f.inR = inR;
+			k->buttonIs(f.params[F::FREEZE] >= 0.5f);
 			e->process(f, out);
 			k->afterProcess(800);
 		}
@@ -277,7 +293,8 @@ void golden_tape_v1() {
 	Module m(48000.f);
 	m.f.params[F::FREEZE] = 1.f;
 	m.k->start();
-	m.k->expectStored(dir);
+	m.k->storeIn(dir);
+	CHECK(m.k->openFrozen(dir, true), "a file there: the read asked for");
 	const bool taken = m.until([&] { return m.e->tapesTaken() == 1; });
 	// The tape is taken wherever the worker's timing puts it in a hop; the new
 	// tape's pass (held: Position fully right) begins at the next boundary, a
@@ -302,6 +319,7 @@ void golden_tape_v1() {
 	ask.rate = 48000.f;
 	SaveAction act = SAVE_WRITE;
 	CHECK(m.k->save(ask, act) && act == SAVE_NOTHING && !m.said("stored the frozen tape", false), "the save writes nothing (%d)", int(act));
+	CHECK(m.k->freezeAttempts() == 0, "nor did the freeze's own write try (%u)", m.k->freezeAttempts());
 	CHECK(readAll(tapeFile(dir)) == goldenBytes(), "the golden file is as it was");
 }
 
@@ -323,53 +341,117 @@ void writer_is_golden() {
 	CHECK(got == goldenBytes(), "the whole file is the golden one");
 }
 
-void saved_without_tape_opens_silent() {
-	const std::string dir = gTemp->sub("no_tape");
-	Module m(48000.f);
-	m.f.params[F::FREEZE] = 1.f;   // Position fully right: held at the end
-	m.inL = 3.f;                   // a live input patched, from the first sample
-	m.inR = -2.f;
-	m.k->start();
-	m.k->expectStored(dir);
+// Runs n samples of a sine at the input; the output's peak over the last
+// half of them.
+double sineFor(Module& m, long long n) {
 	double peak = 0.0;
-	const auto loud = [&](long long n) {
-		for (long long i = 0; i < n; i++) {
-			m.run(1);
-			peak = std::max(peak, std::max(std::fabs(double(m.out.outL)), std::fabs(double(m.out.outR))));
-		}
-	};
-	loud(1);
-	const bool settled = m.until([&] { return !m.e->tapePending(); });
-	loud(48000 * 2);
-	CHECK(settled && !m.e->tapePending(), "no tape pending once the worker has looked");
-	CHECK(peak == 0.0, "silent, with an input patched (peak %g V)", peak);
-	CHECK(m.said("has no stored tape", false) && m.warnCount() == 0, "a line of information, no warning (%d warnings)", m.warnCount());
-	TapeSnapshot s;
-	CHECK(m.k->trouble() == TapeKeeper::FINE && m.k->read(s), "nothing in the window's other corner");
-	float hi = 0.f;
-	for (int i = 0; i < TapeSnapshot::COLS; i++) hi = std::max(hi, std::max(s.high[i], -s.low[i]));
-	CHECK(hi == 0.f, "the window: a silent tape (%g)", hi);
+	for (long long i = 0; i < n; i++) {
+		m.inL = float(3.0 * std::sin(0.031 * double(i)));
+		m.inR = float(-2.0 * std::sin(0.023 * double(i)));
+		m.run(1);
+		if (i > n / 2) peak = std::max(peak, std::max(std::fabs(double(m.out.outL)), std::fabs(double(m.out.outR))));
+	}
+	return peak;
+}
+// The tape records: its newest frame is the input just written.
+bool records(Module& m) {
+	const Ring& g = m.e->ring();
+	const long long p = g.physical(g.now() - 1);
+	return !m.e->state().frozen && g.channel(0)[p] == m.inL && g.channel(1)[p] == m.inR;
 }
 
-void bad_file_is_shown() {
+void opened_frozen_without_a_file_opens_thawed() {
+	const std::string dir = gTemp->sub("no_tape");
+	Module m(48000.f);
+	m.f.params[F::FREEZE] = 1.f;   // the patch's Freeze, on
+	m.k->start();
+	m.k->storeIn(dir);
+	const bool reading = m.k->openFrozen(dir, true);
+	if (!reading) m.f.params[F::FREEZE] = 0.f;   // onAdd lets go of the button
+	CHECK(!reading && !m.e->tapePending(), "no file: no read asked for, the button to be let go");
+	const double peak = sineFor(m, 48000 * 2);
+	CHECK(records(m), "the tape records the live input");
+	CHECK(peak > 0.3, "the output is not silence (peak %g V)", peak);
+	CHECK(m.said("has no stored tape", false) && m.said("Freeze let go", false) && m.warnCount() == 0,
+	      "a line of information, no warning (%d warnings)", m.warnCount());
+	CHECK(m.k->trouble() == TapeKeeper::FINE, "nothing in the window's other corner");
+	CHECK(!m.k->letGoWanted(), "nothing more to let go");
+}
+
+void opened_frozen_with_keep_off_opens_thawed() {
+	const std::string dir = gTemp->sub("keep_off");
+	writeBytes(tapeFile(dir), goldenBytes());
+	Module m(48000.f);
+	m.f.params[F::FREEZE] = 1.f;
+	m.k->start();
+	m.k->keepTape(false);
+	const bool reading = m.k->openFrozen(dir, false);
+	if (!reading) m.f.params[F::FREEZE] = 0.f;
+	CHECK(!reading && !m.e->tapePending(), "Keep off: no read, the button to be let go");
+	sineFor(m, 4800);
+	CHECK(records(m) && m.said("Freeze let go", false) && m.warnCount() == 0, "the tape records; information, no warning");
+}
+
+void opened_frozen_with_a_bad_file_opens_thawed() {
 	const std::string dir = gTemp->sub("bad");
 	const std::string bytes = goldenBytes();
 	writeBytes(tapeFile(dir), bytes.substr(0, bytes.size() / 3));
 	Module m(48000.f);
 	m.f.params[F::FREEZE] = 1.f;
 	m.k->start();
-	m.k->expectStored(dir);
-	const bool settled = m.until([&] { return !m.e->tapePending(); });
-	m.run(4800);
-	CHECK(settled && m.said("was not read", true) && m.k->trouble() == TapeKeeper::NOT_READ, "a warning, and TAPE NOT READ");
+	m.k->storeIn(dir);
+	const bool reading = m.k->openFrozen(dir, true);
+	if (!reading) m.f.params[F::FREEZE] = 0.f;
+	CHECK(!reading && !m.e->tapePending(), "a cut file: refused at open, the button to be let go");
+	CHECK(m.said("was not read", true) && m.k->trouble() == TapeKeeper::NOT_READ && m.said("Freeze let go", true),
+	      "a warning saying so, and TAPE NOT READ");
+	const double peak = sineFor(m, 48000 * 2);
+	CHECK(records(m) && peak > 0.3, "the tape records, the output is not silence (peak %g V)", peak);
 	TapeKeeper::SaveAsk ask;
 	ask.dir = dir;
-	ask.button = true;
-	SaveAction act = SAVE_WRITE;
-	CHECK(m.k->save(ask, act) && act == SAVE_NOTHING && fs::exists(tapeFile(dir)), "the button on: the file stays (%d)", int(act));
-	CHECK(m.k->trouble() == TapeKeeper::NOT_READ, "still shown");
 	ask.button = false;
-	CHECK(m.k->save(ask, act) && act == SAVE_REMOVE && m.k->trouble() == TapeKeeper::FINE, "thawed: removed, the trouble gone (%d)", int(act));
+	SaveAction act = SAVE_NOTHING;
+	CHECK(m.k->save(ask, act) && act == SAVE_REMOVE && !fs::exists(tapeFile(dir)) && m.k->trouble() == TapeKeeper::FINE,
+	      "the next save removes it, the trouble gone (%d)", int(act));
+}
+
+void a_read_that_fails_late_lets_go() {
+	const std::string dir = gTemp->sub("late");
+	writeBytes(tapeFile(dir), goldenBytes());
+	Module m(48000.f);
+	m.f.params[F::FREEZE] = 1.f;
+	m.k->storeIn(dir);
+	CHECK(m.k->openFrozen(dir, true), "a file that looks like a tape: the read asked for");
+	writeBytes(tapeFile(dir), "not a tape any more");   // changed before the worker reads it
+	m.run(100);
+	CHECK(m.e->tapePending() && m.e->state().frozen && !m.k->letGoWanted(), "frozen, waiting for the read; nothing to let go yet");
+	m.k->serviceOnce();   // the worker's round: the read fails
+	CHECK(!m.e->tapePending() && m.said("was not read", true) && m.k->trouble() == TapeKeeper::NOT_READ, "the read failed: given up, shown");
+	CHECK(m.k->letGoWanted(), "the UI is told to let go");
+	CHECK(!m.k->letGoWanted(), "once");
+	m.f.params[F::FREEZE] = 0.f;   // the UI lets go
+	const double peak = sineFor(m, 48000 * 2);
+	CHECK(records(m) && peak > 0.3, "let go: the tape records, the output is not silence (peak %g V)", peak);
+}
+
+void a_press_during_the_read_keeps_the_button() {
+	const std::string dir = gTemp->sub("pressed");
+	writeBytes(tapeFile(dir), goldenBytes());
+	Module m(48000.f);
+	m.f.params[F::FREEZE] = 1.f;
+	m.f.freezeGate = 10.f;   // a gate holds the tape frozen throughout, so the wait stands
+	m.k->storeIn(dir);
+	CHECK(m.k->openFrozen(dir, true), "the read asked for");
+	m.run(100);
+	m.f.params[F::FREEZE] = 0.f;   // the user: off, and on again
+	m.run(10);
+	m.f.params[F::FREEZE] = 1.f;
+	m.run(10);
+	writeBytes(tapeFile(dir), "not a tape any more");
+	CHECK(m.e->tapePending(), "frozen by the gate throughout: still waiting");
+	m.k->serviceOnce();
+	CHECK(!m.e->tapePending() && m.said("was not read", true), "the read failed");
+	CHECK(!m.k->letGoWanted(), "pressed again during the read: the button is the user's, nothing let go");
 }
 
 void save_round_trip() {
@@ -465,8 +547,11 @@ int main() {
 	golden_patch_data();
 	golden_tape_v1();
 	writer_is_golden();
-	saved_without_tape_opens_silent();
-	bad_file_is_shown();
+	opened_frozen_without_a_file_opens_thawed();
+	opened_frozen_with_keep_off_opens_thawed();
+	opened_frozen_with_a_bad_file_opens_thawed();
+	a_read_that_fails_late_lets_go();
+	a_press_during_the_read_keeps_the_button();
 	save_round_trip();
 	save_not_written_is_shown();
 	offer_settles_after_the_switch();

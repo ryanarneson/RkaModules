@@ -36,6 +36,15 @@
 //   middle of the save (the hold, driven a step at a time): the file is one
 //   whole tape or there is none; nothing is written while a tape is on its
 //   way or the freeze is still fading.
+// - freeze_step: the freeze's own write (freezeStep, TapeStore.hpp 7), the
+//   save's path with the save's rules: nothing when the plan is not to
+//   write; later while the tape is not still, with no heap operation (the
+//   copy is not made ready); a take during the copy (the
+//   same seam) writes nothing and asks for later, not for a removal; a
+//   write that fails is final for the freeze and leaves the old file; else
+//   written, the number taken.
+// - a_tape_is_stamped_only_with_its_own_rate: the hold refuses a rate that
+//   is not the held tape's (the file would play at the wrong speed).
 #define RKA_WAV_IMPLEMENTATION
 #include "doldrums/TapeStore.hpp"
 #include "doldrums/TapeView.hpp"
@@ -985,6 +994,96 @@ void save_while_a_conversion_is_pending_keeps_the_file() {
 	while (Ring* x = e.retired()) delete x;
 }
 
+void freeze_step() {
+	const float rate = 8000.f;
+	const long long cap = tapeFrames(rate);
+	const std::string dir = gTemp->sub("freeze_step");
+	DoldrumsEngine e;
+	CHECK(e.allocate(rate), "allocate");
+	e.setSampleRate(rate);
+	F f;
+	DoldrumsResult out;
+	long long k = 0;
+	auto run = [&](long long n) {
+		for (long long i = 0; i < n; i++, k++) {
+			f.inL = float(k % 613) * 0.01f - 3.f;
+			e.process(f, out);
+		}
+	};
+	auto facts = [&](bool keep, bool button, uint32_t w) { return SaveFacts{keep, button, e.frozenSince(), w, e.tapePending()}; };
+	run(cap + 100);
+	std::string why;
+	uint32_t w = 0;
+	CHECK(freezeStep(facts(true, false, 0), dir, e, rate, w, why) == FREEZE_NONE && !fs::exists(tapeFile(dir)), "button off: none");
+	f.params[F::FREEZE] = 1.f;
+	run(10);
+	const long h0 = gHeapOps;
+	const FreezeWrite fading = freezeStep(facts(true, true, 0), dir, e, rate, w, why);
+	const long fadingHeap = gHeapOps - h0;
+	CHECK(fading == FREEZE_LATER && !fs::exists(tapeFile(dir)) && w == 0, "still fading: later, nothing written");
+	CHECK(fadingHeap == 0, "and no copy made ready for it (%ld heap operations)", fadingHeap);
+	run(100);
+	CHECK(freezeStep(facts(false, true, 0), dir, e, rate, w, why) == FREEZE_NONE && !fs::exists(tapeFile(dir)), "Keep off: none");
+
+	// A take during the copy: nothing written, and later (not a failure).
+	{
+		Ring c;
+		c.allocate(cap);
+		std::vector<float> cl((size_t) cap, 0.5f), cr((size_t) cap, -0.5f);
+		c.fill(cl.data(), cr.data());
+		CHECK(writeTape(dir, c, rate, why), "an older tape on file: %s", why.c_str());
+	}
+	const std::string older = fileBytes(dir);
+	Ring* b = nullptr;
+	DoldrumsEngine::TapeJob job;
+	const Ring* a = e.live();
+	auto take = [&]() {
+		e.expectStored();
+		CHECK(e.tapeWanted(job), "wanted");
+		b = new Ring;
+		b->allocate(cap);
+		std::vector<float> bl((size_t) cap, 2.f), br((size_t) cap, -2.f);
+		b->fill(bl.data(), br.data());
+		CHECK(e.offer(b, job.ticket), "offered");
+		run(1);
+		CHECK(e.live() == b, "taken while held");
+	};
+	const SaveFacts during = facts(true, true, 0);
+	CHECK(freezeStep(during, dir, e, rate, w, why, take) == FREEZE_LATER && w == 0, "a take during the copy: later (%s)", why.c_str());
+	CHECK(fileBytes(dir) == older, "the file as it was: not the copy under the new tape's number, not removed");
+	Ring* old = e.retired();
+	CHECK(old == a, "the old ring back");
+	delete old;
+	// Then written: the tape now live, the number taken.
+	CHECK(freezeStep(facts(true, true, 0), dir, e, rate, w, why) == FREEZE_WRITTEN && w == e.frozenSince(), "written (%s)", why.c_str());
+	std::vector<float> fl, fr, ll, lr;
+	oldestFirst(e.ring(), ll, lr);
+	CHECK(fileFrames(dir, fl, fr) && fl == ll && fr == lr && fl[0] == 2.f, "the file is the live tape");
+	CHECK(freezeStep(facts(true, true, w), dir, e, rate, w, why) == FREEZE_NONE, "written already: none");
+
+	// A write that fails: final for this freeze; the number not taken.
+	const std::string blocked = (fs::path(gTemp->sub("freeze_step_blocked")) / "folder").string();
+	writeBytes(blocked, "a file where the folder should be");
+	uint32_t w2 = 0;
+	CHECK(freezeStep(facts(true, true, 0), blocked, e, rate, w2, why) == FREEZE_FAILED && w2 == 0, "cannot write: failed (%s)", why.c_str());
+	while (Ring* x = e.retired()) delete x;
+}
+
+void a_tape_is_stamped_only_with_its_own_rate() {
+	const std::string dir = gTemp->sub("own_rate");
+	DoldrumsEngine e;
+	CHECK(e.allocate(8000.f), "allocate");
+	e.setSampleRate(8000.f);
+	F f;
+	f.params[F::FREEZE] = 1.f;
+	DoldrumsResult out;
+	for (int i = 0; i < 200; i++) e.process(f, out);
+	uint32_t since = 0;
+	std::string why;
+	CHECK(!saveFrozen(dir, e, 11025.f, since, why, 0) && !fs::exists(tapeFile(dir)), "an 8 kHz tape stamped 11025 Hz: refused (%s)", why.c_str());
+	CHECK(saveFrozen(dir, e, 8000.f, since, why, 0) && fs::exists(tapeFile(dir)), "at its own rate: written (%s)", why.c_str());
+}
+
 } // namespace
 
 int main() {
@@ -1009,6 +1108,8 @@ int main() {
 	save_during_swap();
 	save_while_a_load_is_pending_keeps_the_file();
 	save_while_a_conversion_is_pending_keeps_the_file();
+	freeze_step();
+	a_tape_is_stamped_only_with_its_own_rate();
 	gTemp = nullptr;
 	return rkatest::finish("doldrums/test_store");
 }

@@ -7,21 +7,25 @@
 // snapshots.
 //
 // Threads (TapeKeeper.hpp has the worker's and the window's side in full):
-// - The audio thread: process(): the frame, engine.process(), the outputs,
-//   the Freeze cap's light, then keeper.afterProcess() (the window's view)
-//   and, when it published, the figures the tooltips and the drag read
-//   (relaxed atomics).
+// - The audio thread: process(): the frame, keeper.buttonIs (the button as
+//   the frame has it), engine.process(), the outputs, the Freeze cap's
+//   light, then keeper.afterProcess() (the window's view) and, when it
+//   published, the figures the tooltips and the drag read (relaxed atomics).
+//   It never sets a param.
 // - Rack's threads holding the engine's lock exclusively (process() held
-//   off): the constructor (seed, allocate, setSampleRate), onAdd
-//   (keeper.expectStored), onSampleRateChange (allocate, setSampleRate) and
-//   onReset (reset), each with the keeper's call for the fed view.
-// - The worker (the keeper's thread): retired, tapeWanted, giveUp, offer and
-//   the save's hold, and nothing of Rack's APP (APP is per thread). Its
-//   log, makeDir and exists hooks call only Rack's logger and system::.
-// - The UI thread: onSave (keeper.save, which waits for the worker, then
-//   tape.wav removed through Rack if the save says so), the menu (relaxed
-//   atomics), dataToJson / dataFromJson, the tooltips and the window
-//   (keeper.read).
+//   off): the constructor (seed, allocate, setSampleRate, tapeRate), onAdd
+//   (keeper.storeIn, keeper.openFrozen, and the Freeze param let go when it
+//   says there is no tape to read), onSampleRateChange (allocate,
+//   setSampleRate, tapeRate) and onReset (reset), each with the keeper's
+//   call for the fed view.
+// - The worker (the keeper's thread): retired, tapeWanted, giveUp, offer,
+//   the hold, and every write and removal of tape.wav (the save's and the
+//   freeze's own), and nothing of Rack's APP (APP is per thread). Its log,
+//   makeDir, remove and exists hooks call only Rack's logger and system::.
+// - The UI thread: onSave (keeper.save, which waits for the worker), the
+//   menu (relaxed atomics; Keep also told to the keeper), dataToJson /
+//   dataFromJson, the tooltips, the window (keeper.read), and the widget's
+//   step (keeper.letGoWanted: the Freeze param let go after a failed read).
 //
 // The rules carried from the engine's and the store's reviews, and where
 // each is kept:
@@ -31,19 +35,26 @@
 //   time it wakes (every 5 ms at the latest), between jobs, so a
 //   conversion's source is never freed while it reads it and the engine's
 //   eight slots never fill.
-// - The save's hold is taken only on the worker, only for the copy
-//   (saveStep). One save at a time (the keeper's save lock; its worker
-//   serves one request at a time); none meets expectStored, allocate,
-//   setSampleRate or reset, which run with the engine's lock held
-//   exclusively, while onSave holds it shared (Rack's prepareSave) and does
-//   not return until the worker has written tape.wav or declined. A save
-//   while a tape is on its way leaves the file alone (savePlan's
-//   tapePending).
-// - A failed load: giveUp(ticket) and a warning in the log; a stored file
-//   that exists and could not be read, or a frozen tape that could not be
-//   written, is also shown in the window ("TAPE NOT READ", "TAPE NOT
-//   SAVED"), since the user can do something about it. A patch saved
-//   without its tape opens silent with a line of INFO.
+// - The hold is taken only on the worker, only for the copy (saveStep). One
+//   save at a time (the keeper's save lock; its worker serves one request
+//   at a time); none meets expectStored, allocate, setSampleRate or reset,
+//   which run with the engine's lock held exclusively, while onSave holds
+//   it shared (Rack's prepareSave) and does not return until the worker has
+//   written tape.wav, removed it or declined. A save while a tape is on its
+//   way leaves the file alone (savePlan's tapePending).
+// - The tape is written when the button freezes it (TapeStore.hpp 7: the
+//   worker, soon after the freeze's fade, once a freeze, Keep on), because
+//   Rack sends onSave only when the user saves the patch to a file, not at
+//   its autosave or at quit; the autosave keeps the storage folder, so a
+//   quit and a restart find tape.wav. onSave is the backstop.
+// - A patch opening with the Freeze button on and no tape to read (Keep
+//   off, no file, a file that cannot be one) opens thawed: onAdd lets go of
+//   the button. A read that fails later, on the worker: giveUp(ticket), a
+//   warning, and the widget's next step lets go of the button unless it has
+//   fallen since the patch opened. A stored file that exists and could not
+//   be read, or a frozen tape that could not be written, is also shown in
+//   the window ("TAPE NOT READ", "TAPE NOT SAVED"), since the user can do
+//   something about it.
 // - The window: wrote() once for each frame that went onto the tape, after
 //   engine.process(), and publish() about 60 times a second, on the audio
 //   thread; a tape handed in has the spare view rebuilt by the worker
@@ -355,6 +366,15 @@ struct Doldrums : Module {
 				WARN("Doldrums: cannot make %s: %s", dir.c_str(), ex.what());
 			}
 		};
+		keeper.remove = [](const std::string& path) {
+			try {
+				if (system::exists(path))
+					system::remove(path);
+			}
+			catch (std::exception& ex) {
+				WARN("Doldrums: cannot remove %s: %s", path.c_str(), ex.what());
+			}
+		};
 		keeper.exists = [](const std::string& path) { return system::exists(path); };
 		const float rate = APP && APP->engine ? APP->engine->getSampleRate() : 48000.f;
 		adoptRate(rate);
@@ -365,8 +385,10 @@ struct Doldrums : Module {
 	void adoptRate(float rate) {
 		// fs_ (the rate a save stamps on the file) changes only with the
 		// engine's: a failed allocate leaves the engine at its old rate.
-		if (engine.allocate(rate))
+		if (engine.allocate(rate)) {
 			fs_.store(rate);
+			keeper.tapeRate(rate);
+		}
 		else
 			WARN("Doldrums: no tape at %g Hz (out of memory, an unusable rate, or rings not yet collected); the "
 			     "module stays at its old rate or is silent",
@@ -380,12 +402,35 @@ struct Doldrums : Module {
 
 	void onAdd(const AddEvent& e) override {
 		keeper.start();
-		// A patch opening frozen with its tape kept: the tape is read on the
-		// worker and handed in (TapeStore.hpp, 1). Until then the tape is a
-		// silent stand-in, frozen, and every save leaves the file alone.
+		// The folder the freeze's own write puts tape.wav in (TapeStore.hpp,
+		// 7; the worker makes it before a write). A patch opening with the
+		// Freeze button on: its stored tape is read on the worker and handed
+		// in (TapeStore.hpp, 1); until then the tape is a silent stand-in,
+		// frozen, and every save leaves the file alone. With no tape to read
+		// (Keep off, no file, a file that cannot be one) the button is let go
+		// here, before the first sample, as Spindrift lets go of its own: the
+		// patch opens thawed and records, never frozen and silent.
 		const std::string dir = getPatchStorageDirectory();
-		if (params[FREEZE_PARAM].getValue() >= 0.5f && keepTape_.load() && !dir.empty())
-			keeper.expectStored(dir);
+		keeper.storeIn(dir);
+		if (params[FREEZE_PARAM].getValue() >= 0.5f && !keeper.openFrozen(dir, keepTape_.load()))
+			params[FREEZE_PARAM].setValue(0.f);
+	}
+
+	// The UI thread (the widget's step): a stored tape that could not be read
+	// on the worker lets go of the button, unless it has fallen since the
+	// patch opened (TapeKeeper::letGoWanted). The engine waited frozen with a
+	// silent stand-in only for the read and, after it, until this frame.
+	void letGoIfWanted() {
+		if (!keeper.letGoWanted() || params[FREEZE_PARAM].getValue() < 0.5f)
+			return;
+		params[FREEZE_PARAM].setValue(0.f);
+		INFO("Doldrums: Freeze let go: the stored tape could not be read; the tape records");
+	}
+
+	// The menu's Keep, and the keeper's copy for the freeze's own write.
+	void setKeep(bool on) {
+		keepTape_.store(on);
+		keeper.keepTape(on);
 	}
 
 	// The worker is joined here and in the destructor (the keeper's, which
@@ -411,13 +456,16 @@ struct Doldrums : Module {
 		grain_.store(rka::doldrums::GRAIN_MEDIUM);
 		wide_.store(false);
 		stopAtEnd_.store(false);
-		keepTape_.store(true);
+		setKeep(true);
 		follow_.store(false);
 	}
 
 	// The save (TapeStore.hpp, 3): made by the worker, which alone takes the
-	// hold; keeper.save waits for it, because Rack packs the storage folder as
-	// soon as this returns. Then tape.wav is removed if the save says so.
+	// hold and alone writes and removes tape.wav, one thing at a time (so a
+	// save and the freeze's own write never meet); keeper.save waits for it,
+	// because Rack packs the storage folder as soon as this returns. The
+	// backstop to the freeze's own write: it writes a freeze not yet written,
+	// and removes the file when not frozen by the button or Keep is off.
 	void onSave(const SaveEvent& e) override {
 		rka::doldrums::TapeKeeper::SaveAsk ask;
 		ask.dir = getPatchStorageDirectory();
@@ -427,20 +475,8 @@ struct Doldrums : Module {
 		if (ask.dir.empty())
 			return;
 		rka::doldrums::SaveAction action;
-		if (!keeper.save(ask, action)) {
+		if (!keeper.save(ask, action))
 			WARN("Doldrums: saved with no worker running; the stored tape in %s is left as it is", ask.dir.c_str());
-			return;
-		}
-		if (action != rka::doldrums::SAVE_REMOVE)
-			return;
-		const std::string path = rka::doldrums::store::join(ask.dir, rka::doldrums::STORED_TAPE);
-		try {
-			if (system::exists(path))
-				system::remove(path);
-		}
-		catch (std::exception& ex) {
-			WARN("Doldrums: cannot remove %s: %s", path.c_str(), ex.what());
-		}
 	}
 
 	json_t* dataToJson() override {
@@ -476,7 +512,7 @@ struct Doldrums : Module {
 		grain_.store(s.grain);
 		wide_.store(s.wide);
 		stopAtEnd_.store(s.stopAtEnd);
-		keepTape_.store(s.keepTape);
+		setKeep(s.keepTape);
 		follow_.store(s.follow);
 	}
 
@@ -502,6 +538,7 @@ struct Doldrums : Module {
 		frame.wide = wide_.load(std::memory_order_relaxed);
 		frame.stopAtEnd = stopAtEnd_.load(std::memory_order_relaxed);
 		frame.follow = follow_.load(std::memory_order_relaxed);
+		keeper.buttonIs(frame.params[DoldrumsFrame::FREEZE] >= 0.5f);   // for the freeze's own write and the let-go
 
 		engine.process(frame, result);
 
@@ -971,6 +1008,12 @@ struct DoldrumsWidget : ModuleWidget {
 		addOutput(createOutputCentered<rka::BrassPort>(mm2px(OUTPUT_R), module, Doldrums::R_OUTPUT));
 	}
 
+	void step() override {
+		if (Doldrums* m = getModule<Doldrums>())
+			m->letGoIfWanted();
+		ModuleWidget::step();
+	}
+
 	// The window sets the knob so that the anchor lands under the mouse:
 	// positionForX at the tape and grain in force, less what the CV adds.
 	void setPosition(Doldrums* m, float fraction) {
@@ -1039,7 +1082,7 @@ struct DoldrumsWidget : ModuleWidget {
 		menu->addChild(createWhileRecordingItem(m));
 		menu->addChild(createBoolMenuItem(
 		    "Keep the frozen tape with the patch", "", [=]() { return m->keepTape_.load(); },
-		    [=](bool on) { m->keepTape_.store(on); }));
+		    [=](bool on) { m->setKeep(on); }));
 	}
 };
 

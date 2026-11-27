@@ -175,10 +175,19 @@ done
 
 # Doldrums' stored tape, from the patch's storage: an autosave whose Doldrums
 # was saved frozen by the button, with tape.wav made here at 48 kHz (1 s, so
-# the 44.1 kHz headless engine reads it converted and padded): read. Then
-# the file cut short: not read, a warning naming it, no crash. Then no file
-# at all: a silent tape and a line of INFO, no warning.
-for case in whole truncated missing; do
+# the 44.1 kHz headless engine reads it converted and padded): read. Then,
+# on the autosave folder that run left at quit (no save in between), again:
+# the quit kept the folder and its file, and the module opens frozen with
+# it. (A freeze by the button cannot be made here, so the freeze's own
+# write is the unit tests'; and a headless Rack does not rewrite patch.json
+# at quit, so the button's let-go below is pinned by its log line only.) Then
+# the file cut short: not read, a warning naming it, no crash, and Freeze
+# let go. Then no file at all (a frozen patch quit before this build wrote
+# the tape at the freeze): Freeze let go with a line of INFO, no warning.
+for case in whole again truncated missing; do
+	if [ "$case" = again ]; then
+		[ -s "$auto/modules/1/tape.wav" ] || { echo "FAIL: Doldrums' tape.wav gone after a quit"; exit 1; }
+	else
 	rm -rf "$auto"
 	mkdir -p "$auto/modules/1"
 	jq -n --arg ver "$ver" --arg slug "$slug" '{version: "2.6.6", modules: [{id: 1, plugin: $slug, model: "Doldrums",
@@ -194,6 +203,7 @@ hdr = b"RIFF" + struct.pack("<I", 36 + len(data)) + b"WAVEfmt " + struct.pack("<
 blob = hdr + b"data" + struct.pack("<I", len(data)) + data
 open(sys.argv[1], "wb").write(blob if sys.argv[2] == "whole" else blob[:len(blob) // 3])
 EOF4
+	fi
 	status=0
 	(cd "$(dirname "$RACK_BIN")" && (sleep 3; echo) | ${limit[@]+"${limit[@]}"} "$RACK_BIN" -u "$user" -h >/dev/null 2>&1) || status=$?
 	cp "$log" "build/smoke/log-headless-doldrums-$case.txt"
@@ -201,9 +211,10 @@ EOF4
 		echo "FAIL: headless Rack with Doldrums' stored tape ($case, exit $status)"; grep -iE "fatal|crash|doldrums" "$log" | tail; exit 1
 	fi
 	case "$case" in
-	whole) grep -q "Doldrums: read the stored tape in [0-9]* ms: converted from 48000 Hz" "$log" ;;
-	truncated) grep -qE "warn.*Doldrums: the stored tape .* was not read" "$log" ;;
-	missing) grep -q "Doldrums: the patch has no stored tape" "$log" && ! grep -iE "\[[0-9.]+ (warn|fatal)" "$log" | grep -iq doldrums ;;
+	whole | again) grep -q "Doldrums: read the stored tape in [0-9]* ms: converted from 48000 Hz" "$log" ;;
+	truncated) grep -qE "warn.*Doldrums: the stored tape .* was not read: .*; Freeze let go, the tape records" "$log" ;;
+	missing) grep -qE "Doldrums: the patch has no stored tape .*: Freeze let go, the tape records" "$log" &&
+		! grep -iE "\[[0-9.]+ (warn|fatal)" "$log" | grep -iq doldrums ;;
 	esac || { echo "FAIL: Doldrums' stored tape ($case) not handled as expected"; grep -i doldrums "$log" | tail; exit 1; }
 	echo "ok: Doldrums headless, a stored tape ($case)"
 done
