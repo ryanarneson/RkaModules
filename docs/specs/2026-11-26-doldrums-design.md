@@ -623,6 +623,14 @@ As every module (CLAUDE.md, TESTING.md "Adding a module"):
   drag, `src/Overview.hpp` if it suits a scrolling ring, `src/Detents.hpp`,
   the soft bound, `rkatest::AliasMeter`. `src/Tape.hpp` is built round a
   moving write head at any speed and may not suit a plain ring.
+  (As built, 2026-11-26: the window is the module's own, `DoldrumsWindow`
+  in `Doldrums.cpp` drawing `src/doldrums/TapeView.hpp`'s snapshots;
+  `TapeWindow`, `src/TapeGesture.hpp`, `src/Overview.hpp` (its columns
+  stand still; a scrolling ring needs columns tied to absolute frames),
+  `src/Detents.hpp` and `src/Tape.hpp` are not used. Reused: the soft
+  bound (lifted to `src/SoftBound.hpp`), `src/WavFile.hpp`,
+  `src/Resample.hpp`, `rkatest::AliasMeter`; Eddy's worker pattern was
+  copied (`TapeStore.hpp`, `TapeKeeper.hpp`), not shared.)
 - The generator's addition for a drawn mark on a face (Panel).
 - `src/doldrums/bench.inc` (idle; frozen and held; busy: recording, the
   long grain, a 16-note comb with V/OCT moving, Blur and Shift up), the

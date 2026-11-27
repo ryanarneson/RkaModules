@@ -253,7 +253,7 @@ it measures 0 too). `libm-calls` wraps `sqrtf` and `sqrt` as well as the
 list below, for the per-bin roots in Doldrums' grain and tables: on the Mac
 they are instructions (0 calls, and a planted call through a pointer is
 counted, about 98 000 a second), and on Linux x86-64 with GCC 13 too (0
-calls in every module's cases, 2026-11-26: the check's flags include
+calls in every knobs-still case, 2026-11-26: the check's flags include
 `-funsafe-math-optimizations`, so GCC emits no errno call). Doldrums' ring takes a 64-bit remainder
 (`now % capacity`) every sample; replacing it with a mask moved idle by
 less than the runs' own spread (about 19 to 21 ns a sample either way).

@@ -24,8 +24,9 @@ The plain use, and the one to try first:
 
 The moment that was playing when you pressed it now sounds until you
 change something. The window's corner says **FROZEN HELD**. Press FREEZE
-again to let it go: the tape starts recording again and the sound moves on
-(see Freeze, below, for exactly how).
+again to let it go: the tape starts recording again, and the sound carries
+on from the frozen moment through what follows it, coming back to the
+present only when that pass ends (see Freeze, below).
 
 Why it holds: with **Position** fully right a pass starts at the newest
 moment on the tape, and with the tape frozen there is nothing after that
@@ -368,7 +369,10 @@ slice is taken when it is complete, and is heard over the grain that
 follows. On top of that, each grain's work is spread over the samples
 after its start, so a grain starts to sound a fixed time after it was
 taken: 640 samples at 44.1 and 48 kHz (14.5 and 13.3 ms), 1180 at 88.2 kHz
-and 1280 at 96 kHz (13.4 and 13.3 ms), always about 13 to 15 ms. So mixed
+and 1280 at 96 kHz (13.4 and 13.3 ms): about 13 to 15 ms from 44.1 kHz
+up. Below 44.1 kHz it stays 640 samples (20 ms at 32 kHz, 29 ms at
+22.05 kHz, 80 ms at 8 kHz), except Short at 8 kHz, where it is 510
+samples (64 ms). So mixed
 dry and wet are not in time; Mix is for blending a texture under its
 source, not for a tight effect.
 
@@ -443,7 +447,9 @@ tape is frozen anew (it is converted again each time it is read).
   at its busiest (the Long grain, a 16-note comb with V/OCT moving, Blur
   and Shift up). The work is spread so no one sample does more than one
   transform: the most work on any single sample measured 70 µs at 96 kHz
-  with the Long grain and 33 µs at 48 kHz.
+  with the Long grain and 33 µs at 48 kHz, with the core at its working
+  clock. From a light load the first grains took up to about 1.7 times as
+  long (about 110 to 120 µs at 96 kHz).
 
 ## What to expect
 
@@ -451,13 +457,14 @@ These are limits of the method or of this build, found while it was
 built. None is a fault you can fix with a setting, unless one is named.
 
 - **The wet sound is about a grain late** (0.17 to 0.68 s at 48 kHz) plus
-  13 to 15 ms. Mixed with the dry sound it is not in time.
+  13 to 15 ms (more below 44.1 kHz: see Mix and the latency). Mixed with the dry sound it is not in time.
 - **A pure tone wavers in level.** Where two grains overlap, their random
   phases may add or cancel, and a pure tone fills only a few frequency
   lines, so its level over ten seconds can wander by up to about 2 dB at
   the Long grain (about 1 dB at Short); over a minute it averages out to
-  within half a dB. Noise and dense chords hold steady (within a few
-  hundredths of a dB). This waver is part of the method's sound.
+  within half a dB. Noise holds steady, within a few hundredths of a dB;
+  a held chord of a few notes stays within about half a dB over each ten
+  seconds (measured on a held triad). This waver is part of the method's sound.
 - **A frozen full-level sound peaks well above its input.** A held 5 V
   sine comes out at the same loudness but as a narrow band of noise, whose
   peaks reach 13 to 14 V. The output's soft bound (exact up to 8 V) then
@@ -492,9 +499,10 @@ built. None is a fault you can fix with a setting, unless one is named.
 - **A tuned drone from noise.** Hadal's L and R into IN L and IN R.
   HARMONICS to 100 %, Grain Long (menu). Shoal running Harrington 1200:
   its B, C and D outputs (the chord's three notes) merged into one
-  polyphonic cable (VCV's Merge, from Fundamental) into V/OCT, and ROOT at
-  C4 (noon) so the comb sits at Shoal's pitches, or an octave or two below
-  for a deeper drone. Trigger Harrington's moves slowly (a slow clock or
+  polyphonic cable (VCV's Merge, from Fundamental) into V/OCT. Shoal's
+  pitch CV reads 0 V as a C, so with ROOT on any C the comb plays Shoal's
+  notes; set its octave by ear to the voice it accompanies (C2, the
+  default, or lower for a deeper drone). Trigger Harrington's moves slowly (a slow clock or
   Squall into its TRIG 2 to 4): each new chord dissolves in over about a
   grain. Width at its default gives a clear pitch; turn it up to let the
   noise back in. Partials sets how bright it is.
@@ -526,7 +534,10 @@ built. None is a fault you can fix with a setting, unless one is named.
   5. Drag in the window to put the anchor's flag exactly at the clip's
      start. Nothing sounds while you do. The pass will run from there to
      the end of the tape, so anything recorded after the clip and before
-     the freeze is stretched too: freeze promptly.
+     the freeze is stretched too: freeze promptly. The first grain is the
+     slice that ends at the flag, so the clip's onset comes in over the
+     first grains, as a fade in: that is the method, not a flag set late;
+     leave the flag at the clip's start.
   6. Set STRETCH (at 8 a 10 s clip becomes about 80 s).
   7. **Eddy B**: Doldrums' L and R into its IN L and IN R, and Doldrums'
      **RUN** into its **REC** gate. Patch RUN while it is low (it is, while
@@ -537,7 +548,7 @@ built. None is a fault you can fix with a setting, unless one is named.
      last grain has faded, so Eddy B stops with the fade out and plays the
      recording back as its tape. That is exactly one pass.
 
-  Eddy B holds 5 minutes: a 10 s clip at up to about x30, or the whole
+  Eddy B holds 5 minutes at 48 kHz (2:54 at 96 kHz): a 10 s clip at up to about x30, or the whole
   tape at up to x10. A second trigger at TRIG records a new pass over the
   first.
 
