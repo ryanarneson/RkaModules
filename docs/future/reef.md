@@ -1,6 +1,8 @@
 # Reef: two attenuators
 
-Status: idea, 2026-11-15. Not designed. One of six 2 HP utilities.
+Status: **dropped** by the user, 2026-11-27: Tackle (four attenuverters
+with offset) covers it. Kept for the record. Before that: an idea,
+2026-11-15, not designed, one of six 2 HP utilities.
 
 ![mockup](reef-mockup.svg)
 

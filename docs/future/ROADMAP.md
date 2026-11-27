@@ -103,7 +103,7 @@ what this page said of Knot before); it should be designed round slow ratios (/1
 round the sketch's multiples. The utilities table below is in the new
 suggested order. The designer suggests dropping Lull (Beacon's HOLD
 mode and Squall's Swell cover it) and Reef (Tackle covers it); the user
-has not ruled on either. Doldrums is the suggested next large build,
+dropped both on 2026-11-27 (see "Dropped", at the foot). Doldrums is the suggested next large build,
 with the small utilities filling in round it.
 
 **Changes since (2026-11-26, later):** Doldrums was built (16 HP), the
@@ -124,7 +124,8 @@ user has heard the test builds from 2.0.46 (2.0.50 is the fifth). The manual is
 
 ## 1. A whole patch from RKA alone
 
-With Sway, Fathom and Shoal these six make a complete dark ambient patch:
+With Sway, Fathom and Shoal the original six here (Sluice, Fog, Hadal,
+Ballast, and Plimsoll and Lull, since moved and dropped) made a complete dark ambient patch:
 sound, space, loudness under control, stereo, and a safe output.
 
 | # | Module | Effort | Why here |
@@ -133,7 +134,6 @@ sound, space, loudness under control, stereo, and a safe output.
 | 2 | [Fog](fog.md) (built) | L | Reverb. The largest single gain for this music: Fathom into Fog is already a piece. |
 | 3 | [Hadal](hadal.md) (built) | S | Rumble and noise. Cheap, immediately in genre, and the noise source Rigging will want. |
 | 4 | [Ballast](ballast.md) (built) | M | Stereo mixer with level CV; pan in its Pan expander (built). From here a patch needs no other maker's mixer. |
-| 6 | [Lull](lull.md) (low priority) | S | Slew. Slowing everything down is half of this music, and it is 2 HP of work. Squall's Swell covers much of it for now, and Beacon's HOLD mode is a slew limiter; a candidate to drop (2026-11-26). |
 | new | [Tender](tender.md) | M | Aux sends and returns for Ballast, as an expander. Fog, Wake, Spindrift and Eddy are most useful shared between channels, and today each channel needs its own. Probably the most useful missing piece for a real patch. Added 2026-11-26. |
 | new | [Ebb](ebb.md) | S | Mutes and slow fades on a button or a gate, as a Ballast expander or alone. Bringing layers in and out by hand is the commonest gesture in a long piece. Added 2026-11-26. |
 
@@ -208,7 +208,6 @@ a gap between larger builds.
 | 28 | [Splice](splice.md) | S | Adder. |
 | 31 | [Bell](bell.md) | S | Manual trigger. |
 | 32 | [Sextant](sextant.md) | S | Scanner between four sources; with the stepped mode added to its page (2026-11-26) it is also the sequential switch. |
-| 30 | [Reef](reef.md) | S | Attenuators. Tackle may make it unnecessary; a candidate to drop (2026-11-26). |
 | 5 | [Plimsoll](plimsoll.md) | M | Limiter. Skipped for now: Ballast's soft limit and DC blocker keep the output safe; built when long drones into reverb call for real limiting. |
 
 ## 7. Only if wanted
@@ -222,6 +221,16 @@ Good ideas that this music does not need, or that Shoal already covers.
 | 36 | [Bearing](bearing.md) | M | Quantiser. Shoal covers it. |
 | 37 | [Seastate](seastate.md) | S | Wavefolder. The weakest idea in the set. |
 | new | [Fetch](fetch.md) (later) | M | A player for long field recordings, read from disk. Moved down 2026-11-22: Eddy's 5 minutes are enough for now. Built when a piece needs a recording longer than that; it reuses Eddy's window widget, WAV reader, rate conversion and band-limited read. |
+
+## Dropped
+
+Ideas the user has taken off the list. Their pages are kept, marked
+dropped, for the reasoning and the sketches.
+
+| # | Module | Dropped | Why |
+|---|--------|---------|-----|
+| 6 | [Lull](lull.md) | 2026-11-27 | Slew limiter. Beacon's HOLD mode is a slew limiter and Squall's Swell smooths, so the ground is covered twice. |
+| 30 | [Reef](reef.md) | 2026-11-27 | Two attenuators. Tackle (four attenuverters with offset) does the same job and more. |
 
 ## Things that could change the order
 

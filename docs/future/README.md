@@ -62,7 +62,7 @@ designer's reading was:
 - **Core.** Sound: Fathom, Foghorn, Ping, Buoy. Space and texture: Fog,
   Spindrift, Wake. Slow movement: Sway, Neap, Reckoner, Squall.
   Long-form structure: Watch, Log, Shoal. Mixing and safety: Ballast,
-  Plimsoll, Thermocline. Glue: Tackle, Splice, Lull, Hold, Cleat.
+  Plimsoll, Thermocline. Glue: Tackle, Splice, Lull (since dropped), Hold, Cleat.
 - **Matters less for beatless music.** Knot, Sounding, Bearing (Shoal
   covers all three), Seastate, and Beacon, Sextant and Signal, which are
   useful in places but not central.
@@ -97,8 +97,8 @@ an instrument of their own; there is no room for one.
 |--------|--------------|
 | [Cleat](cleat.md) | Multiple: one input to five outputs |
 | [Splice](splice.md) | Precision adder: four inputs summed at unity |
-| [Reef](reef.md) | Two attenuators |
-| [Lull](lull.md) | Slew limiter with separate rise and fall |
+| [Reef](reef.md) | Two attenuators (dropped 2026-11-27: Tackle covers it) |
+| [Lull](lull.md) | Slew limiter with separate rise and fall (dropped 2026-11-27: Beacon's HOLD and Squall's Swell cover it) |
 | [Hold](hold.md) | Sample and hold, with track |
 | [Bell](bell.md) | Manual trigger and gate; gate to trigger |
 
