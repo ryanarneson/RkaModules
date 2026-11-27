@@ -301,9 +301,7 @@ struct Doldrums : Module {
 		    "after 32, and held (still) at the end";
 		configParam(STRETCH_ATT_PARAM, -1.f, 1.f, d.params[F::STRETCH_ATT], "Stretch CV", "%", 0.f, 100.f);
 		configParam<PositionQuantity>(POSITION_PARAM, 0.f, 1.f, d.params[F::POSITION], "Position")->description =
-		    "Where a pass starts (the Position flag): now at the right, 30 s back less a grain at the left. A press or a "
-		    "drag in the window puts the flag under the mouse and plays from there (a new pass, as TRIG); this knob and "
-		    "its CV move the flag and the read head together without a new pass";
+		    "Where a pass starts: now at the right, 30 s back at the left. Press in the window to play from there";
 		configParam(POSITION_ATT_PARAM, -1.f, 1.f, d.params[F::POSITION_ATT], "Position CV", "%", 0.f, 100.f);
 		configParam<HarmonicsQuantity>(HARMONICS_PARAM, 0.f, 1.f, d.params[F::HARMONICS], "Harmonics")->description =
 		    "The tuned comb: 0 % out of the path, 100 % only its teeth pass";
