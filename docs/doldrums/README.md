@@ -631,6 +631,12 @@ has not been written by then; in both cases only when:
   tape is frozen writes the tape then);
 - the tape has not been written since it froze (one freeze, one write).
 
+How often: a freeze by the gate alone never writes it; each freeze by
+the button writes it once, over the one file (no copies are kept), so
+tapping the button writes it each time the tape stays frozen for more
+than a moment (about 5 to 10 ms: the fade, then the background thread's
+next look), about 11.5 MB at 48 kHz each time, on a background thread.
+
 So a frozen tape survives quitting Rack without saving: Rack's autosave
 keeps the module's folder, and the patch reopens frozen with its tape.
 Freezing anew writes the new tape over the old one. With the button off
@@ -668,11 +674,13 @@ as you left it. The file stays until the next save, which removes it (the
 button is off), or until a new freeze writes over it. The words stay
 until the file is written or removed, or the module is initialised.
 
-**A frozen tape that could not be written** is not kept: the window says
-**TAPE NOT SAVED** and the log says why. Written at the freeze, the old
-file is left as it was, and the next save tries again; at a save, the old
-file is removed. The words stay until the tape is written or a save
-removes the file as planned.
+**A frozen tape that could not be written** (a full disk, a folder that
+cannot be written) is not kept: the window says **TAPE NOT SAVED**, the
+log says why, and the older file (an earlier freeze's) is removed, so the
+patch never reopens on the wrong tape: quit before the tape is written,
+and it opens thawed. The next save, or the next freeze, tries again. The
+words stay until the tape is written or a save removes the file as
+planned.
 
 **When Rack's sample rate changes**, a frozen tape is converted to the new
 rate off the audio thread; until it is ready the tape is silent and stays
@@ -683,8 +691,9 @@ tape is frozen anew (it is converted again each time it is read).
 
 **Duplicating a frozen module** (Ctrl+D): what the copy holds is not yet
 tested. The copy opens with Freeze on and reads the tape file from its
-own folder in the patch, so it may hold the original's tape, an older
-one, or silence.
+own folder in the patch, so it may hold the original's tape or an older
+one; if it finds no file there it opens thawed (above), never frozen and
+silent.
 
 ## Specifications
 
@@ -757,8 +766,9 @@ built. None is a fault you can fix with a setting, unless one is named.
 - **Each freeze by the button writes the tape to disk** (when Keep the
   frozen tape with the patch is on): about 11.5 MB at 48 kHz, 23 MB at
   96 kHz, 184 MB at 768 kHz, a moment after the press, on a background
-  thread.
-  Nothing in the audio waits for it, and it is not heard.
+  thread. Nothing on the audio thread blocks on it, and it is not heard;
+  a thaw that comes while the tape is being copied starts the recording
+  that much later (a few ms at 48 kHz, tens of ms at 768 kHz).
 - **Deleting the module while it reads or writes its tape** (just after a
   patch opens, during a rate change's conversion, or just after a press of
   Freeze) holds Rack's audio until that read or write finishes.

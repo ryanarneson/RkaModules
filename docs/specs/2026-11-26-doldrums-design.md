@@ -622,10 +622,12 @@ Knobs only. Each is read once a grain.
   worker (about 11.5 MB at 48 kHz; nothing on the audio thread waits for
   it), by the same rules and the same write as a save. Rack's autosave
   keeps the storage folder, so a quit and a restart find the file. The
-  save stays as the backstop and is still the only one that removes the
-  file (a thaw does not remove it at once); every write and removal is
-  the worker's, one at a time. Turning Keep on while frozen writes the
-  tape.)
+  save stays as the backstop and removes the file when the button or
+  Keep is off (a thaw does not remove it at once); a freeze whose write
+  fails removes the older file, as a save that cannot write does, so a
+  quit then opens thawed rather than on an earlier tape; every write and
+  removal is the worker's, one at a time. Turning Keep on while frozen
+  writes the tape.)
 - Menu: **Keep the frozen tape with the patch**, on by default.
 - A reopened patch has the same tape and the same Position, and starts
   its pass from the anchor. A sound that was only held (Stretch at the
