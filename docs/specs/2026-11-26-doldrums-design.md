@@ -612,6 +612,20 @@ Knobs only. Each is read once a grain.
   been written since it froze. A tape frozen by the gate alone is not
   kept: the button is the state the patch saves, and the file follows
   it. A tape that is not frozen stores nothing. *(call)*
+  (As built, 2026-11-26, Task 15, after the user found at 2.0.48 that a
+  frozen module was still frozen after quitting and restarting Rack but
+  its tape was gone, so nothing played: Rack sends a module's save only
+  when the user saves the patch to a file, never for its autosave or at
+  quit, so a tape written only at a save was lost by a quit. The tape is
+  now also written when the button freezes it: soon after the freeze, once
+  its fade is on the tape, with Keep on, once a freeze, on the module's
+  worker (about 11.5 MB at 48 kHz; nothing on the audio thread waits for
+  it), by the same rules and the same write as a save. Rack's autosave
+  keeps the storage folder, so a quit and a restart find the file. The
+  save stays as the backstop and is still the only one that removes the
+  file (a thaw does not remove it at once); every write and removal is
+  the worker's, one at a time. Turning Keep on while frozen writes the
+  tape.)
 - Menu: **Keep the frozen tape with the patch**, on by default.
 - A reopened patch has the same tape and the same Position, and starts
   its pass from the anchor. A sound that was only held (Stretch at the
@@ -632,6 +646,20 @@ Knobs only. Each is read once a grain.
   tape is being read holds Rack's audio until the read ends (the worker
   is joined under Rack's lock); the manual says so. Whether a duplicated
   frozen module (Ctrl+D) carries its tape was not tried.)
+  (As built, 2026-11-26, Task 15, superseding the bullet and the note
+  above: a patch that opens with the Freeze button on but gets no tape
+  opens thawed, never frozen and silent, as Spindrift's does: the button
+  is let go (the param set to 0, by the UI side, never the audio thread)
+  and the module records and plays as one never frozen. That is so for a
+  missing file (a line of information in the log, nothing in the
+  window), for Keep off, and for a file that cannot be read (TAPE NOT
+  READ and a warning, as before; the file is no longer kept, since the
+  button is off: the next save removes it, or a new freeze writes over
+  it). Most bad files are refused by their header as the patch opens,
+  before a sample; one that fails in the read lets go of the button as
+  soon as the read fails, unless the user has pressed Freeze since the
+  patch opened. A gate high at open still freezes. Deleting the module
+  while it writes its tape also holds Rack's audio until the write ends.)
 - Initialize silences the tape and returns everything to its default.
   (As built, 2026-11-26: the menu too. After Initialize, and after a rate
   change when not frozen, the recording on the silent tape fades in from
@@ -800,7 +828,9 @@ TESTING.md applies in full. Particular to Doldrums:
   or libm on the path.
 - **With the patch.** Golden saved state. A frozen tape comes back to
   the bit; a tape that is not frozen stores no file; the file is not
-  written twice for one freeze; a missing file opens silent; a rate
+  written twice for one freeze; a missing file opens silent (as built,
+  Task 15: thawed, the button let go; the tape written at the freeze
+  without a save); a rate
   change converts a frozen tape (a tone keeps its pitch within 1 cent)
   with no lock, allocation or free on the audio thread.
 - **The window.** The reduced copy matches the tape's peaks column by

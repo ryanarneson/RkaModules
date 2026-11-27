@@ -620,19 +620,26 @@ The random seed is not saved.
 
 **A frozen tape is kept with the patch**, as `tape.wav` in the module's
 folder inside the patch (32-bit float stereo, in volts, at Rack's rate:
-about 11.5 MB at 48 kHz, 23 MB at 96 kHz). It is written when you save the
-patch, and only when:
+about 11.5 MB at 48 kHz, 23 MB at 96 kHz). It is written when the Freeze
+button freezes the tape, a moment after the press (once the 5 ms fade
+onto the tape has been written), and again when you save the patch if it
+has not been written by then; in both cases only when:
 
 - the Freeze **button** is on (a tape frozen by the gate alone is not
   kept: the button is what the patch saves, and the tape follows it);
-- **Keep the frozen tape with the patch** is on;
+- **Keep the frozen tape with the patch** is on (turning it on while the
+  tape is frozen writes the tape then);
 - the tape has not been written since it froze (one freeze, one write).
 
-With the button off or Keep off, the file is removed at the next save. A
-tape that is not frozen stores nothing. **A sound that is only held**
-(Stretch at its stop, the tape recording) **is not kept**: to keep a
-sound, freeze it with the button. Remember that Freeze while held takes
-the slice at Position's place (Freeze, above).
+So a frozen tape survives quitting Rack without saving: Rack's autosave
+keeps the module's folder, and the patch reopens frozen with its tape.
+Freezing anew writes the new tape over the old one. With the button off
+or Keep off, the file is removed at the next save of the patch (not at
+the thaw itself: until a save, the file is only read if the patch opens
+with the button on). A tape that is not frozen stores nothing. **A sound
+that is only held** (Stretch at its stop, the tape recording) **is not
+kept**: to keep a sound, freeze it with the button. Remember that Freeze
+while held takes the slice at Position's place (Freeze, above).
 
 A reopened patch has the same tape and the same Position, and starts its
 pass from the Position flag: in Go round at once, in Stop waiting for a trigger
@@ -640,19 +647,32 @@ unless there is nothing to travel through (then held). Until the tape has
 been read (on a background thread, a moment after the patch opens) the
 tape is silent and frozen, and saves leave the file alone.
 
-**A patch saved without its tape file** opens with a silent tape and no
-error (a line in Rack's log says so).
+**A patch that opens with Freeze on but has no tape to read opens
+thawed**: the Freeze button is let go, and the module records and plays
+as if it had never been frozen, rather than sitting frozen on a silent
+tape. That is so when the tape file is missing (a frozen patch quit
+before this build, or a file deleted by hand: a line in Rack's log says
+so, and nothing shows in the window), when Keep the frozen tape with the
+patch was off, and when the file is there but cannot be read (below). A
+cable at GATE that is high when the patch opens still freezes the tape, as
+it always does, so with one the tape stays frozen (and silent) until the
+gate falls: nothing was kept for a gate.
 
 **A tape file that is there but cannot be read** (damaged, cut short, not a
-WAV) leaves the tape silent; the window says **TAPE NOT READ** and the log
-says why. The file is kept while Freeze stays on, so it can still be
-mended; freezing a new tape and saving writes over it. The words stay
-until a save writes or removes the file, or the module is initialised.
+WAV) is not loaded: the Freeze button is let go as above, the window says
+**TAPE NOT READ** and the log says why. Most such files are refused as the
+patch opens, before a sample is played; one that fails while it is read
+(a moment later) lets go of the button as soon as the read fails, unless
+you have pressed Freeze yourself meanwhile, in which case the button stays
+as you left it. The file stays until the next save, which removes it (the
+button is off), or until a new freeze writes over it. The words stay
+until the file is written or removed, or the module is initialised.
 
-**A frozen tape that could not be written** at a save is not kept: the
-window says **TAPE NOT SAVED**, the log says why, and the old file is
-removed. The words stay
-until a save writes the tape or removes the file as planned.
+**A frozen tape that could not be written** is not kept: the window says
+**TAPE NOT SAVED** and the log says why. Written at the freeze, the old
+file is left as it was, and the next save tries again; at a save, the old
+file is removed. The words stay until the tape is written or a save
+removes the file as planned.
 
 **When Rack's sample rate changes**, a frozen tape is converted to the new
 rate off the audio thread; until it is ready the tape is silent and stays
@@ -734,9 +754,14 @@ built. None is a fault you can fix with a setting, unless one is named.
   the button (above).
 - **A change of Grain bumps the level for one grain** (up to about 3 dB,
   most from Long to Short), as the two sizes overlap. It does not click.
-- **Deleting the module while it reads its tape** (just after a patch
-  opens, or during a rate change's conversion) holds Rack's audio until
-  that read finishes.
+- **Each freeze by the button writes the tape to disk** (when Keep the
+  frozen tape with the patch is on): about 11.5 MB at 48 kHz, 23 MB at
+  96 kHz, 184 MB at 768 kHz, a moment after the press, on a background
+  thread.
+  Nothing in the audio waits for it, and it is not heard.
+- **Deleting the module while it reads or writes its tape** (just after a
+  patch opens, during a rate change's conversion, or just after a press of
+  Freeze) holds Rack's audio until that read or write finishes.
 
 ## Patches to try
 
@@ -850,9 +875,9 @@ recording starts again with no fade, so the tape has a join there.
   Mix moves to its default smoothly.
 - **Undo after Initialize** brings back the knobs, the Freeze button and
   the menu, but not the tape: Freeze comes back on over the new, nearly
-  empty tape (a new freeze), so the next save writes that tape over the
-  one kept with the patch. To get the old tape back, reopen the patch
-  without saving.
+  empty tape (a new freeze), and that tape is written at once over the
+  one in the module's folder. The patch file you last saved still holds
+  the old tape: to get it back, reopen that file without saving.
 - **Randomize** leaves Freeze, Mix and the menu alone (it would otherwise
   freeze the tape or take the effect away).
 - Each Doldrums holds its tape in memory: 11.5 MB at 48 kHz. While a

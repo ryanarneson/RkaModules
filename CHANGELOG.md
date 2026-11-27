@@ -72,7 +72,11 @@
     pass: Stop (until TRIG)" plays one pass per trigger, for recording into
     Eddy.
   - A tape frozen by the button is kept with the patch (`tape.wav`) and
-    converted at a rate change.
+    converted at a rate change. It is written when the button freezes it
+    (and at a save if not yet written), so it survives quitting Rack
+    without saving; a patch that opens frozen with no tape to read (no
+    file, Keep off, a bad file) opens thawed, the button let go, rather
+    than frozen and silent (found by the user at 2.0.48).
   - "While recording" (menu): Drift (the default: the read point falls
     behind at Stretch's pace while the tape records) or Follow (it stays
     on the Position flag, the window says FOLLOW, and Stretch acts once
