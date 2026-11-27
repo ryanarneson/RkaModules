@@ -104,7 +104,7 @@ Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the cli
 
 <div class="patch"><h4>E. Capture, then stretch</h4>
 <div class="chain">A phrase (Rigging, or a recording from Eddy) → IN L/R · menu: While recording: Follow</div>
-<p>The corner says <b>FOLLOW</b> and the gold bar sits on the flag: you hear the phrase as it comes, Position's distance late, whatever Stretch says. When it has played, press <b>FREEZE</b>; press in the window at the phrase's start (the pass plays from there); set <b>STRETCH</b> and listen. Release FREEZE to go back to following the input at once. Step by step in the manual's "Patches to try".</p></div>
+<p>The corner says <b>FOLLOW</b> and the gold bar sits on the flag: you hear the phrase as it comes, Position's distance late, whatever Stretch says. When it has played, press <b>FREEZE</b>; press in the window at the phrase's start (the pass plays from there); set <b>STRETCH</b> and listen. To go back to the live input, turn POSITION fully right (or press at the window's right edge), then release FREEZE; released with the flag still back at the phrase's start, the phrase plays again unstretched, and the new input comes only after it. Step by step in the manual's "Patches to try".</p></div>
 </main>
 
 <script>
@@ -150,6 +150,9 @@ const groups = [
   ["Hold at Position fully right (FROZEN AT END) with Stretch at 1, then release FREEZE. Again with Stretch at 8.",
    "Both times the gold bar goes back to the flag at the right edge at once and a new pass starts there. At x1 it stays on the flag: you hear the live input at once (the frozen moment dissolves into it in about a third of a second). At x8 it starts at now and then falls back to the left of the flag, the sound it reads scrolling with it: you hear the input from the thaw onward, slowed (about 26 s behind after half a minute, then back to the flag), not the live input. (That is While recording: Drift, the default. In Follow the gold bar stays on the flag after the thaw at x8 too, and you hear the live input at once: the checks under \"While recording: Drift or Follow\".)",
    "Whether the thaw's return to the flag is what you expect (the user's ruling on 2.0.46)."],
+  ["The same at Position's default (about 3 s back): a phrase playing, press FREEZE, wait a few seconds, release FREEZE. At x1, at x8, then (menu) in While recording: Follow.",
+   "The gold bar goes back to the flag at once, but the tape did not move while frozen, so the flag is 3 s before the freeze. At x1 you hear about 3 s of the sound from just before the freeze, then the new input, 3 s late. At x8 those 3 s come drawn out (about 24 s), then a little of the new input before the pass returns to the flag. In Follow, at any Stretch, as at x1: about 3 s from before the freeze, then the new input, 3 s late. Only at Position fully right (the check above) is it the live input within about a grain.",
+   "Whether a thaw should replay the flag's distance of tape from before the freeze (it does now), or go straight to the new input."],
   ["Recording, Stretch 1, Position fully right. Turn Stretch to 8 for ten seconds, then back to 1.",
    "At x1 the gold bar sits on the flag at the right edge. At x8 it falls back to the left of the flag. Back at x1 it rejoins the flag at the next grain (a dissolve) and stays there: the output is live again, not late.",
    "Whether Stretch at 1 should always mean on the flag (it does now)."],
@@ -176,8 +179,8 @@ const groups = [
    "A scan back and forth across the tape, each grain a new slice, no clicks; the flag, the gold bar and the slice sweep across the window together.",
    null],
   ["Stretch at ∞, tape recording (HELD), a slow LFO on Position CV.",
-   "The held sound follows Position: each move takes a new slice at the flag (the gold bar goes to the flag and holds there).",
-   "Whether a held sound should follow a modulated Position, or stay put until a bigger move."]]],
+   "The corner says HELD, but with this build each move of Position takes the sound at the moving flag (the gold bar goes to the flag and holds there until the next move): what you hear is the input as it is read at the flag, changing as the LFO moves, not one held moment.",
+   "Whether that is what you want from a held sound under a moving Position, or it should keep its moment until a bigger move (or until you let go of the stop)."]]],
  ["While recording: Drift or Follow", [
   ["The same changing input both ways: a phrase or Rigging's chords into IN L, Position at its default, Stretch at 8, a scope on RUN. Menu, While recording: Drift; watch the window and listen for a minute. Then choose Follow and do the same.",
    "Drift (the default): no corner word; the gold bar leaves the flag and falls back to the left of it, riding with the sound it reads, the bright peaks from it to where the oldest sound will catch it; about every 30 s it dissolves back to the flag (RUN dips). You hear the input drawn out, an evolving digest that skips most of it. Follow: the corner says FOLLOW; at the next grain the gold bar rejoins the flag (one RUN dip) and then stays on it, the peaks scrolling under both, bright from the gold bar to the right edge; RUN stays high. You hear the input as it comes, smeared, about 3 s late. Turning Stretch changes nothing; its tooltip adds \"(waits for Freeze)\".",
@@ -186,8 +189,8 @@ const groups = [
    "Still FOLLOW, not HELD: the gold bar stays on the flag and you hear the input as before. After the freeze: FROZEN HELD, the slice at the flag held.",
    "Verdict WHILE RECORDING: whether, in Follow, Stretch's stop should still hold while recording (it does not now)."],
   ["Follow: play a phrase, then press FREEZE; press in the window at the phrase's start; Stretch at 8. Later release FREEZE.",
-   "Frozen, everything is as in Drift: FROZEN, a pass from the flag at Stretch's pace, back to the flag at the end. Released: FOLLOW at once, the gold bar back on the flag, the input heard again within about a grain, Position's distance late.",
-   null],
+   "Frozen, everything is as in Drift: FROZEN, a pass from the flag at Stretch's pace, back to the flag at the end. Released with the flag still at the phrase's start: FOLLOW, the gold bar on the flag, playing on at the input's own speed: first the tape from the flag to the freeze (the phrase again, unstretched), then the new input, that far late. Do it again with the flag at its default (about 3 s back): about 3 s of the sound from just before the freeze, then the new input, 3 s late. And with Position fully right before releasing (FROZEN AT END): the live input within about a grain.",
+   "Whether a thaw in Follow should go straight to the live input wherever the flag is (it does not now: it plays the flag's distance of tape from before the freeze first)."],
   ["Follow, at x8, then choose Drift again while the tape records.",
    "The gold bar leaves the flag where it is and falls behind at x8; no dip on RUN, no jump in the sound.",
    null],
@@ -263,7 +266,7 @@ const groups = [
    "The same loudness as the input, but peaks of 13 to 14 V for the sine before the soft bound (the output is bounded at 10 V), with a little roughness. A pad does it less on a scope but can reach the bound too.",
    "Verdict LEVEL: keep equal loudness, or make the wet sound quieter."],
   ["At 96 kHz, Grain Long, Wide on, Harmonics 100 % with a 16-note chord, Blur and Shift up: watch Rack's CPU meter and listen for crackle.",
-   "Measured at 48 kHz on the development Mac: about 0.33 % of a core per module at these settings; at 96 kHz expect about double (roughly 0.6 to 0.7 % on Rack's meter). No single sample does more than one transform (68 µs measured on the development Mac at its working clock; from a cold start the first grains can take up to about 1.7 times as long).",
+   "Measured at 48 kHz on the development Mac: about 0.33 % of a core per module at these settings; at 96 kHz expect about double (roughly 0.6 to 0.7 % on Rack's meter). No single sample does more than one transform (about 70 µs measured on the development Mac at 96 kHz at its working clock, against a bound of 100 µs; from a cold start the first grains can take up to about 1.7 times as long).",
    "Whether a crackle appears on your machine.", true]]],
  ["With the patch", [
   ["Freeze by the button, save the patch, close Rack, reopen it.",

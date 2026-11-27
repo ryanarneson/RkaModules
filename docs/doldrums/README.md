@@ -33,7 +33,9 @@ The defaults, and the thing to try first:
    to the flag and plays them again, dissolving from the end into the
    start. Turn **STRETCH** to hear them faster or slower.
 4. Press FREEZE again to let it go: the tape records again and the read
-   head goes straight back to the flag.
+   head goes straight back to the flag. The flag is still 3 seconds
+   before the freeze, so you first hear those 3 seconds again, drawn
+   out, and the new input only after them.
 
 **At the defaults the wet sound is always about 3 seconds or more behind
 the input**, and Freeze loops a stretch of the last 3 seconds rather than
@@ -395,10 +397,18 @@ x8). From there the read head travels at Stretch's pace while new sound
 arrives at full pace, as in any recording pass: at x1 it keeps up and you
 hear the live input; above x1 it falls behind again, so you hear the
 input from the thaw onward, slowed, not the live input (at x8 about 26 s
-behind after half a minute, then back to the flag). **In Follow** the read
-head stays on the flag at any Stretch, so after a thaw you hear the
-input again at once, Position's distance late, dissolving in within
-about a grain. Stopped
+behind after half a minute, then back to the flag). That is with Position
+fully right. **With the flag back in the tape** (Position's default is
+about 3 s back), the tape did not move while frozen, so the flag is
+Position's distance before the freeze: the read head plays that stretch
+of sound from before the freeze first, and reaches the new input only
+after it: at x1 after about 3 s at the default (then 3 s late); at x8
+the 3 s are drawn out (about 24 s) and only a little of the new input is
+heard before the pass returns to the flag. **In Follow** the read head
+stays on the flag at any Stretch and plays on at the input's own speed:
+first Position's distance of the tape from before the freeze (about 3 s
+at the default), then the new input, that far late; with Position fully
+right, the live input within about a grain. Stopped
 (Stop setting, waiting for TRIG), a thaw leaves it stopped: no pass, and
 RUN stays low, so a recorder gated by RUN is not restarted. A thaw that
 starts a new pass while RUN is high makes RUN's 1 ms dip, as any new pass
@@ -469,13 +479,14 @@ Right-click the panel:
 - **While recording**: **Drift** (the default) or **Follow**: what the
   read head does while the tape is not frozen. Each has a line under it
   in the menu.
-  - **Drift**, "Stretched as it records: falls behind, then back to the
-    flag": the read head travels at Stretch's pace, falls behind the
-    input and returns to the Position flag when the oldest sound catches
-    it: a slowed, evolving digest of the input that skips most of it. This
-    is how the module has always behaved.
-  - **Follow**, "Unstretched, Position's distance late; Stretch waits for
-    Freeze": the read head stays on the flag whatever Stretch says, so
+  - **Drift**, "Stretch acts on the input as it records": above x1 the
+    read head travels at Stretch's pace, falls behind the input and
+    returns to the Position flag when the oldest sound catches it: a
+    slowed, evolving digest of the input that skips most of it. At x1 it
+    sits on the flag; at the stop it holds. This is how 2.0.47 and
+    earlier behaved while recording.
+  - **Follow**, "Stretch waits for Freeze; the input plays on at the
+    flag": the read head stays on the flag whatever Stretch says, so
     you hear the input as it comes (smeared, Position's distance late,
     plus about a grain), and Stretch takes effect once the tape is
     frozen: capture first, stretch after. The window's corner says
@@ -756,7 +767,9 @@ built. None is a fault you can fix with a setting, unless one is named.
   retrace its path. Turn Stretch back off the stop for the read head to
   creep on from wherever the scan has left it.
 - **Capture, then stretch** (While recording: Follow):
-  1. Menu, While recording: **Follow**. Patch a sound into IN L and IN R.
+  1. Menu, While recording: **Follow**, and At the end of a pass: **Go
+     round** (the default; in Stop the freeze would wait, FROZEN STOPPED,
+     for a trigger). Patch a sound into IN L and IN R.
      The corner says FOLLOW and the gold bar sits on the flag: you hear
      the input as it comes, smeared, Position's distance late, at any
      Stretch.
@@ -767,9 +780,14 @@ built. None is a fault you can fix with a setting, unless one is named.
   4. Set **STRETCH** and listen: the phrase is drawn out at that pace, to
      the end of the tape, then again from the flag (Go round). Press in
      the window again to start from elsewhere.
-  5. Let FREEZE go: the gold bar goes back to the flag and follows the
-     input again at once, Position's distance behind it (turn Position
-     fully right to hear it about a grain late).
+  5. To go back to the live input: turn POSITION fully right (or press
+     at the window's right edge: FROZEN AT END, the last moment held),
+     then let FREEZE go. The gold bar goes to the flag at now and you
+     hear the input within about a grain. If you let FREEZE go with the
+     flag still back at the phrase's start, the gold bar goes there and
+     plays on at the input's own speed: first the tape from the flag to
+     the freeze (the phrase again, unstretched), then the new input, as
+     far behind it as the flag is.
 - **Draw a clip out into a long loop** (Eddy into Doldrums into Eddy):
   1. **Eddy A**: load the clip (right-click, Load file), LOOP off. Its L
      and R outputs into Doldrums' IN L and IN R.

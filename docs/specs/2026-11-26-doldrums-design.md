@@ -329,8 +329,11 @@ The read point is the end of the slice that the next grain will take.
   one return to the anchor, a new pass, once; Stretch's stop does not
   hold while recording in Follow (to hold, Freeze); a stopped module
   stays stopped; TRIG, Freeze, a thaw and a press in the window keep
-  their rules, so a thaw in Follow returns to the input at once at any
-  Stretch; Drift chosen while following goes on from the anchor and falls
+  their rules, so a thaw in Follow returns the read point to the anchor
+  and it plays on from there at the input's own speed, at any Stretch:
+  first Position's distance of the tape from before the freeze, then the
+  new input (with Position fully right, the live input within a grain);
+  Drift chosen while following goes on from the anchor and falls
   behind at the pace, with no new pass. Frozen, the two are the same in
   every respect. The window says FOLLOW while following, so the panel
   says why Stretch does nothing, and Stretch's tooltip adds "(waits for
