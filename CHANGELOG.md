@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.50 (2026-11-27): Doldrums: a press in the window moves the read head only; Freeze in Stop plays one pass, then stops; a timer in the window while frozen; Mix starts at 50 %; shorter Position tooltip
 - 2.0.49 (2026-11-26): Doldrums: a frozen tape survives quitting Rack (written when the button freezes it; opened frozen with no tape opens thawed); a shorter Position tooltip
 - 2.0.48 (2026-11-26): Doldrums: While recording, Drift or Follow; a held recording tape woken by Position; what a thaw plays, stated exactly
 - 2.0.47 (2026-11-26): Doldrums: the final review's fixes and the user's rulings on 2.0.46 (comb loudness measured, play from here in the window, Position 3 s back, FROZEN AT END, brass read head, x1 rejoins the flag, a thaw returns to the flag, Freeze in Stop, Initialize, the tape wait)
