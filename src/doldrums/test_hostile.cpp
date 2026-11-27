@@ -25,9 +25,9 @@
 // - position_cv_at_audio_rate (Review Focus 1): Position and Stretch by CV
 //   at audio rate, stepped, huge and NaN, with the attenuverters at either
 //   end, frozen and recording, in both settings, at each grain size.
-// - hot_sine_on_a_tooth (Review Focus 4): a +-10 V sine on a tooth of the
-//   narrowest comb at full Harmonics (the makeup at its +18 dB): no NaN, the
-//   output held under the soft bound's ceiling.
+// - hot_sine_on_a_tooth (Review Focus 4): a +-40 V sine on a tooth of the
+//   narrowest comb at full Harmonics: no NaN, the output held under the soft
+//   bound's ceiling.
 // - empty_comb_is_silent (Review Focus 4): 16 roots all above Nyquist, or all
 //   under 16 Hz: exact silence, not NaN.
 // - dc_in: DC in, no DC out (the 16 Hz cut).
@@ -697,9 +697,11 @@ void position_cv_at_audio_rate() {
 
 // ---- Review Focus 4: the hottest comb.
 
-// A +-10 V sine exactly on the comb's one tooth (Partials 1, the root; ROOT
-// 0 = C4, 261.63 Hz), Harmonics 1, Width at its least (5 cents): the makeup
-// at its bound (+18 dB), so the tone is asked for at about 80 V.
+// A +-40 V sine exactly on the comb's one tooth (Partials 1, the root; ROOT
+// 0 = C4, 261.63 Hz), Harmonics 1, Width at its least (5 cents). The makeup
+// is measured from the sound (Tables.hpp), so a tone on a tooth comes out at
+// about its own level: the input is made hot instead (under the old rule a
+// +-10 V tone was raised by the bound's +18 dB, to about 80 V).
 void hot_sine_on_a_tooth() {
 	const double hz = 261.6256;
 	for (float fs : {44100.f, 48000.f, 96000.f})
@@ -715,7 +717,7 @@ void hot_sine_on_a_tooth() {
 					h.f.params[F::HARMONICS] = 1.f;
 					const long long n = (long long) (3.0 * fs);
 					for (long long i = 0; i < n; i++) {
-						h.f.inL = float(10.0 * std::sin(2.0 * kPi * hz * double(h.t) / fs));
+						h.f.inL = float(40.0 * std::sin(2.0 * kPi * hz * double(h.t) / fs));
 						if (frozen && i == n / 3) h.f.params[F::FREEZE] = 1.f;
 						h.step();
 					}
@@ -723,7 +725,7 @@ void hot_sine_on_a_tooth() {
 					std::snprintf(what, sizeof what, "hot_sine_on_a_tooth (%.0f Hz, %s, %s, %s)", fs, size == 0 ? "Short" : size == 1 ? "Medium" : "Long",
 					              frozen ? "frozen" : "recording", wide ? "Wide" : "default");
 					h.sane(what);
-					// Not vacuous: the comb made it hot, and the bound held it.
+					// Not vacuous: the comb passed it hot, and the bound held it.
 					CHECK(h.peak > 8.f, "%s: the output reaches the soft bound (peak %.2f V)", what, h.peak);
 				}
 }

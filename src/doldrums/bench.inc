@@ -191,7 +191,8 @@ struct doldrums {
 
 	// The busiest tables (busy, with Tilt and 32 partials: every table in
 	// use, Shift up) at `rate`, Long grain, recording noise, V/OCT moving so
-	// the tables are always being rebuilt. The same `seconds` run four
+	// the tables are always being rebuilt; Wide as asked (Wide draws twice
+	// the random phases in PHASES). The same `seconds` run four
 	// times, from a new engine each time (the same seed and inputs, so the
 	// same work on each sample); the first, untimed, brings the core up to
 	// its working clock (from a light load an M-series core starts slow: the
@@ -199,7 +200,7 @@ struct doldrums {
 	// the least of the other three, which drops a preemption that hit it
 	// once, and each piece's figure is the most of its samples. Returns the
 	// worst piece's time in us.
-	static double worstSample(float rate, double seconds, const Cv& cv, bool print) {
+	static double worstSample(float rate, double seconds, const Cv& cv, bool print, bool wide = true) {
 		typedef std::chrono::steady_clock Clock;
 		const long n = long(seconds * rate);
 		std::vector<float> best(size_t(n), 1e30f);
@@ -212,6 +213,7 @@ struct doldrums {
 				if (t == 0) {
 					i->frame.params[F::TILT] = 0.5f;
 					i->frame.params[F::PARTIALS] = 32.f;
+					i->frame.wide = wide;
 				}
 				const Clock::time_point t0 = Clock::now();
 				i->engine.process(i->frame, i->result);
@@ -242,8 +244,8 @@ struct doldrums {
 			worst = 1e9;   // fails the bound: the staging is one piece a sample
 		}
 		if (print) {
-			std::printf("doldrums worst single sample at %.0f kHz, Long grain, busiest tables (least of 3 runs of %.0f s):\n",
-			            rate / 1000.0, seconds);
+			std::printf("doldrums worst single sample at %.0f kHz, Long grain, busiest tables, Wide %s (least of 3 runs of %.0f s):\n",
+			            rate / 1000.0, wide ? "on" : "off", seconds);
 			for (int p = 0; p < 14; p++)
 				if (count[p])
 					std::printf("doldrums   %-11s %8ld samples  most %7.2f us  mean %7.2f us\n", pieceName(p), count[p],
@@ -254,15 +256,21 @@ struct doldrums {
 	}
 
 	// Run by the bench after the cases: the worst single sample at 96 kHz
-	// (the bound's rate) and 48 kHz, Long grain, against the design's bound
-	// of 100 us on the development Mac; elsewhere three times that,
-	// provisional (as the budgets are). Measured 2026-11-26 on the M5 Pro,
-	// three runs of `make bench`: at 96 kHz 68.7 to 70.7 us, the worst piece
-	// INVERSE_L or INVERSE_R (a transform and a pass over the frames); then
-	// FORWARD 59 to 63, SPECTRAL 50 to 58 (Tables::apply, every table in
-	// use), PHASES 33, LOUDNESS 26, add 28, the worst Tables::work call 33,
-	// the boundary (swap, pass step, a copy of 512 KB) 11. At 48 kHz 32.4 to
-	// 33.3 us. TESTING.md rule 10 has the history.
+	// (the bound's rate) and 48 kHz, Long grain, Wide on (the costlier
+	// PHASES; every other piece does the same work either way), against the
+	// design's bound of 100 us on the development Mac; elsewhere three times
+	// that, provisional (as the budgets are). Measured 2026-11-26 on the
+	// M5 Pro, three runs of `make bench`, Wide off: at 96 kHz 68.7 to 70.7 us,
+	// the worst piece INVERSE_L or INVERSE_R (a transform and a pass over the
+	// frames); then FORWARD 59 to 63, SPECTRAL 50 to 58 (Tables::apply, every
+	// table in use), PHASES 33, LOUDNESS 26, add 28, the worst Tables::work
+	// call 33, the boundary (swap, pass step, a copy of 512 KB) 11. At 48 kHz
+	// 32.4 to 33.3 us. Again after the comb's makeup came to be measured from
+	// the sound (a pass over the bins in each SPECTRAL, the comb's gain on
+	// both sides in PHASES), Wide off and on: SPECTRAL 55 to 56, PHASES 36
+	// (Wide off) and 68 (Wide on, the worst piece at 96 kHz: 68.3 us),
+	// INVERSE 64, FORWARD 58; at 48 kHz 30.8 us (off), 34.1 (on). TESTING.md
+	// rule 10 has the history.
 	static bool extra(const Cv& cv) {
 #if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
 		const double bound = 100.0;

@@ -36,8 +36,12 @@
 //               loudnesses copied for the tables with the bins under 16 Hz
 //               zeroed (the same cut the tables make, so that at rest the
 //               spectral steps change nothing)
-//   SPECTRAL_L/R Tables::apply on each side's loudnesses
-//   PHASES      a random phase per bin from the generator and a table of
+//   SPECTRAL_L/R Tables::apply on each side's loudnesses, all but the comb's
+//               gain; each adds its side's two powers for the comb's makeup
+//   PHASES      with the comb on, its gain (Tables::comb) on both sides with
+//               one makeup measured from the sums of both (Tables.hpp, "The
+//               makeup"), so a panned sound keeps its image; then a random
+//               phase per bin from the generator and a table of
 //               4096 cosines and sines. By default one phase for both sides,
 //               the right side turned further by the kept unit vector (from
 //               one reciprocal square root, no trig; a zero vector reads as
@@ -51,9 +55,11 @@
 // Bins 0 (DC) and the Nyquist bin are always 0. outL()/outR() hold the
 // finished grain from INVERSE_L/R until the next grain's INVERSE.
 //
-// Tables: apply() is used only when live().bins is this grain's bins (the
-// engine swaps tables of the right size in at a grain boundary); otherwise
-// SPECTRAL does nothing. The 16 Hz cut uses live().rate.
+// Tables: apply() and comb() are used only when live().bins is this grain's
+// bins (the engine swaps tables of the right size in at a grain boundary);
+// otherwise SPECTRAL and the comb do nothing. The 16 Hz cut uses
+// live().rate. makeup() is the comb's makeup on the last grain (1 with the
+// comb out), for the tests.
 //
 // Overlap: add() lays a grain down starting at the sample next() gives next;
 // the engine calls it once a hop, so the grains lie half a grain apart. A
@@ -202,15 +208,21 @@ struct Grain {
 			std::fill(b.loudR.begin(), b.loudR.begin() + cut, 0.f);
 			std::copy(b.heldL.begin() + cut, b.heldL.end(), b.loudL.begin() + cut);
 			std::copy(b.heldR.begin() + cut, b.heldR.end(), b.loudR.begin() + cut);
+			power_ = CombPower();
 			break;
 		}
 		case SPECTRAL_L:
-			if (t.live().bins == bins) t.apply(b.loudL.data(), b.scratch.data());
+			if (t.live().bins == bins) t.apply(b.loudL.data(), b.scratch.data(), power_);
 			break;
 		case SPECTRAL_R:
-			if (t.live().bins == bins) t.apply(b.loudR.data(), b.scratch.data());
+			if (t.live().bins == bins) t.apply(b.loudR.data(), b.scratch.data(), power_);
 			break;
 		case PHASES:
+			makeup_ = 1.f;
+			if (t.live().bins == bins && t.combOn()) {
+				makeup_ = Tables::makeupFrom(power_);
+				t.comb(b.loudL.data(), b.loudR.data(), makeup_);
+			}
 			phases(b, bins, rng, wide);
 			break;
 		case INVERSE_L:
@@ -229,12 +241,15 @@ struct Grain {
 	// The finished grain, windowed for laying down: grain() frames a side.
 	const float* outL() const { return b_ ? b_->outL : nullptr; }
 	const float* outR() const { return b_ ? b_->outR : nullptr; }
+	float makeup() const { return makeup_; }
 
 private:
 	GrainBuffers* b_ = nullptr;
 	const float* sliceL_ = nullptr;
 	const float* sliceR_ = nullptr;
 	bool take_ = false;
+	CombPower power_;
+	float makeup_ = 1.f;
 	float cosSin_[2 * kPhases];
 
 	static void windowed(const float* in, float* out, const GrainBuffers& b, int n) {

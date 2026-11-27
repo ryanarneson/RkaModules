@@ -63,6 +63,7 @@ int cutOf(int bins, double rate) {
 struct Live {
 	Tables t;
 	std::vector<float> scratch;
+	float g = 1.f;   // the comb's makeup on the last run
 	explicit Live(int maxBins = 65536) {
 		t.allocate(maxBins);
 		scratch.assign(maxBins, 0.f);
@@ -73,13 +74,13 @@ struct Live {
 		t.swapIfReady();
 	}
 	std::vector<float> run(std::vector<float> loud) {
-		t.apply(loud.data(), scratch.data());
+		g = t.apply(loud.data(), scratch.data());
 		return loud;
 	}
 	// The comb's mask: ones in, h = 1, divided by the makeup.
 	std::vector<float> mask() {
 		std::vector<float> m = run(std::vector<float>(t.live().bins, 1.f));
-		for (float& x : m) x /= t.makeup();
+		for (float& x : m) x /= g;
 		return m;
 	}
 };
@@ -160,7 +161,7 @@ void rest_is_exact() {
 	for (int k = cut; k < kBins; k++)
 		if (std::memcmp(&in[k], &out2[k], sizeof(float)) != 0) diff++;
 	CHECK(diff == 0, "h = 0 with a 16-note comb set: %d bins changed", diff);
-	CHECK(L.t.makeup() == 1.f, "no comb, no makeup: %g", L.t.makeup());
+	CHECK(L.g == 1.f && !L.t.combOn(), "no comb, no makeup: %g", L.g);
 }
 
 void low_cut() {
@@ -378,7 +379,7 @@ void shift_comes_first() {
 	const int k = int(std::lround(binOf(500.0)));
 	std::vector<float> out = L.run(oneBin(kBins, k));
 	double e = energy(out);
-	CHECK(e > 0.5 * L.t.makeup() * L.t.makeup(), "500 Hz up an octave meets the 1 kHz tooth: %g", e);
+	CHECK(e > 0.5, "500 Hz up an octave meets the 1 kHz tooth: %g", e);
 	// A bin at the tooth itself shifted away does not.
 	out = L.run(oneBin(kBins, int(std::lround(binOf(1000.0)))));
 	CHECK(energy(out) == 0.0, "1 kHz moved to 2 kHz misses the tooth: %g", energy(out));
@@ -387,7 +388,7 @@ void shift_comes_first() {
 	L.set(s);
 	out = L.run(oneBin(kBins, int(std::lround(binOf(2000.0)))));
 	e = energy(out);
-	CHECK(e > 0.5 * L.t.makeup() * L.t.makeup(), "2 kHz down an octave meets the 1 kHz tooth: %g", e);
+	CHECK(e > 0.5, "2 kHz down an octave meets the 1 kHz tooth: %g", e);
 	out = L.run(oneBin(kBins, int(std::lround(binOf(1000.0)))));
 	CHECK(energy(out) == 0.0, "1 kHz moved to 500 Hz misses the tooth: %g", energy(out));
 	// Tilt at the new frequency: 1 kHz up an octave gets +6 dB at 6 dB/oct.
@@ -575,7 +576,7 @@ void comb_stops_at_nyquist() {
 	float top = 0.f;
 	for (int k = int(binOf(21000.0)); k < kBins; k++) top = std::max(top, m[k]);
 	CHECK(top < 0.01f, "nothing from teeth past the top: %g", top);
-	CHECK(std::isfinite(L.t.makeup()) && L.t.makeup() <= 8.f, "makeup %g", L.t.makeup());
+	CHECK(std::isfinite(L.g) && L.g <= 8.f, "makeup %g", L.g);
 	// A tooth just over the top is left out, one just under kept.
 	L.set(combSpec(12100.f, 4, 25.f));
 	CHECK(countPeaks(L.mask()) == 1, "12.1 kHz: %d peaks", countPeaks(L.mask()));
@@ -682,9 +683,9 @@ void harmonics_zero_is_out() {
 	CHECK(std::memcmp(rest.data(), out.data(), kBins * sizeof(float)) == 0, "h = 0: the comb is out to the bit");
 	// Out of the path altogether: nothing of the comb is kept, and a moving
 	// V/OCT (or Partials, or Width) with h at 0 starts no rebuild.
-	CHECK(L.t.live().roots == 0 && L.t.live().partials == 0 && L.t.live().widthCents == 0.f && L.t.makeup() == 1.f,
+	CHECK(L.t.live().roots == 0 && L.t.live().partials == 0 && L.t.live().widthCents == 0.f && L.g == 1.f && !L.t.combOn(),
 	      "h = 0: the comb's settings cleared: %d roots, %d partials, %g cents, makeup %g", L.t.live().roots,
-	      L.t.live().partials, L.t.live().widthCents, L.t.makeup());
+	      L.t.live().partials, L.t.live().widthCents, L.g);
 	TableSpec moved = s;
 	for (int i = 0; i < 16; i++) moved.rootHz[i] *= 1.0594631f;
 	moved.partials = 7;
@@ -707,8 +708,8 @@ void harmonics_full_passes_only_teeth() {
 	Live L;
 	const std::vector<float> in = noise(kBins, 13);
 	L.set(combSpec(220.f, 8, 25.f, 1.f));
-	const float g = L.t.makeup();
 	std::vector<float> out = L.run(in);
+	const float g = L.g;   // the makeup measured from this input
 	// Between the teeth, nothing at all where they are 6 sigma apart or more
 	// (from tooth 5 up their bells overlap a little: 4e-5 between 7 and 8).
 	for (int n = 1; n < 5; n++) {
@@ -721,15 +722,14 @@ void harmonics_full_passes_only_teeth() {
 		out = L.run(in);
 		CHECK(std::fabs(out[k] - g * in[k]) <= 1e-5f * g * in[k], "tooth %d: %g for %g x %g", n, out[k], g, in[k]);
 	}
-	// Half way: (1 - h) + h g mask.
+	// Half way: (1 - h) + h g mask, g measured at h = 0.5 (comb_makeup_measured).
 	L.set(combSpec(220.f, 8, 25.f, 0.5f));
-	const float g2 = L.t.makeup();
-	CHECK(g2 == g, "makeup does not depend on h: %g %g", g2, g);
 	out = L.run(std::vector<float>(kBins, 1.f));
+	const float g2 = L.g;
 	const int gap = int(std::lround(binOf(220.0 * 2.5)));
 	CHECK(out[gap] == 0.5f, "h = 0.5 between teeth: %g", out[gap]);
 	const int tooth = peakNear(out, 440.0);
-	CHECK(std::fabs(out[tooth] - (0.5f + 0.5f * g)) < 1e-5f, "h = 0.5 at a tooth: %g, wanted %g", out[tooth], 0.5f + 0.5f * g);
+	CHECK(std::fabs(out[tooth] - (0.5f + 0.5f * g2)) < 1e-5f, "h = 0.5 at a tooth: %g, wanted %g", out[tooth], 0.5f + 0.5f * g2);
 }
 
 void makeup_formula_and_bound() {
@@ -746,7 +746,7 @@ void makeup_formula_and_bound() {
 		// The mask straight from h = 1 with the gain not yet applied is g x mask;
 		// recover the mask's mean square and check g = min(8, 1 / rms).
 		const std::vector<float> gm = L.run(std::vector<float>(kBins, 1.f));
-		const double g = L.t.makeup();
+		const double g = L.g;
 		double sq = 0;
 		for (int k = cut; k < kBins; k++) sq += (double(gm[k]) / g) * (double(gm[k]) / g);
 		const double want = std::min(8.0, 1.0 / std::sqrt(sq / (kBins - cut)));
@@ -755,7 +755,100 @@ void makeup_formula_and_bound() {
 		CHECK(g >= 1.0 && g <= 8.0, "g %g inside [1, 8]", g);
 	}
 	L.set(combSpec(440.f, 1, 5.f));
-	CHECK(L.t.makeup() == 8.f, "one narrow tooth: the bound, %g", L.t.makeup());
+	L.mask();
+	CHECK(L.g == 8.f, "one narrow tooth: the bound, %g", L.g);
+}
+
+// The makeup measured from the sound (Tables.hpp, "The makeup"; C1 of the
+// final review): g = sqrt(before / after) held to [1, 8], before the power
+// reaching the comb and after what the comb leaves at g = 1.
+void comb_makeup_measured() {
+	Live L;
+	const int cut = cutOf(kBins, kRate);
+	// The formula, on noise and on a sound shaped like the comb, at three h.
+	for (float h : {1.f, 0.5f, 0.1f}) {
+		L.set(combSpec(65.406f, 8, 25.f, h));
+		const std::vector<float> m = [&] {
+			Live M;
+			M.set(combSpec(65.406f, 8, 25.f, 1.f));
+			return M.mask();
+		}();
+		{
+			// A sound shaped like the comb (its loudness the mask).
+			double before = 0, after = 0;
+			for (int k = cut; k < kBins; k++) {
+				const double x = m[k], y = x * ((1.0 - h) + h * m[k]);
+				before += x * x;
+				after += y * y;
+			}
+			const double want = std::min(8.0, std::max(1.0, std::sqrt(before / after)));
+			const std::vector<float> out = L.run(m);
+			CHECK(std::fabs(L.g - want) < 1e-4 * want, "h %g, a sound on the teeth: g %g, wanted %g", h, L.g, want);
+			// On the teeth the level is kept: at h = 1 the output's power is the
+			// input's; below, g scales only the comb's share of the gain, so the
+			// level comes a little short (-0.29 dB at h = 0.5), never over.
+			const double got = dB(energy(out) / before);
+			CHECK(want < 8.0 && (h == 1.f ? std::fabs(got) < 0.01 : got <= 0.0 && got > -0.5), "h %g, a sound on the teeth: %+.4f dB (g %g)", h,
+			      got, want);
+		}
+		const std::vector<float> n = noise(kBins, 21);
+		double before = 0, after = 0;
+		for (int k = cut; k < kBins; k++) {
+			const double x = n[k], y = x * ((1.0 - h) + h * m[k]);
+			before += x * x;
+			after += y * y;
+		}
+		const double need = std::sqrt(before / after), want = std::min(8.0, std::max(1.0, need));
+		L.run(n);
+		CHECK(std::fabs(L.g - want) < 1e-4 * want, "h %g, noise: g %g, wanted %g (needs %g)", h, L.g, want, need);
+		if (h == 1.f) {
+			CHECK(need > 8.0 && L.g == 8.f, "noise at the defaults needs %.1f (%+.1f dB): the bound, %g", need, 20 * std::log10(need), L.g);
+			std::printf("  comb_makeup_measured: noise at C2, 8 partials, 25 cents, h 1 needs %+.1f dB; the bound gives +18.1\n",
+			            20 * std::log10(need));
+		}
+	}
+	// A tone on a tooth, through a tilt: Tilt is before the comb, so the
+	// makeup does not undo it.
+	TableSpec s = combSpec(1000.f, 1, 25.f);
+	s.tiltDbPerOct = 6.f;
+	L.set(s);
+	std::vector<float> out = L.run(oneBin(kBins, int(std::lround(binOf(2000.0)))));
+	CHECK(energy(out) == 0.0 && L.g == 1.f, "a tone off the only tooth: silent, g 1 (after 0): %g, %g", energy(out), L.g);
+	const int k1 = int(std::lround(binOf(1000.0)));
+	out = L.run(oneBin(kBins, k1));
+	CHECK(std::fabs(L.g - 1.f) < 1e-3f && std::fabs(out[k1] - 1.f) < 1e-3f, "a tone at 1 kHz on its tooth: g %g, out %g", L.g, out[k1]);
+	// Silence: g 1 and silence, to the bit.
+	L.set(combSpec(65.406f, 8, 25.f));
+	out = L.run(std::vector<float>(kBins, 0.f));
+	CHECK(L.g == 1.f && energy(out) == 0.0, "silence: g %g, %g out", L.g, energy(out));
+	// Sums that overflow: g 1, every bin finite.
+	s = combSpec(65.406f, 8, 25.f);
+	s.tiltDbPerOct = 48.f;
+	L.set(s);
+	out = L.run(std::vector<float>(kBins, 1e18f));
+	int bad = 0;
+	for (float x : out) bad += !std::isfinite(x);
+	CHECK(L.g == 1.f && bad == 0, "1e18 everywhere under +24 dB of tilt: g %g, %d bins not finite", L.g, bad);
+	const double inf = std::numeric_limits<double>::infinity();
+	CHECK(Tables::makeupFrom(CombPower{0.0, 1.0}) == 1.f && Tables::makeupFrom(CombPower{1.0, 0.0}) == 1.f &&
+	          Tables::makeupFrom(CombPower{inf, 1.0}) == 1.f && Tables::makeupFrom(CombPower{1.0, inf}) == 1.f &&
+	          Tables::makeupFrom(CombPower{4.0, 1.0}) == 2.f && Tables::makeupFrom(CombPower{100.0, 1.0}) == 8.f &&
+	          Tables::makeupFrom(CombPower{1.0, 2.0}) == 1.f,
+	      "makeupFrom at its edges");
+	// Two sides, one scale: comb(l, r, g) gives both the same gain per bin.
+	L.set(combSpec(220.f, 8, 25.f, 0.7f));
+	std::vector<float> l = noise(kBins, 3), r = noise(kBins, 4);
+	CombPower p;
+	L.t.apply(l.data(), L.scratch.data(), p);
+	const std::vector<float> l0 = l;
+	L.t.apply(r.data(), L.scratch.data(), p);
+	const std::vector<float> r0 = r;
+	const float g = Tables::makeupFrom(p);
+	L.t.comb(l.data(), r.data(), g);
+	int differ = 0;
+	for (int k = cut; k < kBins; k++)
+		if (l0[k] > 0.f && r0[k] > 0.f && std::fabs(l[k] / l0[k] - r[k] / r0[k]) > 1e-6f * (l[k] / l0[k])) differ++;
+	CHECK(g > 1.f && differ == 0, "both sides one gain per bin (g %g): %d bins differ", g, differ);
 }
 
 // ---------------------------------------------------------------- rebuild
@@ -786,7 +879,6 @@ void rebuild_in_parts() {
 	CHECK(calls == (512 + 65536 * 22 + 63) / 64, "64 at a time: %d calls", calls);
 	CHECK(parts->t.swapIfReady(), "swaps");
 	CHECK(same(once->t.live(), parts->t.live()), "same spec");
-	CHECK(once->t.makeup() == parts->t.makeup(), "same makeup: %.9g %.9g", once->t.makeup(), parts->t.makeup());
 	for (uint32_t seed : {1u, 2u}) {
 		const std::vector<float> in = noise(bins, seed);
 		const std::vector<float> a = once->run(in), b = parts->run(in);
@@ -825,7 +917,7 @@ void rebuild_in_parts() {
 		}
 	}
 	CHECK(std::memcmp(L.run(in).data(), before.data(), kBins * sizeof(float)) == 0, "built, not yet swapped: unchanged");
-	CHECK(L.t.live().shiftRatio == 1.f && L.t.live().roots == 0 && L.t.makeup() == 1.f, "live spec still the old one");
+	CHECK(L.t.live().shiftRatio == 1.f && L.t.live().roots == 0 && !L.t.combOn(), "live spec still the old one");
 	CHECK(L.t.work(64), "stays whole");
 	CHECK(L.t.swapIfReady(), "swaps at the boundary");
 	CHECK(!L.t.swapIfReady(), "once");
@@ -888,7 +980,7 @@ void hostile_roots() {
 			for (float x : g)
 				if (!(x >= 0.f && x <= 8.f)) badGain++;
 			CHECK(badGain == 0, "width %g, %g Hz: %d gains outside [0, 8]", width, rate, badGain);
-			CHECK(std::isfinite(L.t.makeup()) && L.t.makeup() >= 1.f && L.t.makeup() <= 8.f, "makeup %g", L.t.makeup());
+			CHECK(std::isfinite(L.g) && L.g >= 1.f && L.g <= 8.f, "makeup %g", L.g);
 			// All bad: an empty comb (30 kHz is in the band at 96 kHz; 0.625 x
 			// the rate never is).
 			for (int i = 8; i < 16; i++) s.rootHz[i] = bad[i - 8];
@@ -898,7 +990,7 @@ void hostile_roots() {
 			double sum = 0;
 			for (float x : z) sum += x;
 			CHECK(sum == 0.0, "width %g, %g Hz: an empty comb passes %g", width, rate, sum);
-			CHECK(std::isfinite(L.t.makeup()), "empty comb: makeup %g", L.t.makeup());
+			CHECK(L.g == 1.f, "empty comb: makeup %g (after is 0)", L.g);
 		}
 	// Counts past their ends, NaN everywhere else.
 	TableSpec s = combSpec(110.f, 99, 25.f);
@@ -961,6 +1053,7 @@ int main() {
 	harmonics_zero_is_out();
 	harmonics_full_passes_only_teeth();
 	makeup_formula_and_bound();
+	comb_makeup_measured();
 	rebuild_in_parts();
 	hostile_roots();
 	return rkatest::finish("doldrums/test_tables");

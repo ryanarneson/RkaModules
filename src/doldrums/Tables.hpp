@@ -52,12 +52,29 @@
 //   reading of "never narrower than the transform can show": a tooth always
 //   passes whole through the bin that holds it, as an oscillator's partial
 //   at that frequency would; measured to the bin's centre, a low tooth half
-//   way between two bins would pass at 0.88.) The makeup is
-//   g = min(kMakeupBound, 1 / sqrt(mean of mask^2 over the band)), and the
-//   gain (1 - h) + h g mask. At h = 0 the comb is not built and makeup() is 1.
-// - Tilt and the comb are one gain per bin. With Shift 1, Blur 0, Tilt 0 and
-//   h 0, apply() only zeroes the bins under 16 Hz: every other bin comes back
-//   to the bit.
+//   way between two bins would pass at 0.88.) The gain on a bin is
+//   (1 - h) + h g mask, g the makeup.
+// - The makeup is measured from the sound, not worked out from the comb
+//   alone (the final review's C1 reversed the design's rule, which assumed a
+//   flat spectrum and so raised a sound already on the teeth by up to
+//   +18 dB). Per grain, the loudnesses x as they reach the comb (after Shift,
+//   Blur and Tilt) give before = sum x^2 and after = sum (x ((1 - h) + h mask))^2,
+//   the power the comb would leave at g = 1; g = sqrt(before / after), held
+//   to [1, kMakeupBound]. So a sound whose partials lie on the teeth gets
+//   about 1 and keeps its level; one the comb thins gets what brings it back,
+//   up to the bound (+18 dB: white noise at the defaults would need about
+//   +25 dB, and sinks by the rest); a sound between the teeth is still cut,
+//   raised by no more than the bound. With before or after 0 (silence, an
+//   empty comb), or a sum that is not finite, g is 1. The two sides share one
+//   g, from the sums of both, so a panned sound's image does not move.
+//   apply(loud, scratch, power) does everything but the comb's gain and adds
+//   the side's sums to `power`; makeupFrom(power) is g; comb(l, r, g) then
+//   applies (1 - h) + h g mask to both sides in one pass. apply(loud,
+//   scratch), for one side alone, does all three and returns g. At h = 0 the
+//   comb is not built, nothing is measured and comb() does nothing.
+// - Tilt is a gain per bin; the comb's mask is kept apart from it. With
+//   Shift 1, Blur 0, Tilt 0 and h 0, apply() only zeroes the bins under
+//   16 Hz: every other bin comes back to the bit.
 //
 // Rebuilding. Two sets of tables, the live one apply() reads and a spare.
 // start() begins a rebuild of the spare (cheap: no table is touched);
@@ -79,10 +96,12 @@
 // Tilt and the comb, 37 to 42 us with Shift down (by the ratio), 50 us with
 // Shift up, 71 us with Blur and 88 us with every table in use (Shift up);
 // Blur's passes run as eight chains side by side (one chain is 5x slower:
-// each bin waits on the last).
+// each bin waits on the last). (Measured before the makeup was measured from
+// the sound; the comb now adds a pass over the bins to measure it, in eight
+// sums side by side, and comb() one more over both sides.)
 //
-// Threads: allocate() off the audio thread; start, work, swapIfReady and
-// apply on it, with no allocation, lock or libm (FastMath.hpp; std::sqrt and
+// Threads: allocate() off the audio thread; start, work, swapIfReady,
+// apply and comb on it, with no allocation, lock or libm (FastMath.hpp; std::sqrt and
 // std::floor are instructions). apply() needs loud finite and >= 0 and
 // scratch at least bins long.
 //
@@ -107,7 +126,7 @@ constexpr int kMaxRoots = 16;
 constexpr int kMaxPartials = 32;
 constexpr float kLowCutHz = 16.f;
 constexpr float kTiltBoundDb = 24.f;
-constexpr float kMakeupBound = 8.f;   // +18 dB, a starting bound
+constexpr float kMakeupBound = 8.f;   // +18 dB, a starting bound on the measured makeup
 constexpr float kBlurMaxOctaves = 4.f;
 
 struct TableSpec {                     // what the tables are built from; compared to see if a rebuild is due
@@ -117,6 +136,11 @@ struct TableSpec {                     // what the tables are built from; compar
 	float harmonics;                   // h
 	int roots; float rootHz[16];
 	int partials; float widthCents;
+};
+
+// The comb's two powers for one grain, summed over the sides (see "The makeup").
+struct CombPower {
+	double before = 0.0, after = 0.0;
 };
 
 namespace detail {
@@ -160,6 +184,7 @@ struct Tables {
 			s.joinUp.assign(maxBins_, 0.f);
 			s.joinDown.assign(maxBins_, 0.f);
 			s.gain.assign(maxBins_, 1.f);
+			s.mask.assign(maxBins_, 0.f);
 		}
 		live_ = 0;
 		phase_ = IDLE;
@@ -233,8 +258,20 @@ struct Tables {
 		return true;
 	}
 
-	// The live set, applied in place to loud[0..bins): Shift, Blur, Tilt, comb, the 16 Hz cut.
-	void apply(float* loud, float* scratch) const {
+	// One side alone, in place on loud[0..bins): Shift, Blur, Tilt, the 16 Hz
+	// cut and the comb with its makeup measured from this side. Returns the makeup.
+	float apply(float* loud, float* scratch) const {
+		CombPower p;
+		apply(loud, scratch, p);
+		const float g = makeupFrom(p);
+		comb(loud, nullptr, g);
+		return g;
+	}
+
+	// The live set, applied in place to loud[0..bins): Shift, Blur, Tilt, the
+	// 16 Hz cut, all but the comb's gain; with the comb on, the side's two
+	// powers added to `power` (see "The makeup").
+	void apply(float* loud, float* scratch, CombPower& power) const {
 		if (maxBins_ == 0) return;
 		const Set& s = sets_[live_];
 		const int bins = s.spec.bins, cut = s.cut;
@@ -293,26 +330,54 @@ struct Tables {
 				else
 					blur<1>(s, p);
 			}
-			if (s.gainOn)
+			if (s.tiltOn)
 				for (int k = cut; k < bins; k++) loud[k] = std::sqrt(p[k]) * s.gain[k];
 			else
 				for (int k = cut; k < bins; k++) loud[k] = std::sqrt(p[k]);
-		} else if (s.gainOn) {
+		} else if (s.tiltOn) {
 			for (int k = cut; k < bins; k++) loud[k] *= s.gain[k];
 		}
 		std::fill(loud, loud + std::min(cut, bins), 0.f);
+		if (s.combOn) measure(s, loud, power);
 	}
 
+	// The makeup from a grain's powers: sqrt(before / after) held to
+	// [1, kMakeupBound]; 1 if either is 0 or not finite.
+	static float makeupFrom(const CombPower& p) {
+		const double b = p.before, a = p.after;
+		if (!(b > 0.0 && a > 0.0 && b - b == 0.0 && a - a == 0.0)) return 1.f;
+		const double r = b / a, top = double(kMakeupBound) * kMakeupBound;
+		return r >= top ? kMakeupBound : r > 1.0 ? float(std::sqrt(r)) : 1.f;
+	}
+
+	// The comb's gain, (1 - h) + h g mask, on both sides in one pass (r may be
+	// null). Does nothing with the comb out.
+	void comb(float* l, float* r, float g) const {
+		if (maxBins_ == 0) return;
+		const Set& s = sets_[live_];
+		if (!s.combOn) return;
+		const int bins = s.spec.bins;
+		const float a = 1.f - s.spec.harmonics, b = s.spec.harmonics * g;
+		const float* m = s.mask.data();
+		if (r)
+			for (int k = s.cut; k < bins; k++) {
+				const float c = a + b * m[k];
+				l[k] *= c;
+				r[k] *= c;
+			}
+		else
+			for (int k = s.cut; k < bins; k++) l[k] *= a + b * m[k];
+	}
+
+	bool combOn() const { return maxBins_ > 0 && sets_[live_].combOn; }
 	const TableSpec& live() const { return sets_[live_].spec; }
-	float makeup() const { return sets_[live_].makeup; }   // the live comb's g
 
 private:
 	struct Set {
 		TableSpec spec;
 		int cut = 0;
-		bool shiftOn = false, blurOn = false, combOn = false, gainOn = false;
+		bool shiftOn = false, blurOn = false, combOn = false, tiltOn = false;
 		int shiftTop = 0;   // Shift up: the first source bin that lands past the top
-		float makeup = 1.f;
 		std::vector<int32_t> lower;     // Shift: the bin below k r, -1 dropped
 		std::vector<float> upperShare;  // and the share of the bin above
 		std::vector<float> lowerShare;  // Shift up only: the lower source bin's weight
@@ -326,7 +391,8 @@ private:
 		int segments = 1, segLength = 0;   // the last segment ends at bins
 		std::vector<float> joinUp, joinDown;
 		float wholeUp[8] = {}, wholeDown[8] = {};
-		std::vector<float> gain;        // Tilt x comb; the comb's mask while it is built
+		std::vector<float> gain;        // Tilt
+		std::vector<float> mask;        // the comb's mask
 	};
 	enum Phase { IDLE, TEETH, SHIFT, BLUR_UP, BLUR_DOWN, MASK, GAIN, READY };
 	static constexpr int kBlurSegments = 8;   // as many chains as the core keeps busy
@@ -340,7 +406,7 @@ private:
 	TableSpec next_{};
 
 	// The build in hand.
-	double binHz_ = 0, maskSum_ = 0;
+	double binHz_ = 0;
 	float blurUp_ = 0, blurDown_ = 0;   // r / ln(2)^2 for each pass
 	float run_ = 1.f;                    // the product of a so far in the segment
 	int liveRoots_ = 0;
@@ -360,8 +426,7 @@ private:
 		s.shiftTop = std::min(p.bins, int(top) + (int(top) < top ? 1 : 0));
 		s.blurOn = p.blurOctaves > 0.f;
 		s.combOn = p.harmonics > 0.f;
-		s.gainOn = s.combOn || p.tiltDbPerOct != 0.f;
-		s.makeup = 1.f;
+		s.tiltOn = p.tiltDbPerOct != 0.f;
 		// Segments a little longer than an eighth, so that the eight chains do
 		// not fall on the same cache sets (eighths of a power of two do: 5x
 		// slower), the last one shorter.
@@ -382,7 +447,6 @@ private:
 			blurUp_ = float((q - 0.5 * ln2) / (ln2 * ln2));
 			blurDown_ = float((q + 0.5 * ln2) / (ln2 * ln2));
 		}
-		maskSum_ = 0;
 		liveRoots_ = 0;
 		const double nyquist = 0.5 * spec.rate;
 		for (int i = 0; i < kMaxRoots; i++) {
@@ -406,18 +470,13 @@ private:
 		if (!s.combOn) next(s);
 	}
 
-	// On to the next phase this set needs; the makeup once the mask is whole.
+	// On to the next phase this set needs.
 	void next(Set& s) {
 		cursor_ = 0;
-		if (phase_ == MASK && s.combOn) {
-			const int n = s.spec.bins - s.cut;
-			const double mean = n > 0 ? maskSum_ / n : 0.0;
-			s.makeup = mean > 0.0 ? float(std::min<double>(kMakeupBound, 1.0 / std::sqrt(mean))) : kMakeupBound;
-		}
 		for (;;) {
 			phase_ = Phase(phase_ + 1);
 			if (phase_ == READY || (phase_ == SHIFT && s.shiftOn) || ((phase_ == BLUR_UP || phase_ == BLUR_DOWN) && s.blurOn) ||
-			    (phase_ == MASK && s.combOn) || (phase_ == GAIN && s.gainOn))
+			    (phase_ == MASK && s.combOn) || (phase_ == GAIN && s.tiltOn))
 				return;
 		}
 	}
@@ -546,7 +605,7 @@ private:
 		const float hz = float(binHz_);
 		for (int k = from; k < to; k++) {
 			if (k < s.cut) {
-				s.gain[k] = 0.f;
+				s.mask[k] = 0.f;
 				continue;
 			}
 			const float below = fastLog2((float(k) - 0.5f) * hz), above = fastLog2((float(k) + 0.5f) * hz);
@@ -559,9 +618,36 @@ private:
 				m = std::max(m, bell(below, above, toothLog2_[i][a], toothInvSigma_[i][a]));
 				if (b != a) m = std::max(m, bell(below, above, toothLog2_[i][b], toothInvSigma_[i][b]));
 			}
-			s.gain[k] = m;
-			maskSum_ += double(m) * m;
+			s.mask[k] = m;
 		}
+	}
+
+	// The comb's two powers for one side's loudnesses x (bins under the cut
+	// are 0): eight sums side by side, so that no add waits on the last.
+	static void measure(const Set& s, const float* x, CombPower& power) {
+		const int bins = s.spec.bins;
+		const float a = 1.f - s.spec.harmonics, b = s.spec.harmonics;
+		const float* m = s.mask.data();
+		float before[8] = {}, after[8] = {};
+		int k = 0;
+		for (; k + 8 <= bins; k += 8)
+			for (int j = 0; j < 8; j++) {
+				const float v = x[k + j], y = v * (a + b * m[k + j]);
+				before[j] += v * v;
+				after[j] += y * y;
+			}
+		for (; k < bins; k++) {
+			const float v = x[k], y = v * (a + b * m[k]);
+			before[0] += v * v;
+			after[0] += y * y;
+		}
+		double sb = 0.0, sa = 0.0;
+		for (int j = 0; j < 8; j++) {
+			sb += before[j];
+			sa += after[j];
+		}
+		power.before += sb;
+		power.after += sa;
 	}
 
 	// A tooth at log2 t seen by the bin [2^below, 2^above].
@@ -575,14 +661,9 @@ private:
 	void gainBins(Set& s, int from, int to) {
 		const TableSpec& p = s.spec;
 		const float hz = float(binHz_);
-		const float h = p.harmonics, gh = s.makeup * h;
 		for (int k = from; k < to; k++) {
-			float g = s.combOn ? (1.f - h) + gh * s.gain[k] : 1.f;
-			if (p.tiltDbPerOct != 0.f) {
-				const float db = p.tiltDbPerOct * (fastLog2(float(k) * hz) - 9.96578428466209f);   // log2(1000)
-				g *= fastDbToGain(std::min(kTiltBoundDb, std::max(-kTiltBoundDb, db)));
-			}
-			s.gain[k] = k < s.cut ? 0.f : g;
+			const float db = p.tiltDbPerOct * (fastLog2(float(k) * hz) - 9.96578428466209f);   // log2(1000)
+			s.gain[k] = k < s.cut ? 0.f : fastDbToGain(std::min(kTiltBoundDb, std::max(-kTiltBoundDb, db)));
 		}
 	}
 };

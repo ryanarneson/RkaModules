@@ -563,6 +563,79 @@ void stereo_keeps_a_phase_difference() {
 	CHECK(std::fabs(d) < 10.0, "phase difference: %.2f deg out, %.2f in", got, want);
 }
 
+// Held (take false: the loudnesses and turns kept from the last grain taken),
+// a panned, phase-offset stereo sound keeps its image: R 6 dB under L and a
+// quarter turn from it, grain after grain for 30 s.
+void held_keeps_the_stereo_image() {
+	const double f = 500.0, rate = 48000.0;
+	auto r = rig();
+	std::vector<float> l(r->N), rr(r->N), inL, inR;
+	for (int i = 0; i < r->N; i++) {
+		l[i] = float(std::sin(2.0 * kPi * f * i / rate));
+		rr[i] = float(0.5 * std::sin(2.0 * kPi * f * i / rate + kPi / 2));
+	}
+	// The input's own figures, from a stretch of the same sound.
+	for (int i = 0; i < 30 * 48000; i++) {
+		inL.push_back(float(std::sin(2.0 * kPi * f * i / rate)));
+		inR.push_back(float(0.5 * std::sin(2.0 * kPi * f * i / rate + kPi / 2)));
+	}
+	Collect out;
+	r->grain(l.data(), rr.data(), true, out);
+	while (out.l.size() < size_t(30 * 48000 + r->N)) r->grain(nullptr, nullptr, false, out);
+	double sl = 0, sr = 0;
+	for (size_t i = r->N; i < out.l.size(); i++) {
+		sl += double(out.l[i]) * out.l[i];
+		sr += double(out.r[i]) * out.r[i];
+	}
+	const double pan = db(sr / sl);
+	const double want = phaseAt(inL, inR, 0, f, rate), got = phaseAt(out.l, out.r, r->N, f, rate);
+	double d = got - want;
+	while (d > 180.0) d -= 360.0;
+	while (d < -180.0) d += 360.0;
+	std::printf("  held stereo: pan %.3f dB (in %.3f), phase difference %.2f deg (in %.2f)\n", pan, db(0.25), got, want);
+	CHECK(std::fabs(pan - db(0.25)) < 0.25, "held stereo: pan %.3f dB, want %.3f", pan, db(0.25));
+	CHECK(std::fabs(d) < 10.0, "held stereo: phase difference %.2f deg out, %.2f in", got, want);
+}
+
+// The comb's makeup is one for both sides, measured from the sums of both
+// (Tables.hpp, "The makeup"): L a tone on the comb's one tooth (it alone
+// would need about 1), R noise (it alone would need the bound).
+void comb_one_makeup_for_both_sides() {
+	const double rate = 48000.0;
+	auto r = rig();
+	TableSpec s = restSpec(r->N / 2, float(rate));
+	s.harmonics = 1.f;
+	s.roots = 1;
+	s.rootHz[0] = 500.f;
+	s.partials = 1;
+	s.widthCents = 25.f;
+	r->tables(s);
+	Noise n(31);
+	std::vector<float> l(r->N), rr(r->N);
+	for (int i = 0; i < r->N; i++) {
+		float a, b;
+		n(a, b);
+		l[i] = float(std::sin(2.0 * kPi * 500.0 * i / rate));
+		rr[i] = 0.3f * a;
+	}
+	Collect out;
+	r->grain(l.data(), rr.data(), true, out);
+	// The same sums from the loudnesses the grain kept, through the same tables.
+	std::vector<float> xl(r->b.heldL), xr(r->b.heldR), scratch(r->N / 2);
+	CombPower both, left, right;
+	std::vector<float> yl = xl, yr = xr;
+	r->t.apply(yl.data(), scratch.data(), both);
+	r->t.apply(yr.data(), scratch.data(), both);
+	yl = xl;
+	r->t.apply(yl.data(), scratch.data(), left);
+	yr = xr;
+	r->t.apply(yr.data(), scratch.data(), right);
+	const float gBoth = Tables::makeupFrom(both), gL = Tables::makeupFrom(left), gR = Tables::makeupFrom(right);
+	std::printf("  comb's makeup: %.4f for both sides (L alone %.4f, R alone %.4f)\n", r->g.makeup(), gL, gR);
+	CHECK(gL < 1.2f && gR == kMakeupBound, "not vacuous: L alone %g, R alone %g", gL, gR);
+	CHECK(std::fabs(r->g.makeup() - gBoth) < 1e-4f * gBoth, "one makeup for both sides: %g, wanted %g", r->g.makeup(), gBoth);
+}
+
 void wide_decorrelates() {
 	auto r = rig();
 	r->wide = true;
@@ -656,6 +729,8 @@ int main() {
 	stereo_mono_stays_mono();
 	stereo_keeps_a_level_pan();
 	stereo_keeps_a_phase_difference();
+	held_keeps_the_stereo_image();
+	comb_one_makeup_for_both_sides();
 	wide_decorrelates();
 	dissolve_between_unrelated_slices();
 	overlap_lays_grains_down();

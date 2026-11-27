@@ -741,6 +741,80 @@ void comb_follows_voct_within_a_grain() {
 	}
 }
 
+// The comb's loudness (C1 of the final review; Tables.hpp, "The makeup"):
+// measured from the sound, per grain, one scale for both sides. At the
+// defaults (48 kHz, Medium, x8, Position now, recording, Root C2, 8 partials,
+// 25 cents), Harmonics 1: a tone whose partials lie on the teeth comes out
+// at its own level; so does a chord on three roots; white noise sinks only by
+// what the +18 dB bound leaves; a tone between the teeth is cut, not raised;
+// silence stays exact silence. Levels are kept out of the soft bound (1 V
+// partials), so the figures are the comb's.
+float partialsAt(long long i, float rate, double hz, int partials) {
+	const double s = double(i) / rate;
+	double y = 0;
+	for (int k = 1; k <= partials && k * hz < 0.45 * rate; k++) y += std::sin(2.0 * kPi * k * hz * s) / k;
+	return float(y);
+}
+
+double combLevelDb(float h, int channels, const float* volts, float (*src)(long long, float, Random&)) {
+	const float rate = 48000.f;
+	Rig g(rate, 151);
+	g.keep = true;
+	float v[16] = {};
+	for (int c = 0; c < channels; c++) v[c] = volts[c];
+	if (channels > 0) {
+		g.f.voct = v;
+		g.f.voctChannels = channels;
+	}
+	g.f.params[F::HARMONICS] = h;
+	Random n;
+	n.seed(12);
+	std::vector<float> in;
+	g.go(g.secs(8.0), [&](long long t) {
+		g.f.inL = src(t, rate, n);
+		in.push_back(g.f.inL);
+	});
+	const long long a = g.secs(2.0), len = g.secs(6.0);
+	const double out = 0.5 * (meanSquare(g.L, a, len) + meanSquare(g.R, a, len)), ref = meanSquare(in, a, len);
+	return ref > 0 ? db(out / ref) : (out == 0.0 ? 0.0 : 1e9);
+}
+
+const double kC2 = 65.40639;
+float sawC2(long long t, float rate, Random&) { return partialsAt(t, rate, kC2, 24); }
+float chordC2(long long t, float rate, Random&) {
+	return (partialsAt(t, rate, kC2, 24) + partialsAt(t, rate, kC2 * std::pow(2.0, 4.0 / 12), 24) +
+	        partialsAt(t, rate, kC2 * std::pow(2.0, 7.0 / 12), 24)) / 3.f;
+}
+float whiteNoise(long long, float, Random& n) { return n.uniform(); }
+float betweenTeeth(long long t, float rate, Random&) { return float(std::sin(2.0 * kPi * 1.5 * kC2 * double(t) / rate)); }
+float silence(long long, float, Random&) { return 0.f; }
+
+void comb_keeps_the_level() {
+	const float none[1] = {0.f};
+	const float triad[3] = {0.f, 4.f / 12, 7.f / 12};
+	const double saw0 = combLevelDb(0.f, 0, none, sawC2), saw = combLevelDb(1.f, 0, none, sawC2);
+	const double sawHalf = combLevelDb(0.5f, 0, none, sawC2);
+	const double chord3 = combLevelDb(1.f, 3, triad, chordC2);
+	const double noise1 = combLevelDb(1.f, 0, none, whiteNoise);
+	const double mistuned = combLevelDb(1.f, 0, none, betweenTeeth);
+	const double quiet = combLevelDb(1.f, 0, none, silence);
+	std::printf("  comb_keeps_the_level: saw on C2 %+.2f dB at Harmonics 0, %+.2f at 0.5, %+.2f at 1; chord on 3 roots %+.2f;"
+	            " white noise %+.2f; a sine between teeth 1 and 2 %+.2f\n",
+	            saw0, sawHalf, saw, chord3, noise1, mistuned);
+	CHECK(std::fabs(saw0) < 0.5, "Harmonics 0: the saw at its own level (%+.2f dB)", saw0);
+	CHECK(std::fabs(saw) < 1.5, "Harmonics 1: a saw on the root within 1.5 dB of its input (%+.2f dB)", saw);
+	CHECK(std::fabs(sawHalf) < 1.5, "Harmonics 0.5: the saw within 1.5 dB (%+.2f dB)", sawHalf);
+	CHECK(std::fabs(chord3) < 1.5, "Harmonics 1: a chord on three roots within 1.5 dB (%+.2f dB)", chord3);
+	// Flat noise would need about +25 dB, more than the bound's +18 (the
+	// makeup sits at the bound: test_tables' comb_makeup_measured): it sinks
+	// by the difference, -6.6 dB measured, and no more.
+	CHECK(noise1 > -7.35 && noise1 < -5.85, "Harmonics 1: white noise %+.2f dB (-6.6 measured: the bound's)", noise1);
+	// Between the teeth only the analysis window's skirt reaches a tooth:
+	// -22.4 dB measured, the skirt raised by the bound and no more.
+	CHECK(mistuned < -20.0, "Harmonics 1: a sine between the teeth is cut, not raised (%+.2f dB)", mistuned);
+	CHECK(quiet == 0.0, "silence in: exact silence out");
+}
+
 // Mix 0: the input to the bit, undelayed, IN R from IN L unpatched; NaN reads 0.
 // The latency, from a trigger's boundary to the first sound, is the same every grain.
 void mix_and_latency() {
@@ -1680,6 +1754,7 @@ int main() {
 	the_patch_it_was_asked_for();
 	no_clicks();
 	comb_follows_voct_within_a_grain();
+	comb_keeps_the_level();
 	mix_and_latency();
 	staging_fits();
 	rapid_freeze_and_trig();
