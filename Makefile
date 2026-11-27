@@ -83,8 +83,9 @@ build/src/spindrift/Spindrift.cpp.o: FLAGS += $(SPINDRIFT_PLUGIN_FLAGS)
 # The vendored pffft (src/dep/pffft/, upstream unchanged; Fft.hpp). The SDK
 # has pffft.h and the code inside libRack, which the tests cannot link, so
 # the plugin carries its own copy; rka_prefix.h renames its symbols
-# rka_pffft_* so it never meets libRack's (nm -g plugin.dylib | grep ' _pffft_'
-# must find none), and they stay hidden. Upstream is not clean under the
+# rka_pffft_* so it never meets libRack's (make smoke checks, with
+# tools/check_pffft_symbols.sh, that no plain pffft_* symbol is exported or
+# imported), and they stay hidden. Upstream is not clean under the
 # plugin's warnings and is built without them as errors.
 build/src/dep/pffft/pffft.c.o: FLAGS += -include src/dep/pffft/rka_prefix.h -fvisibility=hidden
 
@@ -95,7 +96,9 @@ shoal-bench:
 	build/test/shoal/bench_core
 
 # Load the installed plugin in a real (headless) Rack and render module
-# screenshots. See tools/rack_smoke.sh.
+# screenshots. See tools/rack_smoke.sh. First: the plugin neither exports
+# nor imports a plain pffft_* symbol (tools/check_pffft_symbols.sh).
 .PHONY: smoke
 smoke: dist
+	tools/check_pffft_symbols.sh
 	tools/rack_smoke.sh

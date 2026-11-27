@@ -72,6 +72,17 @@ void width_shift() {
 	      widthText(1.f).c_str());
 	CHECK(std::fabs(widthCents(widthForCents(25.0)) - 25.f) < 0.05f, "25 cents typed: %g", double(widthCents(widthForCents(25.0))));
 	CHECK(widthForCents(1.0) == 0.f && widthForCents(1000.0) == 1.f, "typed outside the range: the ends");
+	// Typed (M2 of the final review): what does not parse leaves the knob alone.
+	float w = -1.f;
+	CHECK(parseWidth("25", w) && std::fabs(widthCents(w) - 25.f) < 0.05f && parseWidth(" 100 cents", w) &&
+	          std::fabs(widthCents(w) - 100.f) < 0.1f,
+	      "a width typed in cents");
+	w = -1.f;
+	CHECK(!parseWidth("wide", w) && !parseWidth("", w) && !parseWidth("nan", w) && w == -1.f, "a width that is no number is refused");
+	float h = -1.f;
+	CHECK(parseHarmonics("50", h) && h == 0.5f && parseHarmonics("100 %", h) && h == 1.f, "a Harmonics typed in percent");
+	h = -1.f;
+	CHECK(!parseHarmonics("full", h) && !parseHarmonics("", h) && !parseHarmonics("nan", h) && h == -1.f, "a Harmonics that is no number is refused");
 	CHECK(shiftText(0.f) == "0" && shiftText(0.2f) == "0" && shiftText(-0.25f) == "0", "0 in the detent");
 	CHECK(shiftText(7.f) == "+7.0" && shiftText(-12.f) == "-12.0", "signed outside it: %s %s", shiftText(7.f).c_str(),
 	      shiftText(-12.f).c_str());

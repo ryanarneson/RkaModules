@@ -10,15 +10,19 @@
 //   figure ("8", "x8", "128") or "held" / "inf", through dialForStretch.
 // - Root: the comb's note, "C2" (C4 at 0 semitones; sharps, never flats);
 //   typed, a note ("C2", "f#3", "Bb1") or a number of semitones from C4.
-// - Width: the tooth's width in cents, "25 cents" (Laws.hpp's widthCents).
+// - Width: the tooth's width in cents, "25 cents" (Laws.hpp's widthCents);
+//   typed, a number of cents ("25", "25 cents"), through parseWidth.
+// - Harmonics: Rack's display in percent with CV's value beside it; typed,
+//   a percentage ("50", "50 %"), through parseHarmonics.
 // - Shift: semitones with a sign, "+7.0", "-12.0"; "0" inside the detent
 //   (Laws.hpp's shiftRatio: exactly no shift within +-0.25).
 // - Position: how far back the anchor is, "now" at the right end, else
 //   "12.3 s ago" (the lag Laws.hpp's lagFrames makes, at the rate and grain
 //   in force); typed, seconds back.
-// Partials (a whole number), Tilt (dB per octave), Blur (octaves),
-// Harmonics and Mix (percent; Mix "wet") need no help: Rack's own display
-// with a unit and a multiplier says them.
+// Partials (a whole number), Tilt (dB per octave), Blur (octaves) and Mix
+// (percent; Mix "wet") need no help: Rack's own display with a unit and a
+// multiplier says them. Every parser here refuses text that does not begin
+// with a number (or one of its words), so the knob is left as it was.
 //
 // The window's bright part (toPlay): what the pass will still play, as
 // fractions of the window (0 = 30 s ago, 1 = now; TapeView.hpp):
@@ -141,6 +145,15 @@ inline std::string widthText(float width) {
 	std::snprintf(buf, sizeof buf, "%.0f cents", double(widthCents(width)));
 	return buf;
 }
+// The leading number of a typed value (spaces allowed before it); false if
+// there is none.
+inline bool leadingNumber(const std::string& text, double& v) {
+	const char* begin = text.c_str();
+	char* end = nullptr;
+	v = std::strtod(begin, &end);
+	return end != begin && v == v;
+}
+
 // The knob for a width in cents (5 to 300).
 inline float widthForCents(double cents) {
 	if (!(cents > 5.0))
@@ -148,6 +161,26 @@ inline float widthForCents(double cents) {
 	if (!(cents < 300.0))
 		return 1.f;
 	return float(std::log(cents / 5.0) / std::log(60.0));
+}
+
+// A typed width in cents ("25", "25 cents"); false if none.
+inline bool parseWidth(const std::string& text, float& width) {
+	double c;
+	if (!leadingNumber(text, c))
+		return false;
+	width = widthForCents(c);
+	return true;
+}
+
+// ---- Harmonics.
+
+// A typed Harmonics in percent ("50", "50 %"): the knob's 0..1; false if none.
+inline bool parseHarmonics(const std::string& text, float& value) {
+	double v;
+	if (!leadingNumber(text, v) || !(std::fabs(v) < 1e30))
+		return false;
+	value = float(v / 100.0);
+	return true;
 }
 
 // ---- Shift.

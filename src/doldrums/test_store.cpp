@@ -753,8 +753,18 @@ void save_during_swap() {
 	// and the input thawed, all while A is held for the copy (the seam runs
 	// after the copy, before letGo). The copy is A's frames, but the number the
 	// save would give it is the one B carries now (a tape handed in keeps the
-	// number), so nothing may be written: the file stays A's, as it was.
+	// number), so nothing may be written: the file stays as it was. So that a
+	// rewrite would show (A's frames written again would be A's bytes), the
+	// file is first made a different tape, C.
+	{
+		Ring c;
+		c.allocate(cap);
+		std::vector<float> cl((size_t) cap, 0.25f), cr((size_t) cap, -0.25f);
+		c.fill(cl.data(), cr.data());
+		CHECK(writeTape(dir, c, rate, why), "tape C written: %s", why.c_str());
+	}
 	const std::string before = fileBytes(dir);
+	CHECK(fileFrames(dir, fl, fr) && fl[0] == 0.25f && fl != al, "the file is tape C, not A");
 	uint32_t writtenFor = 0;   // as if A's file had not been written: the plan says write
 	const Ring* a = e.live();
 	Ring* b = nullptr;
@@ -777,7 +787,7 @@ void save_during_swap() {
 	CHECK(savePlan(facts) == SAVE_WRITE, "the plan: write");
 	CHECK(saveStep(facts, dir, e, rate, writtenFor, why, 0, swapAndThaw) == SAVE_NOTHING && writtenFor == 0,
 	      "a tape taken during the copy: nothing written (%s)", why.c_str());
-	CHECK(fileBytes(dir) == before, "the file is as it was (tape A), not A's frames under B's number");
+	CHECK(fileBytes(dir) == before, "the file is as it was (tape C), not A's frames under B's number");
 	CHECK(e.frozenSince() == facts.frozenSince, "B carries the number the save read");
 	run(1);
 	CHECK(b && b->now() == cap + 1, "let go: the thaw goes on (now %lld)", b ? b->now() : -1);

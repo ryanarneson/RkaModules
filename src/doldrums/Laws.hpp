@@ -13,6 +13,7 @@
 // end (Mix and Shift: no change), so a stray sample never reaches the sound.
 #include "FastMath.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 namespace rka { namespace doldrums {

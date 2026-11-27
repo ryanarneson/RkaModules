@@ -18,8 +18,10 @@
 //   and done in place. Scattered upward, only one output bin in r would be filled, and
 //   noise made of every r-th bin is periodic within the grain: a repetition
 //   heard at the grain's rate. Gathered, a flat spectrum stays flat up to
-//   where the source's top bin lands, and a tone is spread over about 2 r
-//   bins round k r, as a true pitch shift would spread its window's lobe.
+//   where the source's top bin lands. The trade-off: a tone shifted up is
+//   widened in proportion to the shift, spread over about 2 r bins round
+//   k r (at +24 semitones, r = 4, with the Medium grain about 47 Hz wide).
+//   A scatter would keep a tone narrow but leave the bins between empty.
 //   What would land past the top bin is dropped, never folded back: up, the
 //   source bins with k r >= bins are left out before the gather. Bins
 //   under the cut are dropped before they move, so a DC offset's skirt is
@@ -374,7 +376,7 @@ struct Tables {
 
 private:
 	struct Set {
-		TableSpec spec;
+		TableSpec spec{};   // zeroed, so live() before allocate reads no garbage
 		int cut = 0;
 		bool shiftOn = false, blurOn = false, combOn = false, tiltOn = false;
 		int shiftTop = 0;   // Shift up: the first source bin that lands past the top

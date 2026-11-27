@@ -185,8 +185,6 @@ build/test/doldrums/test_store: src/doldrums/test_store.cpp build/test/dep/pffft
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@ $(DOLDRUMS_LOCK_LINK)
 
-# Doldrums' tests: the sanitizers, and pffft.o linked into every one of them
-# (Fft.hpp needs it; a test that does not use it links it unused).
 # Doldrums' thread test (the window's view, a tape swapped in, the save):
 # ThreadSanitizer, which cannot be combined with ASan; WavFile.hpp compiled in. Fails, saying why, where the compiler cannot build with it.
 build/test/doldrums/test_threads: src/doldrums/test_threads.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp src/hadal/*.hpp src/dep/*.h)
@@ -201,6 +199,8 @@ build/test/doldrums/test_keeper: src/doldrums/test_keeper.cpp build/test/dep/pff
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=thread -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@ || \
 		{ echo "test_keeper: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Doldrums' keeper test needs it" >&2; exit 1; }
 
+# Doldrums' other tests: the sanitizers, and pffft.o linked into every one of
+# them (Fft.hpp needs it; a test that does not use it links it unused).
 build/test/doldrums/test_%: src/doldrums/test_%.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp)
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@

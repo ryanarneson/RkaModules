@@ -206,9 +206,9 @@ struct Doldrums : Module {
 			return s;
 		}
 		void setDisplayValueString(std::string s) override {
-			const float v = std::strtof(s.c_str(), nullptr);
-			if (std::isfinite(v))
-				setValue(v / 100.f);
+			float v;
+			if (rka::doldrums::parseHarmonics(s, v))
+				setValue(v);
 		}
 		std::string getUnit() override {
 			return "";
@@ -234,9 +234,9 @@ struct Doldrums : Module {
 			return rka::doldrums::widthText(getValue());
 		}
 		void setDisplayValueString(std::string s) override {
-			const double c = std::strtod(s.c_str(), nullptr);
-			if (std::isfinite(c))
-				setValue(rka::doldrums::widthForCents(c));
+			float w;
+			if (rka::doldrums::parseWidth(s, w))
+				setValue(w);
 		}
 		std::string getUnit() override {
 			return "";
@@ -254,9 +254,19 @@ struct Doldrums : Module {
 
 	Doldrums() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
-		static_assert(int(STRETCH_PARAM) == int(DoldrumsFrame::STRETCH) && int(FREEZE_PARAM) == int(DoldrumsFrame::FREEZE) &&
-		                  int(MIX_PARAM) == int(DoldrumsFrame::MIX) && int(PARAMS_LEN) == int(DoldrumsFrame::kParams),
-		              "ParamId follows DoldrumsFrame::Param");
+		// process() copies params[i] to frame.params[i] by index, and saved
+		// patches hold the ids: every one is pinned.
+		static_assert(int(STRETCH_PARAM) == int(DoldrumsFrame::STRETCH) && int(STRETCH_ATT_PARAM) == int(DoldrumsFrame::STRETCH_ATT) &&
+		                  int(POSITION_PARAM) == int(DoldrumsFrame::POSITION) &&
+		                  int(POSITION_ATT_PARAM) == int(DoldrumsFrame::POSITION_ATT) &&
+		                  int(HARMONICS_PARAM) == int(DoldrumsFrame::HARMONICS) &&
+		                  int(HARMONICS_ATT_PARAM) == int(DoldrumsFrame::HARMONICS_ATT) && int(BLUR_PARAM) == int(DoldrumsFrame::BLUR) &&
+		                  int(ROOT_PARAM) == int(DoldrumsFrame::ROOT) && int(TILT_PARAM) == int(DoldrumsFrame::TILT) &&
+		                  int(SHIFT_PARAM) == int(DoldrumsFrame::SHIFT) && int(PARTIALS_PARAM) == int(DoldrumsFrame::PARTIALS) &&
+		                  int(WIDTH_PARAM) == int(DoldrumsFrame::WIDTH) && int(FREEZE_PARAM) == int(DoldrumsFrame::FREEZE) &&
+		                  int(MIX_PARAM) == int(DoldrumsFrame::MIX) && int(PARAMS_LEN) == int(DoldrumsFrame::kParams) &&
+		                  int(PARAMS_LEN) == 14,
+		              "ParamId follows DoldrumsFrame::Param, all 14 pinned");
 		const DoldrumsFrame d;
 		typedef DoldrumsFrame F;
 		configParam<StretchQuantity>(STRETCH_PARAM, 0.f, 1.f, d.params[F::STRETCH], "Stretch")->description =
