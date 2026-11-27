@@ -591,6 +591,7 @@ struct Doldrums : Module {
 struct DoldrumsWindowView {
 	TapeSnapshot snap;
 	float pace = 0.f;
+	float tapeSeconds = 0.f;   // the tape's length, for the timer
 	int trouble = rka::doldrums::TapeKeeper::FINE;
 };
 
@@ -763,8 +764,14 @@ struct DoldrumsWindow : widget::Widget {
 		const char* trouble = v->trouble == rka::doldrums::TapeKeeper::NOT_READ    ? "TAPE NOT READ"
 		                      : v->trouble == rka::doldrums::TapeKeeper::NOT_SAVED ? "TAPE NOT SAVED"
 		                                                               : "";
+		// Top left: a file's trouble, else, while frozen, the time the pass
+		// will still play (Readout.hpp's passTimeText; the user's request at
+		// 2.0.49).
+		char timer[16];
+		rka::doldrums::passTimeText(timer, sizeof timer, s, v->pace, v->tapeSeconds);
+		const char* left = *trouble ? trouble : timer;
 		corner(vg, s.state, true, true);
-		corner(vg, trouble, false, true);
+		corner(vg, left, false, true);
 
 		// The anchor: a cyan line with a flag at its top.
 		const float ax = xAt(s.anchor), at = markTop(ax, top);
@@ -785,7 +792,7 @@ struct DoldrumsWindow : widget::Widget {
 		line(vg, rx, markTop(rx, top), rx, bottom, brass, 1.5f);
 
 		corner(vg, s.state, true, false);
-		corner(vg, trouble, false, false);
+		corner(vg, left, false, false);
 		nvgRestore(vg);
 	}
 };
@@ -904,6 +911,7 @@ bool previewFromEngine(const std::string& state, DoldrumsWindowView& out) {
 		return false;
 	view->publish(e->state());
 	out.pace = float(e->state().pace);
+	out.tapeSeconds = 30.f;
 	return view->read(out.snap);
 }
 
@@ -927,6 +935,7 @@ void previewFromFormula(DoldrumsWindowView& out) {
 	s.frozen = true;
 	std::strcpy(s.state, "FROZEN");
 	out.pace = 0.125f;
+	out.tapeSeconds = 30.f;
 }
 
 } // namespace
@@ -968,6 +977,8 @@ struct DoldrumsWidget : ModuleWidget {
 			if (!m->keeper.read(v.snap))
 				return false;
 			v.pace = m->pace_.load(std::memory_order_relaxed);
+			const float fs = m->fs_.load(std::memory_order_relaxed);
+			v.tapeSeconds = fs > 0.f ? float(double(m->capacity_.load(std::memory_order_relaxed)) / double(fs)) : 0.f;
 			v.trouble = m->keeper.trouble();
 			return true;
 		};

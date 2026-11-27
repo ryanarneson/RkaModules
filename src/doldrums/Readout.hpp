@@ -39,6 +39,18 @@
 //   (Stretch 1) it never returns: [r, 1]; nor, following (While recording:
 //   Follow, the read point on the flag whatever the pace), [r, 1].
 // A span with nothing in it is from > to.
+//
+// The window's timer (passTimeText; the user's request at 2.0.49): while the
+// tape is frozen, how long the pass will still play at the pace in force:
+// - frozen and travelling: the time for the read point to reach the end of
+//   the tape, (1 - readEnd) of the tape's length / pace, counting down;
+// - frozen and stopped: the length of the pass a trigger would play, from
+//   the anchor to the end, (1 - anchor) of the tape's length / pace;
+// - held (the Stretch stop, or nothing to travel through), not frozen, or
+//   with no pace or no tape: nothing ("").
+// As "m:ss" (0:07, 4:00, 59:59), then "h:mm:ss" (1:04:00); 100 hours or more
+// is ">99 h". The seconds are rounded up (less a hundredth), so the figure
+// reaches 0:00 only as the pass ends.
 #include "Laws.hpp"
 #include "TapeView.hpp"
 
@@ -256,6 +268,31 @@ inline void toPlay(const TapeSnapshot& s, double pace, float& from, float& to) {
 	const double r = s.readEnd > 0.f ? double(s.readEnd) : 0.0;
 	const double end = r + p * r / (1.0 - p);
 	to = float(end < 1.0 ? end : 1.0);
+}
+
+// ---- The window's timer (see the top of this file). `out` holds at least
+// 12 chars.
+
+inline void passTimeText(char* out, size_t n, const TapeSnapshot& s, double pace, double tapeSeconds) {
+	if (!out || n == 0)
+		return;
+	out[0] = 0;
+	if (!s.frozen || s.held || !(pace > 0.0) || !(tapeSeconds > 0.0))
+		return;
+	const double at = s.stopped ? double(s.anchor) : double(s.readEnd);
+	if (!(at == at))
+		return;
+	const double left = (1.0 - (at < 0.0 ? 0.0 : (at > 1.0 ? 1.0 : at))) * tapeSeconds / (pace < 1.0 ? pace : 1.0);
+	if (!(left < 360000.0)) {
+		std::snprintf(out, n, ">99 h");
+		return;
+	}
+	// Up, but not for a hundredth of a second (a float's 0.9 is a hair under).
+	const long long t = left > 0.01 ? (long long) std::ceil(left - 0.01) : 0;
+	if (t < 3600)
+		std::snprintf(out, n, "%lld:%02lld", t / 60, t % 60);
+	else
+		std::snprintf(out, n, "%lld:%02lld:%02lld", t / 3600, (t / 60) % 60, t % 60);
 }
 
 }} // namespace rka::doldrums

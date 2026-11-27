@@ -143,6 +143,44 @@ void to_play() {
 	CHECK(b <= 0.f || a > b, "a read point off the edge plays nothing on the glass (%g..%g)", a, b);
 }
 
+// The window's timer: while frozen, the time the pass will still play.
+void pass_time() {
+	char t[16];
+	auto text = [&](const TapeSnapshot& s, double pace, double secs = 30.0) {
+		passTimeText(t, sizeof t, s, pace, secs);
+		return std::string(t);
+	};
+	// Frozen, travelling: from the read point to the end, over the pace.
+	CHECK(text(snap(0.0f, true, false, false), 0.125) == "4:00", "the whole tape at x8: 4:00 (%s)", t);
+	CHECK(text(snap(0.5f, true, false, false), 0.125) == "2:00", "half of it at x8: 2:00 (%s)", t);
+	CHECK(text(snap(0.9f, true, false, false), 1.0) == "0:03", "3 s at x1: 0:03 (%s)", t);
+	CHECK(text(snap(0.9f, true, false, false), 0.125) == "0:24", "3 s at x8: 0:24 (%s)", t);
+	CHECK(text(snap(0.99f, true, false, false), 1.0) == "0:01", "0.3 s left: rounded up, 0:01 (%s)", t);
+	CHECK(text(snap(1.f, true, false, false), 0.125) == "0:00", "at the end: 0:00 (%s)", t);
+	CHECK(text(snap(0.f, true, false, false), 1.0 / 128.0) == "1:04:00", "the whole tape at x128: 1:04:00 (%s)", t);
+	CHECK(text(snap(0.f, true, false, false), 30.0 / 359999.0) == "99:59:59", "just under 100 hours (%s)", t);
+	CHECK(text(snap(0.f, true, false, false), 1e-9) == ">99 h", "100 hours or more: >99 h (%s)", t);
+	CHECK(text(snap(0.5f, true, false, false), 0.125, 27.5625) == "1:51", "a 27.56 s tape (a rate with a shorter one): 1:51 (%s)", t);
+	// Stopped: the pass a trigger would play, from the anchor (0.5 in snap()).
+	CHECK(text(snap(0.2f, true, false, true), 0.125) == "2:00", "stopped: from the anchor, 2:00 (%s)", t);
+	// Held, not frozen, no pace, no tape: nothing.
+	CHECK(text(snap(0.4f, true, true, false), 0.125).empty(), "held: nothing (%s)", t);
+	CHECK(text(snap(0.4f, true, false, false), 0.0).empty(), "the Stretch stop: nothing (%s)", t);
+	CHECK(text(snap(0.4f, false, false, false), 0.125).empty(), "not frozen: nothing (%s)", t);
+	CHECK(text(snap(0.4f, false, false, true), 0.125).empty(), "stopped, not frozen: nothing (%s)", t);
+	CHECK(text(snap(0.4f, true, false, false), 0.125, 0.0).empty(), "no tape: nothing (%s)", t);
+	// Hostile figures: off the glass is held to it; NaN says nothing; a pace
+	// above 1 reads 1.
+	CHECK(text(snap(-0.5f, true, false, false), 0.125) == "4:00", "a read point left of the glass: the whole tape (%s)", t);
+	CHECK(text(snap(1.5f, true, false, false), 0.125) == "0:00", "right of it: 0:00 (%s)", t);
+	CHECK(text(snap(std::nanf(""), true, false, false), 0.125).empty(), "NaN: nothing (%s)", t);
+	CHECK(text(snap(0.f, true, false, false), 5.0) == "0:30", "a pace above 1 reads 1 (%s)", t);
+	CHECK(text(snap(0.f, true, false, false), std::nan("")).empty(), "a NaN pace: nothing (%s)", t);
+	char small[4] = "zzz";
+	passTimeText(small, 1, snap(0.f, true, false, false), 0.125, 30.0);
+	CHECK(small[0] == 0 && small[1] == 'z', "a buffer of one char: empty, nothing written past it");
+}
+
 } // namespace
 
 int main() {
@@ -151,5 +189,6 @@ int main() {
 	width_shift();
 	position();
 	to_play();
+	pass_time();
 	return rkatest::finish("doldrums/test_readout");
 }

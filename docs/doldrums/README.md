@@ -151,9 +151,26 @@ Read this with the module open. From the back of the glass to the front:
     just opened) and the module is silent until a trigger (in Follow too:
     STOPPED comes before FOLLOW);
   - **FROZEN STOPPED**: the same, on a frozen tape.
+- **A time in the top left corner, such as 3:12: the timer.** It shows
+  only while the tape is frozen, and says how long the pass will still
+  play at the Stretch you have set: the time the gold bar needs to reach
+  the right edge. It counts down as the gold bar travels, and changes at
+  once when you turn Stretch (twice the stretch, twice the time), turn
+  Position, or press in the window. It reads minutes and seconds
+  (0:24), then hours, minutes and seconds (1:04:00 for the whole tape at
+  x128); 100 hours or more reads ">99 h". By state:
+  - **FROZEN**, the gold bar travelling: the time left in this pass. In
+    Go round the gold bar then returns to the flag and the timer starts
+    again from the length of a pass from the flag.
+  - **FROZEN STOPPED**: the length of the pass a trigger at TRIG would
+    play, from the flag to the right edge. It does not count while
+    stopped.
+  - **FROZEN HELD** and **FROZEN AT END**: no timer. The gold bar is not
+    travelling, so the sound lasts until you change something.
+  - Not frozen: no timer.
 - **The words in the top left corner**, only when the patch's tape had
   trouble: **TAPE NOT READ** or **TAPE NOT SAVED** (see "With the
-  patch").
+  patch"). They take the timer's place while they show.
 - **The ruler** under the glass: a long tick every tenth of the tape
   (3 s), short ticks between them every 0.75 s.
 
