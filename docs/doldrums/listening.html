@@ -57,7 +57,7 @@ th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: upper
 <body>
 <main>
 <h1>DOLDRUMS</h1>
-<div class="sub">Listening list · test build 2.0.45 · 2026-11-26 · first build</div>
+<div class="sub">Listening list · test build 2.0.46 · 2026-11-26 · first build</div>
 <p class="lead">Doldrums is new: a 30 s tape of the input, held or crept through with PaulStretch's random-phase method, with a tuned comb. Every default, range and rule below is a first guess built from the design, and several rules were decided by the builder while building; this list is where you rule on them. Each check says what to patch, what to do, what you should hear or see if it works as designed, and what your answer decides. The manual (<b>docs/doldrums/README.md</b>) says what everything does; its section "What to expect" lists the limits found while building.
 Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> could not be tried without a live Rack: the drag and its undo, the menu, dark panels, a rate change while running, duplicating a module, the tooltips.</p>
 
@@ -259,7 +259,7 @@ const groups = [
    "Nothing sounds or gates between the freeze and the trigger; Eddy B records one pass of about 80 s, from the fade in to the fade out, and then plays it.",
    "Whether the patch you asked for works as you expected, and verdict FREEZE IN STOP."]]]
 ];
-const KEY = "doldrums-2.0.45-listening";
+const KEY = "doldrums-2.0.46-listening";
 let state = {};
 try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
@@ -297,7 +297,7 @@ document.getElementById("copy").addEventListener("click", ev => {
     const s = state[i + 1] || {};
     if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
   });
-  const text = "Doldrums 2.0.45 listening notes\n" + lines.join("\n");
+  const text = "Doldrums 2.0.46 listening notes\n" + lines.join("\n");
   const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
   if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
 });

@@ -1,7 +1,7 @@
-# Doldrums 2.0.45: Technical Reference for QA
+# Doldrums 2.0.46: Technical Reference for QA
 
 Module: **Doldrums** (16 HP, 81.28 mm), plugin `rka` (slug `rka`, module slug `Doldrums`), VCV Rack 2 (minRackVersion 2.5.0). Tags `Effect`, `Granular`.
-Build: the first test build, from branch `doldrums` (not yet merged to main). This document was written against commit `00fd5bd` ("Doldrums: the module and its window") and the test-build fixes after it; plugin.json read `"version": "2.0.45"` when it was written, and the test build takes the next number. Check the version in the package's plugin.json.
+Build: the first test build, from branch `doldrums` (not yet merged to main). This document was written against commit `00fd5bd` ("Doldrums: the module and its window") and the test-build fixes after it; the first test build is 2.0.46. Check the version in the package's plugin.json.
 Document date: 2026-11-26.
 Listening guide: `docs/doldrums/listening.html` (on the share as `doldrums-<version>-listening.html`). Manual: `docs/doldrums/README.md`. Design: `docs/specs/2026-11-26-doldrums-design.md` (with dated "As built" notes). Build ledger: `.superpowers/sdd/2026-11-26-doldrums/progress.md`.
 
