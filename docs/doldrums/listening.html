@@ -57,10 +57,11 @@ th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: upper
 <body>
 <main>
 <h1>DOLDRUMS</h1>
-<div class="sub">Listening list · test build 2.0.49 · 2026-11-26 · fourth build</div>
+<div class="sub">Listening list · test build 2.0.50 · 2026-11-27 · fifth build</div>
 <p class="lead">Doldrums is new: a 30 s tape of the input, held or crept through with PaulStretch's random-phase method, with a tuned comb. Every default, range and rule below is a first guess built from the design, and several rules were decided by the builder while building; this list is where you rule on them. Each check says what to patch, what to do, what you should hear or see if it works as designed, and what your answer decides. The manual (<b>docs/doldrums/README.md</b>) says what everything does; its section "What to expect" lists the limits found while building.
 Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> could not be tried without a live Rack: the press and drag in the window and their undo, a rate change while running, duplicating a module, the tooltips, Initialize and its undo.</p>
-<p class="lead">Since 2.0.46 (from your listening and the final review): Position starts about 3 s back, so Freeze at the defaults loops the last few seconds and the instant-hold is Position fully right; the corner says FROZEN AT END when Stretch has nothing to act on; the read head is drawn as a gold bar; a thaw goes back to the Position flag at once; Stretch brought back to 1 rejoins the flag; a press in the window plays from there; in Stop, Freeze always waits for TRIG unless it holds; the comb's loudness is measured from the sound; Initialize no longer clicks onto the tape. The window's marks, named as the checks use them: <b>the Position flag</b> (a thin cyan line with a small solid triangle on top: where a pass starts), <b>the gold bar</b> (the read head: where the module has got to), <b>the slice</b> (a short cyan bar along the bottom with a faint band above it: the piece of tape the current grain is made from), the bright and dim peaks (bright: what the pass has still to play) and the word in the top right corner. The manual's "The tape and its window" has them in full.</p>
+<p class="lead"><b>New in 2.0.50, from your notes on 2.0.49:</b> a press or drag in the window moves only the gold bar and plays from there (the cyan flag and the POSITION knob stay put; only the knob and its CV move the flag); in Stop, Freeze plays one pass from the flag and then stops (before, it stopped at once); a timer in the window's top left corner, while frozen, says how long the pass will still play at the Stretch you have set; Mix starts at 50 %; Position's tooltip is three words. The checks for these: "Still frozen: press in the window", the two after it, "Stop chosen, a pass playing", the one after it, and "Frozen, Position about 3 s back, Stretch at 8".</p>
+<p class="lead">Since 2.0.46 (from your listening and the final review): Position starts about 3 s back, so Freeze at the defaults loops the last few seconds and the instant-hold is Position fully right; the corner says FROZEN AT END when Stretch has nothing to act on; the read head is drawn as a gold bar; a thaw goes back to the Position flag at once; Stretch brought back to 1 rejoins the flag; the comb's loudness is measured from the sound; Initialize no longer clicks onto the tape. The window's marks, named as the checks use them: <b>the Position flag</b> (a thin cyan line with a small solid triangle on top: where a pass starts), <b>the gold bar</b> (the read head: where the module has got to), <b>the slice</b> (a short cyan bar along the bottom with a faint band above it: the piece of tape the current grain is made from), the bright and dim peaks (bright: what the pass has still to play) and the word in the top right corner. The manual's "The tape and its window" has them in full.</p>
 
 <div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
 <button id="copy">Copy notes</button><button id="reset">Reset</button></div>
@@ -326,7 +327,7 @@ const groups = [
    "With Stretch at x1, Freeze as the clip ends plays the clip once from the flag (the gold bar crosses to the right edge), then FROZEN STOPPED (silent, RUN low). Set the flag on the clip's start with the Position knob, then Stretch to 8, then patch RUN to Eddy B's REC. Nothing sounds or gates from FROZEN STOPPED to the trigger; Eddy B records one pass of about 80 s, from the fade in to the fade out, and then plays it.",
    "Whether the patch you asked for works as you expected, and verdict FREEZE IN STOP."]]]
 ];
-const KEY = "doldrums-2.0.49-listening";
+const KEY = "doldrums-2.0.50-listening";
 let state = {};
 try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
@@ -364,7 +365,7 @@ document.getElementById("copy").addEventListener("click", ev => {
     const s = state[i + 1] || {};
     if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
   });
-  const text = "Doldrums 2.0.49 listening notes\n" + lines.join("\n");
+  const text = "Doldrums 2.0.50 listening notes\n" + lines.join("\n");
   const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
   if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
 });
