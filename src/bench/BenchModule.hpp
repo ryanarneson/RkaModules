@@ -23,6 +23,10 @@
 //   static LibmCase<Instance> libmCase(int k)
 //                                  what libm_calls renders; at least one
 //                                  with the knobs still
+//   static bool extra(const Cv&)   optional: something more the bench
+//                                  measures and checks after the cases
+//                                  (Doldrums: the worst single sample);
+//                                  false fails `make bench`
 //
 // A case's `sample` sets the instance's inputs for sample t (t counts from
 // 0, before the first process()); one-time set-up goes under `t == 0`.

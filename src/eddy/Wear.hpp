@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include "FastMath.hpp"
+#include "SoftBound.hpp"
 #include "eddy/EddyTuning.hpp"
 #include "hadal/Random.hpp"
 
@@ -29,12 +30,9 @@ inline float tameVolts(float x) {
 
 // The write path's soft bound: the exact identity up to 8 V (bit for bit),
 // then tanh-shaped into a ceiling of 10 V. The input must not be NaN.
+// Shared with Doldrums (SoftBound.hpp).
 inline float softBound(float x) {
-	const float a = x >= 0.f ? x : -x;
-	if (a <= 8.f)
-		return x;
-	const float y = 8.f + 2.f * fastTanh((a - 8.f) * 0.5f);
-	return x >= 0.f ? y : -y;
+	return rka::softBound(x);
 }
 
 inline float onePoleCoeff(float hz, float fs) {

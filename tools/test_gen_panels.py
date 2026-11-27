@@ -726,6 +726,53 @@ class FaceWords(unittest.TestCase):
         g.check_references("T", self.words([(0, "UP")], words_r=15.0, words_size=1.7))
 
 
+class FaceMarks(unittest.TestCase):
+    """A drawn mark on a dial face (the infinity sign on Doldrums' Stretch)."""
+
+    def marked(self, marks, **face):
+        return spec(components=[("param", "V", 30.0, 60.0, None)], sizes={"PARAM_V": "hero"},
+                    faces={"PARAM_V": dict(r=19.0, ticks=50, major=10, marks=marks, **face)})
+
+    def test_face_mark_is_drawn(self):
+        s = g.PANELS["Doldrums"]
+        g.check_panel("Doldrums", s)
+        svg = g.panel_svg("Doldrums", s, g.INSTRUMENT[""])
+        marks = re.findall(r'<path d="(M0,0 C[^"]*)" transform="translate\(([\d.]+) ([\d.]+)\) rotate\(135\)" '
+                           r'fill="none" stroke="#1c1a16" stroke-width="0.32"', svg)
+        self.assertEqual(len(marks), 1)
+        d, x, y = marks[0]
+        # Half-length 1.4 mm, half-height 0.85 mm.
+        self.assertIn("1.4,0", d)
+        self.assertIn("-0.85", d)
+        # On the words' radius (r 16 - 3) at 135 degrees on Stretch's face.
+        c = next(c for c in g.comps_of("Doldrums", s) if c.id == "PARAM_STRETCH")
+        px, py = g.dial_point(c.x, c.y, 13.0, 135)
+        self.assertAlmostEqual(float(x), px, delta=0.01)
+        self.assertAlmostEqual(float(y), py, delta=0.01)
+
+    def test_face_mark_clearance(self):
+        g.check_panel("T", self.marked([(135, "infinity")]))
+        # The same mark over a word on the face fails, naming both.
+        msg = failure(self, "T", self.marked([(135, "infinity")], words=[(135, "WORD")]))
+        self.assertIn("WORD", msg)
+        self.assertIn("infinity", msg)
+        # Its box has its length: marks 12 degrees apart (3.4 mm between
+        # centres, with boxes 3.1 mm long) fail, and 40 degrees apart pass.
+        msg = failure(self, "T", self.marked([(100, "infinity"), (112, "infinity")]))
+        self.assertIn("infinity", msg)
+        g.check_panel("T", self.marked([(100, "infinity"), (140, "infinity")]))
+        # Out at the rim, past the face, it fails too.
+        msg = failure(self, "T", self.marked([(135, "infinity")], words_r=19.0))
+        self.assertIn("infinity", msg)
+
+    def test_unknown_mark_rejected(self):
+        msg = failure(self, "T", self.marked([(0, "lemniscate")]))
+        self.assertIn("lemniscate", msg)
+
+    def test_marks_key_accepted(self):
+        self.assertIn("marks", g.FACE_KEYS)
+
+
 class Screws(unittest.TestCase):
     """Rack's screws, at the positions the description gives, keep clear of
     everything on the panel."""
@@ -1164,7 +1211,9 @@ class Committed(unittest.TestCase):
             folder = ROOT / "res" / s["dir"]
             mismatch = folder_mismatch(folder, {f"{name}{sfx}.svg" for sfx in g.INSTRUMENT})
             self.assertIsNone(mismatch, mismatch)
-            boxes = [g.text_box(t) for t in g.instrument_texts(name, s) + [g.foot_mark(s)]]
+            # A drawn mark is a path, not lettering: the comparison below covers it.
+            boxes = [g.text_box(t) for t in g.instrument_texts(name, s) + [g.foot_mark(s)]
+                     if not isinstance(t, g.Mark)]
             for suffix, pal in g.INSTRUMENT.items():
                 path = folder / f"{name}{suffix}.svg"
                 want, got = drawing(g.panel_svg(name, s, pal)), drawing(path.read_text(encoding="utf-8"))

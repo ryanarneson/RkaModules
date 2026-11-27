@@ -1,7 +1,7 @@
 {
   "slug": "rka",
   "name": "RKA",
-  "version": "2.0.45",
+  "version": "2.0.50",
   "license": "GPL-3.0-or-later",
   "brand": "RKA",
   "author": "Ryan Arneson",
@@ -193,6 +193,16 @@
         "LFO"
       ],
       "keywords": "neap expander fold min max trigger steps quantiser"
+    },
+    {
+      "slug": "Doldrums",
+      "name": "Doldrums",
+      "description": "Freeze and stretch: holds a moment or draws the last 30 seconds out, with a tuned comb, a tape window and a gate for recording a pass",
+      "tags": [
+        "Effect",
+        "Granular"
+      ],
+      "keywords": "freeze stretch paulstretch spectral drone ambient comb hold"
     }
   ]
 }

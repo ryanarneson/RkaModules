@@ -19,6 +19,7 @@ VCV Rack 2 modules.
 | [**Beacon**](docs/beacon/README.md) | 10 | Polyphonic envelope: Gate, Trig or Hold (a slew) on a switch, Attack, Decay and Release from 1 ms to 60 s, Sustain, Shape from a swelling reverse through linear to classic, a gate out for every stage, a trigger at each stage start, OUT and INV, a window that draws the envelope with a dot riding it, RETRIG |
 | [**Neap**](docs/neap/README.md) | 8 | Eight slow cycles, each about an octave below the last in uneven steps that never lock (RATE over 12 octaves, from 40 Hz to hours), TIDE (their weighted sum, with Weight), HIGH (a gate above Mark), ALL as one polyphonic cable, Reset, Drift, triangle or sine |
 | [**Spring**](docs/spring/README.md) | 6 | Neap's expander: sixteen outputs from the eight cycles, four folds, min and max of two pairs, four zero-crossing triggers that cascade, four 16-step codes |
+| [**Doldrums**](docs/doldrums/README.md) | 16 | Stereo freeze and stretch (PaulStretch's method): a 30 s tape of the input with a window on it, held or drawn out from x1 to a true stop with Position and Stretch, Blur, Tilt and Shift on the spectrum, a tuned comb (Harmonics) played from polyphonic V/OCT, Freeze by button or gate, TRIG and a RUN gate for recording one pass; a frozen tape is kept with the patch |
 | [**Hadal**](docs/hadal/README.md) | 10 | Rumble and noise bed: Rumble, Hiss and Crackle darkened together by Depth (0 to 11 km), slow Drift, CV on all five, a layer out each and an L/R mix |
 | [**Shoal**](docs/shoal/README.md) | 28 | The Ornament & Crime v1.3.6 firmware, all 13 apps, on emulated hardware, with a mouse-driven settings list |
 
@@ -79,6 +80,13 @@ src/neap/                the Neap cycles and Spring's expander link: Neap.cpp, N
                          headers (Cycles.hpp, Tide.hpp, NeapRate.hpp, NeapExpander.hpp), test_*.cpp, bench.inc,
                          NeapLayout.hpp
 src/spring/              the Spring expander: Spring.cpp, SpringCore.hpp (Rack-free), test_*.cpp, SpringLayout.hpp
+src/doldrums/            the Doldrums freeze and stretch: Doldrums.cpp, DoldrumsEngine.hpp and the
+                         Rack-free headers it is built from (Laws.hpp, Ring.hpp, Pass.hpp, Tables.hpp,
+                         Grain.hpp; the window's TapeView.hpp; the tape's file TapeStore.hpp and its
+                         worker TapeKeeper.hpp; Readout.hpp, SavedState.hpp), test_*.cpp, bench.inc,
+                         DoldrumsLayout.hpp, testdata/ (the golden tape.wav); shared: src/Fft.hpp
+                         (rka::RealFft) and src/SoftBound.hpp
+src/dep/pffft/           vendored PFFFT (unchanged; README.md there has its provenance)
 src/narrows/             the Narrows filter: Narrows.cpp, NarrowsEngine.hpp and the
                          headers it is built from (Laws.hpp, StateCore.hpp, Comb.hpp,
                          Ping.hpp, NarrowsTuning.hpp; Fathom's ladder, shared as
@@ -338,6 +346,12 @@ GPL-3.0-or-later. See `LICENSE-GPLv3.txt`.
 Attribution), copied unedited from the Fundamental plugin; Eddy uses it to
 read and write WAV files.
 
+`src/dep/pffft/pffft.c` and `pffft.h` are PFFFT by Julien Pommier (BSD-like
+licence, in the file header), unchanged, from
+https://bitbucket.org/jpommier/pffft at commit
+67a4a6a113179ab4ac398298f46fce8dd60498dc (2026-10-16); `rka_prefix.h` renames
+its symbols so they cannot meet libRack's copy. Doldrums' FFT runs on it.
+
 `src/spindrift/beads/` and `src/spindrift/stmlib/` are Mutable Instruments'
 Beads DSP and the parts of stmlib it uses, by Emilie Gillet (MIT; see
 `LICENSE-beads.md`), vendored with every change marked; Spindrift runs on
@@ -345,4 +359,4 @@ them.
 
 `tools/fonts/D-DINCondensed.ttf` (SIL Open Font License 1.1, with
 `tools/fonts/OFL-1.1.txt` and `COPYING.txt`) ships in the plugin package:
-Eddy's and Spindrift's windows are lettered with it.
+Eddy's, Spindrift's and Doldrums' windows are lettered with it.

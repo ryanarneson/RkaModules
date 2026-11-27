@@ -62,7 +62,7 @@ designer's reading was:
 - **Core.** Sound: Fathom, Foghorn, Ping, Buoy. Space and texture: Fog,
   Spindrift, Wake. Slow movement: Sway, Neap, Reckoner, Squall.
   Long-form structure: Watch, Log, Shoal. Mixing and safety: Ballast,
-  Plimsoll, Thermocline. Glue: Tackle, Splice, Lull, Hold, Cleat.
+  Plimsoll, Thermocline. Glue: Tackle, Splice, Lull (since dropped), Hold, Cleat.
 - **Matters less for beatless music.** Knot, Sounding, Bearing (Shoal
   covers all three), Seastate, and Beacon, Sextant and Signal, which are
   useful in places but not central.
@@ -72,7 +72,7 @@ are Doldrums, Rigging, Hadal and Sluice.
 
 | Module | What it does | The instrument | Width |
 |--------|--------------|----------------|-------|
-| [Doldrums](doldrums.md) | Spectral freeze and stretch | A ship becalmed | 10 HP |
+| [Doldrums](doldrums.md) | Spectral freeze and stretch: a 30 s tape held or drawn out, with a tuned comb (built) | A ship becalmed | 16 HP |
 | [Rigging](rigging.md) | Six tuned strings (built) | Wind in the rigging | 14 HP |
 | [Hadal](hadal.md) | Rumble and noise bed (built) | The deepest ocean zone | 10 HP |
 | [Sluice](sluice.md) | Four VCAs (built) | A sluice gate | 10 HP |
@@ -97,10 +97,26 @@ an instrument of their own; there is no room for one.
 |--------|--------------|
 | [Cleat](cleat.md) | Multiple: one input to five outputs |
 | [Splice](splice.md) | Precision adder: four inputs summed at unity |
-| [Reef](reef.md) | Two attenuators |
-| [Lull](lull.md) | Slew limiter with separate rise and fall |
+| [Reef](reef.md) | Two attenuators (dropped 2026-11-27: Tackle covers it) |
+| [Lull](lull.md) | Slew limiter with separate rise and fall (dropped 2026-11-27: Beacon's HOLD and Squall's Swell cover it) |
 | [Hold](hold.md) | Sample and hold, with track |
 | [Bell](bell.md) | Manual trigger and gate; gate to trigger |
+
+## Added 2026-11-26: what the built collection still lacks
+
+With seventeen modules built, the user asked what the list was missing
+("Small utilities? bernouli gate? a sample/track and hold? a true
+clock?"). Hold and Knot were already here and move up the order; these
+five are new, and none is drawn yet. Sextant also gained a stepped mode
+(a sequential switch) in its page.
+
+| Module | What it does | The name | Width |
+|--------|--------------|----------|-------|
+| [Fluke](fluke.md) | Bernoulli gate: each trigger goes to A or B by chance | A stroke of luck; an anchor's two flukes | not drawn |
+| [Semaphore](semaphore.md) | Logic (AND, OR, XOR, NOT) with a comparator on each input | Flag semaphore: two arms combined | not drawn |
+| [Tender](tender.md) | Ballast expander: two stereo aux sends and returns | The boat that goes out from the ship and back | not drawn |
+| [Ebb](ebb.md) | Mutes and slow fades on a button or a gate | The tide going out | not drawn |
+| [Beam](beam.md) | Stereo width, mono lows, mid and side | A ship's width | not drawn |
 
 Two 1 HP ideas were sketched and not kept for now: Telltale, a strip of
 lights showing the outputs of the RKA module on its left, and Batten, a

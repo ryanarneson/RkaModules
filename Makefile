@@ -4,7 +4,7 @@ RACK_DIR ?= ../..
 # One folder per module: code and test_*.cpp tests in src/<module>/,
 # panels in res/<module>/ (generated from res-src/<module>/). src/ itself
 # has the shared plugin entry point and widgets.
-MODULES = sway fathom shoal sluice fog hadal ballast pan squall rigging wake narrows eddy spindrift beacon neap spring
+MODULES = sway fathom shoal sluice fog hadal ballast pan squall rigging wake narrows eddy spindrift beacon neap spring doldrums
 
 # FLAGS will be passed to both the C and C++ compiler
 FLAGS += -Isrc
@@ -18,6 +18,7 @@ LDFLAGS +=
 # Add .cpp files to the build
 SOURCES += $(wildcard src/*.cpp)
 SOURCES += $(filter-out $(wildcard $(MODULES:%=src/%/test_*.cpp)),$(wildcard $(MODULES:%=src/%/*.cpp)))
+SOURCES += src/dep/pffft/pffft.c
 
 # Add files to the ZIP package when running `make dist`
 # The compiled plugin and "plugin.json" are automatically added.
@@ -79,6 +80,15 @@ SPINDRIFT_PLUGIN_FLAGS = $(SPINDRIFT_FW_FLAGS) -isystem src/spindrift -Dstmlib=s
 build/src/spindrift/BeadsFirmware.cpp.o: FLAGS += $(SPINDRIFT_PLUGIN_FLAGS) -fvisibility=hidden
 build/src/spindrift/Spindrift.cpp.o: FLAGS += $(SPINDRIFT_PLUGIN_FLAGS)
 
+# The vendored pffft (src/dep/pffft/, upstream unchanged; Fft.hpp). The SDK
+# has pffft.h and the code inside libRack, which the tests cannot link, so
+# the plugin carries its own copy; rka_prefix.h renames its symbols
+# rka_pffft_* so it never meets libRack's (make smoke checks, with
+# tools/check_pffft_symbols.sh, that no plain pffft_* symbol is exported or
+# imported), and they stay hidden. Upstream is not clean under the
+# plugin's warnings and is built without them as errors.
+build/src/dep/pffft/pffft.c.o: FLAGS += -include src/dep/pffft/rka_prefix.h -fvisibility=hidden
+
 .PHONY: shoal-bench
 shoal-bench:
 	@mkdir -p build/test/shoal
@@ -86,7 +96,9 @@ shoal-bench:
 	build/test/shoal/bench_core
 
 # Load the installed plugin in a real (headless) Rack and render module
-# screenshots. See tools/rack_smoke.sh.
+# screenshots. See tools/rack_smoke.sh. First: the plugin neither exports
+# nor imports a plain pffft_* symbol (tools/check_pffft_symbols.sh).
 .PHONY: smoke
 smoke: dist
+	tools/check_pffft_symbols.sh
 	tools/rack_smoke.sh

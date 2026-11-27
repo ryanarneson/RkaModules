@@ -1,8 +1,21 @@
 # Doldrums: spectral freeze and stretch
 
-Status: idea, 2026-11-15. Not designed. 10 HP in the sketch. One of nine
-added to fill gaps for dark, space and horror ambient. Notes from a
-reading of PaulXStretch added 2026-11-23 (below); still not designed.
+Status: built, 2026-11-26 (16 HP). The manual is
+[docs/doldrums/README.md](../doldrums/README.md); the design is
+`docs/specs/2026-11-26-doldrums-design.md`. The text below is the original
+idea (2026-11-15, 10 HP in the sketch, one of nine added to fill gaps for
+dark, space and horror ambient) and the notes from a reading of
+PaulXStretch (2026-11-23).
+
+**What changed from the idea.** A stereo tape of the last 30 s with a
+window on it and a Position control, so a moment can be found again, held
+or crept through, instead of a freeze of the present alone; the window
+shows the tape, not the held spectrum. Stretch runs from x1 to a true
+stop on one dial. Harmonics, the tuned comb, is played from polyphonic
+V/OCT. A trigger plays one pass and a RUN gate says when it runs, for
+recording into Eddy. A frozen tape is kept with the patch. The FFT is
+PFFFT, vendored. In its first listening stop: the user has heard the test
+builds from 2.0.46 (2.0.50 is the fifth).
 
 ![mockup](doldrums-mockup.svg)
 

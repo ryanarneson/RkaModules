@@ -42,7 +42,8 @@
 	X(long, lroundf, (float a), (a)) X(long, lround, (double a), (a)) \
 	X(float, floorf, (float a), (a)) X(double, floor, (double a), (a)) \
 	X(float, fminf, (float a, float b), (a, b)) X(double, fmin, (double a, double b), (a, b)) \
-	X(float, fmaxf, (float a, float b), (a, b)) X(double, fmax, (double a, double b), (a, b))
+	X(float, fmaxf, (float a, float b), (a, b)) X(double, fmax, (double a, double b), (a, b)) \
+	X(float, sqrtf, (float a), (a)) X(double, sqrt, (double a), (a))
 
 enum {
 #define X(ret, name, params, args) CALL_##name,

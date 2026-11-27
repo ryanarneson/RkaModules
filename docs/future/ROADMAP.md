@@ -18,7 +18,7 @@ process and a plain panel; **M** needs real DSP work or tuning by ear;
 The existing three are already in the Instrument look
 (`docs/specs/2026-11-15-instrument-look-design.md`): Sway, Fathom and
 Shoal moved to it in PR #7, after Shoal's friendly mode landed in PR #6
-(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging, Wake, Narrows, Eddy, Spindrift, Beacon, Neap and Spring were built in it from the start.
+(both 2026-11-15). Sluice, Fog, Hadal, Ballast, Pan, Squall, Rigging, Wake, Narrows, Eddy, Spindrift, Beacon, Neap, Spring and Doldrums were built in it from the start.
 
 **Changes since (the user, 2026-11-18):** Squall was built next, ahead of
 Plimsoll and Lull. Plimsoll is skipped for now, since Ballast's soft limit
@@ -89,9 +89,43 @@ listening stop (test builds 2.0.38 and 2.0.39) nothing was changed: every
 first guess stands. The manual is `docs/neap/README.md`; the design is
 `docs/specs/2026-11-24-neap-design.md`.
 
+**Changes since (2026-11-26):** With Neap built, the user asked what
+the list was missing and named a Bernoulli gate, a sample and hold and a
+true clock. Five ideas were added, none with a number in the original
+order: Fluke (the Bernoulli gate), Semaphore (logic and a comparator),
+Tender (aux sends for Ballast), Ebb (mutes and slow fades) and Beam
+(stereo width). Sextant gained a stepped mode in its page, in place of a
+sequential switch of its own. Hold moves to the head of the utilities.
+Knot moves up from "only if wanted" into the utilities: Sway, Squall,
+Wake and Shoal now all take a clock and nothing in the collection is
+one (Shoal's thirteen apps are clocked, and none is a clock, against
+what this page said of Knot before); it should be designed round slow ratios (/16 to /64) more than
+round the sketch's multiples. The utilities table below is in the new
+suggested order. The designer suggests dropping Lull (Beacon's HOLD
+mode and Squall's Swell cover it) and Reef (Tackle covers it); the user
+dropped both on 2026-11-27 (see "Dropped", at the foot). Doldrums is the suggested next large build,
+with the small utilities filling in round it.
+
+**Changes since (2026-11-26, later):** Doldrums was built (16 HP), the
+last of the texture modules in the original order. Against the idea: a
+30 s tape of the input with a window and a Position control, not a freeze
+of the present alone; Stretch from x1 to a true stop; the tuned comb
+(Harmonics) played from polyphonic V/OCT; a trigger, a RUN gate and a
+play-once setting so a pass can be recorded into Eddy; a frozen tape kept
+with the patch. It did not need a worker thread for the audio (each
+grain's work is spread over the samples after it), only for the tape's
+file. It vendors PFFFT (`src/dep/pffft/`, wrapped as `rka::RealFft` in
+`src/Fft.hpp`), the plugin's first FFT, and lifted Eddy's soft bound to
+`src/SoftBound.hpp`. Its window is its own (`src/doldrums/TapeView.hpp`, a
+ring that scrolls), not Eddy's `TapeWindow`. In its first listening stop: the
+user has heard the test builds from 2.0.46 (2.0.50 is the fifth). The manual is
+`docs/doldrums/README.md`; the design is
+`docs/specs/2026-11-26-doldrums-design.md`.
+
 ## 1. A whole patch from RKA alone
 
-With Sway, Fathom and Shoal these six make a complete dark ambient patch:
+With Sway, Fathom and Shoal the original six here (Sluice, Fog, Hadal,
+Ballast, and Plimsoll and Lull, since moved and dropped) made a complete dark ambient patch:
 sound, space, loudness under control, stereo, and a safe output.
 
 | # | Module | Effort | Why here |
@@ -100,7 +134,8 @@ sound, space, loudness under control, stereo, and a safe output.
 | 2 | [Fog](fog.md) (built) | L | Reverb. The largest single gain for this music: Fathom into Fog is already a piece. |
 | 3 | [Hadal](hadal.md) (built) | S | Rumble and noise. Cheap, immediately in genre, and the noise source Rigging will want. |
 | 4 | [Ballast](ballast.md) (built) | M | Stereo mixer with level CV; pan in its Pan expander (built). From here a patch needs no other maker's mixer. |
-| 6 | [Lull](lull.md) (low priority) | S | Slew. Slowing everything down is half of this music, and it is 2 HP of work. Squall's Swell covers much of it for now. |
+| new | [Tender](tender.md) | M | Aux sends and returns for Ballast, as an expander. Fog, Wake, Spindrift and Eddy are most useful shared between channels, and today each channel needs its own. Probably the most useful missing piece for a real patch. Added 2026-11-26. |
+| new | [Ebb](ebb.md) | S | Mutes and slow fades on a button or a gate, as a Ballast expander or alone. Bringing layers in and out by hand is the commonest gesture in a long piece. Added 2026-11-26. |
 
 ## 2. Texture
 
@@ -117,7 +152,7 @@ window's approach and the waveform overview from Eddy (2026-11-22).
 | new | [Narrows](narrows.md) (built) | M | Polyphonic stereo filter: low-pass, band-pass or high-pass on a Mode sweep, with a comb and a ping input. The collection had no filter outside Fathom's voice, and every texture module here wants one after it. Two cores on a switch: Fathom's ladder, now shared code (`src/fathom/LadderCore.hpp`), and a state-variable filter. Its four-wide float type (`src/Float4.hpp`) is there for the next polyphonic module. |
 | 9 | [Eddy](eddy.md) (built) | L | Tape loop that also loads and saves files, up to 5 minutes, with a waveform window (drag in it to set Start and Length), wear in the loop and a Restore to the original. Larger than first guessed: its tape and write head are new code (Wake's read point did not carry over), and it paid for the first drawn window. Built 2026-11-22, 16 HP. |
 | 10 | [Spindrift](spindrift.md) (built) | L | Grain cloud; the user singled it out. Built 2026-11-22, 20 HP, as Mutable Instruments Beads (its DSP vendored and run unchanged) with a window showing the buffer and every grain. It took Eddy's window approach and `src/Overview.hpp`, not its tape or read: Beads has its own. |
-| 11 | [Doldrums](doldrums.md) | L | Spectral freeze and stretch. The highest reward and the highest risk here, so it comes last; how a window is drawn is settled already (Eddy's `TapeWindow`). |
+| 11 | [Doldrums](doldrums.md) (built) | L | Spectral freeze and stretch. The highest reward and the highest risk here, so it came last. Built 2026-11-26, 16 HP: a 30 s tape held or drawn out from x1 to a true stop, Blur, Tilt and Shift, a tuned comb from polyphonic V/OCT, one pass on a trigger with a RUN gate for recording into Eddy. It drew its own window (a scrolling ring), not Eddy's `TapeWindow`, and vendored PFFFT. |
 
 ## 3. Slow movement and long form
 
@@ -156,6 +191,7 @@ Processes that change the character of what is already there.
 | 24 | [Doppler](doppler.md) | M | Frequency shifter. Slow inharmonic beating; could move earlier if space ambient leads. |
 | 25 | [Rust](rust.md) | M | Wear and decay. Eddy's Wear now does much of it inside a loop; Rust would be the same on any sound as it passes, with wow and flutter. |
 | 26 | [Thermocline](thermocline.md) | S | Crossover, to treat lows and highs apart. |
+| new | [Beam](beam.md) | S | Stereo width, mono lows, mid and side. Everything recent is stereo and nothing narrows, widens or checks it. May be built into Thermocline instead. Added 2026-11-26. |
 
 ## 6. Utilities, as a patch calls for them
 
@@ -164,12 +200,14 @@ a gap between larger builds.
 
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
+| 29 | [Hold](hold.md) | S | Sample and hold, with track. Nothing built samples a signal patched into it: Sway's RAND and Squall's STEP sample their own noise. First of the utilities (2026-11-26). |
+| new | [Fluke](fluke.md) | S | Bernoulli gate: each trigger to A or B by chance. Squall clocked is half of one, with no second output, toggle or latch. Splits one stream of events between two voices. Added 2026-11-26. |
+| 34 | [Knot](knot.md) | M | Clock and divider. Moved up from "only if wanted" (2026-11-26): four built modules take a clock and none is one. For beatless music the long divisions matter more than the tempo dial. |
+| new | [Semaphore](semaphore.md) | S | Logic and a comparator. Makes events conditional ("only while the tide is high"); Neap's HIGH gate is the only comparator so far. Added 2026-11-26. |
 | 27 | [Cleat](cleat.md) | S | Multiple. |
 | 28 | [Splice](splice.md) | S | Adder. |
-| 29 | [Hold](hold.md) | S | Sample and hold. |
-| 30 | [Reef](reef.md) | S | Attenuators. Tackle may make it unnecessary. |
 | 31 | [Bell](bell.md) | S | Manual trigger. |
-| 32 | [Sextant](sextant.md) | S | Scanner between four sources. |
+| 32 | [Sextant](sextant.md) | S | Scanner between four sources; with the stepped mode added to its page (2026-11-26) it is also the sequential switch. |
 | 5 | [Plimsoll](plimsoll.md) | M | Limiter. Skipped for now: Ballast's soft limit and DC blocker keep the output safe; built when long drones into reverb call for real limiting. |
 
 ## 7. Only if wanted
@@ -179,11 +217,20 @@ Good ideas that this music does not need, or that Shoal already covers.
 | # | Module | Effort | Why here |
 |---|--------|--------|----------|
 | 33 | [Signal](signal.md) | M | Morse rhythm. A numbers-station moment in a horror piece, but a narrow use. |
-| 34 | [Knot](knot.md) | S | Clock and divider. Little call for it in beatless music; Shoal has clock apps. |
 | 35 | [Sounding](sounding.md) | M | Step sequencer. Shoal covers it. |
 | 36 | [Bearing](bearing.md) | M | Quantiser. Shoal covers it. |
 | 37 | [Seastate](seastate.md) | S | Wavefolder. The weakest idea in the set. |
 | new | [Fetch](fetch.md) (later) | M | A player for long field recordings, read from disk. Moved down 2026-11-22: Eddy's 5 minutes are enough for now. Built when a piece needs a recording longer than that; it reuses Eddy's window widget, WAV reader, rate conversion and band-limited read. |
+
+## Dropped
+
+Ideas the user has taken off the list. Their pages are kept, marked
+dropped, for the reasoning and the sketches.
+
+| # | Module | Dropped | Why |
+|---|--------|---------|-----|
+| 6 | [Lull](lull.md) | 2026-11-27 | Slew limiter. Beacon's HOLD mode is a slew limiter and Squall's Swell smooths, so the ground is covered twice. |
+| 30 | [Reef](reef.md) | 2026-11-27 | Two attenuators. Tackle (four attenuverters with offset) does the same job and more. |
 
 ## Things that could change the order
 

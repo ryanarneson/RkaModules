@@ -78,6 +78,12 @@ layout.
   `src/spindrift/beads/` and `src/spindrift/stmlib/`; change it only with a
   `// SPINDRIFT:` mark and a line in `src/spindrift/CHANGES.md`. `make test`
   checks both (`spindrift-vendor`, `spindrift-globals`).
+- Doldrums' FFT is vendored PFFFT in `src/dep/pffft/` (`pffft.c`,
+  `pffft.h`), unchanged from upstream: never edit them. Its provenance
+  (URL, commit, date) is in `src/dep/pffft/README.md` and README.md's
+  License section; `rka_prefix.h` renames every symbol it exports to
+  `rka_pffft_*` so it cannot meet libRack's copy (an update that adds an
+  export needs a line there). `src/Fft.hpp` wraps it as `rka::RealFft`.
 - The Shoal module (`src/shoal/Shoal.cpp`) only maps jacks, buttons,
   lights and the patch data onto `shoal::Host`; only the engine thread
   touches the running core (restore and reset build a new one off it).

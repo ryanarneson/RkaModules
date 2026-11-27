@@ -231,6 +231,7 @@ _BC_X = [8.0, 19.6, 31.2, 42.8]
 _BC_STAGES = ["ATTACK", "DECAY", "SUSTAIN", "RELEASE"]
 _NR_X = _WK_X   # Narrows lines up with Wake
 _ED_X = [7.8, 24.22, 40.64, 57.06, 73.48]   # Eddy: 16 HP, the outer columns as Wake's
+_DL_X = _ED_X   # Doldrums: the same five columns
 _SD_T = [7.8, 23.5, 50.8, 78.1, 93.8]   # Spindrift top: Time, Size | Density | Shape, Pitch
 _SD_B = [7.8, 29.3, 50.8, 72.3, 93.8]   # Spindrift bottom: five even columns
 
@@ -939,6 +940,57 @@ PANELS = {
         preview={},
         screws=screws_at(_SP_HP, "tr", "bl"),
     ),
+    # Doldrums, a freeze and stretch (docs/specs/2026-11-26-doldrums-design.md).
+    # The tape's window across the top over a ruler, as Eddy's; Stretch, the
+    # hero, in the middle column with its attenuverter and CV below it, and
+    # Position and Harmonics either side, each with an attenuverter and a CV.
+    # Blur and Root between them; Tilt, Shift, Partials and Width; then the
+    # ins, Freeze over its gate, Mix over its trigger, V/OCT over RUN, and
+    # the outs. The typeface has no infinity sign, so the last mark on
+    # Stretch's face is drawn (`marks`).
+    "Doldrums": dict(
+        dir="doldrums", hp=16, title="DOLDRUMS", subtitle="FREEZE & STRETCH",
+        components=[
+            ("param", "STRETCH", _DL_X[2], 54.0, "STRETCH"), ("param", "STRETCH_ATT", _DL_X[2], 78.0, None),
+            ("input", "STRETCH_CV", _DL_X[2], 90.0, None),
+            ("param", "POSITION", _DL_X[0], 48.0, "POSITION"), ("param", "POSITION_ATT", _DL_X[0], 61.0, None),
+            ("input", "POSITION_CV", _DL_X[0], 73.0, None),
+            ("param", "HARMONICS", _DL_X[4], 48.0, "HARMONICS"), ("param", "HARMONICS_ATT", _DL_X[4], 61.0, None),
+            ("input", "HARMONICS_CV", _DL_X[4], 73.0, None),
+            ("param", "BLUR", _DL_X[1], 74.5, "BLUR"), ("param", "ROOT", _DL_X[3], 74.5, "ROOT"),
+            ("param", "TILT", _DL_X[0], 88.0, "TILT"), ("param", "SHIFT", _DL_X[1], 88.0, "SHIFT"),
+            ("param", "PARTIALS", _DL_X[3], 88.0, "PARTIALS"), ("param", "WIDTH", _DL_X[4], 88.0, "WIDTH"),
+            ("input", "L", _DL_X[0], 102.0, "IN L"), ("input", "R", _DL_X[0], 116.0, "IN R"),
+            ("param", "FREEZE", _DL_X[1], 102.0, "FREEZE"), ("input", "FREEZE", _DL_X[1], 116.0, "GATE"),
+            ("param", "MIX", _DL_X[2], 104.0, "MIX"), ("input", "TRIG", _DL_X[2], 116.0, "TRIG"),
+            ("input", "VOCT", _DL_X[3], 102.0, "V/OCT"), ("output", "RUN", _DL_X[3], 116.0, "RUN"),
+            ("output", "L", _DL_X[4], 102.0, "L"), ("output", "R", _DL_X[4], 116.0, "R")],
+        sizes={"PARAM_STRETCH": "hero", "PARAM_FREEZE": "cap", "PARAM_MIX": "atten"},
+        faces={"PARAM_STRETCH": dict(r=16.0, ticks=36, major=6, words_size=1.7,
+                                     words=[(-135, "1"), (-90, "2"), (-45, "4"), (0, "8"), (45, "16"), (90, "32")],
+                                     marks=[(135, "infinity")])},
+        tiles=[dict(port="OUTPUT_L"), dict(port="OUTPUT_R"), dict(port="OUTPUT_RUN")],
+        traces=[["INPUT_STRETCH_CV", "PARAM_STRETCH_ATT", "PARAM_STRETCH"],
+                ["INPUT_POSITION_CV", "PARAM_POSITION_ATT", "PARAM_POSITION"],
+                ["INPUT_HARMONICS_CV", "PARAM_HARMONICS_ATT", "PARAM_HARMONICS"]],
+        # The module draws the tape in exactly this rectangle; the ruler's px
+        # is a 320th of its width.
+        screens=[("TAPE", 5.0, 19.5, 71.28, 14.0)],
+        rulers={"TAPE": dict(px=71.28 / 320, sides="b")},
+        label_at={"PARAM_STRETCH": "face"},
+        # "CV" beside each CV jack: there is no room beneath them.
+        notes=[(_DL_X[0] + 5.6, 73.6, "CV", 1.6, "dim", "start"), (_DL_X[4] - 5.6, 73.6, "CV", 1.6, "dim", "end"),
+               (_DL_X[2] + 5.6, 90.6, "CV", 1.6, "dim", "start")],
+        # At the defaults: Stretch x8, Position 0.9 (about 3 s back), Harmonics and Blur 0,
+        # Root C2, Partials 8 of 1..32 and Width 0.393 (25 cents), all
+        # linear over the sweep, Mix fully wet.
+        preview={"PARAM_STRETCH": dict(turn=0), "PARAM_POSITION": dict(turn=108), "PARAM_HARMONICS": dict(turn=-135),
+                 "PARAM_BLUR": dict(turn=-135), "PARAM_TILT": dict(turn=0), "PARAM_SHIFT": dict(turn=0),
+                 "PARAM_ROOT": dict(turn=-90), "PARAM_PARTIALS": dict(turn=-74), "PARAM_WIDTH": dict(turn=-29),
+                 "PARAM_MIX": dict(turn=135), "PARAM_STRETCH_ATT": dict(turn=0), "PARAM_POSITION_ATT": dict(turn=0),
+                 "PARAM_HARMONICS_ATT": dict(turn=0)},
+        screws=screws_at(16, "tr", "bl"),
+    ),
 }
 
 def layout_hpp(name, spec):
@@ -1045,6 +1097,9 @@ def check_screens(name, spec):
 #                     the face, each centred on the radius `words_r`
 #                     (default r - 3.0) at `turn` degrees (0 up, clockwise)
 #                     and turned to follow the rim; `words_size` (1.9)
+#                     `marks=[(turn, kind), ...]` draws a mark the typeface
+#                     lacks ("infinity") in the same place, as lettering
+#                     for the clearance checks (see FACE_MARKS)
 #   tiles             [dict(port=id, name=, light=id, left=, right=, top=,
 #                     bottom=, name_at=(dx, dy), name_size=)]: an output's
 #                     ivory tile; only `port` is required
@@ -1298,12 +1353,40 @@ def cap_height(size, weight="normal"):
 Text = namedtuple("Text", "x y s size colour weight anchor spacing what rot", defaults=(0.0,))
 
 
+class Mark(Text):
+    """A drawn mark on a dial face, in the lettering's lists: (x, y) is its
+    centre, `s` its kind (a key of FACE_MARKS), `rot` how far it is turned
+    about the centre. It has a box as lettering has, and is checked as it."""
+    __slots__ = ()
+
+
+# Drawn marks for a face's `marks`, for what the typeface has no glyph: half
+# the length, half the height and the stroke, in mm. The infinity sign is a
+# figure of eight on its side, its long axis along the rim as a word's
+# baseline is, about as heavy as the numerals' stems.
+FACE_MARKS = {"infinity": dict(a=1.4, h=0.85, stroke=0.32)}
+
+
+def mark_path(kind):
+    """The path of a mark, centred on the origin and not turned."""
+    m = FACE_MARKS[kind]
+    a, h = m["a"], m["h"]
+    return (f"M0,0 C{a/3:.2f},{-h} {a},{-h} {a},0 C{a},{h} {a/3:.2f},{h} 0,0 "
+            f"C{-a/3:.2f},{-h} {-a},{-h} {-a},0 C{-a},{h} {-a/3:.2f},{h} 0,0 Z")
+
+
 def text_corners(t):
-    """The four corners of a Text's capitals, turned by its `rot`."""
-    w = text_width(t.s, t.size, t.spacing, t.weight)
-    x0 = t.x - {"start": 0.0, "middle": w / 2, "end": w}[t.anchor]
-    box = ((x0, t.y - cap_height(t.size, t.weight)), (x0 + w, t.y - cap_height(t.size, t.weight)),
-           (x0 + w, t.y), (x0, t.y))
+    """The four corners of a Text's capitals (of a Mark, its box), turned by
+    its `rot`."""
+    if isinstance(t, Mark):
+        m = FACE_MARKS[t.s]
+        a, h = m["a"] + m["stroke"] / 2, m["h"] + m["stroke"] / 2
+        box = ((t.x - a, t.y - h), (t.x + a, t.y - h), (t.x + a, t.y + h), (t.x - a, t.y + h))
+    else:
+        w = text_width(t.s, t.size, t.spacing, t.weight)
+        x0 = t.x - {"start": 0.0, "middle": w / 2, "end": w}[t.anchor]
+        box = ((x0, t.y - cap_height(t.size, t.weight)), (x0 + w, t.y - cap_height(t.size, t.weight)),
+               (x0 + w, t.y), (x0, t.y))
     if not t.rot:
         return box
     a = math.radians(t.rot)
@@ -1319,6 +1402,11 @@ def text_box(t):
 
 
 def text_svg(t, pal):
+    if isinstance(t, Mark):
+        turn = f" rotate({num(t.rot)})" if t.rot else ""
+        return (f'<path d="{mark_path(t.s)}" transform="translate({t.x:.2f} {t.y:.2f}){turn}" fill="none" '
+                f'stroke="{pal[t.colour]}" stroke-width="{num(FACE_MARKS[t.s]["stroke"])}" '
+                f'stroke-linejoin="round"/>')
     # SVG letterspacing also follows the last letter; shift so that the
     # letters themselves sit where the anchor says.
     x = t.x + {"start": 0.0, "middle": t.spacing / 2, "end": t.spacing}[t.anchor]
@@ -1487,6 +1575,11 @@ def instrument_texts(name, spec):
             a = math.radians(deg)
             out.append(Text(px - math.sin(a) * cap / 2, py + math.cos(a) * cap / 2, s, size, "ink", "bold",
                             "middle", 0.25, f'word "{s}" on the face of {fid}', deg))
+        # Drawn marks, centred on the same radius, turned to follow the rim.
+        for deg, kind in face.get("marks", []):
+            px, py = dial_point(c.x, c.y, r, deg)
+            out.append(Mark(px, py, kind, 0.0, "ink", "normal", "middle", 0.0,
+                            f'the {kind} mark on the face of {fid}', deg))
 
     # Names of components.
     for c in comps:
@@ -1552,7 +1645,7 @@ INSTRUMENT_KEYS = {"dir", "hp", "title", "subtitle", "nameplate", "mark", "compo
                    "rulers", "dividers", "label_at", "label_colour", "label_size", "label_gap", "label_dx", "label_dy", "notes",
                    "preview", "screws"}
 FACE_KEYS = {"r", "ticks", "major", "sweep", "numerals", "tick_r", "minor_len", "major_len", "numeral_r",
-             "numeral_size", "words", "words_r", "words_size"}
+             "numeral_size", "words", "words_r", "words_size", "marks"}
 TILE_KEYS = {"port", "name", "light", "left", "right", "top", "bottom", "name_at", "name_size"}
 LIMB_KEYS = {"c", "r", "a0", "a1", "step", "major", "minor_len", "major_len"}
 RULER_KEYS = {"px", "sides", "numerals"}
@@ -1579,6 +1672,10 @@ def check_references(name, spec):
                 sys.exit(f"{name}: `{key}` names {ref}, which is not a component")
     for fid, face in spec.get("faces", {}).items():
         check_keys(name, f"the face of {fid}", face, FACE_KEYS, ("r", "ticks"))
+        for _, kind in face.get("marks", []):
+            if kind not in FACE_MARKS:
+                sys.exit(f"{name}: the face of {fid} has an unknown mark {kind!r} "
+                         f"(it may have: {', '.join(sorted(FACE_MARKS))})")
     for limb in spec.get("limbs", []):
         check_keys(name, "a limb", limb, LIMB_KEYS, ("c", "r", "a0", "a1", "step", "major"))
     for ref, state in spec.get("preview", {}).items():

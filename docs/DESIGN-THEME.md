@@ -93,7 +93,7 @@ the plugin's only one.
   Tide). Names in `docs/future/` are working titles and have not been
   checked against the VCV Library.
 - **Small utilities** (2 HP) take a nautical name without an instrument:
-  Cleat, Splice, Reef.
+  Cleat, Splice, Hold.
 
 Lettering on panels:
 

@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doldrums listening list</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+.decides { color: var(--brass); display: block; margin-top: 4px; font-size: 14px; }
+li.done { opacity: .55; }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>DOLDRUMS</h1>
+<div class="sub">Listening list · test build 2.0.50 · 2026-11-27 · fifth build</div>
+<p class="lead">Doldrums is new: a 30 s tape of the input, held or crept through with PaulStretch's random-phase method, with a tuned comb. Every default, range and rule below is a first guess built from the design, and several rules were decided by the builder while building; this list is where you rule on them. Each check says what to patch, what to do, what you should hear or see if it works as designed, and what your answer decides. The manual (<b>docs/doldrums/README.md</b>) says what everything does; its section "What to expect" lists the limits found while building.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> could not be tried without a live Rack: the press and drag in the window, a rate change while running, duplicating a module, the tooltips, Initialize and its undo.</p>
+<p class="lead"><b>New in 2.0.50, from your notes on 2.0.49:</b> a press or drag in the window moves only the gold bar and plays from there (the cyan flag and the POSITION knob stay put; only the knob and its CV move the flag); in Stop, Freeze plays one pass from the flag and then stops (before, it stopped at once); a timer in the window's top left corner, while frozen, says how long the pass will still play at the Stretch you have set; Mix starts at 50 %; Position's tooltip is four words. The checks for these: "Still frozen: press in the window", the two after it, "Stop chosen, a pass playing", the one after it, "Stop chosen, FROZEN STOPPED. Press in the window", "Drag in the window, frozen", the tooltip check ("Hover over Stretch"), and "Frozen, Position about 3 s back, Stretch at 8".</p>
+<p class="lead">Since 2.0.46 (from your listening and the final review): Position starts about 3 s back, so Freeze at the defaults loops the last few seconds and the instant-hold is Position fully right; the corner says FROZEN AT END when Stretch has nothing to act on; the read head is drawn as a gold bar; a thaw goes back to the Position flag at once; Stretch brought back to 1 rejoins the flag; the comb's loudness is measured from the sound; Initialize no longer clicks onto the tape. The window's marks, named as the checks use them: <b>the Position flag</b> (a thin cyan line with a small solid triangle on top: where a pass starts), <b>the gold bar</b> (the read head: where the module has got to), <b>the slice</b> (a short cyan bar along the bottom with a faint band above it: the piece of tape the current grain is made from), the bright and dim peaks (bright: what the pass has still to play) the word in the top right corner and, while frozen, the timer in the top left corner (figures such as 0:24: how long the pass will still play). The manual's "The tape and its window" has them in full.</p>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>GRAIN</b></td><td>Short, Medium or Long as the default? Are the three sizes the right three?</td></tr>
+<tr><td><b>STEREO</b></td><td>The source's own image by default, or Wide by default?</td></tr>
+<tr><td><b>DEFAULT POSITION</b></td><td>Position now starts about 3 s back, so Freeze at the defaults loops the last 3 s drawn out (about 24 s at x8) and the instant-hold needs Position fully right. Is 3 s the right default, or should it be another distance (or back at now)?</td></tr>
+<tr><td><b>FREEZE IN STOP</b></td><td>In the Stop setting, Freeze now always starts one pass from the flag, whether a pass was playing or not: the gold bar travels to the right edge, then FROZEN STOPPED until a trigger (your ruling at 2.0.49; before, it stopped at once and waited). With nothing to travel through (Position fully right) it holds. Is this what you expect?</td></tr>
+<tr><td><b>FREEZE WHILE HELD</b></td><td>Freeze pressed while Stretch is at its stop throws the held sound away and takes the slice at Position. Should it keep the held sound instead (freeze around it)?</td></tr>
+<tr><td><b>THE COMB</b></td><td>Root's default (C2) and range (C1 to C7), Partials' default (8), Width's range (5 to 300 cents, default 25), and the loudness rule (measured from the sound, up to +18 dB: in-tune material keeps its level, noise comes out quieter). Too loud, too quiet, or right?</td></tr>
+<tr><td><b>LEVEL</b></td><td>A loud held sound peaks well above its input and meets the output's soft bound. Keep the wet level equal to the input, or make the wet sound quieter so the bound is rarely reached?</td></tr>
+<tr><td><b>CV</b></td><td>Is CV on Tilt or Blur (or Shift, Partials, Width, Mix) missed?</td></tr>
+<tr><td><b>THE WINDOW</b></td><td>Do the corner words (FROZEN AT END among them) say enough? Is the gold bar easy to find? Is a view of the spectrum missed? Is 30 s the right length of tape?</td></tr>
+<tr><td><b>WHILE RECORDING</b></td><td>Drift (the read head falls behind at Stretch's pace while recording) or Follow (it stays on the flag and Stretch waits for Freeze): which should be the default? And in Follow, should Stretch's stop still hold while recording (it does not now: to hold, Freeze)?</td></tr>
+<tr><td><b>DUPLICATE</b></td><td>When a frozen module is duplicated (Ctrl+D), should the copy carry the frozen tape?</td></tr>
+</table>
+
+<h2>Patches</h2>
+
+<div class="patch"><h4>A. Hold a chord</h4>
+<div class="chain">Rigging (or Fathom) L/R → Doldrums IN L/R · Doldrums L/R → mixer</div>
+<p>At the defaults, press <b>FREEZE</b> while the chords play: <b>FROZEN</b>, the last 3 s drawn out and looped. Then turn <b>POSITION</b> fully right and press FREEZE twice (off, then on while a chord sounds): the corner says <b>FROZEN AT END</b> and the chord stays, shimmering, never looping; the flag and the gold bar stand together at the right edge. Press FREEZE again: the gold bar goes back to the flag (now) at once; at x8 you then hear the input from that moment on, slowed, falling behind (at x1 it would be the live input).</p></div>
+
+<div class="patch"><h4>B. A tuned drone from noise</h4>
+<div class="chain">Hadal L/R → IN L/R · Shoal (Harrington 1200) B, C, D → VCV Merge → V/OCT</div>
+<p><b>HARMONICS</b> 100 %, <b>ROOT</b> C4 (noon), Grain Long. Trigger Harrington's moves slowly: each chord dissolves in over about a grain.</p></div>
+
+<div class="patch"><h4>C. A slow scan</h4>
+<div class="chain">Neap cycle 5 → Position CV (Position at noon, attenuverter fully right)</div>
+<p>A changing 30 s on the tape; <b>STRETCH</b> at ∞, then <b>FREEZE</b> (the freeze puts the slice on the Position flag: FROZEN HELD). Neap scans the flag back and forth across the whole tape, the gold bar and the slice with it; each grain takes the slice where it is.</p></div>
+
+<div class="patch"><h4>D. Eddy → Doldrums → Eddy</h4>
+<div class="chain">Eddy A L/R → IN L/R · Doldrums L/R → Eddy B IN L/R · RUN → Eddy B REC · a trigger → TRIG</div>
+<p>Step by step in the manual's "Patches to try". In short: choose Stop in the menu (no need to wait); type Position a little more than the clip's length back; play the clip; leave Stretch at x1; Freeze as it ends (one pass plays from the flag, then FROZEN STOPPED, silent, RUN low); put the Position flag on the clip's start with the Position knob (a press in the window would play from there); set Stretch; patch RUN to Eddy B's REC while it is low; one trigger. Eddy B records exactly one pass, fades included.</p></div>
+
+<div class="patch"><h4>E. Capture, then stretch</h4>
+<div class="chain">A phrase (Rigging, or a recording from Eddy) → IN L/R · menu: While recording: Follow</div>
+<p>The corner says <b>FOLLOW</b> and the gold bar sits on the flag: you hear the phrase as it comes, Position's distance late, whatever Stretch says. When it has played, press <b>FREEZE</b>; turn POSITION left until the flag is at the phrase's start (passes start there; a press in the window plays from the place pressed once); set <b>STRETCH</b> and listen. To go back to the live input, turn POSITION fully right, then release FREEZE; released with the flag still back at the phrase's start, the phrase plays again unstretched, and the new input comes only after it. Step by step in the manual's "Patches to try".</p></div>
+</main>
+
+<script>
+// Each check: [what to do, what you should hear or see, what it decides, untested].
+const groups = [
+ ["First look", [
+  ["Add Doldrums. Look at the panel and the window before patching anything.",
+   "The window shows a dim line at 0 V; the Position flag (a thin cyan line with a small solid triangle on top) about a tenth of the way in from the right edge (Position's default, about 3 s back); the gold bar (the read head) on or near the flag, with the slice (a short cyan bar along the bottom, a faint pale band above it) just to its left. No corner word: plainly running. The Freeze cap is dark.",
+   "Whether the window is readable at your usual zoom, and whether the gold bar is easy to tell from the cyan flag.", true],
+  ["Hover over Stretch, Position, Root, Width, Shift, Harmonics, Mix.",
+   "Stretch \"x8.0\"; Position \"3.0 s ago\"; Root \"C2\"; Width \"25 cents\"; Shift \"0\"; Harmonics \"0 %\"; Mix \"50 % wet\". Position's tooltip under the figure is \"Where a pass starts\". Right-click a knob and type a value: Stretch takes \"16\" or \"held\", Root \"F#2\", Position \"10\" (seconds back) or \"now\", Width \"100\", Harmonics \"50\". Typing a word that is not a number into Harmonics or Width leaves the knob as it was.",
+   null, true]]],
+ ["Reading the window", [
+  ["Play a phrase into IN L for a few seconds, Stretch at 1 (the dial's left stop), Position at its default. Watch the window, then press FREEZE.",
+   "Recording at x1: the peaks scroll left; the gold bar sits on the Position flag and the slice just left of it; the peaks right of the gold bar are bright. After FREEZE: the peaks stand still, the corner says FROZEN, and the gold bar travels right from the flag a second a second, the bright part ahead of it shrinking; at the right edge it jumps back to the flag.",
+   "Whether the three marks (the Position flag, the gold bar, the slice) read clearly."],
+  ["Still frozen: press in the window well left of the flag, then press just left of the gold bar while it travels.",
+   "Each press sends the gold bar under the mouse at once and it plays on from there (\"play from here\"). The cyan flag does not move and the POSITION knob does not turn (your ruling at 2.0.49). Pressing just left of the gold bar moves playback back to that point. When the gold bar reaches the right edge it goes back to the flag (Go round).",
+   "Whether a press should move only the gold bar (it does now).", true],
+  ["Frozen, Position fully right (FROZEN AT END). Press in the window a few seconds back.",
+   "The gold bar goes there and travels to the right edge at Stretch's pace (the corner says FROZEN meanwhile); the flag stays at the right edge. At the edge the hold comes back: FROZEN AT END, sounding, with no gap.",
+   "Whether a press at FROZEN AT END should play once and hold again."],
+  ["Not frozen, Stretch at 1 (or While recording: Follow). Press in the window.",
+   "The gold bar is tied to the flag here, so it does not go to the mouse: the press starts a new pass from the flag (RUN dips for a millisecond), as a trigger does.",
+   "Whether a press should do this, or nothing, where the gold bar is tied to the flag."],
+  ["Still frozen: turn the POSITION knob instead.",
+   "The flag moves and the gold bar moves by the same amount, carrying on from where it was: no restart.",
+   null],
+  ["Turn Stretch slowly to its ∞ stop.",
+   "The gold bar slows (at x32 it barely moves) and at the stop halts: the corner says FROZEN HELD and only the slice is bright.",
+   null],
+  ["Grain Short, then Long (menu), still held.",
+   "The slice (the short cyan bar at the foot of the glass) gets narrower at Short and twice as wide at Long (about a third of a second at Medium, a little over 1 % of the window).",
+   null]]],
+ ["Freeze and stretch the last few seconds (the defaults)", [
+  ["Pattern A at the defaults (Position about 3 s back, x8): a chord progression playing, press FREEZE.",
+   "FROZEN in the corner. The last 3 seconds play drawn out 8 times: the gold bar creeps from the flag to the right edge in about 24 s, then dissolves back to the flag and plays them again. Stretch changes how slowly.",
+   "Verdict DEFAULT POSITION: whether 3 s back is the right default, and whether freezing a stretch rather than the instant is the right default use."],
+  ["Not frozen, defaults, a phrase into it. Listen a minute.",
+   "The input drawn out 8 times, starting about 3 s behind it: the gold bar falls back to the left of the flag, with the sound it reads, and about every 30 s dissolves back to the flag.",
+   null]]],
+ ["Hold what is playing (Position fully right)", [
+  ["Position fully right (tooltip \"now\"). A chord sounding, press FREEZE.",
+   "The chord holds at once with no click: FROZEN AT END in the corner, the cap lit, RUN high. In the window the flag and the gold bar stand together at the right edge. It shimmers and never loops. Turn Stretch: nothing changes, which is what AT END says (no tape ahead of the read head).",
+   "Whether FROZEN AT END says clearly why Stretch does nothing."],
+  ["While FROZEN AT END, turn Position slowly left.",
+   "Once the flag is more than a grain from the right edge, the hold lets go (FROZEN) and the gold bar creeps right from where the knob has moved it at Stretch's pace. At the end it goes back to the flag (a dissolve) and plays again.",
+   null],
+  ["Hold at Position fully right (FROZEN AT END) with Stretch at 1, then release FREEZE. Again with Stretch at 8.",
+   "Both times the gold bar goes back to the flag at the right edge at once and a new pass starts there. At x1 it stays on the flag: you hear the live input at once (the frozen moment dissolves into it in about a third of a second). At x8 it starts at now and then falls back to the left of the flag, the sound it reads scrolling with it: you hear the input from the thaw onward, slowed (about 26 s behind after half a minute, then back to the flag), not the live input. (That is While recording: Drift, the default. In Follow the gold bar stays on the flag after the thaw at x8 too, and you hear the live input at once: the checks under \"While recording: Drift or Follow\".)",
+   "Whether the thaw's return to the flag is what you expect (the user's ruling on 2.0.46)."],
+  ["The same at Position's default (about 3 s back): a phrase playing, press FREEZE, wait a few seconds, release FREEZE. At x1, at x8, then (menu) in While recording: Follow.",
+   "The gold bar goes back to the flag at once, but the tape did not move while frozen, so the flag is 3 s before the freeze. At x1 you hear about 3 s of the sound from just before the freeze, then the new input, 3 s late. At x8 those 3 s come drawn out (about 24 s), then a little of the new input before the pass returns to the flag. In Follow, at any Stretch, as at x1: about 3 s from before the freeze, then the new input, 3 s late. Only at Position fully right (the check above) is it the live input within about a grain.",
+   "Whether a thaw should replay the flag's distance of tape from before the freeze (it does now), or go straight to the new input."],
+  ["Recording, Stretch 1, Position fully right. Turn Stretch to 8 for ten seconds, then back to 1.",
+   "At x1 the gold bar sits on the flag at the right edge. At x8 it falls back to the left of the flag. Back at x1 it rejoins the flag at the next grain (a dissolve) and stays there: the output is live again, not late.",
+   "Whether Stretch at 1 should always mean on the flag (it does now)."],
+  ["Position about half way back, Stretch at ∞ (held, tape recording: HELD). Then press FREEZE.",
+   "Before the press: HELD, the gold bar riding left with the sound it holds. After: FROZEN HELD, the gold bar on the flag: the held sound is replaced by the slice at the flag. (With Position fully right the corner would say FROZEN AT END.)",
+   "Whether Freeze while held should keep the held sound instead (verdict FREEZE WHILE HELD)."],
+  ["Tap FREEZE quickly several times while a sound plays.",
+   "No clicks; each press and each release starts a pass from the flag (taps closer together than half a grain merge into one); nothing written onto the tape clicks when it is read later.",
+   null]]],
+ ["Position and Stretch", [
+  ["Stretch from 32 to the ∞ end, slowly, on a frozen sound with Position part way back.",
+   "x32, then x64 about 30 % of the way through the last sixth, x128 half way, rising without limit, and at the very end the gold bar stops (FROZEN HELD, the tooltip says \"held\"). No step in the sound anywhere along it.",
+   "Whether the dial's last sixth gives enough room for 64 and 128, and whether its law feels right."],
+  ["A held chord, then a phrase, at x1 and at x8.",
+   "Stretch never lowers the pitch. On the held chord x1 and x8 sound alike (each grain is much like the last); on the phrase x8 is drawn out.",
+   null],
+  ["Not frozen, Position fully left, any Stretch.",
+   "You hear the input as it was about 30 s ago, at any Stretch (it cannot fall further behind). No corner word; the gold bar on the flag at the left; RUN stays high, even in Stop.",
+   "Whether that is acceptable, or Position fully left (not frozen) should do something else (builder's choice, never in the design)."],
+  ["Frozen, Position part way back, turn the Position knob right far enough to push the gold bar to the right edge.",
+   "The pass ends at once (Go round: back to the flag; Stop: stopped), with no grain at the very edge.",
+   "Whether ending the pass at once is right."],
+  ["Pattern C (frozen, Stretch at ∞, Neap on Position CV).",
+   "A scan back and forth across the tape, each grain a new slice, no clicks; the flag, the gold bar and the slice sweep across the window together.",
+   null],
+  ["Stretch at ∞, tape recording (HELD), a slow LFO on Position CV.",
+   "The corner says HELD, but with this build each move of Position takes the sound at the moving flag (the gold bar goes to the flag and holds there until the next move): what you hear is the input as it is read at the flag, changing as the LFO moves, not one held moment.",
+   "Whether that is what you want from a held sound under a moving Position, or it should keep its moment until a bigger move (or until you let go of the stop)."]]],
+ ["While recording: Drift or Follow", [
+  ["The same changing input both ways: a phrase or Rigging's chords into IN L, Position at its default, Stretch at 8, a scope on RUN. Menu, While recording: Drift; watch the window and listen for a minute. Then choose Follow and do the same.",
+   "Drift (the default): no corner word; the gold bar leaves the flag and falls back to the left of it, riding with the sound it reads, the bright peaks from it to where the oldest sound will catch it; about every 30 s it dissolves back to the flag (RUN dips). You hear the input drawn out, an evolving digest that skips most of it. Follow: the corner says FOLLOW; at the next grain the gold bar rejoins the flag (one RUN dip) and then stays on it, the peaks scrolling under both, bright from the gold bar to the right edge; RUN stays high. You hear the input as it comes, smeared, about 3 s late. Turning Stretch changes nothing; its tooltip adds \"(waits for Freeze)\".",
+   "Verdict WHILE RECORDING: which should be the default."],
+  ["Follow, the tape recording: turn Stretch to its ∞ stop. Then press FREEZE.",
+   "Still FOLLOW, not HELD: the gold bar stays on the flag and you hear the input as before. After the freeze: FROZEN HELD, the slice at the flag held.",
+   "Verdict WHILE RECORDING: whether, in Follow, Stretch's stop should still hold while recording (it does not now)."],
+  ["Follow: play a phrase, then press FREEZE; turn POSITION left until the flag is at the phrase's start; Stretch at 8. Later release FREEZE.",
+   "Frozen, everything is as in Drift: FROZEN, a pass from the flag at Stretch's pace, back to the flag at the end. Released with the flag still at the phrase's start: FOLLOW, the gold bar on the flag, playing on at the input's own speed: first the tape from the flag to the freeze (the phrase again, unstretched), then the new input, that far late. Do it again with the flag at its default (about 3 s back): about 3 s of the sound from just before the freeze, then the new input, 3 s late. And with Position fully right before releasing (FROZEN AT END): the live input within about a grain.",
+   "Whether a thaw in Follow should go straight to the live input wherever the flag is (it does not now: it plays the flag's distance of tape from before the freeze first)."],
+  ["Follow, at x8, then choose Drift again while the tape records.",
+   "The gold bar leaves the flag where it is and falls behind at x8; no dip on RUN, no jump in the sound.",
+   null],
+  ["Follow with Stop (until TRIG) chosen.",
+   "Stopped stays stopped: STOPPED, silent, RUN low (Follow does not wake it). A trigger starts a pass from the flag: FOLLOW, and while the tape records it never ends (RUN high) until a freeze.",
+   null]]],
+ ["Stop, TRIG and RUN", [
+  ["Menu: Stop (until TRIG). Not frozen. Wait for the pass to end.",
+   "The wet sound fades out with its last grain; the corner says STOPPED; the gold bar rests on the flag and nothing is bright; RUN falls after the fade. A trigger at TRIG starts a pass from the flag; RUN rises as it begins to sound.",
+   null],
+  ["Stop chosen, a pass playing (after a trigger), Position part way back. Press FREEZE.",
+   "A new pass starts from the flag: the gold bar jumps to the flag and travels right at Stretch's pace, the corner says FROZEN, and RUN dips for a millisecond. When the gold bar reaches the right edge the sound fades out, the corner says FROZEN STOPPED and RUN falls. A trigger at TRIG then plays the pass again. The rule now: in Stop, Freeze always plays one pass from the flag, then stops.",
+   "Verdict FREEZE IN STOP: is this what you expect (your ruling at 2.0.49)?"],
+  ["Stop chosen, STOPPED (a pass has ended, not frozen), Position part way back. Press FREEZE.",
+   "The same from silence: a pass starts from the flag at once (the gold bar leaves the flag, RUN rises), plays to the right edge, then FROZEN STOPPED and RUN low.",
+   "Verdict FREEZE IN STOP."],
+  ["Stop chosen, Position fully right. Press FREEZE (playing or stopped).",
+   "It holds at once (FROZEN AT END, RUN high): the plain hold works in Stop too.",
+   "Verdict FREEZE IN STOP."],
+  ["Stop chosen, FROZEN STOPPED with Position part way back, then turn the Position knob fully right.",
+   "It wakes into the hold at once (FROZEN AT END, sounding, RUN high), as the same state reopened from a patch does.",
+   "Whether turning Position fully right while stopped should wake it (it does now)."],
+  ["Stop chosen, FROZEN STOPPED. Release FREEZE.",
+   "It stays stopped: nothing sounds and RUN stays low (a recorder gated by RUN is not restarted). The corner says STOPPED.",
+   null],
+  ["Stop chosen, FROZEN STOPPED. Press in the window.",
+   "A press plays from there: the gold bar goes under the mouse, a pass plays from it to the right edge and RUN rises (so a stray click can start a gated recorder); then FROZEN STOPPED again. The flag has not moved.",
+   "Whether a press in the window should start a pass in Stop."],
+  ["Go round, a scope on RUN, Position part way back, frozen.",
+   "RUN high, with a 1 ms dip at each return to the flag, at each TRIG in mid pass, at each press in the window and at a thaw.",
+   null]]],
+ ["Grains and stereo", [
+  ["Grain Short, Medium and Long in turn, on a held chord and on a phrase drawn out at x8.",
+   "Short follows changes soonest and smears least; Long smears most and holds pitch most finely. The slice in the window is narrower at Short, wider at Long. Changing Grain while sounding: no click, but a bump in level for one grain (up to about 3 dB, most from Long to Short).",
+   "Verdict GRAIN: the default, and whether the bump on a change is acceptable."],
+  ["A pure sine (Fathom with its filter open, or Narrows self-oscillating) held, at each grain size, a minute each.",
+   "Its level wavers: up to about 2 dB over ten seconds at Long, about 1 dB at Short. Noise held the same way stays steady (a few hundredths of a dB); a held chord of a few notes within about half a dB.",
+   "Whether the waver on pure tones is acceptable as the method's sound."],
+  ["A sound panned hard left, then a mono sound, with Wide off and then on; then freeze the panned one at Position fully right.",
+   "Wide off: the panned sound stays left (held too), the mono sound in the middle with identical sides. Wide on: both fill the whole width.",
+   "Verdict STEREO: the default."]]],
+ ["Blur, Tilt, Shift", [
+  ["Blur from 0 to full on a held chord.",
+   "0 does nothing; at full (one octave) the chord becomes coloured noise. The level stays about the same.",
+   "Whether Blur's range is right."],
+  ["Tilt fully left and fully right on held noise.",
+   "Darker and brighter, 6 dB per octave each way about 1 kHz; noon is flat. Fully right raises everything above 1 kHz (up to 24 dB from 16 kHz), so bright material can reach the soft bound.",
+   "Whether Tilt's range is right."],
+  ["Shift up to +24 and down to -24 on a held tone.",
+   "Down: still one tone. Up: the tone widens in proportion (about 47 Hz wide at +24, Medium): rough at large upward shifts. Nothing folds back past the top. Noon (within a quarter semitone) is exactly no shift.",
+   "Whether the roughness of large upward shifts is acceptable."],
+  ["Play with Doldrums for a while without CV on Blur, Tilt, Shift, Partials, Width or Mix.",
+   "Each is a knob only, read once a grain.",
+   "Verdict CV: whether CV on Tilt or Blur (or the others) is missed."]]],
+ ["Harmonics", [
+  ["A chord on C2, E2 and G2 (saws, or Rigging) into IN L. ROOT at its default, C2. Into V/OCT a polyphonic cable of three constant voltages measured from Root: 0 V, 0.333 V and 0.583 V (C2, E2, G2; V/OCT is added to Root, so a sequencer's absolute pitch, 0 V = C4, would put the comb two octaves up). Harmonics from 0 to 100 %.",
+   "The chord keeps its loudness as Harmonics comes up (measured within half a dB): no jump. The comb's makeup is now measured from the sound, never more than +18 dB.",
+   "Verdict THE COMB: the loudness rule."],
+  ["Pattern B with one note (unpatched V/OCT): Harmonics 0 to 100 % on noise.",
+   "0: the noise; 100 %: only the comb's teeth, a tuned drone on C4 (Pattern B's Root; C2 at Root's default), brought up by the full +18 dB but still quieter than the noise was (about 6.6 dB down at the defaults). A tone between the teeth is cut, not raised to full level.",
+   "Verdict THE COMB: whether noise through the comb is loud enough."],
+  ["Root from C1 to C7; then V/OCT from a sequencer.",
+   "The comb follows the note, an octave a volt from Root. A V/OCT step never clicks.",
+   "Root's default (C2) and range."],
+  ["Partials 1 to 32; Width 5 to 300 cents.",
+   "1: the note alone; more: the overtones, equally strong. Width 5: a clear pitch; 300: the noise comes back through.",
+   "Partials' default (8) and Width's range."],
+  ["Root C1 or C2, Width at 5 cents, each grain size.",
+   "At low roots the narrowest tooth is wide in cents (about 200 cents at 65 Hz with Medium): the pitch is clearer at Long.",
+   "Whether low roots are usable, or Long should be recommended (or forced) for them."],
+  ["A sequencer playing a line into V/OCT, at a slow then a quick pace, at each grain size.",
+   "A new note starts to dissolve in up to a grain after it arrives: slow lines work, quick ones run together. Short follows fastest.",
+   "How quickly the comb should follow a played line; whether the grain sizes allow it."]]],
+ ["Levels", [
+  ["A 5 V sine held, then a loud pad or chord held, the output on a scope.",
+   "The same loudness as the input, but peaks of 13 to 14 V for the sine before the soft bound (the output is bounded at 10 V), with a little roughness. A pad does it less on a scope but can reach the bound too.",
+   "Verdict LEVEL: keep equal loudness, or make the wet sound quieter."],
+  ["At 96 kHz, Grain Long, Wide on, Harmonics 100 % with a 16-note chord, Blur and Shift up: watch Rack's CPU meter and listen for crackle.",
+   "Measured at 48 kHz on the development Mac: about 0.33 % of a core per module at these settings; at 96 kHz expect about double (roughly 0.6 to 0.7 % on Rack's meter). No single sample does more than one transform (about 70 µs measured on the development Mac at 96 kHz at its working clock, against a bound of 100 µs; from a cold start the first grains can take up to about 1.7 times as long).",
+   "Whether a crackle appears on your machine.", true]]],
+ ["With the patch", [
+  ["Freeze by the button, save the patch, close Rack, reopen it.",
+   "The same tape, the same Position, the pass starting from the flag (in Go round at once; in Stop waiting for TRIG unless held). The log says the tape was read.",
+   null, true],
+  ["Freeze by the button, wait a second, then quit Rack without saving the patch, and start Rack again.",
+   "Still frozen, and the frozen sound is there (not silence): the tape was written when you froze it (the log says \"stored the frozen tape (at the freeze)\"), and Rack's autosave kept it. The log says the tape was read.",
+   null, true],
+  ["With a frozen patch quit as above, delete tape.wav by hand (Rack's user folder, autosave/modules/, the folder named by the module's number, tape.wav) before starting Rack again.",
+   "The module opens thawed: the Freeze button off, the tape recording, the input heard; nothing in the window's corner. The log says the patch has no stored tape and Freeze was let go.",
+   null, true],
+  ["Freeze by the GATE alone, save, reopen. Then: held only (Stretch at ∞, not frozen), save, reopen.",
+   "Neither is kept: the tape opens silent and recording. Only the button keeps a tape. The held-only patch reopens saying HELD and silent (it holds the first slice of a tape just started). Turning Position ends the silence (the new slice is taken at the flag and held), as do a trigger at TRIG, a press in the window, or Stretch at exactly 1 (once the tape holds more than Position's distance); Stretch from its stop to x8 leaves it silent for roughly 20 to 24 s at the defaults, then the sound fades in.",
+   "Whether the gate-only and held-only rules are what you expect.", true],
+  ["Turn Keep the frozen tape with the patch off, save, reopen.",
+   "No tape kept; the patch is smaller, by up to about 11.5 MB at 48 kHz (the patch file is compressed). Saved frozen, it reopens with the Freeze button off and recording, not frozen on a silent tape.",
+   null, true],
+  ["Duplicate a frozen module (Ctrl+D) at once after freezing; then freeze again, wait 20 s, and duplicate again.",
+   "Not known: this was not tried. For each copy, note what it holds: the original's tape, an older tape, or none (then it should open thawed, recording, not frozen and silent), and what its corner says.",
+   "Verdict DUPLICATE.", true],
+  ["Change Rack's sample rate while a frozen tape plays, then while recording.",
+   "Frozen: a moment of silence (the wet sound fades), then the same tape at the new rate, same pitch. Recording: the tape starts again from silence, fading in (no click).",
+   null, true],
+  ["Initialize while a sound plays into it, with Mix part way.",
+   "A silent tape that fills again with no click; knobs (Position about 3 s back), Freeze and menu to their defaults; the sound already playing fades out on its own with RUN still high until it ends; Mix moves smoothly to its default, 50 %. Then Ctrl+Z: the knobs and Freeze come back but not the tape (the new tape is written at once over the one in the module's folder; the patch file last saved still holds the old one).",
+   null, true],
+  ["Delete a module just after opening a patch with a frozen tape; then delete one just after freezing it by the button.",
+   "Audio may stall for the moment the tape takes to read, or to write (about 11.5 MB at 48 kHz).",
+   null, true]]],
+ ["The window", [
+  ["Frozen, Position about 3 s back, Stretch at 8: read the figures in the window's top left corner. Turn Stretch to 16, then to 1; press in the window further left; then choose Stop and let the pass end.",
+   "The timer: about 0:24 at x8 just after the freeze, counting down as the gold bar travels right and reaching 0:00 as it arrives. At x16 the figure doubles; at x1 it is the seconds of tape right of the gold bar. A press further left makes it longer. In Go round it starts again each time the gold bar returns to the flag. FROZEN STOPPED: it shows the length of the pass a trigger would play, and does not count. No timer when not frozen, at FROZEN HELD or at FROZEN AT END.",
+   "Whether the timer is what you wanted: time left (as now) or the whole pass's length, frozen only (as now) or while recording too, and its place."],
+  ["Watch the window through each state: running, FROZEN, HELD, FROZEN HELD, FROZEN AT END, STOPPED, FROZEN STOPPED, FOLLOW.",
+   "Each state named in the corner. The bright peaks are what the pass will still play: frozen, from the gold bar to the right edge; following, the same; held or at the end, only the slice; stopped, none. HELD and FROZEN HELD mean Stretch is at its stop; FROZEN AT END means the gold bar is at the end of the tape, so Stretch has nothing to act on; FOLLOW means Stretch waits for Freeze.",
+   "Verdict THE WINDOW: whether the words say enough, and whether a spectrum view is missed."],
+  ["Drag in the window, frozen.",
+   "The gold bar follows the mouse, playing from each place it passes; the flag stays put and the POSITION knob does not turn, so there is nothing for Ctrl+Z to undo.",
+   null, true],
+  ["A CV into Position, Stretch and Harmonics; hover each knob.",
+   "The tooltip adds what is heard with the CV, e.g. \"x8.0 (x16.0 with CV)\".",
+   null, true],
+  ["Use the 30 s tape in your own patches.",
+   "30 s is long enough to find a moment by eye, short enough to scroll readably.",
+   "Whether 30 s is the right length."]]],
+ ["Eddy → Doldrums → Eddy", [
+  ["Pattern D end to end, a 10 s clip at x8.",
+   "With Stretch at x1, Freeze as the clip ends plays the clip once from the flag (the gold bar crosses to the right edge), then FROZEN STOPPED (silent, RUN low). Set the flag on the clip's start with the Position knob, then Stretch to 8, then patch RUN to Eddy B's REC. Nothing sounds or gates from FROZEN STOPPED to the trigger; Eddy B records one pass of about 80 s, from the fade in to the fade out, and then plays it.",
+   "Whether the patch you asked for works as you expected, and verdict FREEZE IN STOP."]]]
+];
+const KEY = "doldrums-2.0.50-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, decides, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (decides) { const d = document.createElement("span"); d.className = "decides"; d.textContent = "Decides: " + decides; body.append(d); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Doldrums 2.0.50 listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

@@ -16,7 +16,7 @@ TEST_BINS = $(patsubst src/%.cpp,build/test/%,$(wildcard $(MODULES:%=src/%/test_
 # start that way either is it skipped, saying why. Any other failure fails.
 # With TSAN_REQUIRED set (to anything but empty or 0; CI sets it) a test that
 # cannot start fails `make test` instead of being skipped.
-TSAN_TESTS = $(filter %/test_threads,$(TEST_BINS))
+TSAN_TESTS = $(filter %/test_threads %/doldrums/test_keeper,$(TEST_BINS))
 TSAN_START_FAILED = ThreadSanitizer: unexpected memory mapping
 TSAN_REQUIRED ?=
 .PHONY: test
@@ -143,6 +143,67 @@ build/test/eddy/test_files: src/eddy/test_files.cpp src/testing.hpp $(wildcard s
 build/test/eddy/test_jobs: src/eddy/test_jobs.cpp src/testing.hpp $(wildcard src/*.hpp src/eddy/*.hpp src/dep/*.h)
 	@mkdir -p $(@D)
 	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/eddy $< -o $@
+
+# The vendored pffft (src/dep/pffft/; Fft.hpp wraps it as rka::RealFft), built
+# once as C, as the Makefile builds it for the plugin: its symbols renamed
+# rka_pffft_* (rka_prefix.h) so they cannot meet libRack's pffft, no warnings
+# as errors (upstream is not clean under -Wall). -O2: the same transform code
+# the plugin runs, without the fast-maths flags.
+PFFFT_DEPS = src/dep/pffft/pffft.c src/dep/pffft/pffft.h src/dep/pffft/rka_prefix.h
+build/test/dep/pffft.o: $(PFFFT_DEPS)
+	@mkdir -p $(@D)
+	$(CC) -O2 -include src/dep/pffft/rka_prefix.h -c src/dep/pffft/pffft.c -o $@
+
+# Doldrums' ring tape: the sanitizers (the test fences the buffer with ASan's
+# poisoning). No pffft.o; it does not use it.
+build/test/doldrums/test_ring: src/doldrums/test_ring.cpp src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $< -o $@
+
+# Doldrums' engine: as the rule below (the sanitizers, pffft.o), and rebuilt
+# when the generator the grains' phases come from (hadal/Random.hpp) changes.
+build/test/doldrums/test_engine: src/doldrums/test_engine.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp src/hadal/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@
+
+# Doldrums' hostile-input test: as the rule below (the sanitizers, pffft.o),
+# rebuilt when hadal/Random.hpp changes, and counting locks: on Linux the
+# pthread lock calls are wrapped (on macOS the test defines them itself).
+ifeq ($(shell uname -s),Darwin)
+DOLDRUMS_LOCK_LINK =
+else
+DOLDRUMS_LOCK_LINK = -Wl,--wrap=pthread_mutex_lock -Wl,--wrap=pthread_mutex_trylock
+endif
+build/test/doldrums/test_hostile: src/doldrums/test_hostile.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp src/hadal/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@ $(DOLDRUMS_LOCK_LINK)
+
+# Doldrums' tape file and its swap into the engine (TapeStore.hpp): as Eddy's
+# test_jobs (the sanitizers, WavFile.hpp compiled in) with pffft.o, counting
+# heap operations and locks as test_hostile does (the same lock link).
+build/test/doldrums/test_store: src/doldrums/test_store.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp src/hadal/*.hpp src/dep/*.h)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@ $(DOLDRUMS_LOCK_LINK)
+
+# Doldrums' thread test (the window's view, a tape swapped in, the save):
+# ThreadSanitizer, which cannot be combined with ASan; WavFile.hpp compiled in. Fails, saying why, where the compiler cannot build with it.
+build/test/doldrums/test_threads: src/doldrums/test_threads.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp src/hadal/*.hpp src/dep/*.h)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=thread -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@ || \
+		{ echo "test_threads: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Doldrums' thread test needs it" >&2; exit 1; }
+
+# Doldrums' module side of the hand-over (TapeKeeper.hpp) under Rack's lock
+# modelled: ThreadSanitizer, as test_threads.
+build/test/doldrums/test_keeper: src/doldrums/test_keeper.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp src/hadal/*.hpp src/dep/*.h)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=thread -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@ || \
+		{ echo "test_keeper: $(CXX) could not build with ThreadSanitizer (-fsanitize=thread); Doldrums' keeper test needs it" >&2; exit 1; }
+
+# Doldrums' other tests: the sanitizers, and pffft.o linked into every one of
+# them (Fft.hpp needs it; a test that does not use it links it unused).
+build/test/doldrums/test_%: src/doldrums/test_%.cpp build/test/dep/pffft.o src/testing.hpp $(wildcard src/*.hpp src/doldrums/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O1 -g -Wall -Wextra $(TEST_WERROR) -fsanitize=address,undefined -fno-sanitize-recover=all -Isrc -Isrc/doldrums $(filter %.cpp %.o,$^) -o $@
 
 # Eddy's worker bookkeeping (WorkerBook.hpp): the sanitizers.
 build/test/eddy/test_book: src/eddy/test_book.cpp src/testing.hpp src/eddy/WorkerBook.hpp
@@ -315,11 +376,17 @@ build/bench/modules.inc: bench-modules-list
 # plugin runs; Beads' own processing, in the object, is. test_engine and
 # test_alias check what it computes, built strict.
 BENCH_VENDOR_FLAGS = -isystem src/spindrift -DTEST
-BENCH_VENDOR_OBJS = build/bench/BeadsFirmware.o
+BENCH_VENDOR_OBJS = build/bench/BeadsFirmware.o build/bench/pffft.o
 BENCH_DEPS += $(SPINDRIFT_FW_DEPS)
 build/bench/BeadsFirmware.o: src/spindrift/BeadsFirmware.cpp src/spindrift/BeadsContext.hpp src/spindrift/GrainView.hpp $(SPINDRIFT_FW_DEPS)
 	@mkdir -p $(@D)
 	$(CXX) $(BENCH_FLAGS) $(SPINDRIFT_FW_FLAGS) -Isrc/spindrift -c $< -o $@
+
+# pffft (Doldrums' transform), as the plugin builds it: compile.mk's C flags
+# (-O3, fast maths, the architecture), the renaming header, hidden names.
+build/bench/pffft.o: $(PFFFT_DEPS)
+	@mkdir -p $(@D)
+	$(CC) -O3 -funsafe-math-optimizations $(BENCH_ARCH) -include src/dep/pffft/rka_prefix.h -c src/dep/pffft/pffft.c -o $@
 
 # The guard (in `make test`): a module folder with a *Engine.hpp must have
 # a bench.inc, and every declaration must be complete (idle, outputs and
@@ -388,7 +455,7 @@ engine-globals: build/test/engine_globals.o
 # tool defines the functions itself and forwards to libSystem's (see the
 # top of libm_calls.cpp). Same cases, same list, same zero on both.
 LIBM_WRAP = exp2f exp2 expf exp log2f log2 logf log powf pow sinf sin cosf cos sincosf sincos \
-	tanf tan tanhf tanh fmodf fmod lroundf lround floorf floor fminf fmin fmaxf fmax
+	tanf tan tanhf tanh fmodf fmod lroundf lround floorf floor fminf fmin fmaxf fmax sqrtf sqrt
 ifeq ($(shell uname -s),Darwin)
 LIBM_LINK =
 else
