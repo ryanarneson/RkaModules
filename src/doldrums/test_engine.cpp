@@ -952,7 +952,13 @@ void follow_is_live_at_any_stretch() {
 			const DoldrumsState st = g.e->state();
 			CHECK(st.following && !st.held && st.end == st.anchor, "Follow: following, on the flag, not held");
 		} else {
-			CHECK(f1 < 0 || l1 - f1 > 3 * len, "Drift, x8: the burst stretched or not yet heard (%lld to %lld)", f1, l1);
+			// Drift: at x8 the head, a pass begun at the start, is still in
+			// the silence before the first burst (it reaches it about 72 s in),
+			// and at the stop it holds that silence: nothing of either burst is
+			// heard where Follow hears it, nor anywhere in the 15 s.
+			const double heardAt = meanSquare(g.L, T1 + lag - slack, len + tail + 2 * slack) + meanSquare(g.L, T2 + lag - slack, len + tail + slack);
+			CHECK(f1 < 0 && f2 < 0 && heardAt < 1e-12 && meanSquare(g.L, g.secs(1.0), g.secs(14.0)) < 1e-12,
+			      "Drift: neither burst heard (first at %lld, %lld; %g where Follow hears them)", f1, f2, heardAt);
 			CHECK(g.e->state().held && !g.e->state().following, "Drift, the Stretch stop: held");
 		}
 	}

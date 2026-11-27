@@ -62,9 +62,11 @@
 //   Stretch, Position or Harmonics, the tooltip adds what is heard with it.
 // - While recording (Task 14, the user's request at 2.0.46): a submenu,
 //   "Drift" and "Follow", each with a line under it saying what is heard:
-//   Drift "Stretched as it records: falls behind, then back to the flag",
-//   Follow "Unstretched, Position's distance late; Stretch waits for
-//   Freeze". Saved as "whileRecording" (SavedState.hpp); Initialize sets
+//   Drift "Stretch acts on the input as it records", Follow "Stretch
+//   waits for Freeze; the input plays on at the flag" (each true at every
+//   Stretch, its 1 and its stop included; fix round 1 of the review: the
+//   first wording, "falls behind, then back to the flag", was false at x1
+//   and at the stop). Saved as "whileRecording" (SavedState.hpp); Initialize sets
 //   Drift. While the engine says it is following (recording in Follow,
 //   sounding), Stretch's tooltip adds " (waits for Freeze)" after its figure
 //   (and the CV's), and the window's corner says FOLLOW. Stopped in Follow
@@ -1011,9 +1013,9 @@ struct DoldrumsWidget : ModuleWidget {
 				Menu* menu = new Menu;
 				Doldrums* mm = m;
 				menu->addChild(createCheckMenuItem("Drift", "", [=]() { return !mm->follow_.load(); }, [=]() { mm->follow_.store(false); }));
-				menu->addChild(createMenuLabel("Stretched as it records: falls behind, then back to the flag"));
+				menu->addChild(createMenuLabel("Stretch acts on the input as it records"));
 				menu->addChild(createCheckMenuItem("Follow", "", [=]() { return mm->follow_.load(); }, [=]() { mm->follow_.store(true); }));
-				menu->addChild(createMenuLabel("Unstretched, Position's distance late; Stretch waits for Freeze"));
+				menu->addChild(createMenuLabel("Stretch waits for Freeze; the input plays on at the flag"));
 				return menu;
 			}
 		};
