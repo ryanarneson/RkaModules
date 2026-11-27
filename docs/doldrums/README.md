@@ -57,9 +57,10 @@ x1 it falls behind again: you hear the input from the moment of the thaw
 onward, slowed, not the live input (at x8 it is about 26 s behind after
 half a minute, then it returns to the flag). The frozen moment dissolves
 into the new sound over the first grains (about a third of a second at
-x1, two or three seconds at x8). A setting that makes a tape that is not
-frozen follow the input at any Stretch ("While recording: Follow") is
-coming in the next build.
+x1, two or three seconds at x8). With the menu's **While recording:
+Follow** the read head stays on the flag while the tape records, at any
+Stretch, so after the thaw you hear the live input at once (about a grain
+late), and Stretch acts again at the next freeze (see The menu).
 
 Why it holds: with Position fully right a pass starts at the newest moment
 on the tape, and with the tape frozen there is nothing after that moment
@@ -107,8 +108,9 @@ Read this with the module open. From the back of the glass to the front:
     **dim peaks** the rest. Frozen, the bright part runs from the gold bar
     to the right edge, and it shrinks as the gold bar travels right.
     Recording, it runs from the gold bar to the place where the oldest
-    sound, about to be recorded over, will catch it up. Held, only the
-    slice itself is bright. Stopped, nothing is bright.
+    sound, about to be recorded over, will catch it up; at Stretch 1, or
+    in Follow (FOLLOW), to the right edge. Held, only the slice itself is
+    bright. Stopped, nothing is bright.
 - **A thin cyan line with a small solid triangle on top: the Position
   flag.** It is where a pass starts, and it is what POSITION sets: fully
   right is now, fully left is as far back as a whole grain can still be
@@ -131,6 +133,9 @@ Read this with the module open. From the back of the glass to the front:
   - **FROZEN**: the tape is frozen and a pass is travelling through it;
   - **HELD**: the read head stands still because Stretch is at its stop
     (∞), while the tape records;
+  - **FOLLOW**: the menu's While recording is set to Follow and the tape
+    is recording: the read head stays on the Position flag, and Stretch
+    waits for Freeze (it does nothing until the tape is frozen);
   - **FROZEN HELD**: frozen, and the read head stands still because
     Stretch is at its stop;
   - **FROZEN AT END**: frozen with the Position flag at the end of the tape
@@ -141,7 +146,7 @@ Read this with the module open. From the back of the glass to the front:
     would change nothing.)
   - **STOPPED**: in the Stop setting, a pass has ended (or the patch has
     just opened, or Freeze has stopped it) and the module is silent until
-    a trigger;
+    a trigger (in Follow too: STOPPED comes before FOLLOW);
   - **FROZEN STOPPED**: the same, on a frozen tape.
 - **The words in the top left corner**, only when the patch's tape had
   trouble: **TAPE NOT READ** or **TAPE NOT SAVED** (see "With the
@@ -150,6 +155,9 @@ Read this with the module open. From the back of the glass to the front:
   (3 s), short ticks between them every 0.75 s.
 
 ### What the marks do
+
+The rows that say "Recording" are for the menu's While recording: Drift,
+the default; Follow has its own rows below them.
 
 - **Recording, Stretch 1**: the gold bar sits on the flag and keeps up
   with the sound, which scrolls left under them both; you hear the input
@@ -163,6 +171,17 @@ Read this with the module open. From the back of the glass to the front:
   stops (Stop). At the defaults that is about every 30 seconds.
 - **Recording, Stretch turned back to 1**: the gold bar rejoins the flag
   at the next grain (a new pass, by a dissolve) and stays on it.
+- **Recording in Follow, any Stretch** (FOLLOW): the gold bar sits on the
+  flag at every setting of Stretch, its stop included, and the sound
+  scrolls left under them both, as at Stretch 1: you hear the input
+  smeared, Position's distance late (plus about a grain). Stretch's
+  tooltip adds "(waits for Freeze)". A pass never ends, so RUN stays high.
+- **Follow chosen while recording**: the gold bar rejoins the flag at the
+  next grain (a new pass, by a dissolve) and stays on it. **Drift chosen
+  while following**: the gold bar leaves the flag where it is and falls
+  behind at Stretch's pace (no new pass). Stopped, either choice leaves
+  it stopped.
+- **Frozen in Follow**: everything below is the same as in Drift.
 - **Frozen, the flag back in the tape** (FROZEN; the default after a
   freeze): the peaks stand still. The gold bar travels right from the
   flag at Stretch's pace; at x1 a second of tape a second, at x32 it
@@ -176,11 +195,12 @@ Read this with the module open. From the back of the glass to the front:
   Position left (or press in the window) to give it tape to travel
   through.
 - **Stretch at its stop** (HELD or FROZEN HELD): the gold bar does not
-  move. Frozen, it stays where it is. Recording, the gold bar and the
-  slice ride left with the sound they hold, while the flag stays put;
-  once that sound has been recorded over they go off the left edge. The
-  corner still says HELD and the sound still plays (it is kept, not read
-  from the tape again).
+  move. Frozen, it stays where it is. Recording (in Drift), the gold bar
+  and the slice ride left with the sound they hold, while the flag stays
+  put; once that sound has been recorded over they go off the left edge.
+  The corner still says HELD and the sound still plays (it is kept, not
+  read from the tape again). Turning Position then puts them back on the
+  flag, holding the slice there.
 - **Stopped** (STOPPED or FROZEN STOPPED): the gold bar rests on the
   flag, nothing is bright, and nothing sounds until a trigger (or a press
   in the window) starts a pass from the flag.
@@ -189,7 +209,8 @@ Read this with the module open. From the back of the glass to the front:
   it stays stopped.
 - **Turning POSITION, or a CV at Position**: the flag moves, and the
   gold bar moves by the same amount, wherever it has got to; the pass
-  goes on (stopped, the gold bar stays on the flag).
+  goes on (stopped, the gold bar stays on the flag; held while recording,
+  it goes to the flag).
 - **A press or a drag in the window: play from here.** The flag goes
   under the mouse and the gold bar goes to the flag: a new pass starts
   there, exactly as a trigger at TRIG does. So a press just left of the
@@ -238,10 +259,15 @@ nothing to act on when the read head has no tape ahead of it (frozen with
 Position fully right: FROZEN AT END). At exactly 1, the dial's left stop,
 the read head sits on the Position flag while recording and keeps up with
 the input; at anything above 1 it falls steadily behind the input until
-the pass ends, and brought back to 1 it rejoins the flag.
+the pass ends, and brought back to 1 it rejoins the flag. That is the
+menu's While recording: Drift, the default. **In While recording: Follow,
+Stretch waits for Freeze**: while the tape records the read head stays on
+the flag at any Stretch, its stop included, and Stretch takes effect from
+the moment the tape is frozen. The window's corner says FOLLOW meanwhile.
 
-The tooltip shows the figure ("x8.0", "x128") and "held" at the stop; you
-can type a figure ("8", "x8", "128") or "held". Default: 8.
+The tooltip shows the figure ("x8.0", "x128") and "held" at the stop,
+followed by "(waits for Freeze)" while the module is following; you can
+type a figure ("8", "x8", "128") or "held". Default: 8.
 
 - Over the lettered travel, from 1 at the left stop up to the 32, it
   doubles every 45 degrees: 1, 2, 4, 8, 16, 32.
@@ -253,14 +279,15 @@ can type a figure ("8", "x8", "128") or "held". Default: 8.
 **Frozen**, the tape stands still and the read head travels right,
 towards now. When it reaches the end of the tape the pass is over.
 
-**Not frozen**, the read head moves through the sound at the same pace,
-but new sound arrives at full pace, so the read head falls behind now
-and drifts left in the window. When the oldest sound, about to be recorded
-over, catches it up, the pass is over. At Stretch 1 it sits on the flag
+**Not frozen** (in Drift), the read head moves through the sound at the
+same pace, but new sound arrives at full pace, so the read head falls
+behind now and drifts left in the window. When the oldest sound, about to
+be recorded over, catches it up, the pass is over. At Stretch 1 it sits on the flag
 and never returns: you hear a smeared copy of the input, late by
 Position's distance and about a grain. With the defaults (Position about
 3 s back, x8, not frozen) a pass lasts about 30 seconds and then starts
-again from the flag.
+again from the flag. In Follow it sits on the flag at any Stretch, as at
+Stretch 1 in Drift.
 
 **At the end of a pass** (the menu, below) the read head goes back to the
 Position flag and plays again, or stops and waits for TRIG.
@@ -268,6 +295,7 @@ Position flag and plays again, or stops and waits for TRIG.
 **Turning Position** (the knob or its CV) moves the read head by the same
 amount, at the next grain, wherever it has got to; it does not start the
 pass again. If that would take it off the tape it stops at the edge.
+Held while recording, it puts the read head on the flag instead (below).
 Frozen, a turn far enough right to push the read head to the end of the
 tape ends the pass at once. A press in the window is different: it plays
 from the flag (above).
@@ -277,7 +305,8 @@ long as it stays so, with fresh random phases every grain. It has two
 causes:
 
 - **Stretch at its stop** (the ∞ end of the dial, or a CV pushing it
-  there): HELD, or FROZEN HELD.
+  there): HELD, or FROZEN HELD. In Follow the stop holds only once the
+  tape is frozen (FROZEN HELD); while it records it follows (FOLLOW).
 - **Nothing to travel through**: the tape frozen with the Position flag
   less than a grain from the end of the tape (FROZEN AT END). Position
   fully right, frozen, is the usual case.
@@ -287,11 +316,10 @@ While held:
 - The module keeps that slice's loudnesses and does not read the tape
   again, so when the tape is recording the held sound stays even after the
   tape under it has been recorded over.
-- **Moving Position takes a new slice**: the read head moves by as much
-  as the flag does (held to the ends of the tape). With the tape frozen
-  and Stretch at its stop this is a scrub through the 30 s, by hand or by
-  CV. If the held place has already been recorded over, the new slice is
-  taken at the flag itself.
+- **Moving Position takes a new slice**. Frozen, the read head moves by
+  as much as the flag does (held to the ends of the tape): with Stretch
+  at its stop this is a scrub through the 30 s, by hand or by CV.
+  Recording, the new slice is taken at the flag itself, and held there.
 - A pass never ends, in either setting of "At the end of a pass", and RUN
   stays high.
 - **Leaving held** (Stretch off its stop, or Position turned left so there
@@ -303,16 +331,16 @@ While held:
   spare); if not, the held sound keeps its size until it is let go.
 
 **A patch reopened with Stretch at its stop and the tape not frozen**
-(in Go round) says HELD and holds silence: it holds the first slice of a
-tape that has only just started recording. Turning Position does not end
-the silence: the read head moves by as much as the flag, and stays inside
-the silence from before the patch opened. Turning Stretch from its stop
-to x8 leaves it silent until the read head has crept up to the moment
-the patch opened (about Position's distance times the Stretch: roughly
-20 to 24 s at the defaults), then the sound fades in. What ends it promptly, once the
-tape holds more than Position's distance: a trigger at TRIG, a press in
-the window, or Stretch at exactly 1 (each puts the read head on the
-flag).
+(in Go round, in Drift) says HELD and holds silence: it holds the first
+slice of a tape that has only just started recording. Turning Stretch
+from its stop to x8 leaves it silent until the read head has crept up to
+the moment the patch opened (about Position's distance times the Stretch:
+roughly 20 to 24 s at the defaults), then the sound fades in. What ends
+it promptly, once the tape holds more than Position's distance: turning
+Position (the new slice is taken at the flag, and held), a trigger at
+TRIG, a press in the window, or Stretch at exactly 1 (each puts the read
+head on the flag). (In Follow the stop does not hold while the tape
+records, so such a patch follows the input from the start.)
 
 **Not frozen, with Position fully left**, a pass has less than a grain to
 travel before the oldest sound catches it. The module then takes its slice
@@ -367,7 +395,10 @@ x8). From there the read head travels at Stretch's pace while new sound
 arrives at full pace, as in any recording pass: at x1 it keeps up and you
 hear the live input; above x1 it falls behind again, so you hear the
 input from the thaw onward, slowed, not the live input (at x8 about 26 s
-behind after half a minute, then back to the flag). Stopped
+behind after half a minute, then back to the flag). **In Follow** the read
+head stays on the flag at any Stretch, so after a thaw you hear the
+input again at once, Position's distance late, dissolving in within
+about a grain. Stopped
 (Stop setting, waiting for TRIG), a thaw leaves it stopped: no pass, and
 RUN stays low, so a recorder gated by RUN is not restarted. A thaw that
 starts a new pass while RUN is high makes RUN's 1 ms dip, as any new pass
@@ -377,7 +408,8 @@ does.
 flag like any freeze in Go round, so the held sound is replaced by the
 slice at Position's place (in Stop, with a pass to travel, it stops). To
 keep a moment, freeze first, then hold. Thawed while held at the stop,
-the read head goes to the flag and holds the slice there.
+the read head goes to the flag and holds the slice there (in Follow it
+follows from the flag instead).
 
 ## TRIG, RUN and the end of a pass
 
@@ -396,10 +428,11 @@ same.
 - In **Go round** one pass dissolves into the next and something is always
   sounding. RUN goes low for 1 ms where each new pass's first grain
   begins, as a marker, and is otherwise high.
-- A trigger at TRIG in mid pass (or a press in the window, a thaw, or
-  Stretch brought back to 1 while recording) starts a new pass and so
-  makes the same 1 ms dip, in either setting.
-- Held, for either reason, RUN stays high.
+- A trigger at TRIG in mid pass (or a press in the window, a thaw,
+  Stretch brought back to 1 while recording, or Follow chosen while the
+  read head is off the flag) starts a new pass and so makes the same 1 ms
+  dip, in either setting.
+- Held, for either reason, RUN stays high; so it does while following.
 
 The menu's **At the end of a pass**:
 
@@ -412,9 +445,10 @@ The menu's **At the end of a pass**:
   Position turned fully right (nothing to travel through) wakes it into
   the hold. Freeze going on stops a pass with tape to travel (above).
   Choosing Stop does not end the pass under way: the module stops when
-  it ends, or at the next freeze. (Recording at exactly x1 a pass never
-  ends, because the read head sits on the flag: it goes on until a
-  freeze.) Choosing Go round while stopped starts
+  it ends, or at the next freeze. (Recording at exactly x1, or in Follow
+  at any Stretch, a pass never ends, because the read head sits on the
+  flag: it goes on until a freeze. Follow chosen while stopped does not
+  wake it.) Choosing Go round while stopped starts
   a pass at once. **A patch opened with Stop chosen waits for a
   trigger**, unless its tape is frozen with nothing to travel through,
   which is held and sounds at once.
@@ -432,6 +466,24 @@ Right-click the panel:
   On, each side gets its own random phases, so any sound, mono included,
   fills the whole width.
 - **At the end of a pass**: **Go round** or **Stop (until TRIG)** (above).
+- **While recording**: **Drift** (the default) or **Follow**: what the
+  read head does while the tape is not frozen. Each has a line under it
+  in the menu.
+  - **Drift**, "Stretched as it records: falls behind, then back to the
+    flag": the read head travels at Stretch's pace, falls behind the
+    input and returns to the Position flag when the oldest sound catches
+    it: a slowed, evolving digest of the input that skips most of it. This
+    is how the module has always behaved.
+  - **Follow**, "Unstretched, Position's distance late; Stretch waits for
+    Freeze": the read head stays on the flag whatever Stretch says, so
+    you hear the input as it comes (smeared, Position's distance late,
+    plus about a grain), and Stretch takes effect once the tape is
+    frozen: capture first, stretch after. The window's corner says
+    FOLLOW and Stretch's tooltip adds "(waits for Freeze)". Stretch's stop
+    does not hold while following: to hold, freeze.
+
+  Frozen, the two are the same in every respect. A press in the window,
+  TRIG, Freeze and the Stop setting keep their rules in both.
 - **Keep the frozen tape with the patch**: on by default. See "With the
   patch".
 
@@ -551,8 +603,9 @@ source, not for a tight effect.
 
 ## With the patch
 
-Saved with the patch: the knobs, the Freeze button, and the four menu
-settings. The random seed is not saved.
+Saved with the patch: the knobs, the Freeze button, and the five menu
+settings (a patch saved before While recording existed opens in Drift).
+The random seed is not saved.
 
 **A frozen tape is kept with the patch**, as `tape.wav` in the module's
 folder inside the patch (32-bit float stereo, in volts, at Rack's rate:
@@ -702,6 +755,21 @@ built. None is a fault you can fix with a setting, unless one is named.
   right, so the slow cycles lead) wanders over the tape and does not
   retrace its path. Turn Stretch back off the stop for the read head to
   creep on from wherever the scan has left it.
+- **Capture, then stretch** (While recording: Follow):
+  1. Menu, While recording: **Follow**. Patch a sound into IN L and IN R.
+     The corner says FOLLOW and the gold bar sits on the flag: you hear
+     the input as it comes, smeared, Position's distance late, at any
+     Stretch.
+  2. Play the phrase you want to stretch (up to 30 s). When it is over,
+     press **FREEZE**: the tape stops and a pass starts from the flag.
+  3. Press in the window just left of the phrase's start (its first peaks
+     on the glass): the flag goes there and the pass plays from it.
+  4. Set **STRETCH** and listen: the phrase is drawn out at that pace, to
+     the end of the tape, then again from the flag (Go round). Press in
+     the window again to start from elsewhere.
+  5. Let FREEZE go: the gold bar goes back to the flag and follows the
+     input again at once, Position's distance behind it (turn Position
+     fully right to hear it about a grain late).
 - **Draw a clip out into a long loop** (Eddy into Doldrums into Eddy):
   1. **Eddy A**: load the clip (right-click, Load file), LOOP off. Its L
      and R outputs into Doldrums' IN L and IN R.
@@ -758,7 +826,7 @@ recording starts again with no fade, so the tape has a join there.
 
 - **Initialize** silences the tape, returns every knob and the Freeze
   button to its default, and the menu to its defaults (Medium, Wide off,
-  Go round, Keep on). The recording starts again on the silent tape with
+  Go round, Drift, Keep on). The recording starts again on the silent tape with
   a 5 ms fade in, so nothing clicks onto it. The grains already playing
   fade out on their own, with RUN still high until they have ended, and
   Mix moves to its default smoothly.

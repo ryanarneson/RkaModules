@@ -315,6 +315,27 @@ The read point is the end of the slice that the next grain will take.
   now, if at pace 1 the read point is not on the anchor at a grain, it
   returns there (a new pass, once) and keeps pace on it. Frozen, x1
   travels from where it is; paces under 1 are unchanged.)
+- **While recording: Drift or Follow** (a menu item).
+  (Added 2026-11-26, at the user's request on listening to the first test
+  build: "I like the evolving, but the pXs way is intriguing as well";
+  the names are theirs. **Drift**, the default, is every rule above: a
+  tape not frozen is still stretched, the read point falling behind and
+  returning to the anchor. **Follow** is PaulXStretch's way, capture
+  first and stretch after: while the tape records the read point is on
+  the anchor at every Stretch, its stop included (as at Stretch 1 above),
+  so the output is the input smeared, late by Position's distance and a
+  grain, and Stretch acts only once the tape is frozen. Arriving there
+  from elsewhere (Follow chosen with the read point behind, or held) is
+  one return to the anchor, a new pass, once; Stretch's stop does not
+  hold while recording in Follow (to hold, Freeze); a stopped module
+  stays stopped; TRIG, Freeze, a thaw and a press in the window keep
+  their rules, so a thaw in Follow returns to the input at once at any
+  Stretch; Drift chosen while following goes on from the anchor and falls
+  behind at the pace, with no new pass. Frozen, the two are the same in
+  every respect. The window says FOLLOW while following, so the panel
+  says why Stretch does nothing, and Stretch's tooltip adds "(waits for
+  Freeze)". Saved as "whileRecording", 0 Drift or 1 Follow; a patch
+  without it opens in Drift.)
 - **With Position fully right and the tape frozen there is nothing to
   travel through**: the anchor is the end of the tape. The module is
   then **held**, exactly as it is with Stretch at its stop (below), at
@@ -365,6 +386,12 @@ The read point is the end of the slice that the next grain will take.
   recorded over, the move takes the new slice at the anchor, Position's
   own place, rather than at the oldest edge; so a held sound under a
   modulated Position follows it. For the listening stop.)
+  (Added 2026-11-26, the fix wave's re-review: on a tape that is
+  recording, a move takes the new slice at the anchor whether or not the
+  held place is still on the tape. Shifting it by the change kept a patch
+  reopened with Stretch at its stop, which holds the silence from before
+  it opened, silent under any turn of Position for up to 30 s. Frozen, a
+  move still shifts the held place by the change: the scrub.)
 - When Stretch leaves the stop the read point goes on from where it is
   if that place is still on the tape, and from the anchor if not.
 - A change of Grain while held takes the slice again at the new size if
@@ -543,6 +570,9 @@ Knobs only. Each is read once a grain.
   nothing; HELD and FROZEN HELD are now only Stretch's stop; with both
   causes, FROZEN AT END; STOPPED still wins. The manual calls the anchor
   the Position flag.)
+  (Added 2026-11-26, at the user's request, with While recording: Follow:
+  recording in Follow the corner says FOLLOW, the read head on the flag;
+  STOPPED still comes first, and frozen the words are the frozen ones.)
 - Held with the tape not frozen, the read point's mark rides left with
   its sound and off the edge; the corner still says held.
 - **Dragging in the window sets Position** (the knob follows), as

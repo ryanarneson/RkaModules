@@ -80,6 +80,7 @@ Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the cli
 <tr><td><b>LEVEL</b></td><td>A loud held sound peaks well above its input and meets the output's soft bound. Keep the wet level equal to the input, or make the wet sound quieter so the bound is rarely reached?</td></tr>
 <tr><td><b>CV</b></td><td>Is CV on Tilt or Blur (or Shift, Partials, Width, Mix) missed?</td></tr>
 <tr><td><b>THE WINDOW</b></td><td>Do the corner words (FROZEN AT END among them) say enough? Is the gold bar easy to find? Is a view of the spectrum missed? Is 30 s the right length of tape?</td></tr>
+<tr><td><b>WHILE RECORDING</b></td><td>Drift (the read head falls behind at Stretch's pace while recording) or Follow (it stays on the flag and Stretch waits for Freeze): which should be the default? And in Follow, should Stretch's stop still hold while recording (it does not now: to hold, Freeze)?</td></tr>
 <tr><td><b>DUPLICATE</b></td><td>When a frozen module is duplicated (Ctrl+D), should the copy carry the frozen tape?</td></tr>
 </table>
 
@@ -100,6 +101,10 @@ Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the cli
 <div class="patch"><h4>D. Eddy → Doldrums → Eddy</h4>
 <div class="chain">Eddy A L/R → IN L/R · Doldrums L/R → Eddy B IN L/R · RUN → Eddy B REC · a trigger → TRIG</div>
 <p>Step by step in the manual's "Patches to try". In short: choose Stop in the menu (no need to wait); type Position a little more than the clip's length back; play the clip; Freeze as it ends (FROZEN STOPPED, silent, RUN low, at once); put the Position flag on the clip's start with the Position knob (a press in the window would play from there); patch RUN to Eddy B's REC while it is low; one trigger. Eddy B records exactly one pass, fades included.</p></div>
+
+<div class="patch"><h4>E. Capture, then stretch</h4>
+<div class="chain">A phrase (Rigging, or a recording from Eddy) → IN L/R · menu: While recording: Follow</div>
+<p>The corner says <b>FOLLOW</b> and the gold bar sits on the flag: you hear the phrase as it comes, Position's distance late, whatever Stretch says. When it has played, press <b>FREEZE</b>; press in the window at the phrase's start (the pass plays from there); set <b>STRETCH</b> and listen. Release FREEZE to go back to following the input at once. Step by step in the manual's "Patches to try".</p></div>
 </main>
 
 <script>
@@ -143,8 +148,8 @@ const groups = [
    "Once the flag is more than a grain from the right edge, the hold lets go (FROZEN) and the gold bar creeps right from where the knob has moved it at Stretch's pace. At the end it goes back to the flag (a dissolve) and plays again.",
    null],
   ["Hold at Position fully right (FROZEN AT END) with Stretch at 1, then release FREEZE. Again with Stretch at 8.",
-   "Both times the gold bar goes back to the flag at the right edge at once and a new pass starts there. At x1 it stays on the flag: you hear the live input at once (the frozen moment dissolves into it in about a third of a second). At x8 it starts at now and then falls back to the left of the flag, the sound it reads scrolling with it: you hear the input from the thaw onward, slowed (about 26 s behind after half a minute, then back to the flag), not the live input. A setting that makes a tape that is not frozen follow the input at any Stretch (\"While recording: Follow\") is coming in the next build.",
-   "Whether the thaw's return to the flag is what you expect (the user's ruling on 2.0.46), and whether you want Follow."],
+   "Both times the gold bar goes back to the flag at the right edge at once and a new pass starts there. At x1 it stays on the flag: you hear the live input at once (the frozen moment dissolves into it in about a third of a second). At x8 it starts at now and then falls back to the left of the flag, the sound it reads scrolling with it: you hear the input from the thaw onward, slowed (about 26 s behind after half a minute, then back to the flag), not the live input. (That is While recording: Drift, the default. In Follow the gold bar stays on the flag after the thaw at x8 too, and you hear the live input at once: the checks under \"While recording: Drift or Follow\".)",
+   "Whether the thaw's return to the flag is what you expect (the user's ruling on 2.0.46)."],
   ["Recording, Stretch 1, Position fully right. Turn Stretch to 8 for ten seconds, then back to 1.",
    "At x1 the gold bar sits on the flag at the right edge. At x8 it falls back to the left of the flag. Back at x1 it rejoins the flag at the next grain (a dissolve) and stays there: the output is live again, not late.",
    "Whether Stretch at 1 should always mean on the flag (it does now)."],
@@ -171,8 +176,24 @@ const groups = [
    "A scan back and forth across the tape, each grain a new slice, no clicks; the flag, the gold bar and the slice sweep across the window together.",
    null],
   ["Stretch at ∞, tape recording (HELD), a slow LFO on Position CV.",
-   "The held sound follows Position: each move takes a new slice (once the held place is recorded over, at the flag).",
+   "The held sound follows Position: each move takes a new slice at the flag (the gold bar goes to the flag and holds there).",
    "Whether a held sound should follow a modulated Position, or stay put until a bigger move."]]],
+ ["While recording: Drift or Follow", [
+  ["The same changing input both ways: a phrase or Rigging's chords into IN L, Position at its default, Stretch at 8, a scope on RUN. Menu, While recording: Drift; watch the window and listen for a minute. Then choose Follow and do the same.",
+   "Drift (the default): no corner word; the gold bar leaves the flag and falls back to the left of it, riding with the sound it reads, the bright peaks from it to where the oldest sound will catch it; about every 30 s it dissolves back to the flag (RUN dips). You hear the input drawn out, an evolving digest that skips most of it. Follow: the corner says FOLLOW; at the next grain the gold bar rejoins the flag (one RUN dip) and then stays on it, the peaks scrolling under both, bright from the gold bar to the right edge; RUN stays high. You hear the input as it comes, smeared, about 3 s late. Turning Stretch changes nothing; its tooltip adds \"(waits for Freeze)\".",
+   "Verdict WHILE RECORDING: which should be the default."],
+  ["Follow, the tape recording: turn Stretch to its ∞ stop. Then press FREEZE.",
+   "Still FOLLOW, not HELD: the gold bar stays on the flag and you hear the input as before. After the freeze: FROZEN HELD, the slice at the flag held.",
+   "Verdict WHILE RECORDING: whether, in Follow, Stretch's stop should still hold while recording (it does not now)."],
+  ["Follow: play a phrase, then press FREEZE; press in the window at the phrase's start; Stretch at 8. Later release FREEZE.",
+   "Frozen, everything is as in Drift: FROZEN, a pass from the flag at Stretch's pace, back to the flag at the end. Released: FOLLOW at once, the gold bar back on the flag, the input heard again within about a grain, Position's distance late.",
+   null],
+  ["Follow, at x8, then choose Drift again while the tape records.",
+   "The gold bar leaves the flag where it is and falls behind at x8; no dip on RUN, no jump in the sound.",
+   null],
+  ["Follow with Stop (until TRIG) chosen.",
+   "Stopped stays stopped: STOPPED, silent, RUN low (Follow does not wake it). A trigger starts a pass from the flag: FOLLOW, and while the tape records it never ends (RUN high) until a freeze.",
+   null]]],
  ["Stop, TRIG and RUN", [
   ["Menu: Stop (until TRIG). Not frozen. Wait for the pass to end.",
    "The wet sound fades out with its last grain; the corner says STOPPED; the gold bar rests on the flag and nothing is bright; RUN falls after the fade. A trigger at TRIG starts a pass from the flag; RUN rises as it begins to sound.",
@@ -249,7 +270,7 @@ const groups = [
    "The same tape, the same Position, the pass starting from the flag (in Go round at once; in Stop waiting for TRIG unless held). The log says the tape was read.",
    null, true],
   ["Freeze by the GATE alone, save, reopen. Then: held only (Stretch at ∞, not frozen), save, reopen.",
-   "Neither is kept: the tape opens silent and recording. Only the button keeps a tape. The held-only patch reopens saying HELD and silent (it holds the first slice of a tape just started). Turning Position leaves it silent; Stretch from its stop to x8 leaves it silent for roughly 20 to 24 s at the defaults, then the sound fades in; a trigger at TRIG, a press in the window, or Stretch at exactly 1 ends the silence at once (once the tape holds more than Position's distance).",
+   "Neither is kept: the tape opens silent and recording. Only the button keeps a tape. The held-only patch reopens saying HELD and silent (it holds the first slice of a tape just started). Turning Position ends the silence (the new slice is taken at the flag and held), as do a trigger at TRIG, a press in the window, or Stretch at exactly 1 (once the tape holds more than Position's distance); Stretch from its stop to x8 leaves it silent for roughly 20 to 24 s at the defaults, then the sound fades in.",
    "Whether the gate-only and held-only rules are what you expect.", true],
   ["Turn Keep the frozen tape with the patch off, save, reopen.",
    "No tape kept; the patch is smaller, by up to about 11.5 MB at 48 kHz (the patch file is compressed).",
@@ -267,8 +288,8 @@ const groups = [
    "Audio may stall for the moment the tape takes to read.",
    null, true]]],
  ["The window", [
-  ["Watch the window through each state: running, FROZEN, HELD, FROZEN HELD, FROZEN AT END, STOPPED, FROZEN STOPPED.",
-   "Each state named in the corner. The bright peaks are what the pass will still play: frozen, from the gold bar to the right edge; held or at the end, only the slice; stopped, none. HELD and FROZEN HELD mean Stretch is at its stop; FROZEN AT END means the gold bar is at the end of the tape, so Stretch has nothing to act on.",
+  ["Watch the window through each state: running, FROZEN, HELD, FROZEN HELD, FROZEN AT END, STOPPED, FROZEN STOPPED, FOLLOW.",
+   "Each state named in the corner. The bright peaks are what the pass will still play: frozen, from the gold bar to the right edge; following, the same; held or at the end, only the slice; stopped, none. HELD and FROZEN HELD mean Stretch is at its stop; FROZEN AT END means the gold bar is at the end of the tape, so Stretch has nothing to act on; FOLLOW means Stretch waits for Freeze.",
    "Verdict THE WINDOW: whether the words say enough, and whether a spectrum view is missed."],
   ["Drag in the window, then Ctrl+Z.",
    "A press puts the flag under the mouse and the gold bar on it (play from here); the drag moves them together and Position turns to match. One undo puts Position back however long the drag, by the knob's rule (no restart). With a CV on Position, the knob is set so knob plus CV lands under the mouse.",

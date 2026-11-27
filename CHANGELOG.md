@@ -72,6 +72,10 @@
     Eddy.
   - A tape frozen by the button is kept with the patch (`tape.wav`) and
     converted at a rate change.
+  - "While recording" (menu): Drift (the default: the read point falls
+    behind at Stretch's pace while the tape records) or Follow (it stays
+    on the Position flag, the window says FOLLOW, and Stretch acts once
+    the tape is frozen: capture first, stretch after).
   - The FFT is PFFFT, vendored unchanged in `src/dep/pffft/`.
 - New module: **Neap**, an 8 HP source of eight slow cycles in the Instrument
   look, after the Instruō øchd, with **Spring**, a 6 HP expander:
