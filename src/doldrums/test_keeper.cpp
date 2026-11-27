@@ -21,6 +21,10 @@
 //   the freeze written and leaves the file as it is.
 // - a_failed_freeze_write_is_tried_once: a folder that cannot be written: a
 //   warning and TAPE NOT SAVED, once for the freeze, the number not taken.
+// - a_failed_freeze_write_removes_the_stale_file: the write fails (its
+//   temporary file cannot be made) with an earlier freeze's tape.wav there:
+//   that file is removed, so a quit opens thawed rather than on the wrong
+//   tape; TAPE NOT SAVED and the warning as above.
 //
 // race(), with real threads: Rack is modelled by a shared mutex, as Rack's
 // engine lock is: the audio thread holds it shared for each block of
@@ -260,6 +264,29 @@ void a_failed_freeze_write_is_tried_once() {
 	CHECK(m.k.writtenFor() != m.e.frozenSince(), "the freeze's number not taken: the save tries again");
 }
 
+void a_failed_freeze_write_removes_the_stale_file() {
+	Rig m(sub("stale"));
+	m.k.remove = [](const std::string& path) {
+		std::error_code ec;
+		fs::remove(path, ec);
+	};
+	m.run(20000);
+	m.f.params[F::FREEZE] = 1.f;
+	m.run(200);
+	m.rounds(2);
+	CHECK(fs::exists(m.file()), "an earlier freeze written");
+	m.f.params[F::FREEZE] = 0.f;
+	m.run(2000);
+	fs::create_directories(m.dir / (std::string(STORED_TAPE) + ".tmp"));   // the next write's temporary file cannot be made
+	m.f.params[F::FREEZE] = 1.f;
+	m.run(200);
+	m.rounds(5);
+	CHECK(m.k.freezeAttempts() == 2 && m.said("was not stored", true) == 1 && m.k.trouble() == TapeKeeper::NOT_SAVED,
+	      "the new freeze's write failed: a warning, TAPE NOT SAVED (%u attempts)", m.k.freezeAttempts());
+	CHECK(!fs::exists(m.file()), "the earlier freeze's file removed: a quit opens thawed, not on the wrong tape");
+	CHECK(m.k.writtenFor() != m.e.frozenSince(), "the number not taken: the next save or freeze tries again");
+}
+
 void race() {
 	const fs::path dir = sub("race");
 	DoldrumsEngine e;
@@ -453,6 +480,7 @@ int main() {
 	write_waits_for_the_tape_to_stand_still();
 	save_after_freeze_write_does_not_rewrite();
 	a_failed_freeze_write_is_tried_once();
+	a_failed_freeze_write_removes_the_stale_file();
 	race();
 	std::error_code ec;
 	fs::remove_all(tempRoot(), ec);

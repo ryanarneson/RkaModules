@@ -41,7 +41,8 @@
 //   write; later while the tape is not still, with no heap operation (the
 //   copy is not made ready); a take during the copy (the
 //   same seam) writes nothing and asks for later, not for a removal; a
-//   write that fails is final for the freeze and leaves the old file; else
+//   write that fails is final for the freeze and leaves the old file to the
+//   caller (the keeper removes it: test_keeper); else
 //   written, the number taken.
 // - a_tape_is_stamped_only_with_its_own_rate: the hold refuses a rate that
 //   is not the held tape's (the file would play at the wrong speed).

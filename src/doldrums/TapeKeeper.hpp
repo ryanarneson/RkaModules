@@ -54,7 +54,8 @@
 // stands still (standsStill: frozen, faded out, nothing on its way), so a
 // round with nothing to write costs a few atomic loads and a tape in its
 // fade has no copy made ready. A write the folder refuses is warned of once
-// a freeze (triedFor_) and left to the next save. stop() joins the worker
+// a freeze (triedFor_) and left to the next save; the older file is
+// removed then, as a save that cannot write removes it. stop() joins the worker
 // after the write under way, if any (about 11.5 MB at 48 kHz, 184 MB at
 // 768 kHz); a folder that vanishes under it is a failed write.
 //
@@ -74,9 +75,9 @@
 // NOT_READ (the stored file exists and could not be read; the button is let
 // go, so the next save removes the file, unless the tape is frozen anew and
 // written over it) until a write or a removal, or the module is
-// initialised; NOT_SAVED (a write of the frozen tape failed: the freeze's
-// own, which leaves the old file, or a save's, which removes it) until a
-// write, or a save removes by plan.
+// initialised; NOT_SAVED (a write of the frozen tape failed, the freeze's
+// own or a save's, and the older file was removed) until a write, or a
+// save removes by plan.
 //
 // Rings: the worker's ready ring (made, not yet offered) is freed by the
 // destructor, after stop(); everything the engine holds it frees itself.
@@ -540,8 +541,12 @@ private:
 			trouble_.store(FINE);
 		}
 		else if (r == FREEZE_FAILED) {
+			// The file there is of an earlier freeze: removed, as a save that
+			// cannot write removes it, so that a quit before the next save
+			// opens thawed rather than on the wrong tape.
 			triedFor_ = f.frozenSince;
-			say(true, "the frozen tape was not stored in " + dir + ": " + why + "; the next save tries again");
+			removeFile(store::join(dir, STORED_TAPE));
+			say(true, "the frozen tape was not stored in " + dir + ": " + why + "; the older file is removed and the next save tries again");
 			trouble_.store(NOT_SAVED);
 		}
 	}

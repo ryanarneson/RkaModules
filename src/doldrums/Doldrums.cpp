@@ -375,7 +375,15 @@ struct Doldrums : Module {
 				WARN("Doldrums: cannot remove %s: %s", path.c_str(), ex.what());
 			}
 		};
-		keeper.exists = [](const std::string& path) { return system::exists(path); };
+		keeper.exists = [](const std::string& path) {
+			try {
+				return system::exists(path);
+			}
+			catch (std::exception& ex) {
+				WARN("Doldrums: cannot look for %s: %s", path.c_str(), ex.what());
+				return false;
+			}
+		};
 		const float rate = APP && APP->engine ? APP->engine->getSampleRate() : 48000.f;
 		adoptRate(rate);
 	}

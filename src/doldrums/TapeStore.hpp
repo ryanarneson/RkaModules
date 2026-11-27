@@ -14,7 +14,9 @@
 // same write (saveStep): when the Freeze BUTTON freezes the tape (7 below:
 // the worker of its own accord, once the freeze's fade has been written,
 // once a freeze), and at a save (3: onSave, the backstop, which writes a
-// freeze not yet written and is the only one that removes the file). The
+// freeze not yet written and removes the file when not frozen by the
+// button or Keep is off; the freeze's own write removes it only when it
+// fails to write over it). The
 // first is there because Rack sends onSave only when the user saves the
 // patch to a file, never for its autosave or at quit (the SDK's
 // Module::onSave; Eddy's design notes the same): a tape written only at a
@@ -73,7 +75,7 @@
 // returns false: saveStep then says to remove the old file (it is of an
 // earlier freeze; writtenFor 0, so the next save tries again), unless a
 // tape is on its way by then, when the file stays as it is. (The freeze's
-// own write, freezeStep, never removes: 7.)
+// own write removes the old file only when the write itself failed: 7.)
 // The hold makes the copy race-free (no torn frames to detect after the
 // fact, as Spindrift's seqlock must), so test_threads checks it under
 // ThreadSanitizer.
@@ -197,9 +199,12 @@
 //    then the folder made (system::createDirectories on the worker: no
 //    APP, not the audio thread) and freezeStep(f, ...): saveStep with a
 //    single try of the hold. Written: writtenFor = the number. Failed (the
-//    file): a warning, TAPE NOT SAVED, not tried again for this freeze, the
-//    next save tries again. Not still yet, or a tape on its way or handed in
-//    meanwhile: the next round looks again. It never removes the file.
+//    file): a warning, TAPE NOT SAVED, the older file (of an earlier
+//    freeze) removed through the module's hook, as a save that cannot
+//    write removes it, so a quit then opens thawed, not on the wrong tape;
+//    not tried again for this freeze; the next save tries again. Not still
+//    yet, or a tape on its way or handed in meanwhile: the next round looks
+//    again, and the file stays as it is.
 //    Why it is safe beside the save, as the save is:
 //    - It cannot overlap a save: both run on the one worker thread, in turn,
 //      and each reads and stores writtenFor there (expectStored, the only
@@ -585,14 +590,15 @@ inline SaveAction saveStep(const SaveFacts& f, const std::string& dir, DoldrumsE
 }
 
 // The freeze's own write (7 above): the save's plan and the save's write,
-// with no removal. FREEZE_NONE: the plan is not to write (the button off,
+// the removal left to the caller. FREEZE_NONE: the plan is not to write (the button off,
 // Keep off, written already, or a tape on its way). FREEZE_LATER: not now,
 // look again (the tape not standing still yet; a tape went on its way, or
 // was handed in, meanwhile: nothing written, the file as it is).
 // FREEZE_WRITTEN: tape.wav holds the tape numbered writtenFor. FREEZE_FAILED:
 // the file could not be written (why says why; WavFile leaves the old file
 // whole or none): final for this freeze; writtenFor is not changed, so the
-// next save tries again. The hold is tried once, not waited for: the worker
+// next save tries again; the caller removes the older file (it is of an
+// earlier freeze), as a save that cannot write does. The hold is tried once, not waited for: the worker
 // looks again a round later.
 template <class Hook>
 inline FreezeWrite freezeStep(const SaveFacts& f, const std::string& dir, DoldrumsEngine& engine, float rate, uint32_t& writtenFor,
