@@ -282,7 +282,7 @@ At 44.1 and 48 kHz, a held sine at 0.1, 0.25, 0.4 of the rate, each grain size, 
 
 ### 8.6 On Linux
 
-At this build `make -f tests.mk test TEST_WERROR=-Werror CXX=g++` ran on Linux x86-64 (GCC 13.3, under Rosetta in Docker): `libm-calls` 0 calls in every Doldrums case (with `sqrt`/`sqrtf` wrapped), every other module's case unchanged; `test_hostile`'s lock counting through `--wrap` built and passed. The ThreadSanitizer tests could not start under emulation and were skipped there (CI runs them natively).
+On 2026-11-26 `make -f tests.mk test TEST_WERROR=-Werror CXX=g++` passed on Linux x86-64 (GCC 13.3, the toolchain image under Rosetta in Docker), after three fixes it found (two GCC `-Werror` warnings in `test_fft` and `test_threads`, a UBSan report of a null `memcpy` source in `TapeStore.hpp`'s `fit`, and a timing assumption in `test_saved`). `libm-calls`: 0 calls in every Doldrums case with `sqrt`/`sqrtf` wrapped, and in every other module's knobs-still cases. `test_hostile`'s and `test_store`'s lock counting through the linker's `--wrap` works there: a `std::mutex` put into `process()` as a mutation failed `test_hostile` ("2000000 locks inside process()"). The ThreadSanitizer tests cannot start under emulation and were skipped in that run; `test_threads` and `test_keeper` passed natively on Linux arm64 (GCC 13.3, under `setarch -R`). The Linux and Windows plugins cross-built cleanly (`tools/cross_build.sh`); the Linux `plugin.so` has no `pffft` symbol, exported or imported.
 
 ---
 
