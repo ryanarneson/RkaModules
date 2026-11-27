@@ -25,19 +25,15 @@
 //   anchor is held inside these bounds, so Position fully left, recording,
 //   starts a hop in.
 // - TRIG starts a pass from the anchor at any time: mid pass, held, stopped.
-// - Freeze rising, in go round, starts a pass from the anchor, always. In
-//   stop it is one rule, whatever was happening before (a pass running,
-//   held, stopped): with a pass to travel it ends any pass and the module
-//   waits, stopped and silent, for TRIG; with nothing to travel through (the
-//   frozen anchor less than a grain from now) it is held (below). (The final
-//   review's ruling, superseding Task 8's, under which Freeze in stop
-//   started a pass if one was running and waited only if none was: the same
-//   press played or did not play by history. The design says both that a
-//   stopped module "stays silent until a trigger at TRIG starts the next
-//   pass" and that a tape with nothing to travel through is held "with
-//   either setting of At the end of a pass"; with a pass to travel, nothing
-//   sounds or gates between the freeze and the trigger.) TRIG on the same
-//   grain wins: a pass starts.
+// - Freeze rising starts a pass from the anchor, always, in either setting
+//   and whatever was happening before (a pass running, held, stopped). In
+//   stop that pass plays once to the end of the frozen tape and the module
+//   then stops and waits for TRIG; with nothing to travel through (the
+//   frozen anchor less than a grain from now) it is held (below). (The
+//   user's ruling at 2.0.49, superseding the final review's, under which
+//   Freeze in stop with a pass to travel ended any pass and waited, stopped
+//   and silent, for TRIG: a module silent after a press of Freeze read as
+//   broken. One press still does one thing whatever came before.)
 // - Freeze falling (a thaw) returns the read point to the anchor at once, a
 //   new pass, whenever the module is sounding (running or held), in either
 //   setting: with Position fully right that is straight back to the live
@@ -209,12 +205,8 @@ private:
 		}
 		if (in.freezeFell && !stopped_)
 			start = true;   // a thaw: back to the anchor, unless stopped
-		if (in.freezeRose) {
-			if (!in.stopAtEnd || nothing)
-				start = true;
-			else
-				stopped_ = true;   // stop, a pass to travel: wait for TRIG (unless it came with the freeze)
-		}
+		if (in.freezeRose)
+			start = true;   // a freeze: a pass from the anchor, in either setting
 		if (stopped_ && (!in.stopAtEnd || nothing))
 			start = true;
 		if (start)

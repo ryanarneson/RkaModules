@@ -147,8 +147,8 @@ Read this with the module open. From the back of the glass to the front:
     its stop as well, the corner still says AT END: moving Stretch alone
     would change nothing.)
   - **STOPPED**: in the Stop setting, a pass has ended (or the patch has
-    just opened, or Freeze has stopped it) and the module is silent until
-    a trigger (in Follow too: STOPPED comes before FOLLOW);
+    just opened) and the module is silent until a trigger (in Follow too:
+    STOPPED comes before FOLLOW);
   - **FROZEN STOPPED**: the same, on a frozen tape.
 - **The words in the top left corner**, only when the patch's tape had
   trouble: **TAPE NOT READ** or **TAPE NOT SAVED** (see "With the
@@ -372,20 +372,24 @@ recording fades out over 5 ms at the freeze and back in over 5 ms when
 Freeze ends, so no step is written onto the tape. Recording goes on from
 the same place.
 
-**Freeze going on, in Go round, starts a new pass from the Position
-flag**, so the frozen moment is reached at once instead of after a long
-creep.
+**Freeze going on starts a new pass from the Position flag**, in either
+setting of At the end of a pass and whatever was happening before (a pass
+playing, held, stopped), so the frozen moment is reached at once instead
+of after a long creep. If RUN was high it dips for a millisecond, as at
+any new pass.
 
-**Freeze going on, in the Stop setting**, does one thing whatever was
-happening before:
+- In **Go round** the pass plays to the end of the frozen tape and then
+  again from the flag, for as long as Freeze is on.
+- In **Stop** the pass plays once: the gold bar travels from the flag to
+  the right edge at Stretch's pace, the sound fades out with the last
+  grain, the corner says FROZEN STOPPED and RUN falls. After that nothing
+  sounds until a trigger at TRIG (or a press in the window).
+- With nothing to travel through (the flag within a grain of the right
+  end, as at Position fully right), it holds in either setting: FROZEN AT
+  END, sounding.
 
-- with a pass to travel (the flag back in the tape, as at the default),
-  it ends any pass, running or not, and the module waits, FROZEN STOPPED,
-  silent, with RUN low, for a trigger at TRIG (or a press in the window);
-- with nothing to travel through (the flag within a grain of the right
-  end, as at Position fully right), it holds: FROZEN AT END, sounding.
-
-A trigger arriving together with the freeze starts a pass.
+A patch opened with Freeze already on has not been pressed: in Stop it
+opens FROZEN STOPPED and waits for a trigger.
 
 **Freeze going off (a thaw) sends the read head back to the Position flag
 at once**: a new pass starts there, in either setting, whenever the
@@ -453,7 +457,8 @@ The menu's **At the end of a pass**:
   the window). The corner says STOPPED. While stopped, turning Position
   or setting Stretch does not wake it, with one exception: frozen,
   Position turned fully right (nothing to travel through) wakes it into
-  the hold. Freeze going on stops a pass with tape to travel (above).
+  the hold. Freeze going on does wake it: it plays one pass from the
+  flag, then stops again (above).
   Choosing Stop does not end the pass under way: the module stops when
   it ends, or at the next freeze. (Recording at exactly x1, or in Follow
   at any Stretch, a pass never ends, because the read head sits on the
@@ -803,8 +808,8 @@ built. None is a fault you can fix with a setting, unless one is named.
   creep on from wherever the scan has left it.
 - **Capture, then stretch** (While recording: Follow):
   1. Menu, While recording: **Follow**, and At the end of a pass: **Go
-     round** (the default; in Stop the freeze would wait, FROZEN STOPPED,
-     for a trigger). Patch a sound into IN L and IN R.
+     round** (the default; in Stop the freeze's pass would play once and
+     then stop, FROZEN STOPPED). Patch a sound into IN L and IN R.
      The corner says FOLLOW and the gold bar sits on the flag: you hear
      the input as it comes, smeared, Position's distance late, at any
      Stretch.
@@ -832,15 +837,17 @@ built. None is a fault you can fix with a setting, unless one is named.
   3. Right-click POSITION and type a little more than the clip's length,
      in seconds ("11" for a 10 s clip), so that once the clip is on the tape
      the Position flag will be just before its start. (Not fully right:
-     there a freeze would hold and sound.)
+     there a freeze would hold and sound.) Leave STRETCH at x1 for now.
   4. Press PLAY on Eddy A. The clip goes onto Doldrums' tape (you see it
      scroll in from the right). As soon as it ends, press Doldrums'
-     **FREEZE**. The pass under way ends at once and the corner says
-     **FROZEN STOPPED**: within about a grain nothing sounds and RUN is
-     low.
+     **FREEZE**. A pass starts from the flag and plays the clip once (at
+     x1 it takes the clip's length; this is why STRETCH is still at x1).
+     When the gold bar reaches the right edge the corner says **FROZEN
+     STOPPED**: nothing sounds and RUN is low. Wait for that.
   5. Put the Position flag exactly at the clip's start with the
      **POSITION knob** (or by typing seconds), watching the flag in the
-     window. Nothing sounds while you do. Do not press in the window for
+     window; you can do this while the freeze's pass plays or after it.
+     Once stopped, nothing sounds while you do. Do not press in the window for
      this: a press plays from there, which in Stop starts a pass (if you
      do, let it play out to FROZEN STOPPED again before step 7). The pass
      will run from the flag to the end of the tape, so anything recorded

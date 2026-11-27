@@ -74,7 +74,7 @@ Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the cli
 <tr><td><b>GRAIN</b></td><td>Short, Medium or Long as the default? Are the three sizes the right three?</td></tr>
 <tr><td><b>STEREO</b></td><td>The source's own image by default, or Wide by default?</td></tr>
 <tr><td><b>DEFAULT POSITION</b></td><td>Position now starts about 3 s back, so Freeze at the defaults loops the last 3 s drawn out (about 24 s at x8) and the instant-hold needs Position fully right. Is 3 s the right default, or should it be another distance (or back at now)?</td></tr>
-<tr><td><b>FREEZE IN STOP</b></td><td>In the Stop setting, Freeze with tape to travel through now always ends any pass and waits for TRIG (FROZEN STOPPED), whether a pass was playing or not; with nothing to travel through (Position fully right) it holds. Is this what you expect?</td></tr>
+<tr><td><b>FREEZE IN STOP</b></td><td>In the Stop setting, Freeze now always starts one pass from the flag, whether a pass was playing or not: the gold bar travels to the right edge, then FROZEN STOPPED until a trigger (your ruling at 2.0.49; before, it stopped at once and waited). With nothing to travel through (Position fully right) it holds. Is this what you expect?</td></tr>
 <tr><td><b>FREEZE WHILE HELD</b></td><td>Freeze pressed while Stretch is at its stop throws the held sound away and takes the slice at Position. Should it keep the held sound instead (freeze around it)?</td></tr>
 <tr><td><b>THE COMB</b></td><td>Root's default (C2) and range (C1 to C7), Partials' default (8), Width's range (5 to 300 cents, default 25), and the loudness rule (measured from the sound, up to +18 dB: in-tune material keeps its level, noise comes out quieter). Too loud, too quiet, or right?</td></tr>
 <tr><td><b>LEVEL</b></td><td>A loud held sound peaks well above its input and meets the output's soft bound. Keep the wet level equal to the input, or make the wet sound quieter so the bound is rarely reached?</td></tr>
@@ -100,7 +100,7 @@ Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the cli
 
 <div class="patch"><h4>D. Eddy → Doldrums → Eddy</h4>
 <div class="chain">Eddy A L/R → IN L/R · Doldrums L/R → Eddy B IN L/R · RUN → Eddy B REC · a trigger → TRIG</div>
-<p>Step by step in the manual's "Patches to try". In short: choose Stop in the menu (no need to wait); type Position a little more than the clip's length back; play the clip; Freeze as it ends (FROZEN STOPPED, silent, RUN low, at once); put the Position flag on the clip's start with the Position knob (a press in the window would play from there); patch RUN to Eddy B's REC while it is low; one trigger. Eddy B records exactly one pass, fades included.</p></div>
+<p>Step by step in the manual's "Patches to try". In short: choose Stop in the menu (no need to wait); type Position a little more than the clip's length back; play the clip; leave Stretch at x1; Freeze as it ends (one pass plays from the flag, then FROZEN STOPPED, silent, RUN low); put the Position flag on the clip's start with the Position knob (a press in the window would play from there); set Stretch; patch RUN to Eddy B's REC while it is low; one trigger. Eddy B records exactly one pass, fades included.</p></div>
 
 <div class="patch"><h4>E. Capture, then stretch</h4>
 <div class="chain">A phrase (Rigging, or a recording from Eddy) → IN L/R · menu: While recording: Follow</div>
@@ -202,8 +202,11 @@ const groups = [
    "The wet sound fades out with its last grain; the corner says STOPPED; the gold bar rests on the flag and nothing is bright; RUN falls after the fade. A trigger at TRIG starts a pass from the flag; RUN rises as it begins to sound.",
    null],
   ["Stop chosen, a pass playing (after a trigger), Position part way back. Press FREEZE.",
-   "The pass ends at once: within about a grain nothing sounds, FROZEN STOPPED, RUN low. A trigger at TRIG starts the pass from the flag. The rule now: in Stop, Freeze always ends any pass and waits for TRIG when there is tape to travel through, whether a pass was playing or not.",
-   "Verdict FREEZE IN STOP: is this what you expect (the final review's rule)?"],
+   "A new pass starts from the flag: the gold bar jumps to the flag and travels right at Stretch's pace, the corner says FROZEN, and RUN dips for a millisecond. When the gold bar reaches the right edge the sound fades out, the corner says FROZEN STOPPED and RUN falls. A trigger at TRIG then plays the pass again. The rule now: in Stop, Freeze always plays one pass from the flag, then stops.",
+   "Verdict FREEZE IN STOP: is this what you expect (your ruling at 2.0.49)?"],
+  ["Stop chosen, STOPPED (a pass has ended, not frozen), Position part way back. Press FREEZE.",
+   "The same from silence: a pass starts from the flag at once (the gold bar leaves the flag, RUN rises), plays to the right edge, then FROZEN STOPPED and RUN low.",
+   "Verdict FREEZE IN STOP."],
   ["Stop chosen, Position fully right. Press FREEZE (playing or stopped).",
    "It holds at once (FROZEN AT END, RUN high): the plain hold works in Stop too.",
    "Verdict FREEZE IN STOP."],
@@ -311,7 +314,7 @@ const groups = [
    "Whether 30 s is the right length."]]],
  ["Eddy → Doldrums → Eddy", [
   ["Pattern D end to end, a 10 s clip at x8.",
-   "No wait for STOPPED: Freeze as the clip ends gives FROZEN STOPPED at once (silent, RUN low). Set the flag on the clip's start with the Position knob. Nothing sounds or gates between the freeze and the trigger; Eddy B records one pass of about 80 s, from the fade in to the fade out, and then plays it.",
+   "With Stretch at x1, Freeze as the clip ends plays the clip once from the flag (the gold bar crosses to the right edge), then FROZEN STOPPED (silent, RUN low). Set the flag on the clip's start with the Position knob, then Stretch to 8, then patch RUN to Eddy B's REC. Nothing sounds or gates from FROZEN STOPPED to the trigger; Eddy B records one pass of about 80 s, from the fade in to the fade out, and then plays it.",
    "Whether the patch you asked for works as you expected, and verdict FREEZE IN STOP."]]]
 ];
 const KEY = "doldrums-2.0.49-listening";

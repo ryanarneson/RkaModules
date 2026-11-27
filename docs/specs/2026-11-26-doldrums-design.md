@@ -285,6 +285,16 @@ The read point is the end of the slice that the next grain will take.
   Stretch stop starts a pass from the anchor like any freeze in go round
   (the held slice is replaced by the anchor's), and in stop, with a pass
   to travel, stops.)
+  (As built, 2026-11-27, the user's ruling at 2.0.49, superseding the
+  paragraph above for *stop*: **Freeze going on starts a pass from the
+  anchor in either setting**, whatever was happening before. In stop it
+  plays once to the end of the frozen tape and the module then stops,
+  silent with RUN low, until TRIG. A module silent straight after a press
+  of Freeze read as broken. The Eddy patch lets the freeze's pass play
+  out, at Stretch 1, before the trigger. Nothing to travel through is
+  held as before; held at the Stretch stop, Freeze takes the anchor's
+  slice and holds it in either setting; a patch opened frozen in stop
+  still waits for a trigger.)
   (As built, 2026-11-26, the user's ruling at the first test build,
   superseding "Freeze going off changes nothing": **a thaw returns the
   read point to the anchor at once**, a new pass from Position by the

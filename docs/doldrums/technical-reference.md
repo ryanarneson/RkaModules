@@ -165,7 +165,7 @@ Every rule is `Pass.hpp`'s `PassLogic::step`, run once per grain boundary, given
 | Event | Go round | Stop |
 |---|---|---|
 | TRIG (rising edge) | new pass from the anchor, any state; a dip if RUN is high | same; wakes a stopped module |
-| Freeze rising (button or gate; the OR of both) | new pass from the anchor | one rule, whatever came before (running, held, stopped): with a pass to travel, any pass ends and the module is stopped, silent, RUN falling once the last grain is heard; with nothing to travel through, a new pass, held. TRIG on the same grain wins (a pass) |
+| Freeze rising (button or gate; the OR of both) | new pass from the anchor | one rule, in either setting and whatever came before (running, held, stopped): a new pass from the anchor (a dip if RUN is high). In Stop it plays once to the end of the frozen tape, then stopped, silent, RUN falling once the last grain is heard. With nothing to travel through, or at the Stretch stop, the new pass is held. TRIG on the same grain: the same one pass. A patch opened frozen is not a rising edge: in Stop it opens stopped |
 | Freeze falling (a thaw) | new pass from the anchor at once (a dip if RUN is high); held at the Stretch stop: the slice at the anchor taken once and held (Drift; in Follow following from the anchor at any pace). The tape stood still while frozen, so the anchor is the lag before the freeze: the read point plays that much pre-freeze tape before it reaches post-thaw input (at x1 or following, the lag's length of it at its own speed; at x8 drawn out); only with Position fully right is it the live input within a grain | sounding (running or held): the same; stopped: stays stopped, no pass, RUN stays low |
 | Pass ends: frozen, read point would pass now | back to the anchor, new pass (dip) | stopped |
 | Pass ends: recording, read point below the lowest usable | back to the anchor (dip) | stopped |
@@ -335,11 +335,11 @@ On 2026-11-26 `make -f tests.mk test TEST_WERROR=-Werror CXX=g++` passed on Linu
 
 Rulings made during the build that wait on the user [ledger]:
 
-- In Stop, Freeze with a pass to travel always ends any pass and waits for TRIG; with nothing to travel through it is held (one rule, after the final review).
+- In Stop, Freeze going on always starts one pass from the anchor, which plays once and then stops; with nothing to travel through it is held (the user's ruling at 2.0.49, superseding the final review's "ends any pass and waits for TRIG").
 - Not frozen, Position fully left: the input about 30 s late at any Stretch, never ending, RUN high.
 - A held sound under a moving Position follows it: frozen by the change (the scrub), recording at the anchor.
 - While recording: Drift (the default) or Follow: which should be the default, and whether in Follow Stretch's stop should still hold while recording (it does not now: to hold, Freeze).
-- Freeze while held at the Stretch stop replaces the held slice with the anchor's (Go round), or stops (Stop, with a pass to travel).
+- Freeze while held at the Stretch stop replaces the held slice with the anchor's, in either setting.
 - Position's default about 3 s back (0.9): at the defaults the module plays 3 s or more behind the input and Freeze loops the last 3 s; the hold is Position fully right.
 - The corner word FROZEN AT END, and the read head in brass (gold on the glass).
 - Recording at exactly Stretch 1 the read head sits on the anchor; Stretch brought back to 1 returns it there (a new pass).
