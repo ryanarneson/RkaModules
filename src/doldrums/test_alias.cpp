@@ -70,6 +70,7 @@ Held held(double fs, int size, double ratio, float semis, double amp) {
 	e->seed(7);
 	F f;
 	f.grainSize = size;
+	f.params[F::POSITION] = 1.f;   // held at the end: Position at now, as these tests were written (the default moved to 0.9 at 2.0.46; its own effect is test_engine's default_position_freezes_a_stretch)
 	f.params[F::SHIFT] = semis;
 	DoldrumsResult r;
 	const double hz = ratio * fs;

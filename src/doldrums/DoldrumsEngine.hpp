@@ -221,7 +221,9 @@ struct DoldrumsFrame {
 	enum Param { STRETCH, STRETCH_ATT, POSITION, POSITION_ATT, HARMONICS, HARMONICS_ATT, BLUR, ROOT, TILT,
 	             SHIFT, PARTIALS, WIDTH, FREEZE, MIX, kParams };
 	// The defaults (the plan's Global Constraints).
-	float params[kParams] = {0.5f, 0.f, 1.f, 0.f, 0.f, 0.f, 0.f, -24.f, 0.f, 0.f, 8.f, 0.393f, 0.f, 1.f};
+	// Position 0.9 (about 3 s back): the user's decision at 2.0.46, so that a
+	// freeze at the defaults leaves Stretch tape to act on (was 1, now).
+	float params[kParams] = {0.5f, 0.f, 0.9f, 0.f, 0.f, 0.f, 0.f, -24.f, 0.f, 0.f, 8.f, 0.393f, 0.f, 1.f};
 	float stretchCv = 0.f, positionCv = 0.f, harmonicsCv = 0.f, freezeGate = 0.f, trig = 0.f;
 	float inL = 0.f, inR = 0.f;
 	bool inRPatched = false;
@@ -243,6 +245,7 @@ struct DoldrumsState {
 	long long now = 0, capacity = 0, anchor = 0, end = 0;   // absolute frames (Ring.hpp); end: the last slice's
 	int grain = 0;                                          // the grain size heard, frames
 	bool frozen = false, held = false, stopped = false;
+	bool atEnd = false;   // held because there is nothing to travel through (frozen, the anchor within a grain of now)
 	double pace = 0.0;
 };
 
@@ -676,7 +679,7 @@ private:
 		last_ = PassOut{};
 		heldSize_ = -1;
 		state_.anchor = state_.end = in->now();
-		state_.held = state_.stopped = false;
+		state_.held = state_.stopped = state_.atEnd = false;
 	}
 
 	// The audio thread: the input onto the tape, unless the worker holds it
@@ -783,6 +786,8 @@ private:
 		state_.end = o.end;
 		state_.held = o.held;
 		state_.stopped = o.stopped;
+		// Held for want of tape ahead (Pass.hpp's "nothing to travel through").
+		state_.atEnd = o.held && in.frozen && in.now - o.anchor < grain;
 		if (!o.sound) return;
 
 		int use = a;

@@ -87,6 +87,16 @@
 //   grain of the guarded oldest edge; Position fully left is the case) sits
 //   on the anchor every grain: it sounds, it is not held, it never ends and
 //   it never marks a new pass, so RUN stays high (difference 2).
+// - Recording at exactly Stretch 1 (pace 1, the dial's left stop or a CV
+//   holding it there), the read point is on the anchor: if it is not there
+//   at a grain (Stretch brought back to 1 after it fell behind, or from the
+//   Stretch stop), it returns to the anchor at that grain, a new pass, once;
+//   from then on it keeps pace on the anchor, and a Position move moves it
+//   with the anchor. (The user's observation at 2.0.46: before, x1 kept pace
+//   from wherever the read point was, so the dial said x1 while the module
+//   played the input late by any amount, for ever.) Frozen, x1 travels from
+//   where it is as any pace does; a pace under 1 falls behind and returns at
+//   the pass's end; stopped stays stopped.
 // - Otherwise the read point travels. Frozen, the pass is over on the grain
 //   it would pass now (a grain ending exactly at now still sounds).
 //   Recording, the pass is over on the grain its end falls below the guarded
@@ -132,12 +142,20 @@ struct PassLogic {
 		fresh_ = true;
 		stopped_ = false;
 		held_ = false;
+		onAnchor_ = false;
 		end_ = 0;
 		frac_ = 0.0;
 		pos_ = 1.f;
 	}
 
 	PassOut step(const PassIn& in) {
+		const PassOut o = stepOnce(in);
+		onAnchor_ = o.sound && o.end == o.anchor;
+		return o;
+	}
+
+private:
+	PassOut stepOnce(const PassIn& in) {
 		PassOut o{};
 		o.end = o.anchor = in.now;
 		if (in.capacity < 1 || in.grain < 1 || in.grain > in.capacity)
@@ -205,6 +223,15 @@ struct PassLogic {
 			return sounding(o);
 		}
 
+		if (!in.frozen && pace == 1.0) {
+			if (!onAnchor_)
+				return begin(anchor, false, o);   // x1 again: back on the anchor, a new pass
+			end_ = anchor;                        // on it, keeping pace (a Position move moves it with the anchor)
+			frac_ = 0.0;
+			o.take = true;
+			return sounding(o);
+		}
+
 		long long e = moved ? clamp(end_ + shift, low, now) : end_;
 		frac_ += pace * double(hop);
 		const long long whole = (long long) frac_;
@@ -223,8 +250,8 @@ struct PassLogic {
 		return sounding(o);
 	}
 
-private:
 	bool fresh_ = true;     // no grain since reset()
+	bool onAnchor_ = false; // the last grain sounded with the read point on the anchor
 	bool stopped_ = false;
 	bool held_ = false;     // the last grain was held
 	long long end_ = 0;     // the read point

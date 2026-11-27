@@ -318,10 +318,11 @@ void state_words() {
 	TapeSnapshot s;
 	DoldrumsState st;
 	st.capacity = 1000;
-	auto word = [&](bool frozen, bool held, bool stopped) {
+	auto word = [&](bool frozen, bool held, bool stopped, bool atEnd = false) {
 		st.frozen = frozen;
 		st.held = held;
 		st.stopped = stopped;
+		st.atEnd = atEnd;
 		v.publish(st);
 		CHECK(v.read(s), "read");
 		CHECK(s.frozen == frozen && s.held == held && s.stopped == stopped, "flags");
@@ -335,7 +336,13 @@ void state_words() {
 	CHECK(word(true, false, true) == "FROZEN STOPPED", "frozen and stopped");
 	CHECK(word(false, true, true) == "STOPPED", "stopped wins over held");
 	CHECK(word(true, true, true) == "FROZEN STOPPED", "all three");
-	CHECK(std::strlen("FROZEN STOPPED") < sizeof s.state, "the longest word fits with its end");
+	// Held because there is nothing to travel through (frozen, the flag
+	// within a grain of the end): Stretch has nothing to act on, and the
+	// corner says why. Held at the Stretch stop as well: still AT END.
+	CHECK(word(true, true, false, true) == "FROZEN AT END", "frozen at the end: %s", word(true, true, false, true).c_str());
+	CHECK(word(true, true, true, true) == "FROZEN STOPPED", "stopped wins over at the end");
+	CHECK(word(true, true, false, false) == "FROZEN HELD", "frozen, held by the Stretch stop alone");
+	CHECK(std::strlen("FROZEN STOPPED") < sizeof s.state && std::strlen("FROZEN AT END") < sizeof s.state, "the longest word fits with its end");
 }
 
 void drag_maps_to_position() {

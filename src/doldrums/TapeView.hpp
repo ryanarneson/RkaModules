@@ -44,6 +44,13 @@
 // can be frozen and its sound held, or frozen and the pass stopped, and
 // dropping either would hide a state the panel must show). Stopped and held
 // do not appear together: a stopped pass is not holding, so STOPPED wins.
+// Held because there is nothing to travel through (DoldrumsState::atEnd:
+// frozen, the anchor within a grain of now, as at Position fully right)
+// says "FROZEN AT END" (13 letters), so the window says why Stretch does
+// nothing (the user's decision at 2.0.46); "FROZEN HELD" is then held by
+// Stretch's stop alone. Both at once say "FROZEN AT END": it is the more
+// specific reason Stretch is inert (moving Stretch off its stop would still
+// leave the head with no tape ahead).
 //
 // Threads.
 //   audio thread: configure, clear, wrote, publish (they share the columns
@@ -101,7 +108,7 @@ struct TapeSnapshot {
 	float low[COLS], high[COLS];      // oldest column first
 	float anchor, readStart, readEnd; // fractions of the window, 0 = 30 s ago, 1 = now; may be < 0 (off the edge)
 	bool frozen, held, stopped;
-	char state[16];                   // "", "FROZEN", "HELD", "STOPPED", "FROZEN HELD", "FROZEN STOPPED"
+	char state[16];                   // "", "FROZEN", "HELD", "STOPPED", "FROZEN HELD", "FROZEN AT END", "FROZEN STOPPED"
 };
 
 struct TapeView {
@@ -277,6 +284,8 @@ private:
 		const char* w = "";
 		if (s.stopped)
 			w = s.frozen ? "FROZEN STOPPED" : "STOPPED";
+		else if (s.atEnd)
+			w = "FROZEN AT END";
 		else if (s.held)
 			w = s.frozen ? "FROZEN HELD" : "HELD";
 		else if (s.frozen)

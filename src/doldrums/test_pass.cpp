@@ -216,15 +216,69 @@ void pass_length_formula() {
 	CHECK(std::fabs(seconds - 8.0 * double(lag) / 48000.0) < double(G) / 48000.0, "x8 over 14.8 s lasts %g s", seconds);
 }
 
-void stretch_1_recording_never_returns() {
+// Recording at x1 the read point sits on the flag: once on it, it never
+// returns (no new pass), late by Position's distance.
+void stretch_1_recording_stays_on_the_flag() {
 	Sim r(0.5f, 1, false);
 	r.next();
 	bool ok = true;
 	for (int i = 0; i < 20000; i++) {
 		const PassOut o = r.next();
-		ok = ok && !o.newPass && o.take && r.nowWas - o.end == 711808;
+		ok = ok && !o.newPass && o.take && r.nowWas - o.end == 711808 && o.end == o.anchor;
 	}
-	CHECK(ok, "x1 keeps pace for 20000 grains (about an hour), late by Position's distance");
+	CHECK(ok, "x1 keeps pace on the flag for 20000 grains (about an hour), late by Position's distance");
+}
+
+// The user's observation at 2.0.46 (Pass.hpp): recording, Stretch back at
+// exactly 1 after the read point fell behind returns it to the flag at the
+// next grain (a new pass, once) and keeps it there. Frozen, x1 is as
+// before; a pace just under 1 still falls behind; stopped stays stopped.
+void stretch_back_to_1_returns_to_the_flag() {
+	Sim r(0.9f, 8, false);
+	for (int i = 0; i < 40; i++) r.next();
+	CHECK(r.o.sound && r.o.anchor - r.o.end > 30 * 7000, "x8: the read point well behind the flag (%lld frames)", r.o.anchor - r.o.end);
+	r.stretch(1);
+	PassOut o = r.next();
+	CHECK(o.newPass && o.take && o.sound && o.end == o.anchor, "back at x1: on the flag at the next grain, a new pass (end %lld, flag %lld)", o.end,
+	      o.anchor);
+	bool ok = true;
+	for (int i = 0; i < 200; i++) {
+		o = r.next();
+		ok = ok && !o.newPass && o.end == o.anchor && o.sound;
+	}
+	CHECK(ok, "and stays on the flag, with no further new pass");
+	// A Position move at x1 moves the flag and the read point together, no new pass.
+	r.in.position = 0.8f;
+	o = r.next();
+	CHECK(!o.newPass && o.end == o.anchor, "x1, Position moved: still on the flag, no new pass");
+	// Leaving the Stretch stop for x1: back on the flag too.
+	Sim h(0.9f, 0, false);
+	for (int i = 0; i < 30; i++) h.next();
+	CHECK(h.o.held && h.o.end < h.o.anchor, "held: the head rides behind the flag");
+	h.stretch(1);
+	o = h.next();
+	CHECK(o.newPass && o.end == o.anchor && !o.held, "held, then x1: on the flag");
+	// A pace just under 1 still falls behind.
+	Sim u(0.9f, 8, false);
+	for (int i = 0; i < 40; i++) u.next();
+	const long long behind = u.o.anchor - u.o.end;
+	u.stretch(1.0 / 0.96);
+	o = u.next();
+	CHECK(!o.newPass && o.anchor - o.end > behind, "pace 0.96: no return, still falling behind");
+	// Frozen, x1 travels from where it is, as before.
+	Sim f(0.5f, 8, true);
+	for (int i = 0; i < 10; i++) f.next();
+	const long long at = f.o.end;
+	f.stretch(1);
+	o = f.next();
+	CHECK(!o.newPass && o.end == at + 8192, "frozen, x1: travels on from where it is (end %lld)", o.end - at);
+	// Stopped, recording: x1 does not wake it.
+	Sim s(0.9f, 8, false, true);
+	o = s.next();
+	CHECK(o.stopped, "stop: stopped from reset");
+	s.stretch(1);
+	for (int i = 0; i < 10; i++) o = s.next();
+	CHECK(o.stopped && !o.sound, "stop, recording at x1: stays stopped");
 }
 
 void position_turn_moves_by_that_much() {
@@ -873,7 +927,7 @@ void fuzz() {
 	const long long caps[] = {1440000, 1323000, 2880000};
 	long long bad = 0, badAnchor = 0, both = 0, other = 0;
 	long long seenTake = 0, seenPass = 0, seenHeld = 0, seenStopped = 0, seenKept = 0, seenWait = 0, seenWake = 0, seenHeldWake = 0, seenThaw = 0,
-	          seenThawStopped = 0;
+	          seenThawStopped = 0, seenFullPace = 0;
 	int steps = 0;
 	for (int run = 0; run < 3; run++) {
 		PassLogic p;
@@ -947,6 +1001,11 @@ void fuzz() {
 			if ((mustReturn && !(o.newPass && o.sound && o.end == o.anchor)) || (thawStopped && !(o.stopped && !o.sound)))
 				other++;
 			seenThaw += mustReturn && o.newPass;
+			// Recording at pace 1 (or above, which reads 1), sounding: on the flag.
+			const bool fullPace = !in.frozen && in.pace >= 1.0;
+			if (fullPace && o.sound && o.end != o.anchor)
+				other++;
+			seenFullPace += fullPace && o.sound;
 			seenThawStopped += thawStopped && o.stopped;
 			if ((o.take && !o.sound) || (o.held && !o.sound) || (o.newPass && !(o.take && o.sound)) ||
 			    (mustStart && (o.stopped || !o.newPass || o.end != o.anchor)) || (mustWait && !(o.stopped && !o.sound)) ||
@@ -975,6 +1034,7 @@ void fuzz() {
 	CHECK(other == 0, "%lld grains taking or held while silent, a new pass not taken, TRIG ignored, Freeze in stop not by the rule,"
 	      " or nothing to travel through not held", other);
 	CHECK(seenThaw > 0 && seenThawStopped > 0, "thaws: %lld returned, %lld stayed stopped", seenThaw, seenThawStopped);
+	CHECK(seenFullPace > 1000, "recording at full pace, sounding: %lld grains", seenFullPace);
 	CHECK(seenWait > 0 && seenWake > 0 && seenHeldWake > 0, "Freeze rising in stop: %lld waited, %lld held; %lld stopped woken into held",
 	      seenWait, seenWake, seenHeldWake);
 	CHECK(steps == 1000002 && seenTake > 100000 && seenPass > 10000 && seenHeld > 10000 && seenStopped > 10000 && seenKept > 10000,
@@ -991,7 +1051,8 @@ int main() {
 	return_frozen();
 	return_recording();
 	pass_length_formula();
-	stretch_1_recording_never_returns();
+	stretch_1_recording_stays_on_the_flag();
+	stretch_back_to_1_returns_to_the_flag();
 	position_turn_moves_by_that_much();
 	position_turn_stops_at_the_edge();
 	trig_restarts();

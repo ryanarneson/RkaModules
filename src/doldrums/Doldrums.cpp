@@ -66,10 +66,11 @@
 // - The window (DoldrumsWindow below), in the theme's colours only: the
 //   tape as cyan peaks, bright where the pass has still to play (Readout.hpp's
 //   toPlay) and at 30 % elsewhere; the slice as a pale cyan band at its true
-//   width with a cyan bar along its foot; the read point (the slice's end)
-//   an ivory line, as Eddy's head; the anchor a cyan line with a small
-//   cyan flag at the top. The state word (TapeView.hpp: FROZEN, HELD,
-//   STOPPED, FROZEN HELD, FROZEN STOPPED) top right, and a file's trouble
+//   width with a cyan bar along its foot; the read point (the slice's end,
+//   the manual's read head) a brass line, bolder than the flag's; the
+//   anchor (the manual's Position flag) a cyan line with a small cyan flag
+//   at the top. The state word (TapeView.hpp: FROZEN, HELD, STOPPED,
+//   FROZEN HELD, FROZEN AT END, FROZEN STOPPED) top right, and a file's trouble
 //   top left, each on a patch of the glass's own colour so the peaks never
 //   cross the letters. Before the first snapshot: a line along the middle,
 //   as Eddy's empty tape. A silent tape draws its 0 V line dimly.
@@ -645,7 +646,7 @@ struct DoldrumsWindow : widget::Widget {
 	void drawView(const DrawArgs& args, const DoldrumsWindowView* v) {
 		NVGcontext* vg = args.vg;
 		const NVGcolor signal = RkaTheme::SIGNAL;
-		const NVGcolor ivory = settings::preferDarkPanels ? RkaTheme::IVORY_DARK : RkaTheme::IVORY;
+		const NVGcolor brass = settings::preferDarkPanels ? RkaTheme::BRASS_DARK : RkaTheme::BRASS;
 		const float top = pad(), bottom = box.size.y - pad();
 		nvgSave(vg);
 		nvgScissor(vg, 0.f, 0.f, box.size.x, box.size.y);
@@ -717,9 +718,11 @@ struct DoldrumsWindow : widget::Widget {
 		nvgFillColor(vg, signal);
 		nvgFill(vg);
 
-		// The read point: the slice's end, an ivory line.
+		// The read head (the read point, the slice's end): a brass line, bolder
+		// than the flag's, the "you are here" mark (the user's decision at
+		// 2.0.46: the ivory line was hard to tell from the flag).
 		const float rx = xAt(s.readEnd);
-		line(vg, rx, markTop(rx, top), rx, bottom, ivory, 1.f);
+		line(vg, rx, markTop(rx, top), rx, bottom, brass, 1.5f);
 
 		corner(vg, s.state, true, false);
 		corner(vg, trouble, false, false);
@@ -730,7 +733,7 @@ struct DoldrumsWindow : widget::Widget {
 
 // The browser's picture (no module). With RKA_DOLDRUMS_PREVIEW naming a state
 // (make smoke sets it: running, frozen, held, stopped, frozen-held,
-// frozen-stopped), a real engine at 48 kHz is run offline on a phrase of
+// frozen-at-end, frozen-stopped), a real engine at 48 kHz is run offline on a phrase of
 // chords and the snapshot it publishes is drawn, so the screenshot shows
 // what the module draws in that state. Without it, a picture made up from a
 // formula (the browser must not pay for an engine).
@@ -808,8 +811,17 @@ bool previewFromEngine(const std::string& state, DoldrumsWindowView& out) {
 		run(5.0);
 	}
 	else if (state == "frozen-held") {
+		f.params[F::POSITION] = 0.6f;
 		run(31.0);
-		f.params[F::FREEZE] = 1.f;   // Position fully right: nothing to travel through
+		f.params[F::FREEZE] = 1.f;
+		run(0.5);
+		f.params[F::STRETCH] = 1.f;   // the stop: FROZEN HELD
+		run(2.0);
+	}
+	else if (state == "frozen-at-end") {
+		f.params[F::POSITION] = 1.f;
+		run(31.0);
+		f.params[F::FREEZE] = 1.f;   // Position fully right: nothing to travel through, FROZEN AT END
 		run(2.0);
 	}
 	else if (state == "frozen-stopped") {

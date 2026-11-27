@@ -127,6 +127,7 @@ struct Module {
 	std::vector<std::string> infos, warns;
 	std::mutex logLock;
 	explicit Module(float rate) {
+		f.params[F::POSITION] = 1.f;   // Position at now, as these tests were written (the default moved to 0.9 at 2.0.46; its own effect is test_engine's default_position_freezes_a_stretch)
 		k.reset(new TapeKeeper(*e));
 		k->log = [this](bool warn, const std::string& s) {
 			std::lock_guard<std::mutex> lk(logLock);
@@ -181,10 +182,13 @@ void param_ids() {
 	          F::WIDTH == 11 && F::FREEZE == 12 && F::MIX == 13 && F::kParams == 14,
 	      "the param ids are the plan's, in its order");
 	const F d;
-	const float want[14] = {0.5f, 0.f, 1.f, 0.f, 0.f, 0.f, 0.f, -24.f, 0.f, 0.f, 8.f, 0.393f, 0.f, 1.f};
+	// The plan's, but Position: 0.9 (about 3 s back), the user's decision at
+	// 2.0.46 (it was 1, now). A default is not saved state: a patch saves
+	// every param's value.
+	const float want[14] = {0.5f, 0.f, 0.9f, 0.f, 0.f, 0.f, 0.f, -24.f, 0.f, 0.f, 8.f, 0.393f, 0.f, 1.f};
 	int bad = 0;
 	for (int i = 0; i < 14; i++) bad += d.params[i] != want[i];
-	CHECK(bad == 0, "the defaults are the plan's (%d differ)", bad);
+	CHECK(bad == 0, "the defaults are the plan's, Position 0.9 (%d differ)", bad);
 }
 
 SavedMap goldenMap() {
@@ -266,7 +270,7 @@ void golden_tape_v1() {
 	CHECK(m.k->read(a) && ref.read(b), "both views read");
 	int cols = 0;
 	for (int i = 0; i < TapeSnapshot::COLS; i++) cols += a.low[i] != b.low[i] || a.high[i] != b.high[i];
-	CHECK(cols == 0 && std::strcmp(a.state, "FROZEN HELD") == 0, "the window: the golden tape (%d columns differ), \"%s\"", cols, a.state);
+	CHECK(cols == 0 && std::strcmp(a.state, "FROZEN AT END") == 0, "the window: the golden tape (%d columns differ), \"%s\"", cols, a.state);
 	// The next save leaves the file as it is: it already holds this freeze.
 	TapeKeeper::SaveAsk ask;
 	ask.dir = dir;

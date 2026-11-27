@@ -45,6 +45,7 @@ struct Rig {
 		e->setSampleRate(rate);
 		e->seed(seed);
 		f.grainSize = grain;
+		f.params[F::POSITION] = 1.f;   // Position at now, as these tests were written (the default moved to 0.9 at 2.0.46; its own effect is test_engine's default_position_freezes_a_stretch)
 	}
 	int grain() const { return grainFrames(GrainSize(f.grainSize), rate); }
 	int hop() const { return grain() / 2; }
@@ -832,6 +833,74 @@ void window_press_when_recording() {
 	g.f.restart = false;
 	toBoundary(g);
 	CHECK(g.e->state().end == g.e->state().anchor, "a press: back on the flag (end %lld, flag %lld)", g.e->state().end, g.e->state().anchor);
+}
+
+// The user's decision at 2.0.46: Position's default is 0.9, about 3 s back
+// (the lag is (1 - p)(30 s - a grain)), so that at the defaults a freeze has
+// tape for Stretch to act on: Freeze starts a pass 2.97 s back, which travels
+// to the end of the tape at x8 (about 24 s) and returns (Go round). And
+// frozen with the flag at the end, the engine says so (atEnd), apart from
+// being held by Stretch's stop.
+void default_position_freezes_a_stretch() {
+	const float rate = 48000.f;
+	Rig g(rate, 151);
+	g.f.params[F::POSITION] = F().params[F::POSITION];   // the default, not the Rig's
+	CHECK(F().params[F::POSITION] == 0.9f, "the default Position is 0.9: %g", F().params[F::POSITION]);
+	Random n;
+	n.seed(13);
+	g.go(g.secs(5.0), [&](long long) { g.f.inL = n.uniform(); });
+	const long long lag = lagFrames(0.9f, g.e->state().capacity, g.grain());
+	CHECK(std::fabs(double(lag) / rate - 2.97) < 0.01, "the default lag: %.3f s", double(lag) / rate);
+	g.f.params[F::FREEZE] = 1.f;
+	const long long press = g.t;
+	g.go(g.secs(60.0));
+	const DoldrumsState st = g.e->state();
+	CHECK(!st.atEnd, "frozen 3 s back: not at the end");
+	// RUN's dips mark the returns: the first return about 24 s after the freeze.
+	const auto e = edges(g.run, press + g.secs(1.0));
+	CHECK(e.size() >= 2 && !e[0].second, "a return within the minute (%zu edges)", e.size());
+	if (!e.empty()) {
+		const double first = double(e[0].first - press) / rate;
+		CHECK(std::fabs(first - 2.97 * 8.0) < 1.0, "the pass lasts about 24 s at x8 (%.2f s)", first);
+	}
+	// Position fully right: at the end, distinct from the Stretch stop.
+	g.f.params[F::POSITION] = 1.f;
+	g.go(g.secs(1.0));
+	CHECK(g.e->state().held && g.e->state().atEnd, "frozen, Position fully right: held at the end");
+	g.f.params[F::POSITION] = 0.5f;
+	g.f.params[F::STRETCH] = 1.f;
+	g.go(g.secs(1.0));
+	CHECK(g.e->state().held && !g.e->state().atEnd, "frozen, the Stretch stop, the flag back in the tape: held, not at the end");
+}
+
+// The user's observation at 2.0.46 (Pass.hpp): recording, Stretch turned up
+// then back to exactly 1 puts the read head back on the flag, so the output
+// is again Position's lag (plus about a grain and the latency) behind the
+// input. Silence, x8 for 6 s (the head falls about 5 s behind the flag), x1
+// again, then a tone at 7 s: it is heard Position's lag later, not 5 s more.
+void stretch_1_follows_position_after_a_detour() {
+	const float rate = 48000.f;
+	Rig g(rate, 161);
+	g.f.params[F::POSITION] = 0.9f;
+	g.f.params[F::STRETCH] = 0.5f;   // x8
+	const long long T = g.secs(7.0);
+	g.go(g.secs(12.0), [&](long long t) {
+		if (t == g.secs(6.0)) g.f.params[F::STRETCH] = 0.f;   // x1
+		g.f.inL = t >= T ? float(std::sin(2.0 * kPi * 1000.0 * double(t) / rate)) : 0.f;
+	});
+	const double lag = double(lagFrames(0.9f, g.e->state().capacity, g.grain()));
+	long long heard = -1;
+	for (long long a = T; a + 480 <= (long long) g.L.size(); a += 480)
+		if (meanSquare(g.L, a, 480) > 0.01) {
+			heard = a;
+			break;
+		}
+	const double late = double(heard - T) - lag;
+	std::printf("  stretch_1_follows_position_after_a_detour: the tone heard %.3f s after it came in (Position's lag %.3f s)\n",
+	            double(heard - T) / rate, lag / rate);
+	CHECK(heard > 0 && late > -g.grain() && late < g.grain() + g.e->latencyFrames() + g.hop(),
+	      "back at x1: heard Position's lag later, within a grain and the latency (%.3f s over)", late / rate);
+	CHECK(g.e->state().end == g.e->state().anchor, "the head on the flag");
 }
 
 // ---------------------------------------------------------------------------
@@ -2153,6 +2222,8 @@ int main() {
 	window_press_restarts_from_the_flag();
 	window_press_in_stop_starts_a_pass();
 	window_press_when_recording();
+	default_position_freezes_a_stretch();
+	stretch_1_follows_position_after_a_detour();
 	mix_and_latency();
 	staging_fits();
 	rapid_freeze_and_trig();

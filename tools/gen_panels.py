@@ -981,10 +981,10 @@ PANELS = {
         # "CV" beside each CV jack: there is no room beneath them.
         notes=[(_DL_X[0] + 5.6, 73.6, "CV", 1.6, "dim", "start"), (_DL_X[4] - 5.6, 73.6, "CV", 1.6, "dim", "end"),
                (_DL_X[2] + 5.6, 90.6, "CV", 1.6, "dim", "start")],
-        # At the defaults: Stretch x8, Position now, Harmonics and Blur 0,
+        # At the defaults: Stretch x8, Position 0.9 (about 3 s back), Harmonics and Blur 0,
         # Root C2, Partials 8 of 1..32 and Width 0.393 (25 cents), all
         # linear over the sweep, Mix fully wet.
-        preview={"PARAM_STRETCH": dict(turn=0), "PARAM_POSITION": dict(turn=135), "PARAM_HARMONICS": dict(turn=-135),
+        preview={"PARAM_STRETCH": dict(turn=0), "PARAM_POSITION": dict(turn=108), "PARAM_HARMONICS": dict(turn=-135),
                  "PARAM_BLUR": dict(turn=-135), "PARAM_TILT": dict(turn=0), "PARAM_SHIFT": dict(turn=0),
                  "PARAM_ROOT": dict(turn=-90), "PARAM_PARTIALS": dict(turn=-74), "PARAM_WIDTH": dict(turn=-29),
                  "PARAM_MIX": dict(turn=135), "PARAM_STRETCH_ATT": dict(turn=0), "PARAM_POSITION_ATT": dict(turn=0),
