@@ -523,48 +523,110 @@ void run_gate() {
 		      "nothing to travel through: up within a hop of the freeze and never down (%zu edges)", e.size());
 		CHECK(g.e->state().held, "held");
 	}
+	{   // stop, a recording pass running (by TRIG): Freeze with a pass to
+		// travel ends it; RUN falls once the grains laid have been heard, and
+		// nothing sounds until a trigger, which plays one pass (Pass.hpp's rule)
+		Rig g(rate);
+		Random n;
+		n.seed(5);
+		g.f.stopAtEnd = true;
+		g.f.params[F::POSITION] = 0.9f;   // frozen, a pass of about 3 s at Stretch 1
+		g.f.params[F::STRETCH] = 0.f;
+		g.go(g.secs(4.0), [&](long long t) {
+			g.f.inL = n.uniform();
+			g.f.trig = t >= 480 && t < 528 ? 10.f : 0.f;
+		});
+		CHECK(g.run.back() > 5.f && !g.e->state().stopped, "stop, recording: a pass running");
+		const long long press = g.t;
+		g.f.params[F::FREEZE] = 1.f;
+		g.go(g.secs(3.0), [&](long long) { g.f.inL = n.uniform(); });
+		auto e = edges(g.run, press);
+		CHECK(e.size() == 1 && !e[0].second && e[0].first <= press + g.hop() + g.grain() + lat,
+		      "Freeze in a running pass: RUN falls once the last grain is heard (%zu edges, at %lld after)", e.size(),
+		      e.empty() ? -1LL : e[0].first - press);
+		if (!e.empty())
+			CHECK(meanSquare(g.L, e[0].first, (long long) g.L.size() - e[0].first) == 0.0 && g.e->state().stopped && g.e->state().frozen,
+			      "then silent, frozen and stopped");
+		const long long T = g.t;
+		g.go(g.secs(6.0), [&](long long t) { g.f.trig = t >= T && t < T + 48 ? 10.f : 0.f; });
+		e = edges(g.run, T);
+		CHECK(e.size() == 2 && e[0].second && !e[1].second, "and a trigger plays one pass (%zu edges)", e.size());
+	}
+	{   // frozen and stopped, Position turned fully right: nothing to travel
+		// through, so held and sounding at once (as the same state opened from
+		// a patch is)
+		Rig g(rate);
+		noiseTape(g);
+		g.f.stopAtEnd = true;
+		g.f.params[F::POSITION] = 0.5f;
+		g.f.params[F::FREEZE] = 1.f;
+		g.go(g.secs(1.0));
+		CHECK(edges(g.run).empty() && g.e->state().stopped, "frozen in stop: stopped");
+		const long long turn = g.t;
+		g.f.params[F::POSITION] = 1.f;
+		g.go(g.secs(5.0));
+		const auto e = edges(g.run, turn);
+		CHECK(e.size() == 1 && e[0].second && e[0].first <= turn + g.hop() + lat, "Position fully right: up within a hop (%zu edges)", e.size());
+		CHECK(g.e->state().held && !g.e->state().stopped, "and held");
+	}
 }
 
-// Eddy A's clip into Doldrums, frozen, play once, a trigger, Stretch 4: RUN
-// high once for the pass, and nothing heard outside it.
+// The patch the module was asked for (Eddy A's clip into Doldrums into Eddy
+// B), as the manual's recipe has it: Stop chosen while the module plays,
+// Position typed a little past the clip's length, the clip played, Freeze
+// pressed as it ends (FROZEN STOPPED: the pass running ends, no wait), the
+// flag set on the clip's start, a trigger: at Stretch 4, RUN high once for the
+// pass, and nothing heard outside it from the freeze on.
 void the_patch_it_was_asked_for() {
 	const float rate = 48000.f;
 	Rig g(rate, 41);
 	Random n;
 	n.seed(6);
-	const long long clipAt = g.secs(1.0), clipEnd = g.secs(4.0);
+	const long long clipAt = g.secs(2.0), clipEnd = g.secs(5.0);
 	const long long cap = g.e->ring().capacity();
 	const long long fade = g.secs(0.005);
 	const long long lag = clipEnd - clipAt + fade;   // now at the freeze is the clip's end plus the fade
-	g.f.stopAtEnd = true;
+	auto posFor = [&](long long l) { return float(1.0 - double(l) / double(cap - g.grain())); };
 	g.f.params[F::STRETCH] = float(2.0 / 6.0);   // x4
-	g.f.params[F::POSITION] = float(1.0 - double(lag) / double(cap - g.grain()));
-	g.go(clipEnd + g.secs(3.0), [&](long long t) {
-		g.f.inL = t >= clipAt && t < clipEnd + fade ? float(n.uniform() * (1.0 + std::sin(2.0 * kPi * 3.0 * double(t) / rate))) : 0.f;
-		g.f.params[F::FREEZE] = t >= clipEnd ? 1.f : 0.f;
-	});
-	// Frozen with a pass to travel, in stop: nothing sounds or gates between the
-	// freeze and the trigger (Pass.hpp's ruling).
+	auto clip = [&](long long t) {
+		return t >= clipAt && t < clipEnd + fade ? float(n.uniform() * (1.0 + std::sin(2.0 * kPi * 3.0 * double(t) / rate))) : 0.f;
+	};
+	// Go round at first (the module plays); then Stop, and Position typed.
+	g.go(g.secs(1.0), [&](long long t) { g.f.inL = clip(t); });
+	CHECK(g.run.back() > 5.f, "go round: sounding");
+	g.f.stopAtEnd = true;
+	g.f.params[F::POSITION] = posFor(lag + g.secs(1.0));
+	g.go(clipEnd - g.t, [&](long long t) { g.f.inL = clip(t); });
+	CHECK(g.run.back() > 5.f && !g.e->state().stopped, "Stop chosen: the pass under way goes on");
+	// Freeze as the clip ends: FROZEN STOPPED within a grain or so, RUN low.
+	const long long press = g.t;
+	g.f.params[F::FREEZE] = 1.f;
+	g.go(g.grain() + g.hop() + g.e->latencyFrames(), [&](long long t) { g.f.inL = clip(t); });
+	CHECK(g.e->state().stopped && g.e->state().frozen && g.run.back() < 5.f, "Freeze: frozen and stopped at once, RUN low");
+	// The flag on the clip's start (nothing sounds meanwhile), then a trigger.
+	g.f.params[F::POSITION] = posFor(lag);
+	g.go(g.secs(1.0));
 	const long long T = g.t;
-	CHECK(edges(g.run).empty() && g.e->state().stopped && g.e->state().frozen, "RUN low from the start, through the freeze, until the trigger");
 	g.go(g.secs(30.0), [&](long long t) { g.f.trig = t >= T && t < T + 48 ? 10.f : 0.f; });
-	const auto e = edges(g.run);
-	CHECK(e.size() == 2 && e[0].second && !e[1].second, "RUN high once (%zu edges)", e.size());
-	if (e.size() == 2) {
-		const double len = double(e[1].first - e[0].first) / rate;
+	const auto e = edges(g.run, press);
+	CHECK(e.size() == 3 && !e[0].second && e[1].second && !e[2].second && e[1].first > T,
+	      "RUN falls after the freeze, then high once for the pass (%zu edges)", e.size());
+	if (e.size() == 3) {
+		const double len = double(e[2].first - e[1].first) / rate;
 		CHECK(std::fabs(len - 12.0) * rate <= 2.0 * g.grain(), "for 12 s within two grains (%.3f s)", len);
 		long long first = -1, last = -1;
 		double in = 0, out = 0;
-		for (long long t = 0; t < (long long) g.L.size(); t++) {
+		for (long long t = e[0].first; t < (long long) g.L.size(); t++) {
 			const double p = double(g.L[size_t(t)]) * g.L[size_t(t)] + double(g.R[size_t(t)]) * g.R[size_t(t)];
 			if (p > 0) {
 				if (first < 0) first = t;
 				last = t;
 			}
-			(t >= e[0].first && t < e[1].first ? in : out) += p;
+			(t >= e[1].first && t < e[2].first ? in : out) += p;
 		}
 		CHECK(out <= in * 1e-8, "the wet outside RUN under -80 dB (%.1f dB)", db(out / in + 1e-30));
-		CHECK(first >= e[0].first && last < e[1].first, "sound from %lld to %lld, RUN high from %lld to %lld", first, last, e[0].first, e[1].first);
+		CHECK(first >= e[1].first && last < e[2].first, "sound from %lld to %lld, RUN high from %lld to %lld", first, last, e[1].first,
+		      e[2].first);
 		CHECK(in > 0, "the pass sounds");
 	}
 }
