@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.46 (2026-11-26): Doldrums: freeze and stretch (first test build, before the final review)
 - 2.0.45 (2026-11-25): Beacon: ADSR / AD / HOLD (AD is a Maths-style one-shot, its fall on Decay)
 - 2.0.44 (2026-11-25): Beacon rework: ADSR / AR / HOLD, AR one-shot, Attack resumes along its curve, the window draws what the mode will do
 - 2.0.43 (2026-11-25): Rigging: air takes a string's top even at Damp 0 (no metallic sizzle at low Damp)
