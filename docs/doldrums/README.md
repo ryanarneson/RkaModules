@@ -689,7 +689,7 @@ one, or silence.
   is made every half grain even of silence), 0.11 recording a tone, 0.33
   at its busiest (the Long grain, a 16-note comb with V/OCT moving, Blur
   and Shift up). The work is spread so no one sample does more than one
-  transform: the most work on any single sample measured 68 µs at 96 kHz
+  transform: the most work on any single sample measured about 70 µs at 96 kHz
   with the Long grain and Wide on, and 34 µs at 48 kHz, with the core at
   its working clock. From a light load the first grains took up to about 1.7 times as
   long (about 110 to 120 µs at 96 kHz).
