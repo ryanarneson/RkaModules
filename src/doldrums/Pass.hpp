@@ -25,6 +25,22 @@
 //   anchor is held inside these bounds, so Position fully left, recording,
 //   starts a hop in.
 // - TRIG starts a pass from the anchor at any time: mid pass, held, stopped.
+// - A press in the window (PassIn::press, pressLag frames behind now) moves
+//   the read point there and plays on from it, a new pass, at any time: mid
+//   pass, held, stopped. The anchor stays where Position has it: only the
+//   knob and its CV move that. (The user's ruling at 2.0.49, superseding "a
+//   press sets Position under the mouse and restarts from it": pressing to
+//   move the read point is no wish to move where passes start.) The place
+//   is held to the tape, as any read point is. From there the rules below
+//   apply as from any place: the pass travels at the pace and ends as any
+//   pass does (in go round back on the anchor, in stop stopped); held at the
+//   Stretch stop, the slice there is taken and held. Frozen with nothing to
+//   travel through (held at the end, below), a press plays from its place
+//   to the end of the tape once, then holds at the anchor again, in either
+//   setting. Where the read point is tied to the anchor (recording at
+//   exactly Stretch 1, following, or with no room: below) a press cannot
+//   move it and is a trigger: a pass from the anchor. TRIG, Freeze rising
+//   or a thaw on the same grain win: a pass from the anchor.
 // - Freeze rising starts a pass from the anchor, always, in either setting
 //   and whatever was happening before (a pass running, held, stopped). In
 //   stop that pass plays once to the end of the frozen tape and the module
@@ -142,6 +158,8 @@ struct PassIn {
 	bool frozen, freezeRose, trig, stopAtEnd, grainChanged;
 	bool freezeFell;       // Freeze went off since the last grain (the engine reports at most one of the two edges)
 	bool follow;           // the menu's While recording: false Drift, true Follow
+	bool press;            // a press in the window since the last grain
+	long long pressLag;    // where: frames behind now (the slice's end)
 };
 
 struct PassOut {
@@ -160,6 +178,7 @@ struct PassLogic {
 		stopped_ = false;
 		held_ = false;
 		onAnchor_ = false;
+		detour_ = false;
 		end_ = 0;
 		frac_ = 0.0;
 		pos_ = 1.f;
@@ -191,13 +210,17 @@ private:
 
 		const bool nothing = in.frozen && now - anchor < grain;   // nothing to travel through
 		const bool following = in.follow && !in.frozen;            // While recording: Follow, and recording
-		const bool held = (pace == 0.0 && !following) || nothing;
 		const bool noRoom = !in.frozen && anchor - low < grain;
+		const bool tied = !in.frozen && (pace == 1.0 || following || noRoom);   // the read point is on the anchor by rule
+		const bool atStop = pace == 0.0 && !following;
+		if (!nothing)
+			detour_ = false;
+		bool held = atStop || (nothing && !detour_);
 		const long long shift = fresh_ ? 0 : lagFrames(pos_, in.capacity, grain) - lag;
 		const bool moved = shift != 0;
 		pos_ = pos;
 
-		bool start = in.trig;
+		bool start = in.trig || (in.press && tied);
 		if (fresh_) {
 			fresh_ = false;
 			stopped_ = in.stopAtEnd && !nothing;
@@ -209,8 +232,18 @@ private:
 			start = true;   // a freeze: a pass from the anchor, in either setting
 		if (stopped_ && (!in.stopAtEnd || nothing))
 			start = true;
-		if (start)
-			return begin(anchor, held, o);
+		if (start) {
+			detour_ = false;
+			return begin(anchor, atStop || nothing, o);
+		}
+		if (in.press) {
+			// Play from there. With nothing to travel through from the anchor,
+			// the pass from the pressed place is a detour: it plays to the end.
+			detour_ = nothing;
+			held = atStop;
+			begin(clamp(now - std::max(0LL, in.pressLag), low, now), held, o);
+			return o;
+		}
 		if (stopped_)
 			return stop(anchor, o);
 
@@ -253,11 +286,12 @@ private:
 		e += whole;
 		const bool over = in.frozen ? e > now : e < low;
 		if (over) {
-			if (in.stopAtEnd) {
+			detour_ = false;
+			if (in.stopAtEnd && !nothing) {
 				stopped_ = true;
 				return stop(anchor, o);
 			}
-			return begin(anchor, false, o);
+			return begin(anchor, nothing, o);   // nothing to travel through: back to the hold at the end
 		}
 		end_ = clamp(e, low, now);
 		o.take = true;
@@ -268,6 +302,7 @@ private:
 	bool onAnchor_ = false; // the last grain sounded with the read point on the anchor
 	bool stopped_ = false;
 	bool held_ = false;     // the last grain was held
+	bool detour_ = false;   // a pressed pass is playing to the end of a frozen tape that is otherwise held there
 	long long end_ = 0;     // the read point
 	double frac_ = 0.0;     // travel short of a whole frame, carried
 	float pos_ = 1.f;       // the last grain's position

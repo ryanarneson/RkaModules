@@ -317,7 +317,9 @@ private:
 	std::atomic<uint32_t> words_[kWords];
 };
 
-// The drag: a fraction of the window (0 = 30 s ago, 1 = now) to a POSITION.
+// A fraction of the window (0 = 30 s ago, 1 = now) to a POSITION. (The
+// window's drag used it until 2.0.49; a press now moves the read point only,
+// Doldrums.cpp, and nothing in the module calls this.)
 // The anchor is now - lagFrames(position, capacity, grain) (Laws.hpp), whose
 // range is not the whole window: Position 1 puts it at now (fraction 1),
 // Position 0 a grain short of the oldest frame, at fraction grain / capacity.

@@ -174,6 +174,7 @@ struct Host {
 
 	explicit Host(float rate_ = 48000.f, uint32_t seed = 1) : e(new DoldrumsEngine), voct(new float[16]) {
 		for (int c = 0; c < 16; c++) voct[c] = 0.f;
+		f.params[F::MIX] = 1.f;        // all wet, as these tests were written (the default moved to 0.5 at 2.0.49)
 		f.params[F::POSITION] = 1.f;   // Position at now, as these tests were written (the default moved to 0.9 at 2.0.46; its own effect is test_engine's default_position_freezes_a_stretch)
 		e->seed(seed);
 		use(rate_);

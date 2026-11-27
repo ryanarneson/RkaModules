@@ -45,6 +45,7 @@ struct Rig {
 		e->setSampleRate(rate);
 		e->seed(seed);
 		f.grainSize = grain;
+		f.params[F::MIX] = 1.f;        // all wet, as these tests were written (the default moved to 0.5 at 2.0.49, the user's decision)
 		f.params[F::POSITION] = 1.f;   // Position at now, as these tests were written (the default moved to 0.9 at 2.0.46; its own effect is test_engine's default_position_freezes_a_stretch)
 	}
 	int grain() const { return grainFrames(GrainSize(f.grainSize), rate); }
@@ -729,11 +730,12 @@ void thaw_while_stopped_stays_stopped() {
 	CHECK(meanSquare(g.L, thaw, g.t - thaw) == 0.0 && g.e->state().stopped && !g.e->state().frozen, "and silent, stopped, recording");
 }
 
-// The user's ruling: a press in the tape window plays from there. The module
-// sets Position under the mouse and raises DoldrumsFrame::restart, which the
-// engine takes as a trigger: at the next grain the read point is on the new
-// anchor, a new pass (RUN's marker as for TRIG). The knob and the CV keep
-// the Position rule: the read point moves by the change, no new pass.
+// The user's rulings: a press in the tape window plays from there, and moves
+// the read head only. The module raises DoldrumsFrame::press with the place
+// (a fraction of the window); at the next grain the read point is there, a
+// new pass (RUN's marker as for TRIG), and the flag has not moved. The knob
+// and the CV keep the Position rule: the flag moves, the read point moves
+// by the change, no new pass.
 // Steps until the next boundary has run; returns its sample.
 long long toBoundary(Rig& g) {
 	for (int i = 0; i < 200000; i++) {
@@ -746,10 +748,18 @@ float posAt(const Rig& g, long long anchor) {
 	const long long cap = g.e->state().capacity, now = g.e->state().now;
 	return float(1.0 - double(now - anchor) / double(cap - g.grain()));
 }
+// The window's fraction for a read point `back` frames behind now.
+float fractionBack(const Rig& g, long long back) { return float(1.0 - double(back) / double(g.e->state().capacity)); }
+void press(Rig& g, float at) {
+	g.f.press = true;
+	g.f.pressAt = at;
+	g.step();
+	g.f.press = false;
+}
 
-void window_press_restarts_from_the_flag() {
+void window_press_moves_the_read_head_only() {
 	const float rate = 48000.f;
-	for (int press = 0; press < 2; press++) {
+	for (int byPress = 0; byPress < 2; byPress++) {
 		Rig g(rate, 141);
 		Random n;
 		n.seed(9);
@@ -759,24 +769,28 @@ void window_press_restarts_from_the_flag() {
 		g.f.params[F::STRETCH] = 0.f;    // x1: the head travels a second a second
 		g.go(g.secs(4.0));
 		toBoundary(g);
-		const long long head = g.e->state().end, flag = g.e->state().anchor;
+		const long long head = g.e->state().end, flag = g.e->state().anchor, now = g.e->state().now;
 		CHECK(head - flag > g.secs(3.0), "the head has travelled from the flag (%lld frames)", head - flag);
-		// The flag set a second behind the head, as a press just left of it would.
+		// A second behind the head: by a press there, or by the knob.
 		const long long want = head - g.secs(1.0);
-		g.f.params[F::POSITION] = posAt(g, want);
 		const long long at = g.t;
-		g.f.restart = press != 0;
-		g.step();
-		g.f.restart = false;
+		if (byPress) press(g, fractionBack(g, now - want));
+		else g.f.params[F::POSITION] = posAt(g, want);
 		toBoundary(g);
 		const DoldrumsState st = g.e->state();
-		if (press) {
-			CHECK(std::llabs(st.anchor - want) <= 1 && st.end == st.anchor, "a press: the head on the flag at the next grain (end %lld, flag %lld)", st.end,
-			      st.anchor);
+		if (byPress) {
+			CHECK(std::llabs(st.end - want) <= 1, "a press: the head there at the next grain (end %lld, want %lld)", st.end, want);
+			CHECK(st.anchor == flag, "a press: the flag has not moved (%lld, was %lld)", st.anchor, flag);
 			g.go(g.grain() + g.e->latencyFrames());
 			const auto e = edges(g.run, at);
 			CHECK(e.size() == 2 && !e[0].second && e[1].first - e[0].first == runDipFrames(rate), "a press: RUN's 1 ms marker, as TRIG's (%zu edges)",
 			      e.size());
+			// It plays on from there at the pace.
+			const long long e0 = g.e->state().end;
+			g.go(g.secs(1.0));
+			toBoundary(g);
+			CHECK(std::llabs((g.e->state().end - e0) - g.secs(1.0)) <= 2 * g.hop() && g.e->state().anchor == flag,
+			      "and travels on from there at x1 (%lld frames in a second)", g.e->state().end - e0);
 		} else {
 			const long long moved = st.anchor - flag;
 			CHECK(st.end - head >= moved && st.end - head <= moved + 2 * g.hop(), "the knob: the head moves by the change (%lld, change %lld)",
@@ -785,7 +799,8 @@ void window_press_restarts_from_the_flag() {
 			CHECK(edges(g.run, at).empty(), "the knob: no new pass");
 		}
 	}
-	// Several presses between two boundaries (a fast drag) are one restart.
+	// Several presses between two boundaries (a fast drag) are one new pass,
+	// from the last place.
 	Rig g(rate, 143);
 	Random n;
 	n.seed(10);
@@ -795,25 +810,29 @@ void window_press_restarts_from_the_flag() {
 	g.f.params[F::STRETCH] = 0.f;
 	g.go(g.secs(2.0));
 	toBoundary(g);
-	const long long at = g.t;
+	const long long at = g.t, flag = g.e->state().anchor;
 	for (int k = 0; k < 5; k++) {
-		g.f.params[F::POSITION] = 0.02f * float(k + 1);
-		g.f.restart = true;
-		g.step();
-		g.f.restart = false;
+		press(g, 0.1f * float(k + 1));
 		g.go(100);
 	}
 	const long long b = toBoundary(g);
 	CHECK(b > 0 && b - at < g.hop(), "the presses fell inside one hop");
+	const long long want = g.e->state().now - (long long) std::llround(0.5 * double(g.e->state().capacity));
+	CHECK(std::llabs(g.e->state().end - want) <= 1 && g.e->state().anchor == flag, "at the last press's place (end %lld, want %lld)",
+	      g.e->state().end, want);
 	g.go(g.hop() * 3);
 	const auto e = edges(g.run, at);
-	CHECK(e.size() == 2, "five presses in a hop: one restart (%zu edges)", e.size());
-	CHECK(std::llabs(g.e->state().anchor - (g.e->state().now - lagFrames(0.1f, g.e->state().capacity, g.grain()))) <= 1,
-	      "from the last press's flag");
+	CHECK(e.size() == 2, "five presses in a hop: one new pass (%zu edges)", e.size());
+	// At the end of the pressed pass the head returns to the flag (Go round).
+	g.go(g.secs(16.0));
+	toBoundary(g);
+	CHECK(g.e->state().end - flag >= 0 && g.e->state().end - flag < g.secs(2.0) && g.e->state().anchor == flag,
+	      "after the pass's end, playing from the flag again (%lld frames past it)", g.e->state().end - flag);
 }
 
-// In the Stop setting a press starts a pass, as a trigger does: RUN rises,
-// one pass plays, and the module stops again.
+// In the Stop setting a press starts a pass from its place, as a trigger
+// does from the flag: RUN rises, the rest of the tape plays, and the module
+// stops again.
 void window_press_in_stop_starts_a_pass() {
 	const float rate = 48000.f;
 	Rig g(rate, 145);
@@ -822,30 +841,59 @@ void window_press_in_stop_starts_a_pass() {
 	g.tape([&](long long, float& l, float& r) { l = r = n.uniform(); });
 	g.f.stopAtEnd = true;
 	g.f.params[F::FREEZE] = 1.f;
-	g.f.params[F::POSITION] = 0.9f;   // a pass of about 3 s at x1
+	g.f.params[F::POSITION] = 0.5f;
 	g.f.params[F::STRETCH] = 0.f;
 	g.go(g.secs(1.0));
 	CHECK(edges(g.run).empty() && g.e->state().stopped, "frozen in stop: stopped, RUN low");
-	const long long at = g.t;
-	g.f.params[F::POSITION] = 0.92f;
-	g.f.restart = true;
-	g.step();
-	g.f.restart = false;
+	const long long at = g.t, flag = g.e->state().anchor;
+	press(g, fractionBack(g, g.secs(3.0)));   // 3 s from the end
 	g.go(g.secs(6.0));
 	const auto e = edges(g.run, at);
 	CHECK(e.size() == 2 && e[0].second && !e[1].second, "a press in stop: one pass, RUN up and down (%zu edges)", e.size());
-	CHECK(g.e->state().stopped, "and stopped again");
-	// Pressed at the right edge, frozen: nothing to travel through, held.
-	g.f.params[F::POSITION] = 1.f;
-	g.f.restart = true;
-	g.step();
-	g.f.restart = false;
-	g.go(g.secs(1.0));
-	CHECK(g.e->state().held && !g.e->state().stopped && g.run.back() > 5.f, "pressed at the right edge, frozen: held");
+	if (e.size() == 2)
+		CHECK(std::llabs((e[1].first - e[0].first) - g.secs(3.0)) <= 2 * g.grain(), "of the tape from the press to the end (%lld frames)",
+		      e[1].first - e[0].first);
+	CHECK(g.e->state().stopped && g.e->state().anchor == flag, "and stopped again, the flag where it was");
 }
 
-// Not frozen, a press restarts from the flag too: the head goes back to the
-// flag's place behind now.
+// Frozen at the end (the flag fully right, nothing to travel through): a
+// press plays from its place to the end of the tape once, then the hold at
+// the end again, in either setting; the flag stays at the end throughout.
+void window_press_at_the_end_plays_and_holds_again() {
+	const float rate = 48000.f;
+	for (int stop = 0; stop < 2; stop++) {
+		Rig g(rate, 149);
+		Random n;
+		n.seed(13);
+		g.tape([&](long long, float& l, float& r) { l = r = n.uniform(); });
+		g.f.stopAtEnd = stop != 0;
+		g.f.params[F::FREEZE] = 1.f;
+		g.f.params[F::POSITION] = 1.f;
+		g.f.params[F::STRETCH] = 0.f;
+		g.go(g.secs(1.0));
+		const char* set = stop ? "stop" : "go round";
+		CHECK(g.e->state().atEnd && g.e->state().held, "%s: frozen at the end, held", set);
+		const long long now = g.e->state().now;
+		press(g, fractionBack(g, g.secs(2.0)));
+		toBoundary(g);
+		CHECK(std::llabs(g.e->state().end - (now - g.secs(2.0))) <= 1 && !g.e->state().held && !g.e->state().atEnd && g.e->state().anchor == now,
+		      "%s: a press: the head 2 s back, playing, the flag still at the end", set);
+		g.go(g.secs(1.0));
+		CHECK(!g.e->state().held && !g.e->state().stopped && g.e->state().end > now - g.secs(1.5), "%s: travelling to the end", set);
+		const long long mid = g.t;
+		g.go(g.secs(3.0));
+		CHECK(g.e->state().atEnd && g.e->state().held && !g.e->state().stopped && g.e->state().end == now && g.run.back() > 5.f,
+		      "%s: then held at the end again", set);
+		CHECK(meanSquare(g.L, mid, g.t - mid) > 0.01, "%s: sounding throughout", set);
+		long long low = 0;
+		for (long long t = mid; t < g.t; t++) low += g.run[size_t(t)] < 5.f;
+		CHECK(low <= runDipFrames(rate), "%s: RUN never falls, but for the new pass's marker (%lld samples low)", set, low);
+	}
+}
+
+// Recording in Drift, a press sends the head to its place behind now, and it
+// plays on from there; where the head is tied to the flag (recording at
+// exactly Stretch 1, or following) a press is a trigger: a pass from the flag.
 void window_press_when_recording() {
 	const float rate = 48000.f;
 	Rig g(rate, 147);
@@ -856,11 +904,25 @@ void window_press_when_recording() {
 	toBoundary(g);
 	const long long behind = g.e->state().anchor - g.e->state().end;
 	CHECK(behind > g.secs(2.0), "recording at x8: the head has fallen behind the flag (%lld frames)", behind);
-	g.f.restart = true;
-	g.step();
-	g.f.restart = false;
+	press(g, fractionBack(g, g.secs(1.0)));
 	toBoundary(g);
-	CHECK(g.e->state().end == g.e->state().anchor, "a press: back on the flag (end %lld, flag %lld)", g.e->state().end, g.e->state().anchor);
+	DoldrumsState st = g.e->state();
+	CHECK(std::llabs((st.now - st.end) - g.secs(1.0)) <= g.hop() && st.now - st.anchor > g.secs(2.5),
+	      "a press 1 s back: the head there, ahead of the flag (%lld frames behind now; the flag %lld)", st.now - st.end, st.now - st.anchor);
+	for (int follow = 0; follow < 2; follow++) {
+		Rig t(rate, 151);
+		t.f.params[F::POSITION] = 0.9f;
+		t.f.params[F::STRETCH] = follow ? 0.5f : 0.f;
+		t.f.follow = follow != 0;
+		t.go(t.secs(4.0), [&](long long) { t.f.inL = n.uniform(); });
+		const long long at = t.t;
+		press(t, 0.5f);
+		toBoundary(t);
+		CHECK(t.e->state().end == t.e->state().anchor, "%s: a press leaves the head on the flag", follow ? "following" : "recording at x1");
+		t.go(t.grain() + t.e->latencyFrames());
+		const auto e = edges(t.run, at);
+		CHECK(e.size() == 2 && !e[0].second, "%s: and is a trigger, a new pass (%zu edges)", follow ? "following" : "recording at x1", e.size());
+	}
 }
 
 // The user's decision at 2.0.46: Position's default is 0.9, about 3 s back
@@ -1938,7 +2000,7 @@ void initialize_moves_mix_and_keeps_run() {
 		g.go(g.secs(2.0));
 		const size_t at = g.L.size();
 		g.e->reset();
-		g.f.params[F::MIX] = 1.f;   // the module's Initialize: Mix to its default
+		g.f.params[F::MIX] = 1.f;   // all wet again, as the rig is (the module's Initialize moves Mix to its default)
 		g.go(g.secs(0.1));
 		float worst = 0.f;
 		for (size_t i = at - 10; i < g.L.size(); i++) worst = std::max(worst, std::fabs(g.L[i] - g.L[i - 1]));
@@ -2387,7 +2449,8 @@ int main() {
 	comb_keeps_the_level();
 	thaw_returns_to_live();
 	thaw_while_stopped_stays_stopped();
-	window_press_restarts_from_the_flag();
+	window_press_moves_the_read_head_only();
+	window_press_at_the_end_plays_and_holds_again();
 	window_press_in_stop_starts_a_pass();
 	window_press_when_recording();
 	default_position_freezes_a_stretch();

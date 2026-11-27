@@ -153,12 +153,13 @@ struct Doldrums : Module {
 	std::atomic<int> grainFrames_{0};
 	std::atomic<float> pace_{0.125f}, heardStretch_{0.5f}, heardPosition_{1.f}, heardHarmonics_{0.f};
 	std::atomic<bool> following_{false};   // DoldrumsState::following: Stretch is waiting for Freeze
-	// A press, or a drag's move, in the tape window (the UI thread counts,
-	// after setting Position): the audio thread raises frame.restart on the
-	// sample it sees the count change, and the engine takes it as a trigger
-	// (the user's ruling: a press plays from there). Only the window counts:
-	// the knob, the CV, undo and redo, Initialize and a patch opening move
-	// Position by its own rule and start no pass.
+	// A press, or a drag's move, in the tape window (the UI thread stores
+	// the place, then counts): the audio thread raises frame.press, with the
+	// place, on the sample it sees the count change, and the engine moves the
+	// read head there and plays on (the user's rulings: a press plays from
+	// there, and moves the read head only; Position is the knob's and its
+	// CV's). No param changes, so there is nothing to undo.
+	std::atomic<float> windowPressAt_{1.f};   // a fraction of the window: 0 the oldest frame, 1 now
 	std::atomic<uint32_t> windowPresses_{0};
 	uint32_t pressesSeen_ = 0;   // the audio thread's
 
@@ -312,7 +313,7 @@ struct Doldrums : Module {
 		    "after 32, and held (still) at the end";
 		configParam(STRETCH_ATT_PARAM, -1.f, 1.f, d.params[F::STRETCH_ATT], "Stretch CV", "%", 0.f, 100.f);
 		configParam<PositionQuantity>(POSITION_PARAM, 0.f, 1.f, d.params[F::POSITION], "Position")->description =
-		    "Where a pass starts: now at the right, 30 s back at the left. Press in the window to play from there";
+		    "Where a pass starts";
 		configParam(POSITION_ATT_PARAM, -1.f, 1.f, d.params[F::POSITION_ATT], "Position CV", "%", 0.f, 100.f);
 		configParam<HarmonicsQuantity>(HARMONICS_PARAM, 0.f, 1.f, d.params[F::HARMONICS], "Harmonics")->description =
 		    "The tuned comb: 0 % out of the path, 100 % only its teeth pass";
@@ -535,7 +536,8 @@ struct Doldrums : Module {
 		frame.freezeGate = inputs[FREEZE_INPUT].getVoltage();
 		frame.trig = inputs[TRIG_INPUT].getVoltage();
 		const uint32_t presses = windowPresses_.load(std::memory_order_acquire);
-		frame.restart = presses != pressesSeen_;
+		frame.press = presses != pressesSeen_;
+		frame.pressAt = windowPressAt_.load(std::memory_order_relaxed);
 		pressesSeen_ = presses;
 		frame.inL = inputs[L_INPUT].getVoltageSum();
 		frame.inR = inputs[R_INPUT].getVoltageSum();
@@ -595,12 +597,11 @@ struct DoldrumsWindowView {
 // The tape's window (the design's "The window"; the choices are at the top of
 // this file). It knows nothing of the engine: `source` fills a view, or
 // returns false while there is nothing to read yet. The mouse: a left press
-// sets Position at once, a drag follows it, the release ends one undo step
-// (onPosition, onBegin, onEnd); the right button is the module's menu.
+// sends the read head there at once and a drag follows it (onPress, with
+// the fraction of the window); the right button is the module's menu.
 struct DoldrumsWindow : widget::Widget {
 	std::function<bool(DoldrumsWindowView&)> source;
-	std::function<void()> onBegin, onEnd;
-	std::function<void(float fraction)> onPosition;
+	std::function<void(float fraction)> onPress;
 	bool dragging = false;
 	// Volts at the glass's top and bottom edges, as Eddy's window.
 	static constexpr float RANGE_VOLTS = 6.f;
@@ -630,25 +631,18 @@ struct DoldrumsWindow : widget::Widget {
 		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
 			return;
 		e.consume(this);
-		if (e.action != GLFW_PRESS || !onPosition)
+		if (e.action != GLFW_PRESS || !onPress)
 			return;
-		if (dragging && onEnd)   // a release that was lost
-			onEnd();
 		dragging = true;
-		if (onBegin)
-			onBegin();
-		onPosition(fractionAt(e.pos.x));
+		onPress(fractionAt(e.pos.x));
 	}
 	void onDragMove(const DragMoveEvent& e) override {
-		if (e.button == GLFW_MOUSE_BUTTON_LEFT && dragging && onPosition)
-			onPosition(fractionAt(mouseX()));
+		if (e.button == GLFW_MOUSE_BUTTON_LEFT && dragging && onPress)
+			onPress(fractionAt(mouseX()));
 	}
 	void onDragEnd(const DragEndEvent& e) override {
-		if (e.button != GLFW_MOUSE_BUTTON_LEFT || !dragging)
-			return;
-		dragging = false;
-		if (onEnd)
-			onEnd();
+		if (e.button == GLFW_MOUSE_BUTTON_LEFT)
+			dragging = false;
 	}
 
 	void drawLayer(const DrawArgs& args, int layer) override {
@@ -941,7 +935,6 @@ void previewFromFormula(DoldrumsWindowView& out) {
 struct DoldrumsWidget : ModuleWidget {
 	DoldrumsWindowView preview;
 	bool havePreview = false;
-	float positionBefore = 1.f;
 
 	DoldrumsWidget(Doldrums* module) {
 		using namespace DoldrumsLayout;
@@ -979,9 +972,10 @@ struct DoldrumsWidget : ModuleWidget {
 			return true;
 		};
 		if (module) {
-			window->onBegin = [=]() { positionBefore = module->params[Doldrums::POSITION_PARAM].getValue(); };
-			window->onPosition = [=](float fraction) { setPosition(module, fraction); };
-			window->onEnd = [=]() { endPosition(module); };
+			window->onPress = [=](float fraction) {
+				module->windowPressAt_.store(fraction, std::memory_order_relaxed);
+				module->windowPresses_.fetch_add(1, std::memory_order_release);   // after the place
+			};
 		}
 		addChild(window);
 
@@ -1020,32 +1014,6 @@ struct DoldrumsWidget : ModuleWidget {
 		if (Doldrums* m = getModule<Doldrums>())
 			m->letGoIfWanted();
 		ModuleWidget::step();
-	}
-
-	// The window sets the knob so that the anchor lands under the mouse:
-	// positionForX at the tape and grain in force, less what the CV adds.
-	void setPosition(Doldrums* m, float fraction) {
-		const long long cap = m->capacity_.load(std::memory_order_relaxed);
-		const int grain = m->grainFrames_.load(std::memory_order_relaxed);
-		const float want = rka::doldrums::positionForX(fraction, cap, grain);
-		// The CV's share as cvValue (Laws.hpp) reckons it: att x volts / 10.
-		const float att = rka::doldrums::detail::volts(m->params[Doldrums::POSITION_ATT_PARAM].getValue(), 1.f);
-		const float v = rka::doldrums::detail::volts(m->inputs[Doldrums::POSITION_CV_INPUT].getVoltage(), 100.f);
-		m->paramQuantities[Doldrums::POSITION_PARAM]->setValue(math::clamp(want - att * v * 0.1f, 0.f, 1.f));
-		m->windowPresses_.fetch_add(1, std::memory_order_release);   // play from here (after Position is set)
-	}
-	// One undo step per gesture.
-	void endPosition(Doldrums* m) {
-		const float now = m->params[Doldrums::POSITION_PARAM].getValue();
-		if (now == positionBefore)
-			return;
-		history::ParamChange* h = new history::ParamChange;
-		h->name = "set Doldrums' Position";
-		h->moduleId = m->id;
-		h->paramId = Doldrums::POSITION_PARAM;
-		h->oldValue = positionBefore;
-		h->newValue = now;
-		APP->history->push(h);
 	}
 
 	// While recording: Drift or Follow, each with a line under it saying what

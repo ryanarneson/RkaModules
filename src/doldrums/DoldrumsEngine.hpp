@@ -6,9 +6,10 @@
 //
 // Each sample: the inputs, the Freeze gate and TRIG (NaN and inf read as
 // 0 V; IN R unpatched takes IN L); Freeze = the button or the gate (Schmitt 0.1 V / 1 V);
-// DoldrumsFrame::restart (the module raises it for a press or a drag's
-// move in the tape window: the user's ruling "a press plays from there")
-// taken as a TRIG edge, latched with TRIG to the next boundary; the input
+// DoldrumsFrame::press (the module raises it for a press or a drag's
+// move in the tape window, with pressAt, the place in the window: the
+// user's ruling "a press plays from there, and moves the read point only")
+// latched to the next boundary, the last place winning; the input
 // written to the tape (faded over 5 ms at Freeze's edges, Ring.hpp); TRIG's
 // rising edge; the pace from Stretch and its CV; then at most one piece of
 // staged work (below); the overlap's next sample; RUN; Mix (equal power,
@@ -232,7 +233,7 @@ struct DoldrumsFrame {
 	// The defaults (the plan's Global Constraints).
 	// Position 0.9 (about 3 s back): the user's decision at 2.0.46, so that a
 	// freeze at the defaults leaves Stretch tape to act on (was 1, now).
-	float params[kParams] = {0.5f, 0.f, 0.9f, 0.f, 0.f, 0.f, 0.f, -24.f, 0.f, 0.f, 8.f, 0.393f, 0.f, 1.f};
+	float params[kParams] = {0.5f, 0.f, 0.9f, 0.f, 0.f, 0.f, 0.f, -24.f, 0.f, 0.f, 8.f, 0.393f, 0.f, 0.5f};
 	float stretchCv = 0.f, positionCv = 0.f, harmonicsCv = 0.f, freezeGate = 0.f, trig = 0.f;
 	float inL = 0.f, inR = 0.f;
 	bool inRPatched = false;
@@ -242,7 +243,8 @@ struct DoldrumsFrame {
 	bool wide = false;
 	bool stopAtEnd = false;
 	bool follow = false;           // the menu's While recording: false Drift (the default), true Follow (Pass.hpp)
-	bool restart = false;          // a press in the window: a new pass from the anchor, as a TRIG edge
+	bool press = false;            // a press in the window: the read point goes to pressAt and plays on (Pass.hpp)
+	float pressAt = 1.f;           // where: a fraction of the window, 0 = the oldest frame, 1 = now
 };
 
 struct DoldrumsResult {
@@ -364,7 +366,10 @@ struct DoldrumsEngine {
 		frozen_ = frozen;
 		const bool wasTrig = trigHigh_;
 		if (schmitt(trigV, trigHigh_) && !wasTrig) trig_ = true;
-		if (f.restart) trig_ = true;   // a press in the window: as a trigger (latched, so a drag's presses in a hop are one)
+		if (f.press) {   // latched, so a drag's presses in a hop are one: the last place
+			press_ = true;
+			pressAt_ = f.pressAt == f.pressAt ? std::max(0.f, std::min(f.pressAt, 1.f)) : 1.f;
+		}
 		armed_ = true;
 		pace_ = paceFromDial(cvValue(f.params[F::STRETCH], f.params[F::STRETCH_ATT], f.stretchCv));
 		staged_ = 0;
@@ -564,7 +569,8 @@ private:
 	int staged_ = 0;
 
 	// Edges and gates.
-	bool gateHigh_ = false, trigHigh_ = false, frozen_ = false, rose_ = false, fell_ = false, trig_ = false;
+	bool gateHigh_ = false, trigHigh_ = false, frozen_ = false, rose_ = false, fell_ = false, trig_ = false, press_ = false;
+	float pressAt_ = 1.f;
 	bool armed_ = false;   // the edge detectors have seen a sample since the restart
 	double pace_ = 1.0;
 
@@ -736,7 +742,7 @@ private:
 		passGrain_ = 0;
 		heldSize_ = -1;
 		last_ = PassOut{};
-		rose_ = fell_ = trig_ = false;
+		rose_ = fell_ = trig_ = press_ = false;
 		armed_ = false;
 		if (newRate) {
 			runOn_ = false;
@@ -801,7 +807,9 @@ private:
 		in.stopAtEnd = f.stopAtEnd;
 		in.follow = f.follow;
 		in.grainChanged = passGrain_ != grain;
-		rose_ = fell_ = trig_ = false;
+		in.press = press_;
+		in.pressLag = (long long) ((1.0 - double(pressAt_)) * double(in.capacity) + 0.5);
+		rose_ = fell_ = trig_ = press_ = false;
 		passGrain_ = grain;
 		const PassOut o = pass_.step(in);
 		last_ = o;

@@ -530,7 +530,8 @@ Knobs only. Each is read once a grain.
 ### Mix, inputs and outputs
 
 - **Mix**: dry to the left, wet to the right, at equal power between.
-  Default fully wet. Smoothed. The wet sound is about a grain late and
+  Default fully wet (as built, 2026-11-27, the user's decision at
+  2.0.49: default 0.5). Smoothed. The wet sound is about a grain late and
   the dry is not; the manual says so.
 - Levels: the wet sound of a steady input is as loud as the input,
   within 1 dB, at any Stretch, with the comb out, **measured over ten
@@ -604,6 +605,16 @@ Knobs only. Each is read once a grain.
   Position rule, the read head keeping its distance from the flag with no
   restart, so a CV sweeping Position does not restart the pass; undo of a
   window gesture restores Position by that rule too.)
+  (As built, 2026-11-27, the user's ruling at 2.0.49, superseding both
+  paragraphs above: **a press moves the read point only.** The press,
+  and each move of a drag, sends the read point to the place under the
+  mouse, a new pass that plays on from there; the anchor and the
+  Position knob do not move ("the blue bar is moved by the knob or its
+  CV, not by clicking"), so there is no undo step. My rulings within
+  it: where the read point is tied to the anchor (recording at exactly
+  Stretch 1, following, no room) a press is a trigger; frozen with
+  nothing to travel through, a pressed pass plays to the end once and
+  the hold at the anchor returns, in either setting.)
 - The ruler printed under the glass marks tenths: 3 s each.
 - Drawing takes nothing from the audio thread: the waveform is a reduced
   copy (a few hundred columns of peaks), kept up to date as the tape is

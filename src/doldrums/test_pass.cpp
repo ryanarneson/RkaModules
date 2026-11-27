@@ -47,7 +47,7 @@ struct Sim {
 	PassOut next() {
 		nowWas = in.now;
 		o = p.step(in);
-		in.trig = in.freezeRose = in.freezeFell = in.grainChanged = false;
+		in.trig = in.freezeRose = in.freezeFell = in.grainChanged = in.press = false;
 		if (!in.frozen)
 			in.now += in.hop;
 		return o;
@@ -748,6 +748,101 @@ void stop_at_end() {
 	CHECK(o.stopped && !o.sound, "reset() then stop: stopped from the start");
 }
 
+// The user's ruling at 2.0.49 (Pass.hpp): a press in the window moves the
+// read point to its place and plays on, a new pass; the anchor does not move.
+void press_moves_the_read_point_only() {
+	const long long back = 300000;   // the press: this far behind now
+	for (int stop = 0; stop < 2; stop++) {
+		const char* set = stop ? "stop" : "go round";
+		// Frozen, a pass travelling from Position 0.5 (in stop: stopped, from reset).
+		Sim f(0.5f, 8, true, stop != 0);
+		for (int i = 0; i < 10; i++) f.next();
+		CHECK(f.o.stopped == (stop != 0), "%s: the state before", set);
+		const long long anchor = f.anchorFor(0.5f);
+		f.in.press = true;
+		f.in.pressLag = back;
+		PassOut o = f.next();
+		CHECK(o.end == NOW0 - back && o.newPass && o.take && o.sound && !o.stopped && !o.held && o.anchor == anchor,
+		      "%s, frozen: a press: the read point there, a new pass, the anchor unmoved", set);
+		o = f.next();
+		CHECK(o.end == NOW0 - back + 1024 && !o.newPass && o.anchor == anchor, "%s: and it travels on from there", set);
+		// To the end of the tape: then back on the anchor (go round) or stopped.
+		const long long n = frozenPassGrains(back, 1024);
+		for (long long i = 2; i < n; i++) f.next();
+		CHECK(f.o.sound && !f.o.newPass && f.o.end <= NOW0, "%s: the pressed pass sounds to the end", set);
+		o = f.next();
+		if (stop) CHECK(o.stopped && !o.sound, "stop: then stopped");
+		else CHECK(o.newPass && o.end == anchor, "go round: then a pass from the anchor");
+
+		// Held at the Stretch stop, frozen: the slice at the press, held.
+		Sim h(0.5f, 0, true, stop != 0);
+		h.in.trig = true;
+		for (int i = 0; i < 5; i++) h.next();
+		h.in.press = true;
+		h.in.pressLag = back;
+		o = h.next();
+		CHECK(o.end == NOW0 - back && o.held && o.take && o.newPass && o.sound, "%s, the Stretch stop: a press takes the slice there, held", set);
+		o = h.next();
+		CHECK(o.end == NOW0 - back && o.held && !o.take && !o.newPass, "%s: and holds it", set);
+
+		// Frozen at the end (Position 1, nothing to travel through): the
+		// pressed pass plays to the end, then the hold at the anchor again.
+		Sim e(1.f, 8, true, stop != 0);
+		for (int i = 0; i < 5; i++) e.next();
+		CHECK(e.o.held && e.o.sound && e.o.end == NOW0, "%s: frozen at the end, held", set);
+		e.in.press = true;
+		e.in.pressLag = back;
+		o = e.next();
+		CHECK(o.end == NOW0 - back && o.newPass && !o.held && o.sound && o.anchor == NOW0, "%s, at the end: a press plays from there", set);
+		bool ok = true;
+		for (long long i = 1; i < n; i++) {
+			o = e.next();
+			ok = ok && o.sound && !o.held && !o.newPass && !o.stopped;
+		}
+		CHECK(ok, "%s, at the end: the pressed pass travels, %lld grains", set, n);
+		o = e.next();
+		CHECK(o.end == NOW0 && o.held && o.sound && !o.stopped && o.newPass, "%s, at the end: then held at the anchor again, never stopped", set);
+		o = e.next();
+		CHECK(o.end == NOW0 && o.held && o.sound && !o.newPass, "%s: and stays held", set);
+
+		// Recording in Drift at x8: the read point goes to the place behind now.
+		Sim r(0.5f, 8, false, stop != 0);
+		r.in.trig = true;
+		for (int i = 0; i < 10; i++) r.next();
+		r.in.press = true;
+		r.in.pressLag = back;
+		o = r.next();
+		CHECK(o.end == r.nowWas - back && o.newPass && o.sound && o.anchor == r.anchorFor(0.5f), "%s, recording: a press: the place behind now", set);
+		// Tied to the anchor (recording at x1; following): a press is a trigger.
+		for (int follow = 0; follow < 2; follow++) {
+			Sim t(0.5f, follow ? 8 : 1, false, stop != 0);
+			t.in.follow = follow != 0;
+			for (int i = 0; i < 10; i++) t.next();   // in stop: stopped from reset
+			t.in.press = true;
+			t.in.pressLag = back;
+			o = t.next();
+			CHECK(o.end == t.anchorFor(0.5f) && o.newPass && o.sound && !o.stopped, "%s, %s: a press is a pass from the anchor", set,
+			      follow ? "following" : "recording at x1");
+		}
+	}
+	// A press off the tape is held to it; with TRIG, or with Freeze's edge,
+	// the pass is from the anchor.
+	Sim f(0.5f, 8, true);
+	f.next();
+	f.in.press = true;
+	f.in.pressLag = 100000000;
+	PassOut o = f.next();
+	CHECK(o.end == f.low(false) && o.newPass, "a press left of the tape: the oldest whole grain");
+	f.in.press = true;
+	f.in.pressLag = -5;
+	o = f.next();
+	CHECK(o.end == NOW0 && o.newPass && o.sound, "a press right of now: now");
+	f.in.press = f.in.trig = true;
+	f.in.pressLag = back;
+	o = f.next();
+	CHECK(o.end == f.anchorFor(0.5f) && o.newPass, "a press with TRIG: the anchor");
+}
+
 // The user's ruling at 2.0.49 (Pass.hpp): in stop, Freeze going on starts a
 // pass from the anchor, whatever was happening before; it plays once to the
 // end of the frozen tape and the module then stops and waits for TRIG. With
@@ -1185,7 +1280,8 @@ void fuzz() {
 	const long long caps[] = {1440000, 1323000, 2880000};
 	long long bad = 0, badAnchor = 0, both = 0, other = 0;
 	long long seenTake = 0, seenPass = 0, seenHeld = 0, seenStopped = 0, seenKept = 0, seenWait = 0, seenWake = 0, seenHeldWake = 0, seenThaw = 0,
-	          seenThawStopped = 0, seenFullPace = 0, seenFollow = 0, seenFollowStopped = 0, followPass = 0;
+	          seenThawStopped = 0, seenFullPace = 0, seenFollow = 0, seenFollowStopped = 0, followPass = 0, badPress = 0, seenPress = 0,
+	          seenPressTied = 0, seenDetour = 0;
 	int steps = 0;
 	for (int run = 0; run < 3; run++) {
 		PassLogic p;
@@ -1198,7 +1294,7 @@ void fuzz() {
 		in.position = 1.f;
 		in.pace = 0.125;
 		int tail = 0;
-		bool wasStopped = false, wasOnAnchor = false, wasHeld = false;
+		bool wasStopped = false, wasOnAnchor = false, wasHeld = false, detour = false;
 		for (int i = 0; i < 333334; i++, steps++) {
 			const double u = unit();
 			in.trig = unit() < 0.01;
@@ -1232,6 +1328,8 @@ void fuzz() {
 			}
 			else if (unit() < 0.05)
 				in.pace = unit();
+			in.press = unit() < 0.01;
+			in.pressLag = unit() < 0.1 ? (long long)(next() % 9000000) - 1000000 : (long long)(unit() * double(in.capacity));
 			const PassOut o = p.step(in);
 			const long long lo = in.now - in.capacity + in.grain;
 			const bool moving = !in.frozen || in.freezeRose;
@@ -1255,7 +1353,7 @@ void fuzz() {
 			const bool mustStart = in.trig || in.freezeRose;
 			// A thaw: a new pass from the anchor while sounding, in either
 			// setting; stopped (in stop) it stays stopped.
-			const bool thawStopped = in.freezeFell && wasStopped && in.stopAtEnd && !in.trig;
+			const bool thawStopped = in.freezeFell && wasStopped && in.stopAtEnd && !in.trig && !in.press;
 			const bool mustReturn = in.freezeFell && !thawStopped;
 			if ((mustReturn && !(o.newPass && o.sound && o.end == o.anchor)) || (thawStopped && !(o.stopped && !o.sound)))
 				other++;
@@ -1272,16 +1370,40 @@ void fuzz() {
 			const bool following = in.follow && !in.frozen;
 			if (following && o.sound && (o.end != o.anchor || !o.take || o.held))
 				other++;
-			if (following && o.newPass && !in.trig && !in.freezeFell && wasOnAnchor && !wasHeld && i > 0)
+			if (following && o.newPass && !in.trig && !in.freezeFell && !in.press && wasOnAnchor && !wasHeld && i > 0)
 				followPass++;
 			seenFollow += following && o.sound;
 			seenFollowStopped += following && o.stopped;
 			wasOnAnchor = o.sound && o.end == o.anchor;
 			wasHeld = o.held;
 			seenThawStopped += thawStopped && o.stopped;
+			// A press moves the read point to its place, held to the tape, a
+			// new pass, and never the anchor; where another rule starts a pass
+			// from the anchor on the same grain (TRIG, Freeze's edges, a wake)
+			// or ties the read point to the anchor (recording at full pace,
+			// following, no room), the pass is from the anchor. Frozen with
+			// nothing to travel through, the pressed pass plays to the end
+			// before the hold (the detour).
+			{
+				const double pc = in.pace > 0.0 ? (in.pace < 1.0 ? in.pace : 1.0) : 0.0;
+				const long long lowNow = std::min(in.now - in.capacity + in.grain + (in.frozen ? 0 : std::max(1, std::min(in.hop, in.grain))), in.now);
+				const bool tied = !in.frozen && (pc == 1.0 || in.follow || o.anchor - lowNow < in.grain);
+				const bool starts = in.trig || in.freezeRose || (in.freezeFell && !wasStopped) || (wasStopped && (!in.stopAtEnd || nothing)) || i == 0;
+				if (in.press && !starts) {
+					const long long want = tied ? o.anchor : std::max(lowNow, std::min(in.now - std::max(0LL, in.pressLag), in.now));
+					if (!(o.newPass && o.sound && o.take && !o.stopped && o.end == want))
+						badPress++;
+					seenPress += !tied;
+					seenPressTied += tied;
+					detour = !tied && nothing;
+				}
+				else if (o.newPass || o.stopped || !nothing)
+					detour = false;
+				seenDetour += detour;
+			}
 			if ((o.take && !o.sound) || (o.held && !o.sound) || (o.newPass && !(o.take && o.sound)) ||
 			    (mustStart && (o.stopped || !o.newPass || o.end != o.anchor)) ||
-			    (nothing && !(o.held && o.sound)))
+			    (nothing && !detour && !(o.held && o.sound)) || (nothing && !o.sound))
 				other++;
 			seenWait += in.freezeRose && in.stopAtEnd && !nothing && !in.trig && wasStopped && o.newPass && !o.held;
 			seenWake += in.freezeRose && in.stopAtEnd && nothing && !in.trig && o.newPass && o.held;
@@ -1305,6 +1427,9 @@ void fuzz() {
 	CHECK(both == 0, "%lld grains both sounding and stopped", both);
 	CHECK(other == 0, "%lld grains taking or held while silent, a new pass not taken, TRIG ignored, Freeze in stop not by the rule,"
 	      " or nothing to travel through not held", other);
+	CHECK(badPress == 0 && seenPress > 1000 && seenPressTied > 100 && seenDetour > 100,
+	      "presses: %lld not at their place as a new pass; %lld seen free, %lld tied to the anchor, %lld grains of a detour at the end", badPress,
+	      seenPress, seenPressTied, seenDetour);
 	CHECK(seenThaw > 0 && seenThawStopped > 0, "thaws: %lld returned, %lld stayed stopped", seenThaw, seenThawStopped);
 	CHECK(seenFullPace > 1000, "recording at full pace, sounding: %lld grains", seenFullPace);
 	CHECK(followPass == 0 && seenFollow > 10000 && seenFollowStopped > 1000,
@@ -1342,6 +1467,7 @@ int main() {
 	full_left_recording();
 	stop_at_end();
 	freeze_in_stop();
+	press_moves_the_read_point_only();
 	held_recording_position_move_takes_at_the_anchor();
 	follow_sits_on_the_flag();
 	follow_frozen_is_as_drift();

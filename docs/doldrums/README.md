@@ -20,7 +20,8 @@ The defaults, and the thing to try first:
 1. Patch a sound into **IN L** (and **IN R** for stereo) and the **L** and
    **R** outputs to your mixer. Leave every knob where it starts: Position
    about 3 seconds back (the knob a little left of fully right), Stretch
-   at 8, Mix fully wet.
+   at 8, Mix at half (the input and the stretched sound together; turn
+   MIX fully right to hear the stretched sound alone).
 2. Listen: the module plays the input drawn out 8 times, starting about
    3 seconds behind it and falling further behind (it is reading at an
    eighth of the speed the sound arrives). About every 30 seconds it
@@ -118,8 +119,8 @@ Read this with the module open. From the back of the glass to the front:
   right is now, fully left is as far back as a whole grain can still be
   taken (30 s less a grain). (The technical reference calls this place the
   anchor.) It stays put on the glass while the tape scrolls under it, and
-  it moves only when Position moves: the knob, its CV, or a press in the
-  window.
+  it moves only when Position moves: the knob or its CV. A press in the
+  window does not move it.
 - **A short cyan bar along the bottom edge, with a pale band above it:
   the slice.** This is the piece of tape the current grain is made from,
   drawn at its true width: a grain long, about a third of a second at
@@ -194,8 +195,9 @@ the default; Follow has its own rows below them.
   bar are pinned together at the right edge and the slice sits just to
   their left. There is no tape ahead of the read head, so Stretch has
   nothing to act on: changing it does not slow anything down. Turn
-  Position left (or press in the window) to give it tape to travel
-  through.
+  Position left to give it tape to travel through. (A press in the
+  window plays from the place pressed to the end, once, and then the
+  hold at the end comes back.)
 - **Stretch at its stop** (HELD or FROZEN HELD): the gold bar does not
   move. Frozen, it stays where it is. Recording (in Drift), the gold bar
   and the slice ride left with the sound they hold, while the flag stays
@@ -213,32 +215,43 @@ the default; Follow has its own rows below them.
   gold bar moves by the same amount, wherever it has got to; the pass
   goes on (stopped, the gold bar stays on the flag; held while recording,
   it goes to the flag).
-- **A press or a drag in the window: play from here.** The flag goes
-  under the mouse and the gold bar goes to the flag: a new pass starts
-  there, exactly as a trigger at TRIG does. So a press just left of the
-  gold bar moves playback back to that point, and a drag scrubs the
-  flag and the gold bar together.
+- **A press or a drag in the window: play from here.** The gold bar
+  goes under the mouse and plays on from there. The flag does not move:
+  only the POSITION knob and its CV move the flag. So a press just left
+  of the gold bar moves playback back to that point, and a drag scrubs
+  the gold bar along the tape.
 
-### Setting Position with the mouse
+### Moving the read head with the mouse
 
-Press in the window to put the Position flag under the mouse and play
-from there; drag to move it, playing from each place it passes.
-**POSITION** turns to match, and the whole gesture is one undo step;
-undoing it puts Position back as the knob would (the gold bar keeps its
-distance from the flag; no new pass). With a CV at Position's jack, the
-knob is set so that knob plus CV, as the CV is at that moment, puts the
-flag under the mouse; the knob stops at its ends, so a large CV can leave
-the flag short of the mouse. The flag cannot go further left than a grain
-from the oldest end of the tape, so a press at the very left edge sets
-Position fully left. The right mouse button opens the menu, as anywhere
-on the panel.
+Press in the window to send the read head (the gold bar) to the place
+under the mouse and play from there; drag to move it, playing from each
+place it passes. **The Position flag stays where it is, and the POSITION
+knob does not turn**: a press moves what you hear now, not where passes
+start. Nothing is changed that Undo could put back. The right mouse
+button opens the menu, as anywhere on the panel.
 
-A press is not the same as turning the knob. The knob (and its CV) moves
-the flag and the gold bar together without starting a pass, so a CV
-sweeping Position never restarts the sound. A press starts a pass, as a
-trigger does. **In the Stop setting a press starts a pass and raises
-RUN**, so a stray click can start a recorder gated by RUN. Frozen, a press
-at the right edge holds (nothing to travel through: FROZEN AT END).
+What happens after the press is what happens from any place:
+
+- The gold bar travels on from there at Stretch's pace. At the end of
+  the pass it goes back to the flag (Go round) or the module stops
+  (Stop), as after any pass.
+- With **Stretch at its stop**, the slice at the place pressed is taken
+  and held.
+- **Frozen with Position fully right** (FROZEN AT END), a press plays
+  from the place pressed to the end of the tape once, and then the hold
+  at the end comes back, in either setting of At the end of a pass.
+- **Where the read head is tied to the flag, a press cannot move it**:
+  while the tape records at Stretch exactly 1, in Follow, or with
+  Position fully left. There a press starts a new pass from the flag, as
+  a trigger does.
+- The read head cannot go further left than a grain from the oldest end
+  of the tape, nor right of now.
+
+A press starts a pass, as a trigger does (RUN dips for 1 ms if it was
+high). **In the Stop setting a press starts a pass and raises RUN**, so a
+stray click can start a recorder gated by RUN. Turning the knob is
+different: it moves the flag and the gold bar together without starting
+a pass, so a CV sweeping Position never restarts the sound.
 
 ## Position and Stretch
 
@@ -299,8 +312,8 @@ amount, at the next grain, wherever it has got to; it does not start the
 pass again. If that would take it off the tape it stops at the edge.
 Held while recording, it puts the read head on the flag instead (below).
 Frozen, a turn far enough right to push the read head to the end of the
-tape ends the pass at once. A press in the window is different: it plays
-from the flag (above).
+tape ends the pass at once. A press in the window is different: it moves
+the read head alone and plays from there (above).
 
 **Held** means the read head stands still and one slice sounds for as
 long as it stays so, with fresh random phases every grain. It has two
@@ -340,8 +353,8 @@ the moment the patch opened (about Position's distance times the Stretch:
 roughly 20 to 24 s at the defaults), then the sound fades in. What ends
 it promptly, once the tape holds more than Position's distance: turning
 Position (the new slice is taken at the flag, and held), a trigger at
-TRIG, a press in the window, or Stretch at exactly 1 (each puts the read
-head on the flag). (In Follow the stop does not hold while the tape
+TRIG or Stretch at exactly 1 (each puts the read head on the flag), or a
+press in the window (the slice at the place pressed is taken, and held). (In Follow the stop does not hold while the tape
 records, so such a patch follows the input from the start.)
 
 **Not frozen, with Position fully left**, a pass has less than a grain to
@@ -429,8 +442,8 @@ follows from the flag instead).
 
 **TRIG** puts the read head back on the Position flag and starts a new
 pass at any time: in mid pass, held or stopped. It acts on a rising edge
-(high from 1 V, low again under 0.1 V). A press in the window does the
-same.
+(high from 1 V, low again under 0.1 V). A press in the window starts a
+new pass too, from the place pressed, not from the flag.
 
 **RUN** is a gate: 10 V while a pass is sounding.
 
@@ -603,7 +616,7 @@ overtones.
 ## Mix and the latency
 
 **MIX** is dry to the left and wet to the right, at equal power between.
-Default fully wet. It moves smoothly (10 ms for its whole travel).
+Default half and half (50 %). It moves smoothly (10 ms for its whole travel).
 
 The dry sound is not delayed. **The wet sound is about a grain late**: a
 slice is taken when it is complete, and is heard over the grain that
@@ -815,14 +828,14 @@ built. None is a fault you can fix with a setting, unless one is named.
      Stretch.
   2. Play the phrase you want to stretch (up to 30 s). When it is over,
      press **FREEZE**: the tape stops and a pass starts from the flag.
-  3. Press in the window just left of the phrase's start (its first peaks
-     on the glass): the flag goes there and the pass plays from it.
+  3. Turn **POSITION** left until the flag is just left of the phrase's
+     start (its first peaks on the glass): passes now start there.
   4. Set **STRETCH** and listen: the phrase is drawn out at that pace, to
      the end of the tape, then again from the flag (Go round). Press in
-     the window again to start from elsewhere.
-  5. To go back to the live input: turn POSITION fully right (or press
-     at the window's right edge: FROZEN AT END, the last moment held),
-     then let FREEZE go. The gold bar goes to the flag at now and you
+     the window to hear from somewhere else at once: the gold bar goes
+     there and plays to the end, then passes go on from the flag.
+  5. To go back to the live input: turn POSITION fully right (FROZEN AT
+     END, the last moment held), then let FREEZE go. The gold bar goes to the flag at now and you
      hear the input within about a grain. If you let FREEZE go with the
      flag still back at the phrase's start, the gold bar goes there and
      plays on at the input's own speed: first the tape from the flag to

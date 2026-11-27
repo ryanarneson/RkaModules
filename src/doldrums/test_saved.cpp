@@ -200,11 +200,12 @@ void param_ids() {
 	const F d;
 	// The plan's, but Position: 0.9 (about 3 s back), the user's decision at
 	// 2.0.46 (it was 1, now). A default is not saved state: a patch saves
-	// every param's value.
-	const float want[14] = {0.5f, 0.f, 0.9f, 0.f, 0.f, 0.f, 0.f, -24.f, 0.f, 0.f, 8.f, 0.393f, 0.f, 1.f};
+	// every param's value. And Mix: 0.5, the user's decision at 2.0.49 (it
+	// was 1, all wet).
+	const float want[14] = {0.5f, 0.f, 0.9f, 0.f, 0.f, 0.f, 0.f, -24.f, 0.f, 0.f, 8.f, 0.393f, 0.f, 0.5f};
 	int bad = 0;
 	for (int i = 0; i < 14; i++) bad += d.params[i] != want[i];
-	CHECK(bad == 0, "the defaults are the plan's, Position 0.9 (%d differ)", bad);
+	CHECK(bad == 0, "the defaults are the plan's, but Position 0.9 and Mix 0.5 (%d differ)", bad);
 }
 
 SavedMap goldenMap(bool follow = false) {
