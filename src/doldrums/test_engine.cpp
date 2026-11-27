@@ -903,6 +903,140 @@ void stretch_1_follows_position_after_a_detour() {
 	CHECK(g.e->state().end == g.e->state().anchor, "the head on the flag");
 }
 
+// While recording: Follow (Pass.hpp). Recording at Position 0.9 (2.97 s
+// back), a tone burst at 6 s at x8 and another at 10 s at Stretch's stop:
+// each is heard Position's lag later, within a grain and the latency, and
+// for no longer than it lasted (it is not stretched, and the stop does not
+// hold it); RUN stays high throughout. In Drift the same input is stretched
+// and held (the contrast, so the test can fail).
+void follow_is_live_at_any_stretch() {
+	const float rate = 48000.f;
+	for (int follow = 1; follow >= 0; follow--) {
+		Rig g(rate, 171);
+		g.f.follow = follow != 0;
+		g.f.params[F::POSITION] = 0.9f;
+		g.f.params[F::STRETCH] = 0.5f;   // x8
+		const long long T1 = g.secs(6.0), T2 = g.secs(10.0), len = g.secs(0.5), stop = g.secs(8.5);
+		g.go(g.secs(15.0), [&](long long t) {
+			if (t == stop) g.f.params[F::STRETCH] = 1.f;   // the stop
+			const bool on = (t >= T1 && t < T1 + len) || (t >= T2 && t < T2 + len);
+			g.f.inL = on ? float(std::sin(2.0 * kPi * 1000.0 * double(t) / rate)) : 0.f;
+		});
+		const long long lag = lagFrames(0.9f, g.e->state().capacity, g.grain());
+		// The onset: within a grain, the latency and a hop of the lag; the end
+		// also has the last grain's own length to play out.
+		const long long slack = g.grain() + g.e->latencyFrames() + g.hop(), tail = slack + g.grain();
+		// The sounding blocks of 480 in [from, to).
+		auto heard = [&](long long from, long long to, long long& first, long long& last) {
+			first = last = -1;
+			for (long long a = from; a + 480 <= to; a += 480)
+				if (meanSquare(g.L, a, 480) > 1e-4) {
+					if (first < 0) first = a;
+					last = a + 480;
+				}
+		};
+		long long f1, l1, f2, l2;
+		heard(T1, T2 + g.secs(1.5), f1, l1);
+		heard(T2 + g.secs(1.5), (long long) g.L.size(), f2, l2);
+		const auto e = edges(g.run, g.secs(1.0));
+		if (follow) {
+			std::printf("  follow_is_live_at_any_stretch: x8, heard %.3f s to %.3f s after the burst; the stop, %.3f s to %.3f s (lag %.3f s)\n",
+			            double(f1 - T1) / rate, double(l1 - T1) / rate, double(f2 - T2) / rate, double(l2 - T2) / rate, double(lag) / rate);
+			CHECK(f1 > 0 && std::llabs(f1 - T1 - lag) < slack && std::llabs(l1 - (T1 + len) - lag) < tail,
+			      "Follow, x8: the burst heard Position's lag late, as long as it was (%.3f s to %.3f s late)", double(f1 - T1) / rate,
+			      double(l1 - T1 - len) / rate);
+			CHECK(f2 > 0 && std::llabs(f2 - T2 - lag) < slack && std::llabs(l2 - (T2 + len) - lag) < tail,
+			      "Follow, the Stretch stop: the burst heard Position's lag late, as long as it was, not held (%.3f s to %.3f s late)",
+			      double(f2 - T2) / rate, double(l2 - T2 - len) / rate);
+			CHECK(e.empty() && g.run.back() > 5.f, "Follow: RUN high throughout (%zu edges)", e.size());
+			const DoldrumsState st = g.e->state();
+			CHECK(st.following && !st.held && st.end == st.anchor, "Follow: following, on the flag, not held");
+		} else {
+			CHECK(f1 < 0 || l1 - f1 > 3 * len, "Drift, x8: the burst stretched or not yet heard (%lld to %lld)", f1, l1);
+			CHECK(g.e->state().held && !g.e->state().following, "Drift, the Stretch stop: held");
+		}
+	}
+}
+
+// Whole humps of energy in y from `from` on, by blocks of 512: their centres.
+std::vector<double> humpCentres(const std::vector<float>& y, long long from) {
+	const int B = 512;
+	std::vector<double> e(y.size() / B, 0.0);
+	for (size_t i = size_t(from / B) * B; i < e.size() * B; i++) e[i / B] += double(y[i]) * y[i];
+	std::vector<double> centres;
+	size_t i = size_t(from / B);
+	while (i < e.size()) {
+		if (e[i] <= 0.0) {
+			i++;
+			continue;
+		}
+		size_t j = i;
+		double w = 0, m = 0;
+		while (j < e.size() && e[j] > 0.0) {
+			w += e[j];
+			m += e[j] * (double(j) + 0.5) * B;
+			j++;
+		}
+		if (i > size_t(from / B) && j < e.size()) centres.push_back(m / w);   // whole humps only
+		i = j;
+	}
+	return centres;
+}
+
+// Follow, then Freeze: Stretch takes effect. A 5 ms burst of 1 kHz every
+// second recorded in Follow at x8 (heard a second apart, live), then
+// frozen: the pass travels at x8 and the bursts come out 8 s apart.
+void follow_then_freeze_stretches() {
+	const float rate = 48000.f;
+	Rig g(rate, 173);
+	g.f.follow = true;
+	g.f.params[F::POSITION] = 0.5f;   // 14.8 s back
+	g.f.params[F::STRETCH] = 0.5f;    // x8
+	const long long burst = g.secs(0.005);
+	auto input = [&](long long t) {
+		const long long at = (t + 24000) % 48000;
+		g.f.inL = at < burst ? float(5.0 * std::sin(kPi * double(at) / double(burst)) * std::sin(2.0 * kPi * 1000.0 * double(t) / rate)) : 0.f;
+	};
+	g.go(g.secs(20.0), input);
+	const std::vector<double> live = humpCentres(g.L, g.secs(16.0));
+	CHECK(live.size() >= 2, "Follow: %zu bursts heard live", live.size());
+	for (size_t k = 1; k < live.size(); k++)
+		CHECK(std::fabs((live[k] - live[k - 1]) / rate - 1.0) * rate <= g.grain(), "Follow: bursts %zu and %zu %.3f s apart (want 1 within a grain)",
+		      k - 1, k, (live[k] - live[k - 1]) / rate);
+	const long long freeze = g.t;
+	g.f.params[F::FREEZE] = 1.f;
+	g.go(g.secs(34.0), [&](long long) { g.f.inL = 0.f; });
+	const std::vector<double> c = humpCentres(g.L, freeze + g.grain() + g.e->latencyFrames());
+	CHECK(c.size() >= 3, "frozen: %zu whole bursts heard", c.size());
+	for (size_t k = 1; k < c.size(); k++) {
+		const double gap = (c[k] - c[k - 1]) / rate;
+		CHECK(std::fabs(gap - 8.0) * rate <= g.grain(), "frozen at x8: bursts %zu and %zu %.3f s apart (want 8 within a grain)", k - 1, k, gap);
+	}
+	CHECK(!g.e->state().following && g.e->state().frozen, "frozen: not following");
+}
+
+// The fix wave's ruling (Pass.hpp): a fresh engine (a patch reopened) with
+// Stretch at its stop holds the silence the tape held when it opened; the
+// input plays for 5 s and the output stays silent; Position moved: within a
+// grain or two the output is the input's spectrum, held there, not silence.
+void reopened_held_wakes_on_position() {
+	const float rate = 48000.f;
+	Rig g(rate, 175);
+	g.f.params[F::POSITION] = 0.9f;
+	g.f.params[F::STRETCH] = 1.f;   // the stop
+	g.go(g.secs(5.0), [&](long long t) { g.f.inL = chord(t, rate); });
+	CHECK(g.e->state().held && meanSquare(g.L, g.secs(4.0), g.secs(1.0)) == 0.0, "held on the silence from before the input");
+	const long long move = g.t;
+	g.f.params[F::POSITION] = 0.92f;
+	g.go(g.secs(3.0), [&](long long t) { g.f.inL = chord(t, rate); });
+	const long long from = move + 2 * g.hop() + g.grain() + g.e->latencyFrames();
+	const Spectrum sp = spectrum(g.L, from, g.secs(1.5), rate);
+	const double level = meanSquare(g.L, from, g.secs(1.5));
+	std::printf("  reopened_held_wakes_on_position: after the move, level %.3f, %.3f of the power at the chord\n", level, chordShare(sp));
+	CHECK(level > 0.1 && chordShare(sp) > 0.95, "Position moved: the input's chord (level %g, share %.3f)", level, chordShare(sp));
+	CHECK(g.e->state().held, "still held");
+}
+
 // ---------------------------------------------------------------------------
 // No clicks: each event of the design's list, on a tape of a 220 Hz sine whose
 // level drifts slowly, the input the same sine going on.
@@ -2224,6 +2358,9 @@ int main() {
 	window_press_when_recording();
 	default_position_freezes_a_stretch();
 	stretch_1_follows_position_after_a_detour();
+	follow_is_live_at_any_stretch();
+	follow_then_freeze_stretches();
+	reopened_held_wakes_on_position();
 	mix_and_latency();
 	staging_fits();
 	rapid_freeze_and_trig();

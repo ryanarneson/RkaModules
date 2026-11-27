@@ -129,6 +129,14 @@ void to_play() {
 	CHECK(a == 0.4f && std::fabs(b - 0.457142857f) < 1e-6f, "recording at x8: to 0.4571 (%g)", b);
 	toPlay(snap(0.4f, false, false, false), 1.0, a, b);
 	CHECK(b == 1.f, "recording at x1: to now (%g)", b);
+	// Following (While recording: Follow), the read point stays on the flag
+	// at any pace: to now, as at x1.
+	TapeSnapshot fo = snap(0.4f, false, false, false);
+	fo.following = true;
+	toPlay(fo, 0.125, a, b);
+	CHECK(a == 0.4f && b == 1.f, "following at x8: to now (%g..%g)", a, b);
+	toPlay(fo, 0.0, a, b);
+	CHECK(a == 0.4f && b == 1.f, "following at the Stretch stop: to now, not the held slice (%g..%g)", a, b);
 	toPlay(snap(0.8f, false, false, false), 0.5, a, b);
 	CHECK(b == 1.f, "recording at x2 from 0.8: cut at now (%g)", b);
 	toPlay(snap(-0.2f, false, false, false), 0.125, a, b);

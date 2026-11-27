@@ -167,7 +167,7 @@ struct Host {
 	long heap = 0, locks = 0, insane = 0;
 	std::string why;
 	// Coverage.
-	long stopSamples = 0, roundSamples = 0, wideSamples = 0, narrowSamples = 0;
+	long stopSamples = 0, roundSamples = 0, wideSamples = 0, narrowSamples = 0, followSamples = 0, followingSamples = 0;
 	long sized[3] = {0, 0, 0};   // samples heard at each grain size (the menu's, where the sizes differ)
 	long frozenSamples = 0, heldSamples = 0, stoppedSamples = 0, runHigh = 0, runLow = 0;
 	double peak = 0.0;
@@ -275,9 +275,13 @@ struct Host {
 			const long long shortest = grainFrames(GRAIN_SHORT, rate);
 			if (!(s.anchor >= s.now - s.capacity + shortest && s.anchor <= s.now)) return fail("the anchor is off the tape");
 			if (!(s.end <= s.now)) return fail("the slice ends after now");
+			// While recording: Follow, recording and sounding: on the flag, never held.
+			if (s.following && (s.held || s.stopped || s.end != s.anchor || !f.follow)) return fail("following, but held, stopped or off the flag");
 		}
 		(f.stopAtEnd ? stopSamples : roundSamples)++;
 		(f.wide ? wideSamples : narrowSamples)++;
+		followSamples += f.follow;
+		followingSamples += s.following;
 		if (s.grain > 0)
 			for (int g = 0; g < 3; g++)
 				if (s.grain == grainFrames(GrainSize(g), rate) && (g == std::max(0, std::min(f.grainSize, 2)))) sized[g]++;
@@ -361,6 +365,7 @@ void choose(Host& h, Segment& s, Random& g) {
 	}
 	if (g.next() % 3 == 0) f.wide = g.next() % 2;
 	if (g.next() % 3 == 0) f.stopAtEnd = g.next() % 2;
+	if (g.next() % 3 == 0) f.follow = g.next() % 2;   // While recording: Drift or Follow
 	if (g.next() % 4 == 0) f.inRPatched = g.next() % 2;
 	if (g.next() % 3 == 0) {
 		const int odd[6] = {-1, -1000, 17, 1000000, INT_MAX, INT_MIN};
@@ -440,7 +445,7 @@ long fuzzSeed(uint32_t seed, long long samples, Host& h) {
 void fuzz() {
 	const uint32_t seeds[3] = {1, 2, 3};
 	struct {
-		long stopSamples = 0, roundSamples = 0, wideSamples = 0, narrowSamples = 0, sized[3] = {0, 0, 0};
+		long stopSamples = 0, roundSamples = 0, wideSamples = 0, narrowSamples = 0, followSamples = 0, followingSamples = 0, sized[3] = {0, 0, 0};
 		long frozenSamples = 0, heldSamples = 0, stoppedSamples = 0, runHigh = 0, runLow = 0, rateChanges = 0;
 		double peak = 0.0;
 	} total;
@@ -454,6 +459,8 @@ void fuzz() {
 		total.roundSamples += h.roundSamples;
 		total.wideSamples += h.wideSamples;
 		total.narrowSamples += h.narrowSamples;
+		total.followSamples += h.followSamples;
+		total.followingSamples += h.followingSamples;
 		for (int g = 0; g < 3; g++) total.sized[g] += h.sized[g];
 		total.frozenSamples += h.frozenSamples;
 		total.heldSamples += h.heldSamples;
@@ -466,6 +473,8 @@ void fuzz() {
 	CHECK(total.stopSamples > 0 && total.roundSamples > 0, "fuzz: both end-of-pass settings (stop %ld, go round %ld samples)",
 	      total.stopSamples, total.roundSamples);
 	CHECK(total.wideSamples > 0 && total.narrowSamples > 0, "fuzz: Wide on and off (%ld, %ld)", total.wideSamples, total.narrowSamples);
+	CHECK(total.followSamples > 100000 && total.followSamples < 5800000 && total.followingSamples > 10000,
+	      "fuzz: While recording, Follow for %ld samples (following for %ld), Drift for the rest", total.followSamples, total.followingSamples);
 	CHECK(total.sized[0] > 0 && total.sized[1] > 0 && total.sized[2] > 0, "fuzz: each grain size heard (%ld, %ld, %ld samples)",
 	      total.sized[0], total.sized[1], total.sized[2]);
 	CHECK(total.frozenSamples > 0 && total.heldSamples > 0 && total.stoppedSamples > 0, "fuzz: frozen %ld, held %ld, stopped %ld samples",

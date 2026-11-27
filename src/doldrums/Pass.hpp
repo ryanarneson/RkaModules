@@ -44,7 +44,8 @@
 //   input, the frozen moment dissolving into it over a grain. Stopped (in
 //   stop, waiting for TRIG) it stays stopped: a thaw starts no pass and
 //   raises no RUN. Held at the Stretch stop, the slice at the anchor is
-//   taken once and held there, on a tape now recording. (The user's ruling
+//   taken once and held there, on a tape now recording (in Drift; in Follow
+//   the read point follows from the anchor, below). (The user's ruling
 //   at the first test build, superseding "Freeze going off changes
 //   nothing", under which a thaw from a hold at Position fully right went
 //   on from the frozen moment and came back to now only when that pass
@@ -68,25 +69,44 @@
 //   drift is not lost: the rounded lags' differences add up to all of it.
 //   The lag is reckoned at the current capacity and grain, so a change of
 //   Grain alone moves nothing.
-// - Held: Stretch at its stop (pace 0), or the tape frozen with the anchor
-//   less than a grain from now (nothing to travel through). The read point
-//   stands still, the grain sounds, a pass never ends, in either setting.
-//   `take` is true on the grain held begins if the read point is still on
-//   the tape, on a Position move, and on a change of Grain if the slice is
-//   on the tape at the new size. A Position move while the held place is
-//   still on the tape moves it as above; once that place has been recorded
-//   over, the move takes the new slice at the anchor, Position's own place,
-//   still held and with no new pass (ruling: as leaving held off the tape
-//   goes from the anchor). `take` is false otherwise, frozen too (choice: one
-//   rule for both causes; retaking a still tape would be harmless, but
-//   keeping the slice also keeps the faded frames written just after a
-//   freeze out of the held moment).
+// - Held: Stretch at its stop (pace 0; not while following, below), or the
+//   tape frozen with the anchor less than a grain from now (nothing to
+//   travel through). The read point stands still, the grain sounds, a pass
+//   never ends, in either setting. `take` is true on the grain held begins
+//   if the read point is still on the tape, on a Position move, and on a
+//   change of Grain if the slice is on the tape at the new size. Frozen, a
+//   Position move while the held place is on the tape moves it as above (the
+//   scrub). Recording, a move takes the new slice at the anchor, Position's
+//   own place, still held and with no new pass, wherever the held place is
+//   (ruling: as leaving held off the tape goes from the anchor; and the fix
+//   wave's re-review, Task 14: before, a held place still on the tape was
+//   shifted by the change, so a patch reopened held on the silence from
+//   before it opened could not be woken by turning Position for up to 30 s).
+//   `take` is false otherwise, frozen too (choice: one rule for both causes;
+//   retaking a still tape would be harmless, but keeping the slice also
+//   keeps the faded frames written just after a freeze out of the held
+//   moment).
 // - Leaving held: on from where the read point is if that is on the tape,
 //   else a new pass from the anchor (never the end of a pass, in stop too).
 // - Not frozen, a pass with less than a grain to travel (the anchor within a
 //   grain of the guarded oldest edge; Position fully left is the case) sits
 //   on the anchor every grain: it sounds, it is not held, it never ends and
 //   it never marks a new pass, so RUN stays high (difference 2).
+// - While recording: Follow (the menu; PassIn::follow; the user's request at
+//   2.0.46, PaulXStretch's way: capture first, stretch after; Drift, the
+//   default, is every other rule here). Recording in Follow ("following"),
+//   the read point is on the anchor at every pace, as at x1 below: taken,
+//   sounding, never held (Stretch's stop does not hold while following: to
+//   hold, Freeze), a pass that never ends (RUN stays high) and no new pass
+//   while it stays there; a Position move moves it with the anchor. Arriving
+//   from elsewhere (Follow chosen with the read point behind the anchor, or
+//   held) is one return to the anchor, a new pass, once (by the x1 rule's
+//   onAnchor_; leaving held is as above). Stopped stays stopped: Follow
+//   wakes nothing. TRIG, a thaw, Freeze rising and a press in the window
+//   keep their rules (a thaw, a new pass from the anchor, then follows).
+//   Drift chosen while following goes on from the anchor at the pace and
+//   falls behind (no return, no new pass). Frozen, Follow and Drift are the
+//   same in every respect.
 // - Recording at exactly Stretch 1 (pace 1, the dial's left stop or a CV
 //   holding it there), the read point is on the anchor: if it is not there
 //   at a grain (Stretch brought back to 1 after it fell behind, or from the
@@ -125,6 +145,7 @@ struct PassIn {
 	double pace;           // 0 = Stretch at the stop
 	bool frozen, freezeRose, trig, stopAtEnd, grainChanged;
 	bool freezeFell;       // Freeze went off since the last grain (the engine reports at most one of the two edges)
+	bool follow;           // the menu's While recording: false Drift, true Follow
 };
 
 struct PassOut {
@@ -173,7 +194,8 @@ private:
 		o.anchor = anchor;
 
 		const bool nothing = in.frozen && now - anchor < grain;   // nothing to travel through
-		const bool held = pace == 0.0 || nothing;
+		const bool following = in.follow && !in.frozen;            // While recording: Follow, and recording
+		const bool held = (pace == 0.0 && !following) || nothing;
 		const bool noRoom = !in.frozen && anchor - low < grain;
 		const long long shift = fresh_ ? 0 : lagFrames(pos_, in.capacity, grain) - lag;
 		const bool moved = shift != 0;
@@ -204,7 +226,7 @@ private:
 
 		if (held) {
 			if (moved) {
-				end_ = onTape(end_) ? clamp(end_ + shift, low, now) : anchor;
+				end_ = in.frozen && onTape(end_) ? clamp(end_ + shift, low, now) : anchor;
 				o.take = true;
 			}
 			else
@@ -223,9 +245,9 @@ private:
 			return sounding(o);
 		}
 
-		if (!in.frozen && pace == 1.0) {
+		if (!in.frozen && (pace == 1.0 || following)) {
 			if (!onAnchor_)
-				return begin(anchor, false, o);   // x1 again: back on the anchor, a new pass
+				return begin(anchor, false, o);   // x1 again, or Follow: back on the anchor, a new pass
 			end_ = anchor;                        // on it, keeping pace (a Position move moves it with the anchor)
 			frac_ = 0.0;
 			o.take = true;

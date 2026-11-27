@@ -318,14 +318,15 @@ void state_words() {
 	TapeSnapshot s;
 	DoldrumsState st;
 	st.capacity = 1000;
-	auto word = [&](bool frozen, bool held, bool stopped, bool atEnd = false) {
+	auto word = [&](bool frozen, bool held, bool stopped, bool atEnd = false, bool following = false) {
 		st.frozen = frozen;
 		st.held = held;
 		st.stopped = stopped;
 		st.atEnd = atEnd;
+		st.following = following;
 		v.publish(st);
 		CHECK(v.read(s), "read");
-		CHECK(s.frozen == frozen && s.held == held && s.stopped == stopped, "flags");
+		CHECK(s.frozen == frozen && s.held == held && s.stopped == stopped && s.following == (following && !frozen && !stopped), "flags");
 		return std::string(s.state);
 	};
 	CHECK(word(false, false, false) == "", "plain running says nothing");
@@ -342,7 +343,47 @@ void state_words() {
 	CHECK(word(true, true, false, true) == "FROZEN AT END", "frozen at the end: %s", word(true, true, false, true).c_str());
 	CHECK(word(true, true, true, true) == "FROZEN STOPPED", "stopped wins over at the end");
 	CHECK(word(true, true, false, false) == "FROZEN HELD", "frozen, held by the Stretch stop alone");
+	// While recording: Follow, recording and sounding: FOLLOW (Stretch waits
+	// for Freeze). Stopped says STOPPED; frozen (a flag left from the
+	// boundary before the freeze), the frozen words.
+	CHECK(word(false, false, false, false, true) == "FOLLOW", "following: %s", word(false, false, false, false, true).c_str());
+	CHECK(word(false, false, true, false, true) == "STOPPED", "stopped wins over following");
+	CHECK(word(true, false, false, false, true) == "FROZEN", "frozen: the frozen word, not FOLLOW");
+	CHECK(word(true, true, false, true, true) == "FROZEN AT END", "frozen at the end, not FOLLOW");
 	CHECK(std::strlen("FROZEN STOPPED") < sizeof s.state && std::strlen("FROZEN AT END") < sizeof s.state, "the longest word fits with its end");
+}
+
+// The word as the engine's own state gives it: a real engine recording for
+// 2 s in each setting, then frozen, and in the Stop setting from reset.
+void follow_word_from_the_engine() {
+	struct Case {
+		bool follow, stop;
+		float freeze;
+		const char* want;
+	};
+	const Case cases[] = {
+	    {true, false, 0.f, "FOLLOW"}, {false, false, 0.f, ""}, {true, false, 1.f, "FROZEN"}, {false, false, 1.f, "FROZEN"}, {true, true, 0.f, "STOPPED"},
+	};
+	for (const Case& c : cases) {
+		DoldrumsEngine e;
+		e.seed(3);
+		CHECK(e.allocate(48000.f), "allocate");
+		e.setSampleRate(48000.f);
+		DoldrumsFrame f;
+		DoldrumsResult r;
+		f.follow = c.follow;
+		f.stopAtEnd = c.stop;
+		for (long long i = 0; i < 96000; i++) {
+			f.inL = noise();
+			if (i == 72000) f.params[DoldrumsFrame::FREEZE] = c.freeze;
+			e.process(f, r);
+		}
+		TapeView v;
+		TapeSnapshot s;
+		v.publish(e.state());
+		CHECK(v.read(s) && std::string(s.state) == c.want, "%s, %s, Freeze %g: \"%s\", want \"%s\"", c.follow ? "Follow" : "Drift",
+		      c.stop ? "stop" : "go round", c.freeze, s.state, c.want);
+	}
 }
 
 void drag_maps_to_position() {
@@ -418,6 +459,7 @@ int main() {
 	scrolls();
 	marks();
 	state_words();
+	follow_word_from_the_engine();
 	drag_maps_to_position();
 	read_before_publish_and_hostile();
 	return rkatest::finish("doldrums/test_view");

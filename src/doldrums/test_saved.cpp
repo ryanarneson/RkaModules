@@ -191,27 +191,51 @@ void param_ids() {
 	CHECK(bad == 0, "the defaults are the plan's, Position 0.9 (%d differ)", bad);
 }
 
-SavedMap goldenMap() {
+SavedMap goldenMap(bool follow = false) {
 	SavedMap m;
-	for (const golden::GoldenField& g : golden::kGoldenData)
-		m[g.key] = {SavedValue::Kind(g.kind == 0 ? SavedValue::BOOL : SavedValue::INT), g.value};
+	if (follow)
+		for (const golden::GoldenField& g : golden::kGoldenDataFollow)
+			m[g.key] = {SavedValue::Kind(g.kind == 0 ? SavedValue::BOOL : SavedValue::INT), g.value};
+	else
+		for (const golden::GoldenField& g : golden::kGoldenData)
+			m[g.key] = {SavedValue::Kind(g.kind == 0 ? SavedValue::BOOL : SavedValue::INT), g.value};
 	return m;
 }
 
 void golden_patch_data() {
 	const SavedState s = savedFromMap(goldenMap());
-	CHECK(s.grain == 2 && s.wide && s.stopAtEnd && !s.keepTape, "the golden data loads (grain %d, wide %d, stop %d, keep %d)", s.grain,
-	      int(s.wide), int(s.stopAtEnd), int(s.keepTape));
+	CHECK(s.grain == 2 && s.wide && s.stopAtEnd && !s.keepTape && !s.follow,
+	      "the golden data of 2.0.47 loads, as Drift (grain %d, wide %d, stop %d, keep %d, follow %d)", s.grain, int(s.wide), int(s.stopAtEnd),
+	      int(s.keepTape), int(s.follow));
+	const SavedState sf = savedFromMap(goldenMap(true));
+	CHECK(sf.grain == 2 && sf.wide && sf.stopAtEnd && !sf.keepTape && sf.follow,
+	      "the golden data with whileRecording loads (grain %d, wide %d, stop %d, keep %d, follow %d)", sf.grain, int(sf.wide), int(sf.stopAtEnd),
+	      int(sf.keepTape), int(sf.follow));
 	const SavedState d = savedFromMap(SavedMap());
-	CHECK(d.grain == 1 && !d.wide && !d.stopAtEnd && d.keepTape, "nothing saved: the defaults");
+	CHECK(d.grain == 1 && !d.wide && !d.stopAtEnd && d.keepTape && !d.follow, "nothing saved: the defaults (Drift)");
 	const SavedMap w = savedToMap(SavedState());
-	CHECK(w.size() == 4 && w.count("grain") && w.count("wide") && w.count("atEnd") && w.count("keepTape"),
-	      "the keys written are the four (%zu)", w.size());
+	CHECK(w.size() == 5 && w.count("grain") && w.count("wide") && w.count("atEnd") && w.count("keepTape") && w.count("whileRecording"),
+	      "the keys written are the five (%zu)", w.size());
 	CHECK(w.at("grain").kind == SavedValue::INT && w.at("atEnd").kind == SavedValue::INT && w.at("wide").kind == SavedValue::BOOL &&
-	          w.at("keepTape").kind == SavedValue::BOOL,
-	      "each key of its kind");
-	const SavedState back = savedFromMap(savedToMap(s));
-	CHECK(back.grain == s.grain && back.wide == s.wide && back.stopAtEnd == s.stopAtEnd && back.keepTape == s.keepTape, "written and read back");
+	          w.at("keepTape").kind == SavedValue::BOOL && w.at("whileRecording").kind == SavedValue::INT && w.at("whileRecording").value == 0.0,
+	      "each key of its kind, whileRecording 0 by default");
+	const SavedMap wf = savedToMap(sf);
+	CHECK(wf.at("whileRecording").kind == SavedValue::INT && wf.at("whileRecording").value == 1.0, "Follow is written 1");
+	for (const SavedState& x : {s, sf}) {
+		const SavedState back = savedFromMap(savedToMap(x));
+		CHECK(back.grain == x.grain && back.wide == x.wide && back.stopAtEnd == x.stopAtEnd && back.keepTape == x.keepTape && back.follow == x.follow,
+		      "written and read back (follow %d)", int(x.follow));
+	}
+	// whileRecording bad (wrong kind, out of range, not whole): Drift, the
+	// others load.
+	const SavedValue badFollow[] = {{SavedValue::INT, 2.0},  {SavedValue::INT, -1.0}, {SavedValue::BOOL, 1.0},
+	                                {SavedValue::REAL, 1.0}, {SavedValue::INT, 0.5},  {SavedValue::INT, 1e12}};
+	for (const SavedValue& v : badFollow) {
+		SavedMap m = goldenMap(true);
+		m["whileRecording"] = v;
+		const SavedState t = savedFromMap(m);
+		CHECK(!t.follow && t.grain == 2 && t.wide && t.stopAtEnd && !t.keepTape, "whileRecording bad (kind %d, %g): Drift alone", int(v.kind), v.value);
+	}
 	// Each field bad alone: it takes its default, the others load.
 	struct Bad {
 		const char* key;

@@ -316,14 +316,15 @@ void position_turn_stops_at_the_edge() {
 	CHECK(o.newPass && o.end == r.anchorFor(0.1f), "the oldest sound catches it: the pass is over");
 
 	// Held, recording, still on the tape (1 121 408 behind now after 50
-	// grains); a turn left by 427 085 would take it off: it stops at the edge.
+	// grains): a turn takes the slice at the new anchor, which is always on
+	// the tape (held_recording_position_move_takes_at_the_anchor).
 	Sim h(0.5f, 0, false);
 	for (int i = 0; i < 51; i++)
 		h.next();
 	CHECK(h.o.end >= h.low(true), "the held place is still on the tape");
 	h.in.position = 0.2f;
 	o = h.next();
-	CHECK(o.end == h.low(true) && o.take && o.held && !o.newPass, "held: a turn that would leave the tape stops at its edge");
+	CHECK(o.end == h.anchorFor(0.2f) && o.take && o.held && !o.newPass, "held, recording: a turn takes the slice at the new anchor");
 
 	// Frozen, the read point never falls behind its anchor, so a turn left
 	// cannot take it off; a turn right past now ends the pass.
@@ -499,18 +500,7 @@ void held_at_the_stop() {
 	CHECK(ok, "then kept, not read, for 60 s while the tape runs on");
 	CHECK(r.o.end < r.low(true), "by then the tape under it has been recorded over");
 
-	// A Position move takes a new slice at the moved place.
-	Sim h(0.5f, 0, false);
-	for (int i = 0; i < 20; i++)
-		h.next();
-	const long long here = h.o.end;
-	h.in.position = 0.45f;
-	o = h.next();
-	const long long shift = lagFrames(0.5f, C, G) - lagFrames(0.45f, C, G);
-	CHECK(o.take && o.held && o.end == here + shift, "a Position move: taken at the moved place");
-	o = h.next();
-	CHECK(!o.take && o.end == here + shift, "and kept");
-
+	// (A Position move while held and recording: held_recording_position_move_takes_at_the_anchor.)
 	// Frozen, a move is a scrub.
 	Sim f(0.5f, 0, true);
 	f.next();
@@ -834,6 +824,258 @@ void freeze_in_stop() {
 	CHECK(o.newPass && o.sound && !o.held, "opened frozen in go round: a pass");
 }
 
+// The ruling from the fix wave's re-review (Pass.hpp): held on a tape that
+// is recording (Stretch at its stop), a real Position move takes the new
+// slice at the anchor, where Position now points, even while the old place
+// is still on the tape; so a patch reopened held on the silence from before
+// it opened wakes when Position is turned. Frozen, the place shifts by the
+// change (the scrub), as before.
+void held_recording_position_move_takes_at_the_anchor() {
+	const long long shift = lagFrames(0.5f, C, G) - lagFrames(0.45f, C, G);
+	for (int stop = 0; stop < 2; stop++) {
+		Sim h(0.5f, 0, false, stop != 0);
+		h.in.trig = true;
+		for (int i = 0; i < 20; i++)
+			h.next();
+		const long long here = h.o.end;
+		CHECK(here >= h.low(true) && here != h.o.anchor, "stop %d: held on the tape, behind the flag", stop);
+		h.in.position = 0.45f;
+		PassOut o = h.next();
+		CHECK(o.take && o.held && o.sound && !o.newPass && !o.stopped && o.end == h.anchorFor(0.45f) && o.end == o.anchor,
+		      "stop %d: a Position move takes the slice at the new anchor (end %lld, anchor %lld, the shifted place %lld)", stop, o.end, o.anchor,
+		      here + shift);
+		const long long at = o.end;
+		o = h.next();
+		CHECK(!o.take && o.held && o.end == at, "stop %d: and keeps it", stop);
+		// A wobble is still no move.
+		h.in.position = std::nextafter(0.45f, 2.f);
+		o = h.next();
+		CHECK(!o.take && o.end == at, "stop %d: a wobble keeps it", stop);
+	}
+	// Frozen, held off the anchor (a pass under way, then the Stretch stop): a
+	// move shifts the place by the change.
+	Sim f(0.5f, 8, true);
+	for (int i = 0; i < 10; i++)
+		f.next();
+	f.stretch(0);
+	f.next();
+	const long long here = f.o.end;
+	CHECK(f.o.held && here == f.anchorFor(0.5f) + 9 * 1024, "frozen: held off the anchor");
+	f.in.position = 0.45f;
+	PassOut o = f.next();
+	CHECK(o.take && o.held && o.end == here + shift && o.end != o.anchor, "frozen: a move shifts the held place by the change (end %lld, want %lld)",
+	      o.end, here + shift);
+}
+
+// While recording: Follow (Pass.hpp). Recording, the read point is on the
+// flag every grain whatever the pace, its stop included: taken, sounding,
+// never held, and no new pass once there.
+void follow_sits_on_the_flag() {
+	const double stretches[] = {1, 8, 32, 0};
+	for (double s : stretches)
+		for (float pos : {0.9f, 0.5f, 0.f}) {
+			Sim r(pos, s, false);
+			r.in.follow = true;
+			int passes = r.next().newPass ? 1 : 0;
+			bool ok = true;
+			for (int i = 0; i < 400; i++) {
+				const PassOut o = r.next();
+				passes += o.newPass;
+				ok = ok && o.end == o.anchor && o.anchor == r.anchorFor(pos) + (pos == 0.f ? H : 0) && o.take && o.sound && !o.held &&
+				     !o.stopped;
+			}
+			CHECK(ok && passes <= 1, "Follow, x%g, Position %g: on the flag for 400 grains, taken and sounding, never held (%d new passes)", s, pos,
+			      passes);
+		}
+	// A Position move moves the read point with the flag, no new pass.
+	Sim r(0.9f, 8, false);
+	r.in.follow = true;
+	for (int i = 0; i < 10; i++)
+		r.next();
+	r.in.position = 0.6f;
+	PassOut o = r.next();
+	CHECK(o.end == o.anchor && o.end == r.anchorFor(0.6f) && !o.newPass && o.take, "Follow, a Position move: on the new flag, no new pass");
+	// TRIG and a thaw keep their rules: a new pass from the flag.
+	r.in.trig = true;
+	o = r.next();
+	CHECK(o.newPass && o.end == o.anchor && o.sound && !o.held, "Follow, TRIG: a new pass from the flag");
+	Sim t(0.5f, 0, true);
+	t.in.follow = true;
+	for (int i = 0; i < 10; i++)
+		t.next();
+	CHECK(t.o.held, "Follow, frozen at the Stretch stop: held");
+	t.in.frozen = false;
+	t.in.freezeFell = true;
+	o = t.next();
+	CHECK(o.newPass && o.sound && !o.held && o.end == o.anchor, "Follow, a thaw at the Stretch stop: back to the flag, following, not held");
+	o = t.next();
+	CHECK(!o.newPass && o.take && !o.held && o.end == o.anchor, "and following");
+}
+
+// Frozen, Follow and Drift are the same in every respect. Two passes, one
+// in each setting, recorded differently (Drift falls behind at x8, Follow
+// sits on the flag), then frozen and driven alike for 3000 grains of
+// moving Position, Stretch, TRIG, the Stop setting and Grain: every field
+// of every grain the same from the freeze on.
+void follow_frozen_is_as_drift() {
+	for (int stop = 0; stop < 2; stop++) {
+		Sim d(0.7f, 8, false, stop != 0), w(0.7f, 8, false, stop != 0);
+		w.in.follow = true;
+		d.in.trig = w.in.trig = true;
+		for (int i = 0; i < 40; i++) {
+			d.next();
+			w.next();
+		}
+		CHECK(d.o.end != w.o.end && w.o.end == w.o.anchor, "stop %d: recorded differently (Drift %lld, Follow %lld)", stop, d.o.end, w.o.end);
+		uint64_t x = 12345;
+		auto rnd = [&x]() {
+			x ^= x << 13;
+			x ^= x >> 7;
+			x ^= x << 17;
+			return x;
+		};
+		long long diff = 0, sounded = 0, passes = 0;
+		for (int i = 0; i < 3000; i++) {
+			Sim* both[2] = {&d, &w};
+			const bool rose = i == 0, trig = rnd() % 50 == 0, flip = rnd() % 400 == 0;
+			const uint64_t r = rnd();
+			const bool movePos = r % 20 == 0, moveStretch = (r >> 8) % 30 == 0, grain = (r >> 16) % 500 == 0;
+			const float pos = float((r >> 20) % 1001) / 1000.f;
+			const double st = ((r >> 32) % 5) == 0 ? 0.0 : double(1 + (r >> 36) % 40);
+			for (Sim* s : both) {
+				s->in.frozen = true;
+				s->in.freezeRose = rose;
+				s->in.trig = trig;
+				if (flip) s->in.stopAtEnd = !s->in.stopAtEnd;
+				if (movePos) s->in.position = pos;
+				if (moveStretch) s->stretch(st);
+				if (grain) {
+					s->in.grain = s->in.grain == G ? 32768 : G;
+					s->in.hop = s->in.grain / 2;
+					s->in.grainChanged = true;
+				}
+			}
+			const PassOut a = d.next(), b = w.next();
+			if (rose) {
+				d.in.now += 240;
+				w.in.now += 240;
+			}
+			diff += a.end != b.end || a.take != b.take || a.sound != b.sound || a.newPass != b.newPass || a.held != b.held || a.stopped != b.stopped ||
+			        a.anchor != b.anchor;
+			sounded += a.sound;
+			passes += a.newPass;
+		}
+		CHECK(diff == 0 && sounded > 500 && passes > 20, "stop %d: frozen, Follow and Drift alike over 3000 grains (%lld differ; %lld sounded, %lld passes)",
+		      stop, diff, sounded, passes);
+	}
+}
+
+// Drift, then Follow while recording: one return to the flag, a new pass,
+// once; from the head behind the flag at a pace, and from the Stretch stop.
+void drift_to_follow_rejoins_once() {
+	for (double s : {8.0, 0.0}) {
+		Sim r(0.9f, s, false);
+		for (int i = 0; i < 40; i++)
+			r.next();
+		CHECK(r.o.sound && r.o.anchor - r.o.end > 100000 && r.o.held == (s == 0.0), "x%g: the head behind the flag (%lld)", s, r.o.anchor - r.o.end);
+		r.in.follow = true;
+		PassOut o = r.next();
+		CHECK(o.newPass && o.take && o.sound && !o.held && o.end == o.anchor, "x%g, Follow chosen: back on the flag, a new pass", s);
+		bool ok = true;
+		for (int i = 0; i < 200; i++) {
+			o = r.next();
+			ok = ok && !o.newPass && o.end == o.anchor && o.take && !o.held;
+		}
+		CHECK(ok, "x%g: then on the flag with no further new pass", s);
+	}
+}
+
+// Follow, then Drift while recording: the head goes on from the flag and
+// falls behind at Stretch's pace; no return, no new pass.
+void follow_to_drift_falls_behind_from_the_flag() {
+	Sim r(0.9f, 8, false);
+	r.in.follow = true;
+	for (int i = 0; i < 20; i++)
+		r.next();
+	const long long at = r.o.end;
+	CHECK(at == r.o.anchor, "Follow: on the flag");
+	r.in.follow = false;
+	bool ok = true;
+	for (int k = 1; k <= 30; k++) {
+		const PassOut o = r.next();
+		ok = ok && !o.newPass && o.take && o.sound && !o.held && o.end == at + k * 1024 && o.anchor - o.end == k * (H - 1024);
+	}
+	CHECK(ok, "Drift chosen: on from the flag at x8, falling 7168 a grain behind it, no new pass");
+	// At the Stretch stop: held where it is, on the flag at that grain.
+	Sim h(0.9f, 0, false);
+	h.in.follow = true;
+	for (int i = 0; i < 20; i++)
+		h.next();
+	const long long here = h.o.end;
+	h.in.follow = false;
+	PassOut o = h.next();
+	CHECK(o.held && o.take && !o.newPass && o.end == here, "Drift chosen at the Stretch stop: held where the head was");
+}
+
+// The Stop setting: stopped stays stopped (Follow does not wake it); a
+// module sounding goes on following, and a pass by TRIG never ends.
+void follow_stopped_stays_stopped() {
+	Sim s(0.9f, 8, false, true);
+	s.in.follow = true;
+	PassOut o = s.next();
+	bool ok = o.stopped && !o.sound;
+	for (int i = 0; i < 50; i++) {
+		o = s.next();
+		ok = ok && o.stopped && !o.sound && !o.newPass;
+	}
+	CHECK(ok, "Follow in stop, from reset: stopped and silent");
+	// Stopped by a Drift pass's end, then Follow: still stopped.
+	Sim d(0.1f, 2, false, true);
+	d.in.trig = true;
+	d.next();
+	for (int i = 0; i < 2000 && !d.o.stopped; i++)
+		d.next();
+	CHECK(d.o.stopped, "Drift in stop: the pass ended");
+	d.in.follow = true;
+	ok = true;
+	for (int i = 0; i < 50; i++) {
+		o = d.next();
+		ok = ok && o.stopped && !o.sound && !o.newPass;
+	}
+	CHECK(ok, "then Follow: stays stopped");
+	// TRIG: a pass from the flag, following, that never ends.
+	d.in.trig = true;
+	o = d.next();
+	CHECK(o.newPass && o.sound && o.end == o.anchor, "TRIG: a pass from the flag");
+	ok = true;
+	for (int i = 0; i < 2000; i++) {
+		o = d.next();
+		ok = ok && o.sound && !o.stopped && !o.newPass && o.end == o.anchor;
+	}
+	CHECK(ok, "and it follows, never stopping");
+}
+
+// Stretch at its stop does not hold while recording in Follow: to hold, Freeze.
+void follow_stop_does_not_hold() {
+	Sim r(0.5f, 8, false);
+	r.in.follow = true;
+	for (int i = 0; i < 10; i++)
+		r.next();
+	r.stretch(0);
+	bool ok = true;
+	for (int i = 0; i < 100; i++) {
+		const PassOut o = r.next();
+		ok = ok && !o.held && o.take && o.sound && !o.newPass && o.end == o.anchor;
+	}
+	CHECK(ok, "Follow, the Stretch stop, recording: not held, on the flag, taken every grain");
+	r.in.frozen = r.in.freezeRose = true;
+	PassOut o = r.next();
+	CHECK(o.held && o.newPass && o.sound, "Freeze: held");
+	r.in.now += 240;
+	o = r.next();
+	CHECK(o.held && !o.take, "and kept");
+}
+
 void grain_change_while_held() {
 	Sim h(0.5f, 0, false);
 	for (int i = 0; i < 5; i++)
@@ -927,7 +1169,7 @@ void fuzz() {
 	const long long caps[] = {1440000, 1323000, 2880000};
 	long long bad = 0, badAnchor = 0, both = 0, other = 0;
 	long long seenTake = 0, seenPass = 0, seenHeld = 0, seenStopped = 0, seenKept = 0, seenWait = 0, seenWake = 0, seenHeldWake = 0, seenThaw = 0,
-	          seenThawStopped = 0, seenFullPace = 0;
+	          seenThawStopped = 0, seenFullPace = 0, seenFollow = 0, seenFollowStopped = 0, followPass = 0;
 	int steps = 0;
 	for (int run = 0; run < 3; run++) {
 		PassLogic p;
@@ -940,7 +1182,7 @@ void fuzz() {
 		in.position = 1.f;
 		in.pace = 0.125;
 		int tail = 0;
-		bool wasStopped = false;
+		bool wasStopped = false, wasOnAnchor = false, wasHeld = false;
 		for (int i = 0; i < 333334; i++, steps++) {
 			const double u = unit();
 			in.trig = unit() < 0.01;
@@ -960,6 +1202,8 @@ void fuzz() {
 			}
 			if (unit() < 0.002)
 				in.stopAtEnd = !in.stopAtEnd;
+			if (unit() < 0.002)
+				in.follow = !in.follow;
 			if (u < 0.2) {
 				const float specials[] = {kNaN, kInf, -kInf, 0.f, 1.f, -1.f, 2.f, 1e30f};
 				in.position = specials[next() % 8];
@@ -1006,6 +1250,19 @@ void fuzz() {
 			if (fullPace && o.sound && o.end != o.anchor)
 				other++;
 			seenFullPace += fullPace && o.sound;
+			// Following (Follow, recording), sounding: on the flag, taken, never
+			// held, and a new pass only for TRIG, a thaw, arriving there from
+			// elsewhere, or leaving held with the held place off the tape (Drift
+			// held on the flag, which then left the tape), or the first grain.
+			const bool following = in.follow && !in.frozen;
+			if (following && o.sound && (o.end != o.anchor || !o.take || o.held))
+				other++;
+			if (following && o.newPass && !in.trig && !in.freezeFell && wasOnAnchor && !wasHeld && i > 0)
+				followPass++;
+			seenFollow += following && o.sound;
+			seenFollowStopped += following && o.stopped;
+			wasOnAnchor = o.sound && o.end == o.anchor;
+			wasHeld = o.held;
 			seenThawStopped += thawStopped && o.stopped;
 			if ((o.take && !o.sound) || (o.held && !o.sound) || (o.newPass && !(o.take && o.sound)) ||
 			    (mustStart && (o.stopped || !o.newPass || o.end != o.anchor)) || (mustWait && !(o.stopped && !o.sound)) ||
@@ -1035,6 +1292,9 @@ void fuzz() {
 	      " or nothing to travel through not held", other);
 	CHECK(seenThaw > 0 && seenThawStopped > 0, "thaws: %lld returned, %lld stayed stopped", seenThaw, seenThawStopped);
 	CHECK(seenFullPace > 1000, "recording at full pace, sounding: %lld grains", seenFullPace);
+	CHECK(followPass == 0 && seenFollow > 10000 && seenFollowStopped > 1000,
+	      "following: %lld new passes on the flag with no TRIG or thaw; %lld grains following, %lld stopped", followPass, seenFollow,
+	      seenFollowStopped);
 	CHECK(seenWait > 0 && seenWake > 0 && seenHeldWake > 0, "Freeze rising in stop: %lld waited, %lld held; %lld stopped woken into held",
 	      seenWait, seenWake, seenHeldWake);
 	CHECK(steps == 1000002 && seenTake > 100000 && seenPass > 10000 && seenHeld > 10000 && seenStopped > 10000 && seenKept > 10000,
@@ -1067,6 +1327,13 @@ int main() {
 	full_left_recording();
 	stop_at_end();
 	freeze_in_stop();
+	held_recording_position_move_takes_at_the_anchor();
+	follow_sits_on_the_flag();
+	follow_frozen_is_as_drift();
+	drift_to_follow_rejoins_once();
+	follow_to_drift_falls_behind_from_the_flag();
+	follow_stopped_stays_stopped();
+	follow_stop_does_not_hold();
 	grain_change_while_held();
 	bad_input();
 	fuzz();

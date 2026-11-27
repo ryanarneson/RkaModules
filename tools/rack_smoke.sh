@@ -218,7 +218,7 @@ done
 
 # Doldrums' window in its other states (TESTING.md rule 12), each from its
 # own run of the screenshot mode; the default screenshot above is frozen.
-for state in running held stopped frozen-held frozen-at-end frozen-stopped; do
+for state in running held stopped frozen-held frozen-at-end frozen-stopped follow; do
 	rm -f "$user/screenshots/$slug/Doldrums.png"
 	(cd "$(dirname "$RACK_BIN")" && RKA_DOLDRUMS_PREVIEW=$state "${run[@]}" >/dev/null 2>&1) || true
 	png="$user/screenshots/$slug/Doldrums.png"

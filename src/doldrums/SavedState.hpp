@@ -7,7 +7,9 @@
 //
 // Keys (the plan's "Menu and saved state"): grain (0 Short, 1 Medium, 2 Long;
 // default 1), wide (default false), atEnd (0 go round, 1 stop; default 0),
-// keepTape (default true). The knobs and the Freeze button are Rack's params
+// keepTape (default true), whileRecording (0 Drift, 1 Follow; default 0;
+// Task 14, after 2.0.47: a patch saved before it has no such key and loads
+// as Drift, the module's behaviour then). The knobs and the Freeze button are Rack's params
 // and are saved by Rack; the frozen tape is tape.wav (TapeStore.hpp); the
 // seed is not saved. There is no version key: a later format that needs one
 // adds it, and its absence then means this one.
@@ -25,6 +27,7 @@ struct SavedState {
 	bool wide = false;
 	bool stopAtEnd = false; // "atEnd": 1
 	bool keepTape = true;
+	bool follow = false;    // "whileRecording": 1
 };
 
 struct SavedValue {
@@ -40,6 +43,7 @@ inline SavedMap savedToMap(const SavedState& s) {
 	m["wide"] = {SavedValue::BOOL, s.wide ? 1.0 : 0.0};
 	m["atEnd"] = {SavedValue::INT, s.stopAtEnd ? 1.0 : 0.0};
 	m["keepTape"] = {SavedValue::BOOL, s.keepTape ? 1.0 : 0.0};
+	m["whileRecording"] = {SavedValue::INT, s.follow ? 1.0 : 0.0};
 	return m;
 }
 
@@ -71,6 +75,8 @@ inline SavedState savedFromMap(const SavedMap& m) {
 	if (saved::readInt(m, "atEnd", 0, 1, i))
 		s.stopAtEnd = i == 1;
 	saved::readBool(m, "keepTape", s.keepTape);
+	if (saved::readInt(m, "whileRecording", 0, 1, i))
+		s.follow = i == 1;
 	return s;
 }
 

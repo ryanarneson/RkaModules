@@ -60,6 +60,17 @@
 //   Position "now" or "12.3 s ago"; Partials a whole number; Tilt dB per
 //   octave; Blur octaves; Harmonics % ; Mix "% wet". With a CV moving
 //   Stretch, Position or Harmonics, the tooltip adds what is heard with it.
+// - While recording (Task 14, the user's request at 2.0.46): a submenu,
+//   "Drift" and "Follow", each with a line under it saying what is heard:
+//   Drift "Stretched as it records: falls behind, then back to the flag",
+//   Follow "Unstretched, Position's distance late; Stretch waits for
+//   Freeze". Saved as "whileRecording" (SavedState.hpp); Initialize sets
+//   Drift. While the engine says it is following (recording in Follow,
+//   sounding), Stretch's tooltip adds " (waits for Freeze)" after its figure
+//   (and the CV's), and the window's corner says FOLLOW. Stopped in Follow
+//   the corner says STOPPED and the tooltip adds nothing (it is waiting for
+//   TRIG; after TRIG it follows and says so); frozen, the frozen words and
+//   no addition, in either setting.
 // - Randomize leaves Freeze, Mix and the menu alone (Freeze would freeze the
 //   tape, Mix could silence the effect); the rest is fair game. A Stretch at
 //   the stop is held, not silent.
@@ -70,7 +81,7 @@
 //   the manual's read head) a brass line, bolder than the flag's; the
 //   anchor (the manual's Position flag) a cyan line with a small cyan flag
 //   at the top. The state word (TapeView.hpp: FROZEN, HELD, STOPPED,
-//   FROZEN HELD, FROZEN AT END, FROZEN STOPPED) top right, and a file's trouble
+//   FOLLOW, FROZEN HELD, FROZEN AT END, FROZEN STOPPED) top right, and a file's trouble
 //   top left, each on a patch of the glass's own colour so the peaks never
 //   cross the letters. Before the first snapshot: a line along the middle,
 //   as Eddy's empty tape. A silent tape draws its 0 V line dimly.
@@ -119,6 +130,7 @@ struct Doldrums : Module {
 	// The menu (UI writes, audio reads; saved by dataToJson).
 	std::atomic<int> grain_{rka::doldrums::GRAIN_MEDIUM};
 	std::atomic<bool> wide_{false}, stopAtEnd_{false}, keepTape_{true};
+	std::atomic<bool> follow_{false};   // While recording: false Drift (the default), true Follow
 
 	// What the audio thread last published (with the window's snapshot), for
 	// the tooltips and the window's drag.
@@ -127,6 +139,7 @@ struct Doldrums : Module {
 	std::atomic<long long> capacity_{0};
 	std::atomic<int> grainFrames_{0};
 	std::atomic<float> pace_{0.125f}, heardStretch_{0.5f}, heardPosition_{1.f}, heardHarmonics_{0.f};
+	std::atomic<bool> following_{false};   // DoldrumsState::following: Stretch is waiting for Freeze
 	// A press, or a drag's move, in the tape window (the UI thread counts,
 	// after setting Position): the audio thread raises frame.restart on the
 	// sample it sees the count change, and the engine takes it as a trigger
@@ -151,6 +164,9 @@ struct Doldrums : Module {
 					s += std::string(" (") + buf + " with CV)";
 				}
 			}
+			// While recording: Follow, recording: the dial's figure takes effect at Freeze.
+			if (m && m->following_.load(std::memory_order_relaxed))
+				s += " (waits for Freeze)";
 			return s;
 		}
 		void setDisplayValueString(std::string s) override {
@@ -396,6 +412,7 @@ struct Doldrums : Module {
 		wide_.store(false);
 		stopAtEnd_.store(false);
 		keepTape_.store(true);
+		follow_.store(false);
 	}
 
 	// The save (TapeStore.hpp, 3): made by the worker, which alone takes the
@@ -432,6 +449,7 @@ struct Doldrums : Module {
 		s.wide = wide_.load();
 		s.stopAtEnd = stopAtEnd_.load();
 		s.keepTape = keepTape_.load();
+		s.follow = follow_.load();
 		json_t* root = json_object();
 		for (const auto& kv : rka::doldrums::savedToMap(s))
 			json_object_set_new(root, kv.first.c_str(),
@@ -459,6 +477,7 @@ struct Doldrums : Module {
 		wide_.store(s.wide);
 		stopAtEnd_.store(s.stopAtEnd);
 		keepTape_.store(s.keepTape);
+		follow_.store(s.follow);
 	}
 
 	// ---- The audio thread.
@@ -482,6 +501,7 @@ struct Doldrums : Module {
 		frame.grainSize = grain_.load(std::memory_order_relaxed);
 		frame.wide = wide_.load(std::memory_order_relaxed);
 		frame.stopAtEnd = stopAtEnd_.load(std::memory_order_relaxed);
+		frame.follow = follow_.load(std::memory_order_relaxed);
 
 		engine.process(frame, result);
 
@@ -495,6 +515,7 @@ struct Doldrums : Module {
 			capacity_.store(s.capacity, std::memory_order_relaxed);
 			grainFrames_.store(s.grain, std::memory_order_relaxed);
 			pace_.store(float(s.pace), std::memory_order_relaxed);
+			following_.store(s.following && !s.frozen, std::memory_order_relaxed);
 			typedef DoldrumsFrame F;
 			heardStretch_.store(rka::doldrums::cvValue(frame.params[F::STRETCH], frame.params[F::STRETCH_ATT], frame.stretchCv),
 			                    std::memory_order_relaxed);
@@ -733,7 +754,7 @@ struct DoldrumsWindow : widget::Widget {
 
 // The browser's picture (no module). With RKA_DOLDRUMS_PREVIEW naming a state
 // (make smoke sets it: running, frozen, held, stopped, frozen-held,
-// frozen-at-end, frozen-stopped), a real engine at 48 kHz is run offline on a phrase of
+// frozen-at-end, frozen-stopped, follow), a real engine at 48 kHz is run offline on a phrase of
 // chords and the snapshot it publishes is drawn, so the screenshot shows
 // what the module draws in that state. Without it, a picture made up from a
 // formula (the browser must not pay for an engine).
@@ -823,6 +844,12 @@ bool previewFromEngine(const std::string& state, DoldrumsWindowView& out) {
 		run(31.0);
 		f.params[F::FREEZE] = 1.f;   // Position fully right: nothing to travel through, FROZEN AT END
 		run(2.0);
+	}
+	else if (state == "follow") {
+		// While recording: Follow at x8: the read head on the flag, FOLLOW.
+		f.follow = true;
+		f.params[F::POSITION] = 0.55f;
+		run(32.0);
 	}
 	else if (state == "frozen-stopped") {
 		f.stopAtEnd = true;
@@ -970,6 +997,31 @@ struct DoldrumsWidget : ModuleWidget {
 		APP->history->push(h);
 	}
 
+	// While recording: Drift or Follow, each with a line under it saying what
+	// is heard (the choices at the top of this file); the item shows the
+	// setting in force, as Rack's index submenus do.
+	static MenuItem* createWhileRecordingItem(Doldrums* m) {
+		struct Item : MenuItem {
+			Doldrums* m = nullptr;
+			void step() override {
+				rightText = std::string(m->follow_.load() ? "Follow" : "Drift") + "  " + RIGHT_ARROW;
+				MenuItem::step();
+			}
+			Menu* createChildMenu() override {
+				Menu* menu = new Menu;
+				Doldrums* mm = m;
+				menu->addChild(createCheckMenuItem("Drift", "", [=]() { return !mm->follow_.load(); }, [=]() { mm->follow_.store(false); }));
+				menu->addChild(createMenuLabel("Stretched as it records: falls behind, then back to the flag"));
+				menu->addChild(createCheckMenuItem("Follow", "", [=]() { return mm->follow_.load(); }, [=]() { mm->follow_.store(true); }));
+				menu->addChild(createMenuLabel("Unstretched, Position's distance late; Stretch waits for Freeze"));
+				return menu;
+			}
+		};
+		Item* item = createMenuItem<Item>("While recording");
+		item->m = m;
+		return item;
+	}
+
 	void appendContextMenu(Menu* menu) override {
 		Doldrums* m = getModule<Doldrums>();
 		if (!m)
@@ -984,6 +1036,7 @@ struct DoldrumsWidget : ModuleWidget {
 		menu->addChild(createIndexSubmenuItem(
 		    "At the end of a pass", {"Go round", "Stop (until TRIG)"}, [=]() { return size_t(m->stopAtEnd_.load() ? 1 : 0); },
 		    [=](size_t i) { m->stopAtEnd_.store(i == 1); }));
+		menu->addChild(createWhileRecordingItem(m));
 		menu->addChild(createBoolMenuItem(
 		    "Keep the frozen tape with the patch", "", [=]() { return m->keepTape_.load(); },
 		    [=](bool on) { m->keepTape_.store(on); }));

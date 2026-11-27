@@ -71,6 +71,13 @@
 // another size), until the tables, asked for at the held size again, swap
 // back in: a grain or two without Shift, Blur, Tilt and the comb, dissolved.
 //
+// While recording (DoldrumsFrame::follow, the menu): Drift or Follow, read
+// by the pass at each boundary (Pass.hpp); a change reaches the sound at the
+// next boundary. Following, the output is the input late by Position's lag
+// and latencyFrames(), within a grain (the slice ends at the anchor),
+// whatever Stretch says; Stretch takes effect at Freeze.
+// DoldrumsState::following says so for the window.
+//
 // RUN follows what is heard. It rises on the sample a grain is added to the
 // overlap while it is low (a pass's first grain: a trigger's, a freeze's, the
 // first after Initialize). A grain that begins a pass while RUN is high
@@ -232,6 +239,7 @@ struct DoldrumsFrame {
 	int grainSize = GRAIN_MEDIUM;  // the menu: GrainSize
 	bool wide = false;
 	bool stopAtEnd = false;
+	bool follow = false;           // the menu's While recording: false Drift (the default), true Follow (Pass.hpp)
 	bool restart = false;          // a press in the window: a new pass from the anchor, as a TRIG edge
 };
 
@@ -246,6 +254,7 @@ struct DoldrumsState {
 	int grain = 0;                                          // the grain size heard, frames
 	bool frozen = false, held = false, stopped = false;
 	bool atEnd = false;   // held because there is nothing to travel through (frozen, the anchor within a grain of now)
+	bool following = false;   // While recording: Follow, recording and sounding: the read point on the anchor whatever Stretch says (Pass.hpp)
 	double pace = 0.0;
 };
 
@@ -679,7 +688,7 @@ private:
 		last_ = PassOut{};
 		heldSize_ = -1;
 		state_.anchor = state_.end = in->now();
-		state_.held = state_.stopped = state_.atEnd = false;
+		state_.held = state_.stopped = state_.atEnd = state_.following = false;
 	}
 
 	// The audio thread: the input onto the tape, unless the worker holds it
@@ -777,6 +786,7 @@ private:
 		in.freezeFell = fell_ && !frozen_;
 		in.trig = trig_;
 		in.stopAtEnd = f.stopAtEnd;
+		in.follow = f.follow;
 		in.grainChanged = passGrain_ != grain;
 		rose_ = fell_ = trig_ = false;
 		passGrain_ = grain;
@@ -788,6 +798,7 @@ private:
 		state_.stopped = o.stopped;
 		// Held for want of tape ahead (Pass.hpp's "nothing to travel through").
 		state_.atEnd = o.held && in.frozen && in.now - o.anchor < grain;
+		state_.following = o.sound && in.follow && !in.frozen;
 		if (!o.sound) return;
 
 		int use = a;

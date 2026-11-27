@@ -16,7 +16,10 @@
 //
 // The patch data saved with it (Doldrums.cpp's dataToJson, SavedState.hpp)
 // is kGoldenData below: every menu setting away from its default, so a loader
-// that ignored one fails.
+// that ignored one fails. kGoldenDataFollow is the data a later version
+// saves (Task 14, after 2.0.47, added "whileRecording"): every setting away
+// from its default again; kGoldenData, without the key, stays the patch of
+// 2.0.47 and before, and must load as Drift.
 #include <cstdint>
 
 namespace rka { namespace doldrums { namespace golden {
@@ -66,6 +69,14 @@ const GoldenField kGoldenData[4] = {
     {"wide", 0, 1.0},
     {"atEnd", 1, 1.0},
     {"keepTape", 0, 0.0},
+};
+// {"grain": 2, "wide": true, "atEnd": 1, "keepTape": false, "whileRecording": 1}.
+const GoldenField kGoldenDataFollow[5] = {
+    {"grain", 1, 2.0},
+    {"wide", 0, 1.0},
+    {"atEnd", 1, 1.0},
+    {"keepTape", 0, 0.0},
+    {"whileRecording", 1, 1.0},
 };
 
 }}} // namespace rka::doldrums::golden

@@ -36,7 +36,8 @@
 //   moves at 1; from readEnd = r they meet after r / (1 - pace) of the
 //   tape's length, by which time the read point has passed pace r / (1 -
 //   pace) of sound: [r, r + pace r / (1 - pace)], cut at 1. At pace 1
-//   (Stretch 1) it never returns: [r, 1].
+//   (Stretch 1) it never returns: [r, 1]; nor, following (While recording:
+//   Follow, the read point on the flag whatever the pace), [r, 1].
 // A span with nothing in it is from > to.
 #include "Laws.hpp"
 #include "TapeView.hpp"
@@ -247,7 +248,7 @@ inline void toPlay(const TapeSnapshot& s, double pace, float& from, float& to) {
 		return;
 	}
 	from = s.readEnd;
-	if (s.frozen || !(pace < 1.0)) {
+	if (s.frozen || s.following || !(pace < 1.0)) {
 		to = 1.f;
 		return;
 	}

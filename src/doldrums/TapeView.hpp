@@ -50,7 +50,13 @@
 // nothing (the user's decision at 2.0.46); "FROZEN HELD" is then held by
 // Stretch's stop alone. Both at once say "FROZEN AT END": it is the more
 // specific reason Stretch is inert (moving Stretch off its stop would still
-// leave the head with no tape ahead).
+// leave the head with no tape ahead). Recording in While recording: Follow,
+// sounding (DoldrumsState::following), it says "FOLLOW", so the window says
+// why Stretch does nothing until Freeze (Task 14, the user's rule of least
+// astonishment). STOPPED keeps its precedence (a module stopped in Follow
+// says STOPPED: it is waiting for TRIG, not following), and frozen, the
+// words are the frozen ones (a following flag from the boundary before a
+// freeze is not shown under FROZEN); Drift shows nothing new.
 //
 // Threads.
 //   audio thread: configure, clear, wrote, publish (they share the columns
@@ -107,8 +113,8 @@ struct TapeSnapshot {
 	enum { COLS = 512 };
 	float low[COLS], high[COLS];      // oldest column first
 	float anchor, readStart, readEnd; // fractions of the window, 0 = 30 s ago, 1 = now; may be < 0 (off the edge)
-	bool frozen, held, stopped;
-	char state[16];                   // "", "FROZEN", "HELD", "STOPPED", "FROZEN HELD", "FROZEN AT END", "FROZEN STOPPED"
+	bool frozen, held, stopped, following;
+	char state[16];                   // "", "FROZEN", "HELD", "STOPPED", "FOLLOW", "FROZEN HELD", "FROZEN AT END", "FROZEN STOPPED"
 };
 
 struct TapeView {
@@ -179,6 +185,7 @@ struct TapeView {
 		o.frozen = s.frozen;
 		o.held = s.held;
 		o.stopped = s.stopped;
+		o.following = s.following && !s.frozen && !s.stopped;
 		word(s, o.state);
 
 		uint32_t w[kWords];
@@ -288,6 +295,8 @@ private:
 			w = "FROZEN AT END";
 		else if (s.held)
 			w = s.frozen ? "FROZEN HELD" : "HELD";
+		else if (s.following && !s.frozen)
+			w = "FOLLOW";
 		else if (s.frozen)
 			w = "FROZEN";
 		std::strncpy(out, w, 15);   // out is zeroed and 16 long
