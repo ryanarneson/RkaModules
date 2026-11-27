@@ -123,8 +123,9 @@
 //    thread until offered, so building from it needs no hold of the live
 //    ring and cannot meet a thaw, a reset or a rate change; and the picture
 //    changes on the very sample the tape does.
-// 3. A save (onSave; the worker, or the UI thread, but never one that runs
-//    reset or onSampleRateChange at the same time): f = {keepTape, button,
+// 3. A save (onSave asks; the worker runs it, the only thread that takes
+//    the hold, while onSave waits for it, and never at the same time as
+//    reset or onSampleRateChange): f = {keepTape, button,
 //    engine.frozenSince(), writtenFor, engine.tapePending()}; then
 //    saveStep(f, dir, engine, rate, writtenFor, why), which follows
 //    savePlan(f) (SAVE_WRITE: saveFrozen, writtenFor = the number written)
@@ -136,8 +137,8 @@
 //    holding the engine's lock): engine.allocate(rate),
 //    engine.setSampleRate(rate), wake the worker. The frozen tape's ring is
 //    now the source of a job (2b, `from` set) at the new rate; tapePending()
-//    is true until its conversion is taken (or a thaw or reset ends the
-//    wait), so saves leave the file alone meanwhile. Another rate change
+//    is true until its conversion is taken (or a sample not frozen or a
+//    reset ends the wait), so saves leave the file alone meanwhile. Another rate change
 //    before it lands asks for it again (a new ticket), from the same source.
 // 5. A failed load: the worker's 2b, makeWanted returning null, then
 //    engine.giveUp(job.ticket) on the worker. The engine settles on its

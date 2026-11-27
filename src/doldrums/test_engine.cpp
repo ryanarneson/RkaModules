@@ -1646,6 +1646,40 @@ void drop(std::vector<Ring*>& v) {
 
 // An offer is taken only for the ticket wanted now, frozen, at this rate's
 // length; otherwise handed back at once, unused, and what is live stays.
+// I1 of the final review: a stored tape asked for (expectStored, a patch
+// opened with Freeze on and its tape kept) while the first sample is already
+// thawed (the module was bypassed and Freeze clicked off before it ran):
+// the wait ends within a sample, so a save is not left waiting for ever and a
+// new freeze can be held still and saved. Measured before the fix:
+// tapePending() true for ever and holdStill refused after a new freeze.
+void a_wait_ends_on_a_thawed_sample() {
+	const float rate = 48000.f;
+	Rig g(rate, 205);
+	const uint32_t t = g.e->expectStored();
+	CHECK(g.e->tapePending(), "the stored tape asked for");
+	g.f.params[F::FREEZE] = 0.f;
+	g.go(1, [&](long long n) { g.f.inL = chord(n, rate); });
+	CHECK(!g.e->tapePending(), "first sample thawed: no tape pending");
+	CHECK(g.e->offer(flatTape(rate, 1.f), t), "the stored tape offered late");
+	g.go(1);
+	std::vector<Ring*> back = collect(*g.e);
+	CHECK(back.size() == 1 && g.e->tapesTaken() == 0, "and handed back, not taken");
+	drop(back);
+	g.go(g.secs(0.5), [&](long long n) { g.f.inL = chord(n, rate); });
+	g.f.params[F::FREEZE] = 1.f;
+	g.go(g.secs(0.1));
+	uint32_t since = 0;
+	const Ring* held = g.e->holdStill(&since);
+	CHECK(held != nullptr && held == g.e->live() && since == g.e->frozenSince(), "a new freeze: held still for the save");
+	g.e->letGo();
+	// Frozen on its first sample, the wait stands (the tape is wanted).
+	Rig h(rate, 206);
+	h.e->expectStored();
+	h.f.params[F::FREEZE] = 1.f;
+	h.go(h.secs(0.1));
+	CHECK(h.e->tapePending(), "opened frozen: the stored tape still wanted");
+}
+
 void offers_are_checked() {
 	const float rate = 48000.f;
 	Rig g(rate, 201);
@@ -1677,13 +1711,17 @@ void offers_are_checked() {
 	g.go(g.secs(0.1));
 	a = g.e->live();
 	CHECK(tryOffer(flatTape(rate, 1.f), t, "a wait a thaw ended"), "a wait the thaw ended: handed back");
-	// Wanted while recording: refused until frozen.
+	// Wanted while recording: the next sample, thawed, ends the wait
+	// (a_wait_ends_on_a_thawed_sample), and the offer is handed back.
 	g.f.params[F::FREEZE] = 0.f;
 	g.go(10);
-	const uint32_t t2 = g.e->expectStored();
-	CHECK(tryOffer(flatTape(rate, 1.f), t2, "not frozen"), "not frozen: handed back");
+	const uint32_t t1 = g.e->expectStored();
+	CHECK(tryOffer(flatTape(rate, 1.f), t1, "not frozen"), "not frozen: handed back");
+	CHECK(!g.e->tapePending(), "not frozen: the wait ended");
+	// Wanted while frozen: taken.
 	g.f.params[F::FREEZE] = 1.f;
 	g.go(g.secs(0.1));
+	const uint32_t t2 = g.e->expectStored();
 	a = g.e->live();
 	Ring* b = flatTape(rate, 2.f);
 	CHECK(g.e->offer(b, t2), "offered");
@@ -1988,6 +2026,7 @@ int main() {
 	opened_frozen_waits_in_stop();
 	opened_frozen_and_held_sounds();
 	trig_high_at_start_fires_nothing();
+	a_wait_ends_on_a_thawed_sample();
 	offers_are_checked();
 	rate_change_converts_frozen_tape();
 	hold_puts_off_a_thaw();

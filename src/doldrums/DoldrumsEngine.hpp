@@ -134,9 +134,22 @@
 //   ring it was on, kept as the source) converted from its rate to the new
 //   one. A tape on its way is asked for again, under a new ticket, at each
 //   new rate (from the same source: never a conversion of a conversion). It
-//   stops being wanted when it is taken, at a thaw, at reset, and when the
-//   worker gives up on it (giveUp: a bad file). tapePending() says whether
-//   one is wanted, for the save, which leaves the file alone meanwhile.
+//   stops being wanted when it is taken, on any sample that is not frozen,
+//   at reset, and when the worker gives up on it (giveUp: a bad file).
+//   tapePending() says whether one is wanted, for the save, which leaves the
+//   file alone meanwhile. (Any sample not frozen, not only a frozen-to-thawed
+//   one: a patch opened with Freeze on whose first sample is already thawed,
+//   the module bypassed and Freeze clicked off, saw no thaw, so the wait
+//   stood for ever and every save left an older file in place: the final
+//   review's I1.) The cancel cannot let a stale tape go live: it is a CAS
+//   from the ticket the audio thread read to 0, so it clears only that wait,
+//   never kIssuing or a newer ticket written meanwhile (which a later
+//   thawed sample clears in turn); a take happens on the audio thread too,
+//   and only frozen with the offer's ticket equal to want_, so no take can
+//   fall between a thawed sample's load and its CAS; and an offer made for
+//   a cleared ticket is refused (w == 0 or another ticket). A worker that
+//   read the job before the cancel offers a ring that is then handed back.
+//   The cost is one relaxed load a sample while thawed.
 // - Offered. offer(ring, ticket) hands one in; the audio thread looks at it
 //   on its next sample and takes it only if its ticket is the one wanted
 //   now, the engine is frozen, and its length is this rate's tape; otherwise
@@ -328,7 +341,7 @@ struct DoldrumsEngine {
 			bumpEpoch();
 		}
 		if (!frozen && frozen_ && armed_) fell_ = true;   // a thaw (not the first sample's arming)
-		if (!frozen && frozen_) cancelWant();   // thawed: a tape on its way is not wanted now
+		if (!frozen) cancelWant();   // thawed: a tape on its way is not wanted (see "Wanted")
 		const bool opened = !armed_ && frozen && !frozen_;   // the first sample, Freeze already on
 		frozen_ = frozen;
 		const bool wasTrig = trigHigh_;
