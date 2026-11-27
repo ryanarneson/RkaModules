@@ -87,7 +87,7 @@ Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the cli
 
 <div class="patch"><h4>A. Hold a chord</h4>
 <div class="chain">Rigging (or Fathom) L/R → Doldrums IN L/R · Doldrums L/R → mixer</div>
-<p>At the defaults, press <b>FREEZE</b> while the chords play: <b>FROZEN</b>, the last 3 s drawn out and looped. Then turn <b>POSITION</b> fully right and press FREEZE twice (off, then on while a chord sounds): the corner says <b>FROZEN AT END</b> and the chord stays, shimmering, never looping; the flag and the gold bar stand together at the right edge. Press FREEZE again: back to the live input at once.</p></div>
+<p>At the defaults, press <b>FREEZE</b> while the chords play: <b>FROZEN</b>, the last 3 s drawn out and looped. Then turn <b>POSITION</b> fully right and press FREEZE twice (off, then on while a chord sounds): the corner says <b>FROZEN AT END</b> and the chord stays, shimmering, never looping; the flag and the gold bar stand together at the right edge. Press FREEZE again: the gold bar goes back to the flag (now) at once; at x8 you then hear the input from that moment on, slowed, falling behind (at x1 it would be the live input).</p></div>
 
 <div class="patch"><h4>B. A tuned drone from noise</h4>
 <div class="chain">Hadal L/R → IN L/R · Shoal (Harrington 1200) B, C, D → VCV Merge → V/OCT</div>
@@ -142,17 +142,17 @@ const groups = [
   ["While FROZEN AT END, turn Position slowly left.",
    "Once the flag is more than a grain from the right edge, the hold lets go (FROZEN) and the gold bar creeps right from where the knob has moved it at Stretch's pace. At the end it goes back to the flag (a dissolve) and plays again.",
    null],
-  ["Release FREEZE after a hold at Position fully right, Stretch 8.",
-   "The gold bar goes back to the flag at once and a new pass starts there: you are back at the live input straight away (the frozen moment dissolves into it over about 2 or 3 s at x8, about a third of a second at x1). From then on it falls behind the input as any recording pass at x8 does.",
-   "Whether a thaw returning to the live input at once is what you expect (the user's ruling on 2.0.46)."],
+  ["Hold at Position fully right (FROZEN AT END) with Stretch at 1, then release FREEZE. Again with Stretch at 8.",
+   "Both times the gold bar goes back to the flag at the right edge at once and a new pass starts there. At x1 it stays on the flag: you hear the live input at once (the frozen moment dissolves into it in about a third of a second). At x8 it starts at now and then falls back to the left of the flag, the sound it reads scrolling with it: you hear the input from the thaw onward, slowed (about 26 s behind after half a minute, then back to the flag), not the live input. A setting that makes a tape that is not frozen follow the input at any Stretch (\"While recording: Follow\") is coming in the next build.",
+   "Whether the thaw's return to the flag is what you expect (the user's ruling on 2.0.46), and whether you want Follow."],
   ["Recording, Stretch 1, Position fully right. Turn Stretch to 8 for ten seconds, then back to 1.",
    "At x1 the gold bar sits on the flag at the right edge. At x8 it falls back to the left of the flag. Back at x1 it rejoins the flag at the next grain (a dissolve) and stays there: the output is live again, not late.",
    "Whether Stretch at 1 should always mean on the flag (it does now)."],
-  ["Stretch at ∞ (held, tape recording: HELD). Then press FREEZE.",
-   "Before the press: HELD, the gold bar riding left with the sound it holds. After: FROZEN HELD, the gold bar on the flag: the held sound is replaced by the slice at the flag.",
+  ["Position about half way back, Stretch at ∞ (held, tape recording: HELD). Then press FREEZE.",
+   "Before the press: HELD, the gold bar riding left with the sound it holds. After: FROZEN HELD, the gold bar on the flag: the held sound is replaced by the slice at the flag. (With Position fully right the corner would say FROZEN AT END.)",
    "Whether Freeze while held should keep the held sound instead (verdict FREEZE WHILE HELD)."],
   ["Tap FREEZE quickly several times while a sound plays.",
-   "No clicks; each press and each release starts a pass from the flag; nothing written onto the tape clicks when it is read later.",
+   "No clicks; each press and each release starts a pass from the flag (taps closer together than half a grain merge into one); nothing written onto the tape clicks when it is read later.",
    null]]],
  ["Position and Stretch", [
   ["Stretch from 32 to the ∞ end, slowly, on a frozen sound with Position part way back.",
@@ -219,11 +219,11 @@ const groups = [
    "Each is a knob only, read once a grain.",
    "Verdict CV: whether CV on Tilt or Blur (or the others) is missed."]]],
  ["Harmonics", [
-  ["A chord on C2, E2 and G2 (saws, or Rigging) into IN L, a polyphonic cable carrying the same three notes into V/OCT (Root C2). Harmonics from 0 to 100 %.",
+  ["A chord on C2, E2 and G2 (saws, or Rigging) into IN L. ROOT at its default, C2. Into V/OCT a polyphonic cable of three constant voltages measured from Root: 0 V, 0.333 V and 0.583 V (C2, E2, G2; V/OCT is added to Root, so a sequencer's absolute pitch, 0 V = C4, would put the comb two octaves up). Harmonics from 0 to 100 %.",
    "The chord keeps its loudness as Harmonics comes up (measured within half a dB): no jump. The comb's makeup is now measured from the sound, never more than +18 dB.",
    "Verdict THE COMB: the loudness rule."],
   ["Pattern B with one note (unpatched V/OCT): Harmonics 0 to 100 % on noise.",
-   "0: the noise; 100 %: only the comb's teeth, a tuned drone on C2, brought up by the full +18 dB but still quieter than the noise was (about 6.6 dB down at the defaults). A tone between the teeth is cut, not raised to full level.",
+   "0: the noise; 100 %: only the comb's teeth, a tuned drone on C4 (Pattern B's Root; C2 at Root's default), brought up by the full +18 dB but still quieter than the noise was (about 6.6 dB down at the defaults). A tone between the teeth is cut, not raised to full level.",
    "Verdict THE COMB: whether noise through the comb is loud enough."],
   ["Root from C1 to C7; then V/OCT from a sequencer.",
    "The comb follows the note, an octave a volt from Root. A V/OCT step never clicks.",
@@ -249,7 +249,7 @@ const groups = [
    "The same tape, the same Position, the pass starting from the flag (in Go round at once; in Stop waiting for TRIG unless held). The log says the tape was read.",
    null, true],
   ["Freeze by the GATE alone, save, reopen. Then: held only (Stretch at ∞, not frozen), save, reopen.",
-   "Neither is kept: the tape opens silent and recording. Only the button keeps a tape. The held-only patch reopens saying HELD and silent (it holds the first slice of a tape just started) until Position moves, a trigger, or Stretch leaves the stop.",
+   "Neither is kept: the tape opens silent and recording. Only the button keeps a tape. The held-only patch reopens saying HELD and silent (it holds the first slice of a tape just started). Turning Position leaves it silent; Stretch from its stop to x8 leaves it silent for roughly 20 to 24 s at the defaults, then the sound fades in; a trigger at TRIG, a press in the window, or Stretch at exactly 1 ends the silence at once (once the tape holds more than Position's distance).",
    "Whether the gate-only and held-only rules are what you expect.", true],
   ["Turn Keep the frozen tape with the patch off, save, reopen.",
    "No tape kept; the patch is smaller, by up to about 11.5 MB at 48 kHz (the patch file is compressed).",

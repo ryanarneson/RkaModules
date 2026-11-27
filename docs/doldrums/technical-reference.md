@@ -173,8 +173,8 @@ Every rule is `Pass.hpp`'s `PassLogic::step`, run once per grain boundary, given
 | Stretch off the stop | on from the read point if still on the tape, else a new pass from the anchor | same (never the end of a pass) |
 | Grain change (menu) | at the boundary where the new size's tables swap in; held: re-taken at the new size if still on the tape (recording: margin of half the new grain + four Long grains), else the held size kept until let go | same |
 | Menu Go round chosen while stopped | — | a pass starts at once |
-| Menu Stop chosen while running | — | the pass under way ends normally, then stopped |
-| After reset (module added, patch opened, Initialize, rate change) | first grain starts a pass (with Stretch at its stop and the tape not frozen, held on the anchor's slice of a tape just started: silent until Position moves, TRIG, or Stretch leaves the stop) | stopped, unless frozen with nothing to travel through (held) |
+| Menu Stop chosen while running | — | the pass under way ends normally, then stopped; recording at exactly x1 a pass never ends (the read point sits on the anchor), so it goes on until a freeze |
+| After reset (module added, patch opened, Initialize, rate change) | first grain starts a pass (with Stretch at its stop and the tape not frozen, held on the anchor's slice of a tape just started, silent: a Position move shifts the read point by the lag's change and keeps it in the silence before the open; Stretch off the stop to x8 travels from there and is silent for about lag × stretch (roughly 20 to 24 s at the defaults; the re-review measured about 20 s) before the sound fades in; TRIG, a press in the window, or pace exactly 1 put it on the anchor and end the silence once the tape holds more than the lag) | stopped, unless frozen with nothing to travel through (held) |
 | Patch opened with Freeze on, or TRIG high | edge detectors arm on the first sample: no edge | same |
 
 Pass lengths [code]: frozen from lag L: floor(L / (pace·hop)) + 1 grains. Recording: floor((capacity − grain − hop − L) / ((1 − pace)·hop)) + 1 grains. At pace 1 recording never returns. Defaults (recording, Position 0.9, x8, 48 kHz, Medium): 178 grains, about 30.4 s; frozen at the defaults, from the 2.97 s lag, 140 grains, about 23.9 s (test_engine `default_position_freezes_a_stretch`: the first return measured within 1 s of 2.97 × 8 s). With Position 1 (the old default), recording: about 33.7 s.
@@ -298,7 +298,7 @@ Busiest tables (busy plus Tilt and 32 partials), Long grain, each sample timed, 
 | Phase difference L/R | 90.00° in, 90.00° out |
 | Held stereo (one grain taken, then held 30 s with `take` false) | pan −6.021 dB in and out; phase difference 90.00° in and out |
 | The comb's level (engine, 48 kHz, defaults, Harmonics 1 unless said, recording, 1 V partials) | saw on C2: +0.16 dB at Harmonics 0, +0.07 at 0.5, +0.23 at 1 (before the fix +12.86 and +16.73); chord on three roots +0.49 (before +18.03); white noise −6.60 (needs +25.0 dB, the bound gives +18.1; before −6.61); a sine between the first two teeth −22.4 (before −23.3); silence exact silence [test_engine `comb_keeps_the_level`] |
-| Thaw at Position fully right, a 1 kHz tone arriving while frozen on a chord | the live tone's share of the power: 1.000 from a grain + the latency + a hop after the thaw at x1 (0.53 s), from 8 grains + … at x8 (2.91 s) [test_engine `thaw_returns_to_live`] |
+| Thaw at Position fully right, a 1 kHz tone arriving while frozen on a chord | the share of the power of the tone (the input since the thaw; live at x1, slowed at x8): 1.000 from a grain + the latency + a hop after the thaw at x1 (0.53 s), from 8 grains + … at x8 (2.91 s) [test_engine `thaw_returns_to_live`] |
 | Wide, mono input | correlation 0.0005 (bound 0.2) |
 | Grain change | 50 ms blocks within −3 / +4 dB of before (test bound); about +3 dB worst, Long to Short [ledger] |
 | DC in (5 and 10 V) | at most 9.4e-5 V mean out over 0.25 s [test_hostile] |
@@ -337,9 +337,9 @@ Rulings made during the build that wait on the user [ledger]:
 - The corner word FROZEN AT END, and the read head in brass (gold on the glass).
 - Recording at exactly Stretch 1 the read head sits on the anchor; Stretch brought back to 1 returns it there (a new pass).
 - A press in the window plays from there (a new pass from the new anchor, as TRIG; in Stop it starts a pass and raises RUN); the knob and CV do not restart.
-- A thaw returns the read point to the anchor at once (the user's ruling at 2.0.46); stopped, it stays stopped. Above x1 the new input still comes in at Stretch's pace: at x8 the slice is all new input about 2.7 s (8 grains) after a thaw at Position fully right, and the read point then falls behind now as it does whenever the tape records above x1.
+- A thaw returns the read point to the anchor at once (the user's ruling at 2.0.46); stopped, it stays stopped. With Position fully right that is now; only at x1 is the output then the live input. Above x1 the read point travels at the pace while the tape records at full pace: at x8 the slice is all post-thaw input about 2.7 s (8 grains) after the thaw, and the read point is about 26 s behind now after half a minute, then returns to the anchor. A "While recording: Follow" setting (a tape not frozen following the input at any Stretch) is planned for the next build.
 - Frozen, Position pushed right past now: the pass ends at once, no grain at the edge.
-- The defaults (Medium, Wide off, x8, Position now, C2, 8 partials, 25 cents), Blur's and Tilt's ranges, the comb's makeup (measured, held to +18 dB), equal wet loudness (peaks over 8 V on loud held sounds).
+- The defaults (Medium, Wide off, x8, Position 0.9 about 3 s back, C2, 8 partials, 25 cents), Blur's and Tilt's ranges, the comb's makeup (measured, held to +18 dB), equal wet loudness (peaks over 8 V on loud held sounds).
 - Duplicating a frozen module (Ctrl+D): what the copy holds is not yet tested. The copy opens with Freeze on and reads `tape.wav` from its own storage folder; whether Rack copies the original's folder, and as of which save, is not known here.
 
 ---

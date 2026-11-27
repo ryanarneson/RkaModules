@@ -50,10 +50,16 @@ The sustain-pedal use:
 The moment that was playing when you pressed it now sounds until you
 change something. The window's corner says **FROZEN AT END**. Press
 FREEZE again to let it go: the tape starts recording again and the read
-head goes straight back to the Position flag, which at fully right is the
-present. What arrives from then on is drawn out at Stretch's pace, so the
-frozen moment dissolves into it over the first grains (about a third of a
-second at x1, two or three seconds at x8).
+head goes straight back to the Position flag, which at fully right is
+"now". From there it travels at Stretch's pace while new sound arrives at
+full pace. At x1 it keeps up, so you hear the live input at once. Above
+x1 it falls behind again: you hear the input from the moment of the thaw
+onward, slowed, not the live input (at x8 it is about 26 s behind after
+half a minute, then it returns to the flag). The frozen moment dissolves
+into the new sound over the first grains (about a third of a second at
+x1, two or three seconds at x8). A setting that makes a tape that is not
+frozen follow the input at any Stretch ("While recording: Follow") is
+coming in the next build.
 
 Why it holds: with Position fully right a pass starts at the newest moment
 on the tape, and with the tape frozen there is nothing after that moment
@@ -298,8 +304,15 @@ While held:
 
 **A patch reopened with Stretch at its stop and the tape not frozen**
 (in Go round) says HELD and holds silence: it holds the first slice of a
-tape that has only just started recording. It sounds once Position
-moves, a trigger comes, or Stretch leaves its stop.
+tape that has only just started recording. Turning Position does not end
+the silence: the read head moves by as much as the flag, and stays inside
+the silence from before the patch opened. Turning Stretch from its stop
+to x8 leaves it silent until the read head has crept up to the moment
+the patch opened (about Position's distance times the Stretch: roughly
+20 to 24 s at the defaults), then the sound fades in. What ends it promptly, once the
+tape holds more than Position's distance: a trigger at TRIG, a press in
+the window, or Stretch at exactly 1 (each puts the read head on the
+flag).
 
 **Not frozen, with Position fully left**, a pass has less than a grain to
 travel before the oldest sound catches it. The module then takes its slice
@@ -347,11 +360,14 @@ A trigger arriving together with the freeze starts a pass.
 **Freeze going off (a thaw) sends the read head back to the Position flag
 at once**: a new pass starts there, in either setting, whenever the
 module is sounding (running or held). With Position fully right that is
-straight back to the present. The first grains after the thaw still hold
-the frozen moment's last frames as well as the new input, so it dissolves
-in: within about a grain at x1, about Stretch grains above that (two or
-three seconds at x8). After a thaw the module behaves as any recording
-pass does: above x1 the read head falls behind the input again. Stopped
+"now". The first grains after the thaw still hold the frozen moment's
+last frames as well as the new input, so it dissolves in: within about a
+grain at x1, about Stretch grains above that (two or three seconds at
+x8). From there the read head travels at Stretch's pace while new sound
+arrives at full pace, as in any recording pass: at x1 it keeps up and you
+hear the live input; above x1 it falls behind again, so you hear the
+input from the thaw onward, slowed, not the live input (at x8 about 26 s
+behind after half a minute, then back to the flag). Stopped
 (Stop setting, waiting for TRIG), a thaw leaves it stopped: no pass, and
 RUN stays low, so a recorder gated by RUN is not restarted. A thaw that
 starts a new pass while RUN is high makes RUN's 1 ms dip, as any new pass
@@ -396,7 +412,9 @@ The menu's **At the end of a pass**:
   Position turned fully right (nothing to travel through) wakes it into
   the hold. Freeze going on stops a pass with tape to travel (above).
   Choosing Stop does not end the pass under way: the module stops when
-  it ends, or at the next freeze. Choosing Go round while stopped starts
+  it ends, or at the next freeze. (Recording at exactly x1 a pass never
+  ends, because the read head sits on the flag: it goes on until a
+  freeze.) Choosing Go round while stopped starts
   a pass at once. **A patch opened with Stop chosen waits for a
   trigger**, unless its tape is frozen with nothing to travel through,
   which is held and sounds at once.
@@ -718,6 +736,10 @@ built. None is a fault you can fix with a setting, unless one is named.
      sounds, so Eddy B starts recording with the fade in; it falls when the
      last grain has faded, so Eddy B stops with the fade out and plays the
      recording back as its tape. That is exactly one pass.
+  9. Leave Freeze on until the pass has ended. Letting Freeze go while the
+     pass is still playing starts a new pass from the flag, on a tape that
+     records again: RUN dips and Eddy B starts a new recording over its
+     take. Unfreeze only after the corner says FROZEN STOPPED.
 
   Eddy B holds 5 minutes at 48 kHz (2:54 at 96 kHz): a 10 s clip at up to about x30, or the whole
   tape at up to x10. A second trigger at TRIG records a new pass over the
