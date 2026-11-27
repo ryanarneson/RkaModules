@@ -2,45 +2,75 @@
 
 A stereo freeze and stretch, 16 HP: a ship becalmed, the sound going
 nowhere. Doldrums keeps the last 30 seconds of its input on a tape. It can
-hold any moment of that tape for as long as you like, or creep through it
-many times slower than it was played. The sound is PaulStretch's (Paul
-Nasca's method, written afresh): slices of the tape are taken apart into
-their frequencies, given new random phases and put back together, so what
-comes out is smeared, glassy and never quite repeats. A tuned comb,
-**Harmonics**, can keep only a note and its overtones, so noise comes out
-as a drone in tune. A trigger can play one pass and a gate says when it
-runs, so another module can record it.
+creep through any part of that tape many times slower than it was played,
+or hold one moment of it for as long as you like. The sound is
+PaulStretch's (Paul Nasca's method, written afresh): slices of the tape
+are taken apart into their frequencies, given new random phases and put
+back together, so what comes out is smeared, glassy and never quite
+repeats. A tuned comb, **Harmonics**, can keep only a note and its
+overtones, so noise comes out as a drone in tune. A trigger can play one
+pass and a gate says when it runs, so another module can record it.
 
 ![Doldrums panel](Doldrums.png)
 
-## Hold what is playing
+## First: freeze and stretch the last few seconds
 
-The plain use, and the one to try first:
+The defaults, and the thing to try first:
 
 1. Patch a sound into **IN L** (and **IN R** for stereo) and the **L** and
    **R** outputs to your mixer. Leave every knob where it starts: Position
-   fully right, Stretch at 8, Mix fully wet.
-2. Press **FREEZE**. Its cap lights.
+   about 3 seconds back (the knob a little left of fully right), Stretch
+   at 8, Mix fully wet.
+2. Listen: the module plays the input drawn out 8 times, starting about
+   3 seconds behind it and falling further behind (it is reading at an
+   eighth of the speed the sound arrives). About every 30 seconds it
+   starts again 3 seconds behind.
+3. Press **FREEZE**. Its cap lights and the tape stops recording. The
+   window's corner says **FROZEN**. A pass starts at the Position flag,
+   3 seconds back, and the read head (the gold bar in the window) creeps
+   from there to the end of the tape at Stretch's pace: those last 3
+   seconds, drawn out 8 times, take about 24 seconds. Then it goes back
+   to the flag and plays them again, dissolving from the end into the
+   start. Turn **STRETCH** to hear them faster or slower.
+4. Press FREEZE again to let it go: the tape records again and the read
+   head goes straight back to the flag.
+
+**At the defaults the wet sound is always about 3 seconds or more behind
+the input**, and Freeze loops a stretch of the last 3 seconds rather than
+holding the instant. To hold the instant, turn Position fully right
+(next section).
+
+## Hold what is playing
+
+The sustain-pedal use:
+
+1. Turn **POSITION** fully right (the tooltip says "now").
+2. Press **FREEZE** while the sound you want is playing.
 
 The moment that was playing when you pressed it now sounds until you
-change something. The window's corner says **FROZEN HELD**. Press FREEZE
-again to let it go: the tape starts recording again, and the sound carries
-on from the frozen moment through what follows it, coming back to the
-present only when that pass ends (see Freeze, below).
+change something. The window's corner says **FROZEN AT END**. Press
+FREEZE again to let it go: the tape starts recording again and the read
+head goes straight back to the Position flag, which at fully right is the
+present. What arrives from then on is drawn out at Stretch's pace, so the
+frozen moment dissolves into it over the first grains (about a third of a
+second at x1, two or three seconds at x8).
 
-Why it holds: with **Position** fully right a pass starts at the newest
-moment on the tape, and with the tape frozen there is nothing after that
-moment to travel through. So the read point stands still and the module
-plays that one slice, with new random phases every grain, so it shimmers
-and does not loop. It does this at any Stretch and with either setting of
-"At the end of a pass".
+Why it holds: with Position fully right a pass starts at the newest moment
+on the tape, and with the tape frozen there is nothing after that moment
+to travel through. So the read head stands still at the right end of the
+tape and the module plays that one slice, with new random phases every
+grain, so it shimmers and does not loop. It does this at any Stretch and
+with either setting of "At the end of a pass". **Stretch has nothing to
+act on here**: turning it changes nothing you can hear. That is what
+"AT END" in the corner says. Turn Position left, or let Freeze go, to
+give the read head tape to travel through.
 
 ## The panel
 
 From the top:
 
 - **The window**: the 30 s tape, oldest on the left and now on the right,
-  over a ruler in tenths (3 s each).
+  over a ruler (next section).
 - **POSITION** on the left and **HARMONICS** on the right, each with its
   attenuverter and CV jack beneath it. **STRETCH**, the large dial,
   lettered 1, 2, 4, 8, 16, 32 and ∞, in the middle.
@@ -60,125 +90,220 @@ records the input all the time unless it is frozen. It is silent when the
 module is added. While it records, the picture scrolls left; frozen, it
 stands still.
 
-What the window shows:
+### What you see
 
-- **The tape** as cyan peaks of both sides together. The glass spans
-  ±6 V, so a ±5 V sound fills most of it. A silent tape shows a dim line
-  at 0 V.
-- **Bright and dim.** The part the pass has still to play is bright; the
-  rest is dim. Frozen, that is from the read point to the right end.
-  Recording, it is from the read point to where the oldest sound will
-  catch it up. Held, only the held slice is bright. Stopped, nothing is.
-- **The anchor**, where Position says a pass starts: a cyan line with a
-  small cyan flag at its top.
-- **The read point**, the end of the slice being heard: an ivory line.
-- **The slice** itself: a pale cyan band at its true width (a grain long:
-  about 1 % of the window at the Medium grain), with a cyan bar along its
-  foot.
-- **The corner, top right**, says what state the module is in whenever it
-  is not plainly running:
-  - **FROZEN**: the tape is frozen and a pass is travelling through it.
-  - **HELD**: the read point stands still (Stretch at its stop), the tape
-    still recording.
-  - **FROZEN HELD**: frozen and held, for either reason (Stretch at its
-    stop, or nothing to travel through).
-  - **STOPPED**: in the "Stop" setting, a pass has ended (or the patch
-    has just opened) and the module is silent until a trigger at TRIG.
+Read this with the module open. From the back of the glass to the front:
+
+- **Cyan peaks: the tape.** Both sides together, oldest on the left, the
+  present on the right edge. The glass spans ±6 V, so a ±5 V sound fills
+  most of it; a silent tape shows a dim line at 0 V.
+  - **Bright peaks** are the part the current pass has still to play, and
+    **dim peaks** the rest. Frozen, the bright part runs from the gold bar
+    to the right edge, and it shrinks as the gold bar travels right.
+    Recording, it runs from the gold bar to the place where the oldest
+    sound, about to be recorded over, will catch it up. Held, only the
+    slice itself is bright. Stopped, nothing is bright.
+- **A thin cyan line with a small solid triangle on top: the Position
+  flag.** It is where a pass starts, and it is what POSITION sets: fully
+  right is now, fully left is as far back as a whole grain can still be
+  taken (30 s less a grain). (The technical reference calls this place the
+  anchor.) It stays put on the glass while the tape scrolls under it, and
+  it moves only when Position moves: the knob, its CV, or a press in the
+  window.
+- **A short cyan bar along the bottom edge, with a pale band above it:
+  the slice.** This is the piece of tape the current grain is made from,
+  drawn at its true width: a grain long, about a third of a second at
+  Medium, a little over 1 % of the window (half that at Short, twice at
+  Long). The band is faint; the bar along its foot is the easier to see.
+  Its right-hand end is the gold bar.
+- **A gold bar, the full height of the glass, a little bolder than the
+  flag's line: the read head.** The exact place the module has reached in
+  the tape: the end of the slice being heard.
+- **The word in the top right corner** says what state the module is in
+  whenever it is not plainly running:
+  - nothing: plainly running (a pass travelling, the tape recording);
+  - **FROZEN**: the tape is frozen and a pass is travelling through it;
+  - **HELD**: the read head stands still because Stretch is at its stop
+    (∞), while the tape records;
+  - **FROZEN HELD**: frozen, and the read head stands still because
+    Stretch is at its stop;
+  - **FROZEN AT END**: frozen with the Position flag at the end of the tape
+    (Position fully right, or within a grain of it): the read head is at
+    the end of the tape, so Stretch has nothing to act on until Position
+    moves left or Freeze is let go. The sound is held. (If Stretch is at
+    its stop as well, the corner still says AT END: moving Stretch alone
+    would change nothing.)
+  - **STOPPED**: in the Stop setting, a pass has ended (or the patch has
+    just opened, or Freeze has stopped it) and the module is silent until
+    a trigger;
   - **FROZEN STOPPED**: the same, on a frozen tape.
-  - Nothing: plainly running.
-- **The corner, top left**, says if the patch's tape had trouble:
-  **TAPE NOT READ** or **TAPE NOT SAVED** (see "With the patch").
+- **The words in the top left corner**, only when the patch's tape had
+  trouble: **TAPE NOT READ** or **TAPE NOT SAVED** (see "With the
+  patch").
+- **The ruler** under the glass: a long tick every tenth of the tape
+  (3 s), short ticks between them every 0.75 s.
 
-Held while the tape records, the read point's line rides left with its
-sound and goes off the left edge once that sound has been recorded over;
-the corner still says HELD, and the sound still plays (it is kept, not
-read from the tape again).
+### What the marks do
+
+- **Recording, Stretch 1**: the gold bar sits on the flag and keeps up
+  with the sound, which scrolls left under them both; you hear the input
+  smeared, Position's distance late (plus about a grain). With Position
+  fully right, flag and gold bar stand together at the right edge.
+- **Recording, Stretch above 1** (x8 is the default): each pass starts
+  with the gold bar on the flag. New sound arrives faster than the read
+  head reads, so the gold bar falls back to the left of the flag, with
+  the sound it is reading. When the oldest sound catches it up the pass is
+  over and the gold bar returns to the flag (Go round) or the module
+  stops (Stop). At the defaults that is about every 30 seconds.
+- **Recording, Stretch turned back to 1**: the gold bar rejoins the flag
+  at the next grain (a new pass, by a dissolve) and stays on it.
+- **Frozen, the flag back in the tape** (FROZEN; the default after a
+  freeze): the peaks stand still. The gold bar travels right from the
+  flag at Stretch's pace; at x1 a second of tape a second, at x32 it
+  barely moves. When it reaches the right edge the pass is over: it jumps
+  back to the flag (Go round), or rests on the flag and the corner says
+  FROZEN STOPPED (Stop).
+- **Frozen, Position fully right** (FROZEN AT END): the flag and the gold
+  bar are pinned together at the right edge and the slice sits just to
+  their left. There is no tape ahead of the read head, so Stretch has
+  nothing to act on: changing it does not slow anything down. Turn
+  Position left (or press in the window) to give it tape to travel
+  through.
+- **Stretch at its stop** (HELD or FROZEN HELD): the gold bar does not
+  move. Frozen, it stays where it is. Recording, the gold bar and the
+  slice ride left with the sound they hold, while the flag stays put;
+  once that sound has been recorded over they go off the left edge. The
+  corner still says HELD and the sound still plays (it is kept, not read
+  from the tape again).
+- **Stopped** (STOPPED or FROZEN STOPPED): the gold bar rests on the
+  flag, nothing is bright, and nothing sounds until a trigger (or a press
+  in the window) starts a pass from the flag.
+- **At a thaw** (Freeze let go while the module is sounding): the gold
+  bar returns to the flag at once and a new pass starts there. Stopped,
+  it stays stopped.
+- **Turning POSITION, or a CV at Position**: the flag moves, and the
+  gold bar moves by the same amount, wherever it has got to; the pass
+  goes on (stopped, the gold bar stays on the flag).
+- **A press or a drag in the window: play from here.** The flag goes
+  under the mouse and the gold bar goes to the flag: a new pass starts
+  there, exactly as a trigger at TRIG does. So a press just left of the
+  gold bar moves playback back to that point, and a drag scrubs the
+  flag and the gold bar together.
 
 ### Setting Position with the mouse
 
-Press in the window to put the anchor under the mouse; drag to move it.
-**POSITION** turns to match, and the whole gesture is one undo step. With
-a CV at Position's jack, the knob is set so that knob plus CV, as the CV is
-at that moment, puts the anchor under the mouse; the knob stops at its
-ends, so a large CV can leave the anchor short of the mouse. The anchor
-cannot go further left than a grain from the oldest end of the tape, so a
-press at the very left edge sets Position fully left. The right mouse
-button opens the menu, as anywhere on the panel.
+Press in the window to put the Position flag under the mouse and play
+from there; drag to move it, playing from each place it passes.
+**POSITION** turns to match, and the whole gesture is one undo step;
+undoing it puts Position back as the knob would (the gold bar keeps its
+distance from the flag; no new pass). With a CV at Position's jack, the
+knob is set so that knob plus CV, as the CV is at that moment, puts the
+flag under the mouse; the knob stops at its ends, so a large CV can leave
+the flag short of the mouse. The flag cannot go further left than a grain
+from the oldest end of the tape, so a press at the very left edge sets
+Position fully left. The right mouse button opens the menu, as anywhere
+on the panel.
+
+A press is not the same as turning the knob. The knob (and its CV) moves
+the flag and the gold bar together without starting a pass, so a CV
+sweeping Position never restarts the sound. A press starts a pass, as a
+trigger does. **In the Stop setting a press starts a pass and raises
+RUN**, so a stray click can start a recorder gated by RUN. Frozen, a press
+at the right edge holds (nothing to travel through: FROZEN AT END).
 
 ## Position and Stretch
 
-**The read point** is the end of the slice the next grain takes. It is
-what you hear.
+**The read head** (the gold bar) is the end of the slice the next grain
+takes. It is what you hear.
 
-**POSITION** says where a pass starts (the anchor): fully right is now,
-fully left is as far back as a whole grain can still be taken (30 s less a
-grain). The tooltip says how far back: "now" or "12.3 s ago"; you can type
-a number of seconds, or "now". Default: fully right.
+**POSITION** sets the Position flag, where a pass starts: fully right is
+now, fully left is as far back as a whole grain can still be taken (30 s
+less a grain). The tooltip says how far back: "now" or "12.3 s ago"; you
+can type a number of seconds, or "now". Default: about 3 s back (0.9 of
+the knob's travel: 2.97 s at the Medium grain).
 
-**STRETCH** says how fast the read point moves on through the sound: at 1
-it moves a second of tape each second, at 8 an eighth of a second each
-second. The tooltip shows the figure ("x8.0", "x128") and "held" at the
-stop; you can type a figure ("8", "x8", "128") or "held". Default: 8.
+**What Stretch does, and what it does not.** STRETCH sets how fast the
+read head travels through the tape: at 1 a second of tape each second, at
+8 an eighth of a second each second. It never lowers the pitch: every
+grain keeps the pitches of the slice it was made from. On a steady sound
+(a held chord, a drone) slow and fast sound alike, because each grain is
+much like the last; the difference is heard on sound that changes. It has
+nothing to act on when the read head has no tape ahead of it (frozen with
+Position fully right: FROZEN AT END). At exactly 1, the dial's left stop,
+the read head sits on the Position flag while recording and keeps up with
+the input; at anything above 1 it falls steadily behind the input until
+the pass ends, and brought back to 1 it rejoins the flag.
 
-- Over the lettered travel, up to the 32, it doubles every 45 degrees: 1,
-  2, 4, 8, 16, 32.
+The tooltip shows the figure ("x8.0", "x128") and "held" at the stop; you
+can type a figure ("8", "x8", "128") or "held". Default: 8.
+
+- Over the lettered travel, from 1 at the left stop up to the 32, it
+  doubles every 45 degrees: 1, 2, 4, 8, 16, 32.
 - **The last sixth of the dial**, from the 32 to the ∞ at the end, rises
   without limit: 64 about 30 % of the way along it, 128 half way, and
-  at the very end the read point does not move at all. That end
+  at the very end the read head does not move at all. That end
   is **held**.
 
-**Frozen**, the tape stands still and the read point travels right,
+**Frozen**, the tape stands still and the read head travels right,
 towards now. When it reaches the end of the tape the pass is over.
 
-**Not frozen**, the read point moves through the sound at the same pace,
-but new sound arrives at full pace, so the read point falls behind now
+**Not frozen**, the read head moves through the sound at the same pace,
+but new sound arrives at full pace, so the read head falls behind now
 and drifts left in the window. When the oldest sound, about to be recorded
-over, catches it up, the pass is over. At Stretch 1 it keeps pace and
-never returns: you hear a smeared copy of the input, late by Position's
-distance and about a grain. With the defaults (Position fully right, x8,
-not frozen) a pass lasts about 34 seconds and then starts again from now.
+over, catches it up, the pass is over. At Stretch 1 it sits on the flag
+and never returns: you hear a smeared copy of the input, late by
+Position's distance and about a grain. With the defaults (Position about
+3 s back, x8, not frozen) a pass lasts about 30 seconds and then starts
+again from the flag.
 
-**At the end of a pass** (the menu, below) the read point goes back to the
-anchor and plays again, or stops and waits for TRIG.
+**At the end of a pass** (the menu, below) the read head goes back to the
+Position flag and plays again, or stops and waits for TRIG.
 
-**Turning Position** moves the read point by the same amount, at the next
-grain, wherever it has got to; it does not start the pass again. If that
-would take it off the tape it stops at the edge. Frozen, a turn far enough
-right to push the read point to the end of the tape ends the pass at
-once.
+**Turning Position** (the knob or its CV) moves the read head by the same
+amount, at the next grain, wherever it has got to; it does not start the
+pass again. If that would take it off the tape it stops at the edge.
+Frozen, a turn far enough right to push the read head to the end of the
+tape ends the pass at once. A press in the window is different: it plays
+from the flag (above).
 
-**Held** means the read point stands still and one slice sounds for as
+**Held** means the read head stands still and one slice sounds for as
 long as it stays so, with fresh random phases every grain. It has two
 causes:
 
 - **Stretch at its stop** (the ∞ end of the dial, or a CV pushing it
-  there).
-- **Nothing to travel through**: the tape frozen with the anchor less than
-  a grain from the end of the tape. Position fully right, frozen, is the
-  usual case.
+  there): HELD, or FROZEN HELD.
+- **Nothing to travel through**: the tape frozen with the Position flag
+  less than a grain from the end of the tape (FROZEN AT END). Position
+  fully right, frozen, is the usual case.
 
 While held:
 
 - The module keeps that slice's loudnesses and does not read the tape
   again, so when the tape is recording the held sound stays even after the
   tape under it has been recorded over.
-- **Moving Position takes a new slice**: the read point moves by as much
-  as the anchor does (held to the ends of the tape). With the tape frozen
+- **Moving Position takes a new slice**: the read head moves by as much
+  as the flag does (held to the ends of the tape). With the tape frozen
   and Stretch at its stop this is a scrub through the 30 s, by hand or by
   CV. If the held place has already been recorded over, the new slice is
-  taken at the anchor itself.
+  taken at the flag itself.
 - A pass never ends, in either setting of "At the end of a pass", and RUN
   stays high.
 - **Leaving held** (Stretch off its stop, or Position turned left so there
-  is something to travel through): the read point goes on from where it
-  is if that place is still on the tape, and from the anchor if not.
+  is something to travel through): the read head goes on from where it
+  is if that place is still on the tape, and from the flag if not (and,
+  recording at exactly x1, from the flag).
 - **Changing Grain while held** takes the slice again at the new size if
   its place is still on the tape (while recording, with some room to
   spare); if not, the held sound keeps its size until it is let go.
 
+**A patch reopened with Stretch at its stop and the tape not frozen**
+(in Go round) says HELD and holds silence: it holds the first slice of a
+tape that has only just started recording. It sounds once Position
+moves, a trigger comes, or Stretch leaves its stop.
+
 **Not frozen, with Position fully left**, a pass has less than a grain to
 travel before the oldest sound catches it. The module then takes its slice
-at the anchor every grain: you hear the input as it was about 30 seconds
+at the flag every grain: you hear the input as it was about 30 seconds
 ago, at any Stretch. It is not held (the corner says nothing), it never
 ends, even in the Stop setting, and RUN stays high.
 
@@ -204,29 +329,46 @@ recording fades out over 5 ms at the freeze and back in over 5 ms when
 Freeze ends, so no step is written onto the tape. Recording goes on from
 the same place.
 
-**Freeze going on starts a new pass from the anchor**, so the frozen moment
-is reached at once instead of after a long creep. In the Stop setting this
-holds while a pass is running; while the module is stopped, Freeze wakes
-it only when there is nothing to travel through (Position within a grain
-of the end, so the result is held). With a pass to travel, a stopped
-module stays silent until TRIG.
+**Freeze going on, in Go round, starts a new pass from the Position
+flag**, so the frozen moment is reached at once instead of after a long
+creep.
 
-**Freeze going off changes nothing**: the read point goes on from where it
-is, now through a tape that records again. So after a hold at Position
-fully right, letting Freeze go carries on from the frozen moment through
-what followed it, falling behind, and comes back to the present only when
-that pass ends: 30 / (1 − 1/Stretch) seconds later, give or take a grain
-(34 s at x8, a minute at x2, never at x1).
+**Freeze going on, in the Stop setting**, does one thing whatever was
+happening before:
+
+- with a pass to travel (the flag back in the tape, as at the default),
+  it ends any pass, running or not, and the module waits, FROZEN STOPPED,
+  silent, with RUN low, for a trigger at TRIG (or a press in the window);
+- with nothing to travel through (the flag within a grain of the right
+  end, as at Position fully right), it holds: FROZEN AT END, sounding.
+
+A trigger arriving together with the freeze starts a pass.
+
+**Freeze going off (a thaw) sends the read head back to the Position flag
+at once**: a new pass starts there, in either setting, whenever the
+module is sounding (running or held). With Position fully right that is
+straight back to the present. The first grains after the thaw still hold
+the frozen moment's last frames as well as the new input, so it dissolves
+in: within about a grain at x1, about Stretch grains above that (two or
+three seconds at x8). After a thaw the module behaves as any recording
+pass does: above x1 the read head falls behind the input again. Stopped
+(Stop setting, waiting for TRIG), a thaw leaves it stopped: no pass, and
+RUN stays low, so a recorder gated by RUN is not restarted. A thaw that
+starts a new pass while RUN is high makes RUN's 1 ms dip, as any new pass
+does.
 
 **Freeze while held by Stretch at its stop** starts a new pass from the
-anchor like any freeze, so the held sound is replaced by the slice at
-Position's place. To keep a moment, freeze first, then hold.
+flag like any freeze in Go round, so the held sound is replaced by the
+slice at Position's place (in Stop, with a pass to travel, it stops). To
+keep a moment, freeze first, then hold. Thawed while held at the stop,
+the read head goes to the flag and holds the slice there.
 
 ## TRIG, RUN and the end of a pass
 
-**TRIG** puts the read point back on the anchor and starts a new pass at
-any time: in mid pass, held or stopped. It acts on a rising edge (high from
-1 V, low again under 0.1 V).
+**TRIG** puts the read head back on the Position flag and starts a new
+pass at any time: in mid pass, held or stopped. It acts on a rising edge
+(high from 1 V, low again under 0.1 V). A press in the window does the
+same.
 
 **RUN** is a gate: 10 V while a pass is sounding.
 
@@ -238,23 +380,26 @@ any time: in mid pass, held or stopped. It acts on a rising edge (high from
 - In **Go round** one pass dissolves into the next and something is always
   sounding. RUN goes low for 1 ms where each new pass's first grain
   begins, as a marker, and is otherwise high.
-- A trigger at TRIG in mid pass starts a new pass and so makes the same
-  1 ms dip, in either setting.
+- A trigger at TRIG in mid pass (or a press in the window, a thaw, or
+  Stretch brought back to 1 while recording) starts a new pass and so
+  makes the same 1 ms dip, in either setting.
 - Held, for either reason, RUN stays high.
 
 The menu's **At the end of a pass**:
 
-- **Go round** (the default): at the end of a pass the read point returns
-  to the anchor and plays again, dissolving from the old place to the new.
+- **Go round** (the default): at the end of a pass the read head returns
+  to the flag and plays again, dissolving from the old place to the new.
 - **Stop (until TRIG)**: at the end of a pass the wet sound fades out with
-  its last grain and stays silent until a trigger at TRIG. The corner says
-  STOPPED. While stopped, neither moving Position nor setting Stretch to
-  its stop wakes it; Freeze wakes it only onto nothing to travel through
-  (above). Choosing Stop does not end the pass under way: the module stops
-  when it ends. Choosing Go round while stopped starts a pass at once.
-  **A patch opened with Stop chosen waits for a trigger**, unless its
-  tape is frozen with nothing to travel through, which is held and sounds
-  at once.
+  its last grain and stays silent until a trigger at TRIG (or a press in
+  the window). The corner says STOPPED. While stopped, turning Position
+  or setting Stretch does not wake it, with one exception: frozen,
+  Position turned fully right (nothing to travel through) wakes it into
+  the hold. Freeze going on stops a pass with tape to travel (above).
+  Choosing Stop does not end the pass under way: the module stops when
+  it ends, or at the next freeze. Choosing Go round while stopped starts
+  a pass at once. **A patch opened with Stop chosen waits for a
+  trigger**, unless its tape is frozen with nothing to travel through,
+  which is held and sounds at once.
 
 ## The menu
 
@@ -317,6 +462,10 @@ default.
 - **TILT** is a slope across the spectrum about 1 kHz: noon is flat, left
   darker, right brighter, up to 6 dB per octave either way (the tooltip
   says dB per octave). The gain at any frequency is held within ±24 dB.
+  It is a gain, not only a cut: fully right raises everything above 1 kHz,
+  by 6 dB at 2 kHz and up to 24 dB from 16 kHz, so bright material can
+  reach the output's soft bound; fully left raises the bass the same way
+  (up to 24 dB at about 60 Hz and below).
 
 They act in that order (Shift, Blur, Tilt, then the comb), so what Shift
 moves meets the others at its new frequency.
@@ -347,12 +496,18 @@ overtones.
   edge, and is never narrower than the transform can show: the frequency
   line that holds a tooth always passes whole, so no tooth disappears on a
   low note.
-- **Loudness.** A comb passes only a small part of a noisy sound's energy,
-  so the comb's output is brought up by an amount worked out from the comb
-  alone (how much of a flat spectrum it would pass), never more than 8
-  times (+18 dB). Turning Harmonics up therefore does not make the sound
-  sink away. The gain on a frequency is (1 − h) + h × makeup × tooth, h
-  being Harmonics.
+- **Loudness.** The comb's output is brought back up by an amount
+  measured from the sound itself, grain by grain: as much as the comb
+  took away, never more than 8 times (+18 dB), and the same for both
+  sides so a panned sound stays where it is. So a sound already in tune
+  with the comb (a saw or a chord on Root's notes) keeps its level as
+  Harmonics comes up: measured within half a dB. Noise, which the comb
+  thins much more, is brought up by the full +18 dB and still comes out
+  quieter (about 6.6 dB down at the defaults). A sound between the teeth
+  is cut, not raised to full level (a sine half way between the first two
+  teeth comes out about 22 dB down). Silence stays silence. The gain on a
+  frequency is (1 − h) + h × makeup × tooth, h being Harmonics; at h = 0
+  the comb is out of the path altogether.
 - **Timing.** A change of note, Partials or Width reaches the sound at the
   next grain's start, or at the one after if the comb was being rebuilt,
   and then dissolves in over half a grain: at worst about a grain's length
@@ -398,7 +553,7 @@ sound, freeze it with the button. Remember that Freeze while held takes
 the slice at Position's place (Freeze, above).
 
 A reopened patch has the same tape and the same Position, and starts its
-pass from the anchor: in Go round at once, in Stop waiting for a trigger
+pass from the Position flag: in Go round at once, in Stop waiting for a trigger
 unless there is nothing to travel through (then held). Until the tape has
 been read (on a background thread, a moment after the patch opens) the
 tape is silent and frozen, and saves leave the file alone.
@@ -420,8 +575,14 @@ until a save writes the tape or removes the file as planned.
 **When Rack's sample rate changes**, a frozen tape is converted to the new
 rate off the audio thread; until it is ready the tape is silent and stays
 frozen, and the wet sound fades with its last grains. A tape that is not
-frozen starts again from silence. The file stays at its old rate until the
+frozen starts again from silence, the recording fading in over 5 ms so
+nothing clicks onto the tape. The file stays at its old rate until the
 tape is frozen anew (it is converted again each time it is read).
+
+**Duplicating a frozen module** (Ctrl+D): what the copy holds is not yet
+tested. The copy opens with Freeze on and reads the tape file from its
+own folder in the patch, so it may hold the original's tape, an older
+one, or silence.
 
 ## Specifications
 
@@ -446,9 +607,9 @@ tape is frozen anew (it is converted again each time it is read).
   is made every half grain even of silence), 0.11 recording a tone, 0.33
   at its busiest (the Long grain, a 16-note comb with V/OCT moving, Blur
   and Shift up). The work is spread so no one sample does more than one
-  transform: the most work on any single sample measured 70 µs at 96 kHz
-  with the Long grain and 33 µs at 48 kHz, with the core at its working
-  clock. From a light load the first grains took up to about 1.7 times as
+  transform: the most work on any single sample measured 68 µs at 96 kHz
+  with the Long grain and Wide on, and 34 µs at 48 kHz, with the core at
+  its working clock. From a light load the first grains took up to about 1.7 times as
   long (about 110 to 120 µs at 96 kHz).
 
 ## What to expect
@@ -457,7 +618,9 @@ These are limits of the method or of this build, found while it was
 built. None is a fault you can fix with a setting, unless one is named.
 
 - **The wet sound is about a grain late** (0.17 to 0.68 s at 48 kHz) plus
-  13 to 15 ms (more below 44.1 kHz: see Mix and the latency). Mixed with the dry sound it is not in time.
+  13 to 15 ms (more below 44.1 kHz: see Mix and the latency), on top of
+  Position's distance (about 3 s at the default). Mixed with the dry sound
+  it is not in time.
 - **A pure tone wavers in level.** Where two grains overlap, their random
   phases may add or cancel, and a pure tone fills only a few frequency
   lines, so its level over ten seconds can wander by up to about 2 dB at
@@ -472,6 +635,9 @@ built. None is a fault you can fix with a setting, unless one is named.
   37 dB down). Any sound comes out with the peaks of noise at its own
   loudness, so a loud pad or chord can reach the bound too. Turn the
   input down if you hear it.
+- **Noise through the comb comes out quieter** than it went in (about
+  6.6 dB at the defaults at full Harmonics): the comb's makeup stops at
+  +18 dB. Material in tune with the comb keeps its level.
 - **The comb follows notes at the grain's pace.** A new note starts to
   dissolve in up to a grain after it arrives, so a quick line runs
   together. Slow chord changes work best; Short follows fastest.
@@ -492,9 +658,9 @@ built. None is a fault you can fix with a setting, unless one is named.
 
 ## Patches to try
 
-- **Hold a chord.** Rigging (or Fathom) into IN L and IN R. While a chord
-  sounds, press FREEZE: FROZEN HELD, the chord left sounding
-  under the piece. Turn Blur up for a softer bed; Tilt left to darken it.
+- **Hold a chord.** Rigging (or Fathom) into IN L and IN R, POSITION
+  fully right. While a chord sounds, press FREEZE: FROZEN AT END, the
+  chord left sounding under the piece. Turn Blur up for a softer bed; Tilt left to darken it.
   Press FREEZE again to let the music move on.
 - **A tuned drone from noise.** Hadal's L and R into IN L and IN R.
   HARMONICS to 100 %, Grain Long (menu). Shoal running Harrington 1200:
@@ -508,36 +674,41 @@ built. None is a fault you can fix with a setting, unless one is named.
   noise back in. Partials sets how bright it is.
 - **A slow scan.** Fill the tape with something that changes over the 30 s
   (a field recording from Eddy, a Rigging phrase), turn STRETCH to its
-  stop (∞), then press FREEZE: FROZEN HELD, the slice on the anchor (a
-  freeze starts its pass there). Neap's cycle 5 into Position
+  stop (∞), then press FREEZE: FROZEN HELD, the slice on the Position
+  flag (a freeze starts its pass there). Neap's cycle 5 into Position
   CV, POSITION at noon and its attenuverter fully right, so Neap's ±5 V
   crosses the whole tape. Each grain takes the slice where Neap has put the
-  anchor: the 30 s are scanned back and forth, a cycle about every half
+  flag (watch the flag, the gold bar and the slice sweep across the
+  window together): the 30 s are scanned back and forth, a cycle about every half
   minute at Neap's default Rate. Neap's TIDE in its place (Weight to the
   right, so the slow cycles lead) wanders over the tape and does not
-  retrace its path. Turn Stretch back off the stop for the read point to
+  retrace its path. Turn Stretch back off the stop for the read head to
   creep on from wherever the scan has left it.
 - **Draw a clip out into a long loop** (Eddy into Doldrums into Eddy):
   1. **Eddy A**: load the clip (right-click, Load file), LOOP off. Its L
      and R outputs into Doldrums' IN L and IN R.
   2. **Doldrums**: menu, At the end of a pass: **Stop (until TRIG)**.
-     Leave Freeze off. Wait for the corner to say **STOPPED**: the pass
-     under way has to end first (about half a minute with the defaults).
+     Leave Freeze off. The pass under way goes on; there is no need to
+     wait for it to end.
   3. Right-click POSITION and type a little more than the clip's length,
      in seconds ("11" for a 10 s clip), so that once the clip is on the tape
-     the anchor will be just before its start.
+     the Position flag will be just before its start. (Not fully right:
+     there a freeze would hold and sound.)
   4. Press PLAY on Eddy A. The clip goes onto Doldrums' tape (you see it
      scroll in from the right). As soon as it ends, press Doldrums'
-     **FREEZE**. The corner says **FROZEN STOPPED**: nothing sounds and RUN
-     is low. (If Position is fully right this would be held and sound at
-     once instead.)
-  5. Drag in the window to put the anchor's flag exactly at the clip's
-     start. Nothing sounds while you do. The pass will run from there to
-     the end of the tape, so anything recorded after the clip and before
-     the freeze is stretched too: freeze promptly. The first grain is the
-     slice that ends at the flag, so the clip's onset comes in over the
-     first grains, as a fade in: that is the method, not a flag set late;
-     leave the flag at the clip's start.
+     **FREEZE**. The pass under way ends at once and the corner says
+     **FROZEN STOPPED**: within about a grain nothing sounds and RUN is
+     low.
+  5. Put the Position flag exactly at the clip's start with the
+     **POSITION knob** (or by typing seconds), watching the flag in the
+     window. Nothing sounds while you do. Do not press in the window for
+     this: a press plays from there, which in Stop starts a pass (if you
+     do, let it play out to FROZEN STOPPED again before step 7). The pass
+     will run from the flag to the end of the tape, so anything recorded
+     after the clip and before the freeze is stretched too: freeze
+     promptly. The first grain is the slice that ends at the flag, so the
+     clip's onset comes in over the first grains, as a fade in: that is
+     the method, not a flag set late; leave the flag at the clip's start.
   6. Set STRETCH (at 8 a 10 s clip becomes about 80 s).
   7. **Eddy B**: Doldrums' L and R into its IN L and IN R, and Doldrums'
      **RUN** into its **REC** gate. Patch RUN while it is low (it is, while
@@ -555,13 +726,25 @@ built. None is a fault you can fix with a setting, unless one is named.
 ## Bypass
 
 Bypassed, the inputs pass to the outputs (IN R taking IN L when
-unpatched); RUN is low and the Freeze cap dark.
+unpatched); RUN is low and the Freeze cap dark. The module does nothing
+else while bypassed: the tape does not record and Freeze is not seen (a
+Freeze pressed or released meanwhile acts when the bypass ends). When the
+bypass ends, the tail of the last grain from before it is heard, and the
+recording starts again with no fade, so the tape has a join there.
 
 ## Other details
 
 - **Initialize** silences the tape, returns every knob and the Freeze
   button to its default, and the menu to its defaults (Medium, Wide off,
-  Go round, Keep on).
+  Go round, Keep on). The recording starts again on the silent tape with
+  a 5 ms fade in, so nothing clicks onto it. The grains already playing
+  fade out on their own, with RUN still high until they have ended, and
+  Mix moves to its default smoothly.
+- **Undo after Initialize** brings back the knobs, the Freeze button and
+  the menu, but not the tape: Freeze comes back on over the new, nearly
+  empty tape (a new freeze), so the next save writes that tape over the
+  one kept with the patch. To get the old tape back, reopen the patch
+  without saving.
 - **Randomize** leaves Freeze, Mix and the menu alone (it would otherwise
   freeze the tape or take the effect away).
 - Each Doldrums holds its tape in memory: 11.5 MB at 48 kHz. While a

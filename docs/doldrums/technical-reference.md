@@ -1,11 +1,11 @@
 # Doldrums 2.0.46: Technical Reference for QA
 
 Module: **Doldrums** (16 HP, 81.28 mm), plugin `rka` (slug `rka`, module slug `Doldrums`), VCV Rack 2 (minRackVersion 2.5.0). Tags `Effect`, `Granular`.
-Build: the first test build, from branch `doldrums` (not yet merged to main). This document was written against commit `00fd5bd` ("Doldrums: the module and its window") and the test-build fixes after it; the first test build is 2.0.46. Check the version in the package's plugin.json.
+Build: the first test build, from branch `doldrums` (not yet merged to main). This document was written against commit `00fd5bd` ("Doldrums: the module and its window") and the test-build fixes after it; the first test build is 2.0.46. Updated to describe commit `4862bcd` (the final review's fix wave and the user's rulings on 2.0.46, commits `46a2e82` to `4862bcd`): the comb's makeup measured from the sound; no step on the tape at Initialize or a rate change; Freeze in Stop as one rule; a thaw returning to the anchor; a tape wait ended on any thawed sample; a press in the window playing from there; Position's default about 3 s back; FROZEN AT END; the read head drawn in brass; Stretch back at 1 rejoining the anchor. Check the version in the package's plugin.json.
 Document date: 2026-11-26.
 Listening guide: `docs/doldrums/listening.html` (on the share as `doldrums-<version>-listening.html`). Manual: `docs/doldrums/README.md`. Design: `docs/specs/2026-11-26-doldrums-design.md` (with dated "As built" notes). Build ledger: `.superpowers/sdd/2026-11-26-doldrums/progress.md`.
 
-**Status: new and unruled.** Doldrums has not been heard by the user. Its defaults, ranges and several rules decided during the build are first guesses waiting on the listening stop (section 9). Report impressions of those against the listening guide, not as defects.
+**Status: in its first listening stop.** The user is listening to 2.0.46; the rulings made from that so far (a thaw returns to the anchor, a press in the window plays from there, Position's default 3 s back, FROZEN AT END, the brass read head, x1 rejoining the anchor) are in this document. Its other defaults, ranges and rules are still first guesses waiting on the listening stop (section 9). Report impressions of those against the listening guide, not as defects.
 
 ---
 
@@ -21,7 +21,7 @@ Listening guide: `docs/doldrums/listening.html` (on the share as `doldrums-<vers
 
 ## 1. What Doldrums is
 
-A stereo spectral freeze and stretch after PaulStretch (Paul Nasca's method, written afresh; nothing from PaulXStretch's GPL-2.0-only code). The input is always recorded onto a 30 s stereo ring (the *tape*) unless frozen. Each hop a grain-long slice is taken from the tape at the *read point*, windowed, transformed; only each bin's magnitude is kept; Shift, Blur, Tilt and the comb reshape the magnitudes; each bin gets a fresh random phase; the result is transformed back, windowed and overlap-added. **Position** sets where a pass starts (the *anchor*), **Stretch** how fast the read point moves through the sound. A frozen tape with the anchor at its end has nothing to travel through and is **held** (the headline "hold what is playing"). **Harmonics** is a tuned comb on the magnitudes, a chord from polyphonic V/OCT. **TRIG** starts a pass, **RUN** is high while a pass sounds, and the menu's "At the end of a pass: Stop" plays one pass per trigger. A frozen tape (by the button) is kept with the patch as `tape.wav`.
+A stereo spectral freeze and stretch after PaulStretch (Paul Nasca's method, written afresh; nothing from PaulXStretch's GPL-2.0-only code). The input is always recorded onto a 30 s stereo ring (the *tape*) unless frozen. Each hop a grain-long slice is taken from the tape at the *read point*, windowed, transformed; only each bin's magnitude is kept; Shift, Blur, Tilt and the comb reshape the magnitudes; each bin gets a fresh random phase; the result is transformed back, windowed and overlap-added. **Position** sets where a pass starts (the *anchor*), **Stretch** how fast the read point moves through the sound. At the defaults (Position 0.9, x8) the module plays about 3 s or more behind the input and Freeze loops a stretch of the last 3 s (about 24 s at x8). A frozen tape with the anchor at its end (Position fully right) has nothing to travel through and is **held**: "hold what is playing", the window saying FROZEN AT END. **Harmonics** is a tuned comb on the magnitudes, a chord from polyphonic V/OCT. **TRIG** starts a pass, **RUN** is high while a pass sounds, and the menu's "At the end of a pass: Stop" plays one pass per trigger. A frozen tape (by the button) is kept with the patch as `tape.wav`.
 
 Non-goals (do not file): file load/save (Eddy does it); a Length control; CV on Blur, Tilt, Shift, Partials, Width or Mix (a listening-stop question); polyphonic audio; transient-preserving stretch; a spectrum display; low latency.
 
@@ -49,22 +49,22 @@ Light and dark panel files exist (`res/doldrums/Doldrums.svg`, `Doldrums-dark.sv
 
 ### 2.2 Parameters
 
-Ids never change (a `static_assert` in `Doldrums.cpp` and `test_saved`'s `param_ids` pin them) [code, test].
+Ids never change (a `static_assert` in `Doldrums.cpp` pins all 14 against `DoldrumsFrame::Param`, which `process()` copies by index, and `test_saved`'s `param_ids` pins them) [code, test].
 
 | Id | Param | Range | Default | Law / display |
 |---|---|---|---|---|
 | 0 | STRETCH | 0..1 (dial fraction t) | 0.5 (x8) | see 2.4; tooltip `x8.0` under 100, `x128` from 100, `held` at the stop; typed "8", "x8", "×8", "8x", "held", "inf", "stop" |
 | 1 | Stretch CV (att.) | −1..1 | 0 | % |
-| 2 | POSITION | 0..1 | 1 (now) | lag = round((1 − p)(capacity − grain)) frames; tooltip "now" or "12.3 s ago"; typed seconds back or "now" |
+| 2 | POSITION | 0..1 | 0.9 (about 3 s back: 2.97 s at Medium, 48 kHz; was 1, now, before the user's decision at 2.0.46) | lag = round((1 − p)(capacity − grain)) frames; tooltip "now" or "12.3 s ago"; typed seconds back or "now" |
 | 3 | Position CV (att.) | −1..1 | 0 | % |
-| 4 | HARMONICS | 0..1 | 0 | % |
+| 4 | HARMONICS | 0..1 | 0 | %; typed a percentage ("50", "50 %"); text that does not begin with a number is ignored |
 | 5 | Harmonics CV (att.) | −1..1 | 0 | % |
 | 6 | BLUR | 0..1 | 0 | octaves (the smoothing width) |
 | 7 | ROOT | −36..36 semitones from C4, snapped | −24 (C2) | note name ("C2", sharps); typed a note or semitones |
 | 8 | TILT | −1..1 | 0 | ×6 dB per octave about 1 kHz |
 | 9 | SHIFT | −24..24 semitones | 0 | ratio 2^(s/12), exactly 1 within ±0.25; tooltip "0" there, else "+7.0" |
 | 10 | PARTIALS | 1..32, snapped | 8 | count |
-| 11 | WIDTH | 0..1 | 0.393 (25 cents) | σ = 5 × 60^w cents (5 to 300); tooltip "25 cents"; typed cents |
+| 11 | WIDTH | 0..1 | 0.393 (25 cents) | σ = 5 × 60^w cents (5 to 300); tooltip "25 cents"; typed cents ("25", "25 cents"); text that does not begin with a number is ignored |
 | 12 | FREEZE | 0/1, latching | 0 | Off / On; randomize disabled |
 | 13 | MIX | 0..1 | 1 | " % wet"; equal power; randomize disabled |
 
@@ -101,6 +101,8 @@ NaN and ±inf on every input and CV read 0 V (a +inf on GATE or TRIG is 0 V, not
 - 5/6 < t < 1: u = 6t − 5, stretch = 32 / (1 − u)²; computed as pace = 1.125 (1 − t)². 64 at u = 0.293, 128 at u = 0.5.
 - t ≥ 1: pace exactly 0 (held).
 
+What Stretch is and is not (for reports that "Stretch does nothing"): it sets only how fast the read point moves through the tape (pace × hop frames a grain); it never changes pitch (each grain keeps the slice's frequencies); on a steady sound slow and fast sound alike; with nothing to travel through (FROZEN AT END) it has nothing to act on; recording at exactly x1 the read point sits on the anchor, and above x1 it falls behind until the pass ends.
+
 ### 2.5 Other laws
 
 [code, `Laws.hpp`]
@@ -130,22 +132,26 @@ Saved JSON (`dataToJson`): exactly these four keys, e.g. `{"atEnd": 0, "grain": 
 
 Reading (`readTape`): any WAV `WavFile` reads, 8 to 768 kHz, at most two tapes long; converted to the engine's rate if it differs; newest `capacity` frames kept, short files padded with silence at the old end; mono reads as both; NaN/inf read 0, samples held to ±100 V.
 
-Bypass: inputs to outputs (IN R takes IN L), RUN 0, light off. Initialize: silent tape, params to defaults, menu to defaults, window trouble cleared. Randomize: FREEZE and MIX excluded; the menu is untouched.
+Bypass: inputs to outputs (IN R takes IN L), RUN 0, light off. The engine does not run while bypassed: the tape does not record and Freeze's edges are not seen (a Freeze changed during the bypass acts on the first sample after it); on un-bypass the overlap still holds the tail of the last grain laid before the bypass, which is heard, and the recording resumes with no fade (a join on the tape) [code, `Doldrums.cpp` `processBypass`; final review M1, documented, not changed].
+
+Initialize (`onReset` → `DoldrumsEngine::reset`): silent tape, params to defaults (Freeze off, Mix 1), menu to defaults, window trouble cleared. The recording on the silent tape fades in from 0 over 5 ms (`Ring::fadeIn`), so no step is written onto it; the grains already laid down play out with RUN still high (in Stop, which is stopped after a reset, RUN then falls; in Go round the new pass's first grain dips it 1 ms); Mix moves to its new value over its 10 ms ramp from where it was [code; test_engine `no_step_on_the_tape_at_initialize_or_a_rate_change`, `initialize_moves_mix_and_keeps_run`]. Undo after Initialize (Rack's module history, which restores the params and `dataFromJson`) brings back the knobs, the Freeze button and the menu but not the tape: Freeze coming back on while the engine runs is a rising edge on the new, nearly empty tape, a new `frozenSince`, so the next save with the button on writes that tape over `tape.wav` [code for the engine's side; Rack's undo unverified]. Randomize: FREEZE and MIX excluded; the menu is untouched.
 
 ---
 
 ## 4. State rules
 
-Every rule is `Pass.hpp`'s `PassLogic::step`, run once per grain boundary [code, test_pass]. *Nothing to travel through* = frozen and the anchor less than a grain from now. *Held* = pace 0, or nothing to travel through. While recording the lowest usable read point is a hop above the oldest whole grain (the write head moves on while the slice is copied).
+Every rule is `Pass.hpp`'s `PassLogic::step`, run once per grain boundary, given the edges the engine latched since the last one (Freeze rising, Freeze falling, TRIG; of Freeze's two, only the one that leaves Freeze as it is at the boundary) [code, test_pass]. *Nothing to travel through* = frozen and the anchor less than a grain from now. *Held* = pace 0, or nothing to travel through. While recording the lowest usable read point is a hop above the oldest whole grain (the write head moves on while the slice is copied).
 
 ### 4.1 The states
 
 | State | What sounds | RUN | Window corner | Bright part of the window |
 |---|---|---|---|---|
-| Running, recording | the read point's slice, travelling at pace, falling behind now | 10 V; 1 ms dip at each new pass's first grain (Go round) | (none) | read point to where the oldest sound will catch it: [r, r + pace·r/(1 − pace)], cut at 1 |
+| Running, recording, pace exactly 1 | the slice at the anchor every grain (Position's lag late); brought back to pace 1 off the anchor, a new pass returns it there (a dip) | 10 V | (none) | [r, 1] |
+| Running, recording, pace under 1 | the read point's slice, travelling at pace, falling behind now | 10 V; 1 ms dip at each new pass's first grain (Go round) | (none) | read point to where the oldest sound will catch it: [r, r + pace·r/(1 − pace)], cut at 1 |
 | Running, frozen | the read point travelling right towards now | as above | FROZEN | read point to the right end |
 | Held, recording (Stretch at stop) | one slice, kept (not re-read), fresh phases each grain | 10 V, no dips | HELD | the slice only |
-| Held, frozen (stop, or nothing to travel through) | one slice, fresh phases each grain | 10 V | FROZEN HELD | the slice only |
+| Held, frozen, Stretch at its stop (the anchor back in the tape) | one slice, fresh phases each grain | 10 V | FROZEN HELD | the slice only |
+| Held, frozen, nothing to travel through (`DoldrumsState::atEnd`; with Stretch at its stop too) | one slice; Stretch has nothing to act on | 10 V | FROZEN AT END | the slice only |
 | Stopped (Stop only), recording | silence after the last grain fades | falls when the last grain has been heard to its end; low | STOPPED | nothing |
 | Stopped, frozen | silence | low | FROZEN STOPPED | nothing |
 | Not frozen, Position fully left (no room) | the slice at the anchor every grain (input about 30 s late, any Stretch) | 10 V, no dips; never ends, even in Stop | (none) | as running |
@@ -155,25 +161,27 @@ Every rule is `Pass.hpp`'s `PassLogic::step`, run once per grain boundary [code,
 | Event | Go round | Stop |
 |---|---|---|
 | TRIG (rising edge) | new pass from the anchor, any state; a dip if RUN is high | same; wakes a stopped module |
-| Freeze rising (button or gate; the OR of both) | new pass from the anchor | running: new pass from the anchor. Stopped: wakes only if nothing to travel through (then held); otherwise stays stopped |
-| Freeze falling | nothing; the read point goes on from where it is | same |
+| Freeze rising (button or gate; the OR of both) | new pass from the anchor | one rule, whatever came before (running, held, stopped): with a pass to travel, any pass ends and the module is stopped, silent, RUN falling once the last grain is heard; with nothing to travel through, a new pass, held. TRIG on the same grain wins (a pass) |
+| Freeze falling (a thaw) | new pass from the anchor at once (a dip if RUN is high); held at the Stretch stop: the slice at the anchor taken once and held | sounding (running or held): the same; stopped: stays stopped, no pass, RUN stays low |
 | Pass ends: frozen, read point would pass now | back to the anchor, new pass (dip) | stopped |
 | Pass ends: recording, read point below the lowest usable | back to the anchor (dip) | stopped |
-| Position move (≥ 1 frame of lag since the last grain) | read point moved by the change in lag, clamped to the tape; no new pass. Frozen, pushed to now: the pass ends at once | same; never wakes a stopped module |
+| Position move (≥ 1 frame of lag since the last grain) | read point moved by the change in lag, clamped to the tape; no new pass. Frozen, pushed to now: the pass ends at once | same. Stopped: wakes only into the hold, when the move leaves the frozen anchor within a grain of the end (Position fully right); any other move leaves it stopped |
+| A press or a drag's move in the window | Position set under the mouse (as the knob would be), and a new pass from the new anchor, exactly as TRIG (a dip if RUN is high); a drag's moves within one hop are one restart | the same: starts a pass from a stopped module and raises RUN; frozen at the right edge, held |
 | Position move while held | new slice at the moved place; if the held place has been recorded over, at the anchor | same |
 | Stretch to the stop | held from where the read point is | same; does not wake a stopped module |
+| Stretch to exactly 1 (pace 1.0), recording | if the read point is not on the anchor: a new pass from it at the next grain (a dip if RUN is high), then on the anchor every grain; a Position move moves both. Frozen: no change (travels from where it is) | same; does not wake a stopped module |
 | Stretch off the stop | on from the read point if still on the tape, else a new pass from the anchor | same (never the end of a pass) |
 | Grain change (menu) | at the boundary where the new size's tables swap in; held: re-taken at the new size if still on the tape (recording: margin of half the new grain + four Long grains), else the held size kept until let go | same |
 | Menu Go round chosen while stopped | — | a pass starts at once |
 | Menu Stop chosen while running | — | the pass under way ends normally, then stopped |
-| After reset (module added, patch opened, Initialize, rate change) | first grain starts a pass | stopped, unless frozen with nothing to travel through (held) |
+| After reset (module added, patch opened, Initialize, rate change) | first grain starts a pass (with Stretch at its stop and the tape not frozen, held on the anchor's slice of a tape just started: silent until Position moves, TRIG, or Stretch leaves the stop) | stopped, unless frozen with nothing to travel through (held) |
 | Patch opened with Freeze on, or TRIG high | edge detectors arm on the first sample: no edge | same |
 
-Pass lengths [code]: frozen from lag L: floor(L / (pace·hop)) + 1 grains. Recording: floor((capacity − grain − hop − L) / ((1 − pace)·hop)) + 1 grains. At pace 1 recording never returns. Defaults (recording, Position 1, x8, 48 kHz): about 33.7 s.
+Pass lengths [code]: frozen from lag L: floor(L / (pace·hop)) + 1 grains. Recording: floor((capacity − grain − hop − L) / ((1 − pace)·hop)) + 1 grains. At pace 1 recording never returns. Defaults (recording, Position 0.9, x8, 48 kHz, Medium): 178 grains, about 30.4 s; frozen at the defaults, from the 2.97 s lag, 140 grains, about 23.9 s (test_engine `default_position_freezes_a_stretch`: the first return measured within 1 s of 2.97 × 8 s). With Position 1 (the old default), recording: about 33.7 s.
 
 ### 4.3 RUN timing
 
-[code, `DoldrumsEngine.hpp`; test_engine] RUN rises on the sample a grain is added to the overlap while RUN is low. A grain that begins a pass while RUN is high drops it for the dip from that grain's first sample. RUN falls when the last grain added has been heard to its end. Every high stretch lasts at least a hop less 1 ms (92 ms at Short, 44.1 kHz), so Eddy's REC gate never discards a recording RUN gates.
+[code, `DoldrumsEngine.hpp`; test_engine] RUN rises on the sample a grain is added to the overlap while RUN is low. A grain that begins a pass while RUN is high drops it for the dip from that grain's first sample (a trigger, a return, a thaw). RUN falls when the last grain added has been heard to its end; Initialize does not drop it (the laid grains play out), a rate change does. Every high stretch lasts at least a hop less 1 ms (92 ms at Short, 44.1 kHz), so Eddy's REC gate never discards a recording RUN gates.
 
 ---
 
@@ -183,7 +191,7 @@ Per sample [code]: inputs (NaN → 0; IN R ← IN L if unpatched); Freeze = butt
 
 Per grain and side [code, `Grain.hpp`, `Tables.hpp`]: Hann window → forward FFT → |X| per bin (and the unit vector of X_R·conj(X_L)) → bins under 16 Hz zeroed → Shift (down: scatter of power to the two neighbours; up: gather from bin j/r, interpolated, ×1/r; past the top dropped) → Blur (two one-pole passes along log frequency, energy kept) → Tilt → comb → random phase (default: one phase per bin, the right side turned by the kept unit vector, so a mono input gives sides equal to the bit; Wide: independent phases) → inverse FFT → sine window × gain → overlap-add at a hop. Analysis gain sqrt(N / Σw²) = sqrt(8/3) for Hann.
 
-Comb [code]: teeth at root × n, n = 1..Partials, 16 Hz < f < Nyquist; tooth = exp(−½(d/σ')²), d the distance in cents from the tooth to the bin's nearer edge, σ' = max(σ, one bin's width at the tooth); mask = max over roots; makeup g = min(8, 1/sqrt(mean mask² over the band)); per bin gain (1 − h) + h·g·mask. h = 0 takes the comb out (and clears its settings so a moving V/OCT starts no rebuild).
+Comb [code]: teeth at root × n, n = 1..Partials, 16 Hz < f < Nyquist; tooth = exp(−½(d/σ')²), d the distance in cents from the tooth to the bin's nearer edge, σ' = max(σ, one bin's width at the tooth); mask = max over roots; per bin gain (1 − h) + h·g·mask. **The makeup g is measured per grain from the sound** (final review C1; `Tables.hpp` "The makeup"): SPECTRAL_L and SPECTRAL_R each add to before = Σ x² and after = Σ (x((1 − h) + h·mask))², x the loudness reaching the comb (after Shift, Blur, Tilt); at PHASES g = sqrt(before / after) held to [1, 8] (1 if either sum is 0 or not finite) and the comb's gain is applied to both sides with that one g, so a panned sound keeps its image. h = 0 takes the comb out (to the bit; nothing is measured) and clears its settings so a moving V/OCT starts no rebuild.
 
 Staging [code]: on the boundary sample, the tables' swap, the pass step, the slice copy (`Ring::copy`) and `Grain::begin`; then nine grain steps (WINDOW, FORWARD_L, FORWARD_R, LOUDNESS, SPECTRAL_L, SPECTRAL_R, PHASES, INVERSE_L, INVERSE_R) and the add, one every gap. A grain is first heard `latencyFrames()` = 10 gaps after its boundary: 640 samples at 44.1 and 48 kHz (14.5 / 13.3 ms), 1180 at 88.2 kHz, 1280 at 96 kHz, 2560 at 192 kHz; spacing (hop − 1)/10 where ten gaps do not fit (Short at 8.0 to 8.5 kHz: 51 samples). Half way between gaps the tables are fed (`Tables::start` with the frame's spec, `Tables::work` with a budget of 32 gaps' units). A worst rebuild takes about 0.7 of a hop, so a control change reaches the sound at the next boundary or the one after. The wet sound's content is about one grain late plus that fixed delay.
 
@@ -195,11 +203,27 @@ Staging [code]: on the boundary sample, the tables' swap, the pass step, the sli
 
 - 512 columns of peaks (low and high over both channels), columns tied to absolute frame indices, so the picture scrolls exactly with the ring; the open column is shown as it fills. Frozen: still.
 - Snapshot handed to the UI thread about 60 times a second by a seqlock (no lock, no allocation on the audio thread).
-- Marks are true fractions of the 30 s (0 = 30 s ago, 1 = now), held to [−1, 1]: the anchor (cyan line, cyan flag at top), the read point (the slice's end, ivory line), the slice [end − grain, end) (pale cyan band, cyan bar along the foot). Held while recording, the read point rides left off the window.
+- Marks are true fractions of the 30 s (0 = 30 s ago, 1 = now), held to [−1, 1]; section 6.1 has each.
 - Peaks bright inside `toPlay` (section 4.1), 30 % elsewhere; a dim 0 V line; glass ±6 V. Before the first snapshot, a line along the middle.
-- Corner words: top right FROZEN, HELD, STOPPED, FROZEN HELD, FROZEN STOPPED (STOPPED wins over HELD); top left TAPE NOT READ or TAPE NOT SAVED (`TapeKeeper::trouble`). Each on a patch of glass colour; marks start below a patch.
-- Mouse: left press sets POSITION so the anchor lands under the mouse (`positionForX`, the exact inverse of the lag law over its range; left of Position 0's place is 0), less the CV's share att·V/10, clamped; a drag follows; one `history::ParamChange` per gesture ("set Doldrums' Position"). [unverified in a live Rack]
-- Browser preview: `RKA_DOLDRUMS_PREVIEW` = running, frozen, held, stopped, frozen-held, frozen-stopped runs a real engine offline (`make smoke` screenshots `Doldrums-*.png`); otherwise a formula picture.
+- Corner words: top right FROZEN, HELD, STOPPED, FROZEN HELD, FROZEN AT END, FROZEN STOPPED (STOPPED wins over HELD and AT END; AT END wins over HELD: `TapeView::word`); top left TAPE NOT READ or TAPE NOT SAVED (`TapeKeeper::trouble`). Each on a patch of glass colour; marks start below a patch.
+- Mouse: left press sets POSITION so the anchor lands under the mouse (`positionForX`, the exact inverse of the lag law over its range; left of Position 0's place is 0), less the CV's share att·V/10, clamped; a drag follows; one `history::ParamChange` per gesture ("set Doldrums' Position"). **A press and each move of a drag also play from there** (the user's ruling at 2.0.46): after setting the param the UI thread adds one to `windowPresses_` (release); the audio thread compares it with the count it last saw (acquire) and raises `DoldrumsFrame::restart` on that sample, which the engine takes as a TRIG edge, latched to the next boundary. Undo or redo of the gesture sets the param only: the knob's rule, no restart. The knob, the CV, Initialize and a patch opening never count. [code; test_engine `window_press_restarts_from_the_flag`, `window_press_in_stop_starts_a_pass`, `window_press_when_recording`; the Rack side unverified in a live Rack]
+- Browser preview: `RKA_DOLDRUMS_PREVIEW` = running, frozen, held, stopped, frozen-held, frozen-at-end, frozen-stopped runs a real engine offline (`make smoke` screenshots `Doldrums-*.png`); otherwise a formula picture.
+
+### 6.1 The window's marks
+
+What the user sees, against the engine's terms. The manual uses the names in the second column. Fractions: f(x) = (x − (now − capacity)) / capacity, of an absolute frame x (`TapeView::fraction`); the window draws f at `pad + f × width` [code, `TapeView.hpp` `publish`, `Doldrums.cpp` `drawView`; test_view].
+
+| Seen (colour, shape) | Name (manual) | Engine's terms | Place (fraction of the 30 s) | How it moves |
+|---|---|---|---|---|
+| Cyan peaks, bright and dim | the tape | `TapeSnapshot::low/high`, 512 columns over both sides; bright inside `toPlay` (`Readout.hpp`), 30 % elsewhere | each column's frames | recording: scrolls left with the ring; frozen: still |
+| Thin cyan line with a small solid cyan triangle on top | the Position flag (the anchor) | `DoldrumsState::anchor` → `TapeSnapshot::anchor` | 1 − lag / capacity, lag = round((1 − Position after CV)(capacity − grain)); held a hop in from the oldest whole grain while the tape moves | moves only with Position (knob, CV, a press or drag in the window); fixed on the glass while the tape scrolls under it |
+| Pale cyan band (faint) with a short cyan bar along its foot | the slice | [`end` − `grain`, `end`) → `readStart`, `readEnd` | its true width: grain / capacity (Medium at 48 kHz: 16384 / 1 440 000 = 1.1 %; Short half, Long double) | with the read head (its right end) |
+| Brass line, full height, 1.5 px against the flag's 0.6 (seen as gold, the bezel's colour) | the read head (the read point) | `DoldrumsState::end` → `TapeSnapshot::readEnd` | f(end) | per section 4: travels right from the flag when frozen; on the flag recording at exactly x1; falls back left when recording above x1; stands still held (riding left with the tape if recording, off the left edge once recorded over); stopped: on the flag (`PassLogic::stop` sets end = anchor); a pass start, a TRIG, a press in the window, a thaw, or recording Stretch brought back to 1 put it on the flag |
+| Word top right | the corner | `TapeSnapshot::state` (from `DoldrumsState`'s frozen, held, stopped, atEnd) | — | "" running, FROZEN, HELD, FROZEN HELD, FROZEN AT END, STOPPED, FROZEN STOPPED (section 4.1) |
+| Word top left | trouble | `TapeKeeper::trouble` | — | TAPE NOT READ, TAPE NOT SAVED |
+| Ticks under the glass | the ruler | panel artwork (`gen_panels.py`, rulers px = width / 320) | a short tick every fortieth (0.75 s), a long one every tenth (3 s) | fixed |
+
+By state (section 4.1): running recording at x1: head on the flag (with Position 1, both at the right edge). Running recording above x1: the head starts on the flag and falls back left (by (1 − pace) of a hop a grain) until the oldest sound catches it a hop above the oldest whole grain, then returns to the flag. Running frozen: the head travels right from the flag at pace × hop a grain to the right end, then back to the flag (Go round) or stopped on the flag (Stop). Frozen at Position 1 (FROZEN AT END): flag and head pinned at the right edge (the flag's triangle sits under the corner word's patch); pace has nothing to act on. Frozen at the defaults (Position 0.9, FROZEN): the head travels from the flag 3 s back to the right edge in about 24 s at x8 and returns. Held at the Stretch stop (HELD): the head still; recording, head and slice ride left with their sound while the flag stays. Stopped: head on the flag, nothing bright. A Position move by the knob or the CV moves the flag and the head by the same amount (stopped: the head stays on the flag). A press or drag in the window puts the flag under the mouse and the head on the flag (a new pass).
 
 ---
 
@@ -209,7 +233,7 @@ Staging [code]: on the boundary sample, the tables' swap, the pass step, the sli
 
 - Audio thread: `process()` then `keeper.afterProcess()` (feeds the window). No allocation, lock, free or libm in `process()`.
 - Rack's exclusive lock: constructor, `onAdd` (expectStored when the patch opens frozen with Keep on), `onSampleRateChange` (allocate, setSampleRate), `onReset`.
-- Worker thread (one per module): reads the stored tape, converts a frozen tape at a rate change, makes the save; only it frees rings (eight retire slots). Offers carry a ticket; a ring for a wait that a thaw, a reset or a newer request ended is refused and never goes live.
+- Worker thread (one per module): reads the stored tape, converts a frozen tape at a rate change, makes the save; only it frees rings (eight retire slots). Offers carry a ticket; a ring for a wait that a sample not frozen, a reset or a newer request ended is refused and never goes live. The wait ends on any sample that is not frozen (not only at a frozen-to-thawed sample: a patch opened with Freeze on whose first sample was already thawed left it waiting for ever, and every save then left an older file; final review I1) [code; test_engine `a_wait_ends_on_a_thawed_sample`].
 - UI thread: `onSave` hands the save to the worker and waits (Rack packs the folder when it returns); the window reads snapshots.
 - The save holds the live ring still only for the copy (seq_cst hold/still flags: either the hold is refused or the audio thread's write waits).
 - `onRemove` joins the worker under Rack's lock: deleting the module mid-read stalls audio for the read's length [ledger, Task 12].
@@ -247,7 +271,18 @@ Busiest tables (busy plus Tilt and 32 partials), Long grain, each sample timed, 
 | worst Tables::work call | 28.8 to 32.6 | 16.1 to 16.7 |
 | **worst** | **68.7 to 70.7** | **32.4 to 33.3** |
 
-**Cold-core caveat** [ledger, Task 9]: these hold at the core's working clock. From a light load an M-series core starts slow; the first grains' pieces took up to 1.7 times as long (about 115 µs at 96 kHz), over the bound, and no split of a transform could prevent that. The worst-sample run omits Wide (PHASES may cost a little more with it) [ledger].
+**Cold-core caveat** [ledger, Task 9]: these hold at the core's working clock. From a light load an M-series core starts slow; the first grains' pieces took up to 1.7 times as long (about 115 µs at 96 kHz), over the bound, and no split of a transform could prevent that.
+
+**After the final review** (the comb's makeup measured, one run of the worst-sample check each way, M5 Pro, µs) [code, `bench.inc`]: the run now has Wide on (it draws twice the random phases in PHASES; every other piece does the same work either way).
+
+| Piece | 96 kHz, Wide off | 96 kHz, Wide on | 48 kHz, Wide off | 48 kHz, Wide on |
+|---|---|---|---|---|
+| FORWARD_L / R | 57.7 | 57.5 | 29.6 | 29.9 |
+| SPECTRAL_L / R (now with the makeup's sums) | 56.2 | 56.2 | 26.0 | 26.0 |
+| PHASES (now with the comb's gain on both sides) | 36.5 | **68.3** | 18.1 | 34.1 |
+| INVERSE_L / R | 64.6 | 64.1 | 30.8 | 30.6 |
+| worst Tables::work call | 21.0 | 30.7 | 10.6 | 11.1 |
+| **worst** | **64.6** | **68.3** | **30.8** | **34.1** |
 
 ### 8.3 Level and waver [test_grain]
 
@@ -261,6 +296,9 @@ Busiest tables (busy plus Tilt and 32 partials), Long grain, each sample timed, 
 | Held chord, 10 minutes | spectrum within 0.309 dB of the first minute, level per 10 s within 0.515 dB, autocorrelation 0.013 (no period), the noise recorded underneath does not come through (−97.6 dB) |
 | Panned input (level) | −12.041 dB in, −12.041 out |
 | Phase difference L/R | 90.00° in, 90.00° out |
+| Held stereo (one grain taken, then held 30 s with `take` false) | pan −6.021 dB in and out; phase difference 90.00° in and out |
+| The comb's level (engine, 48 kHz, defaults, Harmonics 1 unless said, recording, 1 V partials) | saw on C2: +0.16 dB at Harmonics 0, +0.07 at 0.5, +0.23 at 1 (before the fix +12.86 and +16.73); chord on three roots +0.49 (before +18.03); white noise −6.60 (needs +25.0 dB, the bound gives +18.1; before −6.61); a sine between the first two teeth −22.4 (before −23.3); silence exact silence [test_engine `comb_keeps_the_level`] |
+| Thaw at Position fully right, a 1 kHz tone arriving while frozen on a chord | the live tone's share of the power: 1.000 from a grain + the latency + a hop after the thaw at x1 (0.53 s), from 8 grains + … at x8 (2.91 s) [test_engine `thaw_returns_to_live`] |
 | Wide, mono input | correlation 0.0005 (bound 0.2) |
 | Grain change | 50 ms blocks within −3 / +4 dB of before (test bound); about +3 dB worst, Long to Short [ledger] |
 | DC in (5 and 10 V) | at most 9.4e-5 V mean out over 0.25 s [test_hostile] |
@@ -271,7 +309,8 @@ Busiest tables (busy plus Tilt and 32 partials), Long grain, each sample timed, 
 - Shift up on a flat spectrum (+7, +12, +24): every bin 1.000000 of the mean, power within 0.0003 dB. A lone bin shifted up by a non-whole ratio: −0.49 to +0.35 dB, centroid within 0.03 bin. A tone shifted up is about 2r bins wide (about 47 Hz at +24, Medium) [ledger].
 - Blur at full: 0.9996 octave between half-power points (651 to 1302 Hz from a bin at 1 kHz); 0.4997 at half. Flat stays flat within 0.01 dB from 100 Hz, 0.07 dB from 50 Hz.
 - Comb: narrowest tooth about 2.7 bins at −3 dB (about 200 cents at 65 Hz, Medium, 48 kHz) [ledger, Task 6].
-- `Tables::apply` at 65536 bins: 6 µs with Tilt and the comb, 37 to 42 µs Shift down, 50 µs Shift up, 71 µs Blur, 88 µs everything (header measurement; the bench's SPECTRAL figures above are the staged ones).
+- `Tables::apply` at 65536 bins: 6 µs with Tilt and the comb, 37 to 42 µs Shift down, 50 µs Shift up, 71 µs Blur, 88 µs everything (header measurement, before the makeup came to be measured; the bench's SPECTRAL figures above are the staged ones, after).
+- The comb's makeup [test_tables `comb_makeup_measured`]: g = sqrt(before / after) to 1e-4 on noise and on a sound shaped like the comb at h 1, 0.5, 0.1; on the teeth at h 1 the output's power is the input's within 0.01 dB (at h 0.5, −0.29 dB: g scales only the comb's share); noise at the defaults needs +25.0 dB and gets the bound; silence g 1; sums that overflow g 1, every bin finite.
 
 ### 8.5 Aliasing (rule 16) [test_alias]
 
@@ -290,15 +329,18 @@ On 2026-11-26 `make -f tests.mk test TEST_WERROR=-Werror CXX=g++` passed on Linu
 
 Rulings made during the build that wait on the user [ledger]:
 
-- In Stop, Freeze wakes a stopped module only onto nothing to travel through; otherwise it waits for TRIG.
+- In Stop, Freeze with a pass to travel always ends any pass and waits for TRIG; with nothing to travel through it is held (one rule, after the final review).
 - Not frozen, Position fully left: the input about 30 s late at any Stretch, never ending, RUN high.
 - A held sound under a moving Position follows it; past the tape, from the anchor.
-- Freeze while held at the Stretch stop replaces the held slice with the anchor's.
-- Thaw from a hold at Position fully right: drifts for 30/(1 − pace) s before returning.
-- Frozen and stopped, Position turned fully right: silent until TRIG or a new freeze (unlike the same state opened from a patch).
+- Freeze while held at the Stretch stop replaces the held slice with the anchor's (Go round), or stops (Stop, with a pass to travel).
+- Position's default about 3 s back (0.9): at the defaults the module plays 3 s or more behind the input and Freeze loops the last 3 s; the hold is Position fully right.
+- The corner word FROZEN AT END, and the read head in brass (gold on the glass).
+- Recording at exactly Stretch 1 the read head sits on the anchor; Stretch brought back to 1 returns it there (a new pass).
+- A press in the window plays from there (a new pass from the new anchor, as TRIG; in Stop it starts a pass and raises RUN); the knob and CV do not restart.
+- A thaw returns the read point to the anchor at once (the user's ruling at 2.0.46); stopped, it stays stopped. Above x1 the new input still comes in at Stretch's pace: at x8 the slice is all new input about 2.7 s (8 grains) after a thaw at Position fully right, and the read point then falls behind now as it does whenever the tape records above x1.
 - Frozen, Position pushed right past now: the pass ends at once, no grain at the edge.
-- The defaults (Medium, Wide off, x8, Position now, C2, 8 partials, 25 cents), Blur's and Tilt's ranges, the comb's makeup (≤ +18 dB), equal wet loudness (peaks over 8 V on loud held sounds).
-- Duplicating a frozen module (Ctrl+D): does the copy carry the tape? Not tried.
+- The defaults (Medium, Wide off, x8, Position now, C2, 8 partials, 25 cents), Blur's and Tilt's ranges, the comb's makeup (measured, held to +18 dB), equal wet loudness (peaks over 8 V on loud held sounds).
+- Duplicating a frozen module (Ctrl+D): what the copy holds is not yet tested. The copy opens with Freeze on and reads `tape.wav` from its own storage folder; whether Rack copies the original's folder, and as of which save, is not known here.
 
 ---
 
@@ -306,13 +348,13 @@ Rulings made during the build that wait on the user [ledger]:
 
 ### 10.1 Open at this build (from the ledger; for the final review)
 
-- **No fade-in of the recording after Initialize or a rate change** (`Ring::clear` keeps the gain at full): a step is written onto the tape and can be heard as a short puff. Ledger: "fix before merge".
 - At 48 kHz with the menu on Long, the first grain after a start can lack non-default Tilt/Shift (the rest set passes the priming test); it dissolves in.
-- Mix snaps at `reset()` while the overlap tail still sounds; RUN falls at once at `reset()` / `setSampleRate` while laid grains still sound.
+- RUN falls at once at a rate change while laid grains still sound (Initialize keeps it).
+- Bypass: no record, no Freeze edges, the last grain's tail on un-bypass and an unfaded join on the tape (section 3).
 - A NaN Position reads as the oldest (30 s back); only reachable if `cvValue`'s guard were bypassed.
 - The stored file stays at its old rate after a rate change until frozen anew (a ruling, not a defect).
 - `TapeKeeper`'s one-save-at-a-time does not cover the module's own removal of `tape.wav` (a single caller in practice).
-- No automated check that the plugin binds no libRack pffft symbol (checked by hand at this build: `nm -D` of the Linux `plugin.so` lists no `pffft` symbol).
+- The check that the plugin binds no plain `pffft_*` symbol (`tools/check_pffft_symbols.sh`, run by `make smoke`) runs on macOS and Linux only; Windows is cross-built and checked by hand.
 - `test_threads` liveness floors (more than 100 changes and publishes in 2 s) could fail on a starved machine; `swap_race` and `save_race` can pass without a take or save on one.
 
 ### 10.2 Known limits that are not defects
@@ -328,21 +370,21 @@ Every Doldrums test builds with ASan and UBSan except the two ThreadSanitizer te
 | Test | Covers |
 |---|---|
 | `test_laws` | grain sizes, the CV rule, the Stretch law and tooltip, the lag, root and width, Tilt, Shift (detent), Mix gains, the staging gap, the RUN dip |
-| `test_ring` | the wrap, the frozen standstill, the 5 ms fades at Freeze's edges, copy's bounds (ASan-poisoned fences), hostile samples, Freeze toggled every sample, a whole tape handed in |
-| `test_pass` | the read point as pure logic against a table from the design: anchor, pace frozen and not, returns, pass lengths, Position moves, edges, TRIG, held for both causes, leaving held, Freeze on and off, nothing to travel, Position fully left recording, Stop, and RUN's markers |
-| `test_tables` | rest is exact, the 16 Hz cut, Shift down/up/past the top/order, Blur energy and width, Tilt slope and bound, the comb's teeth, count, Nyquist, width, low notes, chords, Harmonics 0 and 1, the makeup, the rebuild in parts, hostile roots |
+| `test_ring` | the wrap, the frozen standstill, the 5 ms fades at Freeze's edges, copy's bounds (ASan-poisoned fences), hostile samples, Freeze toggled every sample, a whole tape handed in, the fade-in after clear (`fadeIn`) |
+| `test_pass` | the read point as pure logic against a table from the design: anchor, pace frozen and not, returns, pass lengths, Position moves, edges, TRIG, held for both causes, leaving held, Freeze on, a thaw returning to the anchor (`thaw_returns_to_the_anchor`), x1 recording on the anchor and back to it (`stretch_1_recording_stays_on_the_flag`, `stretch_back_to_1_returns_to_the_flag`), Freeze in Stop by the state before and Position (`freeze_in_stop`), Position fully right waking a stopped module, nothing to travel, Position fully left recording, Stop, RUN's markers, and a fuzz whose invariants tie Freeze's edges in Stop to "nothing to travel", a thaw to a return, and recording at pace 1 to the anchor |
+| `test_tables` | rest is exact, the 16 Hz cut, Shift down/up/past the top/order, Blur energy and width, Tilt slope and bound, the comb's teeth, count, Nyquist, width, low notes, chords, Harmonics 0 and 1, the makeup measured from the sound (`comb_makeup_measured`), the rebuild in parts, hostile roots |
 | `test_fft` | `rka::RealFft` on the vendored pffft against a naive DFT; no allocation after construction |
-| `test_grain` | repeatability, level (noise and sine, each size), ripple, silence, the held chord over 10 minutes, rest, stereo (pan, phase, Wide), dissolves |
-| `test_engine` | the engine: repeatability sample by sample and in blocks, Stretch markers at x2/x8/x32, staging and latency, RUN, Mix, no clicks (Freeze, TRIG, Position, V/OCT, Grain change, stop), the comb following V/OCT, the Eddy patch as an engine test, rate changes, tapes handed in, the hold for the save |
+| `test_grain` | repeatability, level (noise and sine, each size), ripple, silence, the held chord over 10 minutes, rest, stereo (pan, phase, Wide), a held stereo image, one comb makeup for both sides, dissolves |
+| `test_engine` | the engine: repeatability sample by sample and in blocks, Stretch markers at x2/x8/x32, staging and latency, RUN, Mix, no clicks (Freeze, TRIG, Position, V/OCT, Grain change, stop), the comb following V/OCT, the comb's level (`comb_keeps_the_level`), a thaw (`thaw_returns_to_live`, `thaw_while_stopped_stays_stopped`), a press in the window (`window_press_restarts_from_the_flag`, `window_press_in_stop_starts_a_pass`, `window_press_when_recording`), the default Position (`default_position_freezes_a_stretch`), x1 after a detour (`stretch_1_follows_position_after_a_detour`), the Eddy patch as the manual's recipe, Initialize and rate changes (no step on the tape, RUN and Mix through Initialize), tapes handed in (a wait ended by a thawed sample), the hold for the save |
 | `test_alias` | section 8.5 |
 | `test_hostile` | seeded fuzz of every param, CV, gate, input and menu setting with NaN, ±inf, ±1e30, denormals, 16 V/OCT channels at extremes, resets, new seeds, rate changes 44.1 to 768 kHz and bad rates; no allocation, free or lock in `process()` (operator new/delete, malloc/free hooks, `pthread_mutex_lock`/`trylock` and `std::mutex` counted; on Linux through `--wrap`); DC; instances independent |
-| `test_view` | the window's columns against a scan of the tape (recording, frozen, rebuilt), the scroll, the marks, the state words, the drag's inverse |
-| `test_readout` | tooltips and typed values (Stretch, Root, Width, Shift, Position), the bright span (`toPlay`) |
-| `test_store` | the save plan table, a round trip to the bit, mono and odd files, a missing/bad file, rate conversion (a tone within 1 cent), the save leaving the file while a tape is on its way, a swap under a running engine with no heap operation or lock |
+| `test_view` | the window's columns against a scan of the tape (recording, frozen, rebuilt), the scroll, the marks, the state words (FROZEN AT END among them), the drag's inverse |
+| `test_readout` | tooltips and typed values (Stretch, Root, Width, Harmonics, Shift, Position; text that is no number refused), the bright span (`toPlay`) |
+| `test_store` | the save plan table, a round trip to the bit, mono and odd files, a missing/bad file, rate conversion (a tone within 1 cent), the save leaving the file while a tape is on its way (the file first made a different tape, so a rewrite would show), a swap under a running engine with no heap operation or lock |
 | `test_saved` | the param ids and defaults, the four JSON keys from a golden set and each bad alone, the golden `tape.wav` (`testdata/GoldenTapeV1.hpp`) read to the bit and opened through the worker, what a save writes, a patch without its tape opens silent |
 | `test_threads` (TSan) | the window's snapshot hand-off, a view rebuilt and handed over, a tape swapped in under a running engine, saves against thaws |
 | `test_keeper` (TSan) | the module's worker, two savers, the window and Rack's lock (onAdd, a rate change, Initialize) modelled with a shared mutex, with a watchdog for deadlock |
 
-Also: `make bench` (8.1, 8.2), `make libm-calls` (idle, outputs, busyStill 0 calls required; busy reported, 0), `make engine-globals`, `make bench-modules`, `make smoke` (screenshots in each state; headless loads of a stored tape, a cut one and a missing one).
+Also: `make bench` (8.1, 8.2), `make libm-calls` (idle, outputs, busyStill 0 calls required; busy reported, 0), `make engine-globals`, `make bench-modules`, `make smoke` (the pffft symbol check, then screenshots in each state; headless loads of a stored tape, a cut one and a missing one).
 
-Not covered by any automated run [unverified]: the drag and its undo, the menu, dark panels, tooltips with CV, a sample-rate change in a running Rack, duplicating a frozen module, Rack's autosave timing.
+Not covered by any automated run [unverified]: the drag and its undo (and the press's count reaching the audio thread), tooltips with CV, a sample-rate change in a running Rack, duplicating a frozen module, Rack's autosave timing, Undo after Initialize. The user looked at the right-click menu on 2.0.46 (fine). Every panel in the plugin is dark.

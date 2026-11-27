@@ -245,6 +245,15 @@ The read point is the end of the slice that the next grain will take.
   is as far back as a grain can still be taken whole (30 s less one
   grain). Call that place the anchor. Default: fully right. Its CV, at
   full attenuverter, crosses the whole tape with 10 V.
+  (As built, 2026-11-26, the user's decision at the first test build:
+  the default is 0.9, about 3 s back (2.97 s at Medium), not fully right.
+  At fully right a fresh freeze holds and leaves Stretch nothing to act
+  on, which read as Stretch doing nothing. So at the defaults the module
+  plays about 3 s or more behind the input, and Freeze loops a stretch
+  of the last 3 s (about 24 s at x8) rather than holding the instant; the
+  plain hold is Position fully right, and the manual leads with the new
+  default and then the hold. Only the default changed: range, law, id
+  and saved state are as before.)
 - **Stretch** says how fast the read point moves on through the sound
   from there: at 1 it moves a second of tape each second, at 8 an eighth
   of a second each second, at infinity not at all.
@@ -258,22 +267,37 @@ The read point is the end of the slice that the next grain will take.
   have to creep to the end of the tape before the frozen moment was
   reached. Freeze going off changes nothing: the read point goes on
   from where it is. *(call, after the builder's read of this document)*
-  (As built, 2026-11-26, a ruling during the build: in *stop*, Freeze
-  going on starts a pass while a pass is running, but wakes a STOPPED
-  module only when the result is held (the anchor within a grain of the
-  end of the frozen tape, as at Position fully right); with a pass to
-  travel it stays stopped until TRIG. This meets both "stays silent until
-  a trigger at TRIG" and "held ... with either setting", and gives the
-  Eddy patch a clean RUN: nothing sounds or gates between the freeze and
-  the trigger. In *go round* Freeze always starts a pass. Also: a stopped
-  module is not woken by a Position move, so frozen and stopped, turning
-  Position fully right stays silent until TRIG or a new freeze, though
-  the same state opened from a patch is held at once. Freeze going on
-  while held at the Stretch stop starts a pass from the anchor like any
-  freeze, so the held slice is replaced by the anchor's. And a thaw from
-  a hold at Position fully right goes on from the frozen moment and
-  returns to now only when that pass ends, 30 / (1 - pace) s later (34 s
-  at x8). All for the listening stop.)
+  (As built, 2026-11-26, after the final review, superseding the build's
+  rulings: in *stop*, Freeze going on is one rule, whatever was happening
+  before. With a pass to travel it ends any pass and the module waits,
+  STOPPED and silent with RUN low, for TRIG; a pass running at the time
+  does not go on. With nothing to travel through (the anchor within a
+  grain of the end of the frozen tape, as at Position fully right) it is
+  held and sounds. Frozen with nothing to travel through is held whenever
+  it is true: at a freeze, when a patch opens, and when Position is turned
+  fully right while stopped, which wakes it into the hold. This meets both
+  "stays silent until a trigger at TRIG" and "held ... with either
+  setting", gives the Eddy patch a clean RUN (nothing sounds or gates
+  between the freeze and the trigger, with no wait for a pass to end),
+  and makes the same press do the same thing whatever came before. TRIG on
+  the freeze's grain still starts a pass. In *go round* Freeze always
+  starts a pass from the anchor. Freeze going on while held at the
+  Stretch stop starts a pass from the anchor like any freeze in go round
+  (the held slice is replaced by the anchor's), and in stop, with a pass
+  to travel, stops.)
+  (As built, 2026-11-26, the user's ruling at the first test build,
+  superseding "Freeze going off changes nothing": **a thaw returns the
+  read point to the anchor at once**, a new pass from Position by the
+  usual dissolve, whenever the module is sounding (running or held), in
+  either setting. With Position fully right that is straight back to the
+  live input. A module that is STOPPED stays stopped at a thaw: no pass,
+  no RUN, so a recorder gated by RUN is not restarted. A thaw that starts
+  a new pass while RUN is high dips it for 1 ms, as any new pass does.
+  Held at the Stretch stop, the thaw takes the slice at the anchor once
+  and holds it there, on a tape now recording. The first grains after a
+  thaw at Position fully right hold the frozen tape's last frames as well
+  as the new input (it is what "now" holds); at Stretch 1 the new input
+  fills the slice within a grain, at Stretch s within about s grains.)
 - **Frozen**, the tape stands still and the read point travels right,
   towards now. When it arrives at the end of the tape, the pass is over
   and it returns to the anchor and goes again.
@@ -284,6 +308,13 @@ The read point is the end of the slice that the next grain will take.
   to the anchor. At Stretch 1 it keeps pace and never returns: the
   output is a smeared copy of the input, late by Position's distance and
   a grain.
+  (As built, 2026-11-26, the user's observation at the first test build:
+  at Stretch exactly 1, recording, the read point is on the anchor. Built
+  first as "keeps pace from wherever it is", Stretch turned up and back
+  to 1 left the module late by any amount for ever with the dial at x1;
+  now, if at pace 1 the read point is not on the anchor at a grain, it
+  returns there (a new pass, once) and keeps pace on it. Frozen, x1
+  travels from where it is; paces under 1 are unchanged.)
 - **With Position fully right and the tape frozen there is nothing to
   travel through**: the anchor is the end of the tape. The module is
   then **held**, exactly as it is with Stretch at its stop (below), at
@@ -443,6 +474,18 @@ Knobs only. Each is read once a grain.
   *(call; the amount and the bound are for the listening stop)*
   (As built, 2026-11-26: as the plan: g = min(8, 1 / sqrt(mean of mask^2
   over the band)), the gain (1 - h) + h g mask.)
+  (As built, 2026-11-26, the final review's fix: that rule assumed a flat
+  spectrum, so a sound already on the teeth (a saw on C2 at Harmonics 1)
+  came out 16.7 dB over its input, into the soft bound. Reversed: the
+  makeup is measured from the sound, per grain, one for both sides: before
+  = the power reaching the comb (after Shift, Blur and Tilt), after = the
+  power the comb would leave at g = 1, both summed over the two sides, and
+  g = sqrt(before / after) held to [1, 8]; 1 when either is 0 or not
+  finite. Measured at the defaults, 48 kHz, Harmonics 1, recording: a saw
+  on the root +0.2 dB, a chord on three roots +0.5 dB, white noise
+  -6.6 dB (it would need +25 dB; the bound gives +18), a sine between the
+  first two teeth -22 dB (cut, raised by no more than the bound). At
+  Harmonics 0 the comb is out, to the bit.)
 
 ### Mix, inputs and outputs
 
@@ -492,6 +535,14 @@ Knobs only. Each is read once a grain.
   save meant to write the frozen tape and could not). Each sits on a patch
   of the glass's colour. The anchor is a cyan line with a flag, the read
   point an ivory line, the slice a pale band with a bar at its foot.)
+  (As built, 2026-11-26, the user's decisions at the first test build:
+  the read point (the manual's read head) is drawn in the theme's brass,
+  bolder than the flag's line, and reads as gold on the glass; the ivory
+  line was hard to tell from the flag. A tape frozen with nothing to
+  travel through says FROZEN AT END, so the window says why Stretch does
+  nothing; HELD and FROZEN HELD are now only Stretch's stop; with both
+  causes, FROZEN AT END; STOPPED still wins. The manual calls the anchor
+  the Position flag.)
 - Held with the tape not frozen, the read point's mark rides left with
   its sound and off the edge; the corner still says held.
 - **Dragging in the window sets Position** (the knob follows), as
@@ -500,6 +551,16 @@ Knobs only. Each is read once a grain.
   (As built, 2026-11-26: a press puts the anchor under the mouse, a
   drag follows, one undo step per gesture; with a Position CV the knob is
   set so knob plus CV lands there. Not yet tried in a live Rack.)
+  (As built, 2026-11-26, the user's ruling at the first test build: a
+  press in the window means "play from here". The press, and each move of
+  a drag, puts the Position flag under the mouse as before and also
+  starts a new pass from it, as a trigger at TRIG does: so a press just
+  left of the read head moves playback back there, and a drag scrubs flag
+  and head together. In Stop a press starts a pass and raises RUN (a stray
+  click can start a gated recorder). The knob and the CV keep the
+  Position rule, the read head keeping its distance from the flag with no
+  restart, so a CV sweeping Position does not restart the pass; undo of a
+  window gesture restores Position by that rule too.)
 - The ruler printed under the glass marks tenths: 3 s each.
 - Drawing takes nothing from the audio thread: the waveform is a reduced
   copy (a few hundred columns of peaks), kept up to date as the tape is
@@ -539,10 +600,12 @@ Knobs only. Each is read once a grain.
   is joined under Rack's lock); the manual says so. Whether a duplicated
   frozen module (Ctrl+D) carries its tape was not tried.)
 - Initialize silences the tape and returns everything to its default.
-  (As built, 2026-11-26: the menu too. Open at the first test build: the
-  recording starts again at full level after Initialize or a rate change,
-  with no fade in, so a step can be written to the tape and heard as a
-  short puff; deferred by the build's ledger to the final review.)
+  (As built, 2026-11-26: the menu too. After Initialize, and after a rate
+  change when not frozen, the recording on the silent tape fades in from
+  0 over 5 ms, as after a thaw, so no step is written onto it. At
+  Initialize the grains already laid down play out with RUN still high,
+  and Mix moves to its default over its 10 ms ramp. Undo after Initialize
+  brings back the knobs, the Freeze button and the menu but not the tape.)
 
 ## Aliasing
 

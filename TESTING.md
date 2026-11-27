@@ -279,6 +279,13 @@ untimed run that brings the core up to its working clock. Measured
 | the worst Tables::work call (budget 4096 / 2048) | 28.8 to 32.6 | 16.1 to 16.7 |
 | **worst** | **68.7 to 70.7** | **32.4 to 33.3** |
 
+Again after the final review (2026-11-26), when the comb's makeup came to
+be measured from the sound (a pass over the bins in each SPECTRAL, the
+comb's gain on both sides in PHASES), and with Wide on in the run (Wide
+draws twice the random phases): at 96 kHz SPECTRAL 56 µs, PHASES 36 (Wide
+off) and 68 (Wide on, now the worst piece: 68.3 µs), INVERSE 64; at
+48 kHz 30.8 (Wide off) and 34.1 µs (on). The run keeps Wide on.
+
 So no piece needed splitting. From a light load the core starts slow:
 timed without the untimed run, the first grains' pieces took up to 1.7
 times as long (SPECTRAL_L 96 us on the first grain, 56 us by the
