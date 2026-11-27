@@ -53,7 +53,8 @@
 // - Freeze falling (a thaw) returns the read point to the anchor at once, a
 //   new pass, whenever the module is sounding (running or held), in either
 //   setting: with Position fully right that is straight back to the live
-//   input, the frozen moment dissolving into it over a grain. Stopped (in
+//   input, the frozen moment dissolving into it over a grain (and in Drift
+//   above Stretch 1 falling behind it from there, as any recording pass). Stopped (in
 //   stop, waiting for TRIG) it stays stopped: a thaw starts no pass and
 //   raises no RUN. Held at the Stretch stop, the slice at the anchor is
 //   taken once and held there, on a tape now recording (in Drift; in Follow
@@ -67,8 +68,10 @@
 //   frozen with nothing to travel through: frozen and stopped, that is held
 //   and sounding whenever it is true (at a freeze, at reset, and when
 //   Position is turned fully right while stopped, which wakes it into held;
-//   so a state saved and reopened sounds as it did). Stretch at the stop,
-//   Freeze falling or any other Position move do not wake it. Go round
+//   so a state saved and reopened sounds as it did). Freeze rising and a
+//   press in the window wake it too (above). Stretch at the stop,
+//   Freeze falling or any other Position move do not wake it. A wake into
+//   held and a press on the same grain: the wake wins, the press is lost. Go round
 //   chosen while stopped starts a pass at once (choice: in go round
 //   something is always sounding). After reset() the first grain starts a
 //   pass; in stop it is stopped, unless the tape is frozen with nothing to
@@ -83,8 +86,9 @@
 //   Grain alone moves nothing.
 // - Held: Stretch at its stop (pace 0; not while following, below), or the
 //   tape frozen with the anchor less than a grain from now (nothing to
-//   travel through). The read point stands still, the grain sounds, a pass
-//   never ends, in either setting. `take` is true on the grain held begins
+//   travel through; but for a pass from a press there, which travels to
+//   the end and then holds again, above). The read point stands still, the
+//   grain sounds, a pass never ends, in either setting. `take` is true on the grain held begins
 //   if the read point is still on the tape, on a Position move, and on a
 //   change of Grain if the slice is on the tape at the new size. Frozen, a
 //   Position move while the held place is on the tape moves it as above (the
@@ -135,7 +139,8 @@
 //   lowest end; it never passes now (held at now if it would, as after a
 //   thaw part way through a hop). Frozen, a slice pushed below the oldest
 //   whole grain (only by a larger Grain) is held at that edge. A pass over:
-//   in go round, back on the anchor with newPass; in stop, stopped.
+//   in go round, back on the anchor with newPass; in stop, stopped (a pass
+//   from a press with nothing to travel through: held on the anchor again).
 //
 // So a frozen pass from lag L lasts floor(L / (pace hop)) + 1 grains, and a
 // recording one floor((capacity - grain - hop - L) / ((1 - pace) hop)) + 1.

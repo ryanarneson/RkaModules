@@ -59,8 +59,11 @@
   Instrument look, after PaulStretch's method (written afresh):
   - A 30 s stereo tape of the input, always recording unless frozen, with
     a window on it: the tape's peaks, the anchor, the read point and the
-    slice, and the state in the corner (FROZEN, HELD, STOPPED, FROZEN
-    HELD, FROZEN STOPPED). Drag in the window to set Position.
+    slice, and the state in the corner (FROZEN, HELD, STOPPED, FOLLOW,
+    FROZEN HELD, FROZEN AT END, FROZEN STOPPED), and while frozen a timer
+    of how long the pass will still play. A press or drag in the window
+    plays from there; the Position flag moves only with the knob and its
+    CV.
   - Freeze by a latching button or a gate; with Position fully right a
     freeze holds what is playing. Position sets where a pass starts,
     Stretch how slowly it moves on (x1 to x32 on the lettered dial, then

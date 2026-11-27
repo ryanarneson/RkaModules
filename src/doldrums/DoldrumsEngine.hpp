@@ -230,7 +230,8 @@ namespace rka { namespace doldrums {
 struct DoldrumsFrame {
 	enum Param { STRETCH, STRETCH_ATT, POSITION, POSITION_ATT, HARMONICS, HARMONICS_ATT, BLUR, ROOT, TILT,
 	             SHIFT, PARTIALS, WIDTH, FREEZE, MIX, kParams };
-	// The defaults (the plan's Global Constraints).
+	// The defaults (the plan's Global Constraints, but for Position and Mix).
+	// Mix 0.5: the user's decision at 2.0.49 (the plan's was 1, all wet).
 	// Position 0.9 (about 3 s back): the user's decision at 2.0.46, so that a
 	// freeze at the defaults leaves Stretch tape to act on (was 1, now).
 	float params[kParams] = {0.5f, 0.f, 0.9f, 0.f, 0.f, 0.f, 0.f, -24.f, 0.f, 0.f, 8.f, 0.393f, 0.f, 0.5f};

@@ -50,7 +50,8 @@
 // nothing (the user's decision at 2.0.46); "FROZEN HELD" is then held by
 // Stretch's stop alone. Both at once say "FROZEN AT END": it is the more
 // specific reason Stretch is inert (moving Stretch off its stop would still
-// leave the head with no tape ahead). Recording in While recording: Follow,
+// leave the head with no tape ahead; not so after a press in the window
+// with Stretch at its stop, where the word is wrong: issue #109). Recording in While recording: Follow,
 // sounding (DoldrumsState::following), it says "FOLLOW", so the window says
 // why Stretch does nothing until Freeze (Task 14, the user's rule of least
 // astonishment). STOPPED keeps its precedence (a module stopped in Follow

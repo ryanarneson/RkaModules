@@ -10,7 +10,7 @@
 // - The audio thread: process(): the frame, keeper.buttonIs (the button as
 //   the frame has it), engine.process(), the outputs, the Freeze cap's
 //   light, then keeper.afterProcess() (the window's view) and, when it
-//   published, the figures the tooltips and the drag read (relaxed atomics).
+//   published, the figures the tooltips and the window's timer read (relaxed atomics).
 //   It never sets a param.
 // - Rack's threads holding the engine's lock exclusively (process() held
 //   off): the constructor (seed, allocate, setSampleRate, tapeRate), onAdd
@@ -94,8 +94,8 @@
 //   the manual's read head) a brass line, bolder than the flag's; the
 //   anchor (the manual's Position flag) a cyan line with a small cyan flag
 //   at the top. The state word (TapeView.hpp: FROZEN, HELD, STOPPED,
-//   FOLLOW, FROZEN HELD, FROZEN AT END, FROZEN STOPPED) top right, and a file's trouble
-//   top left, each on a patch of the glass's own colour so the peaks never
+//   FOLLOW, FROZEN HELD, FROZEN AT END, FROZEN STOPPED) top right, and top left a
+//   file's trouble or, while frozen, the timer (Readout.hpp), each on a patch of the glass's own colour so the peaks never
 //   cross the letters. Before the first snapshot: a line along the middle,
 //   as Eddy's empty tape. A silent tape draws its 0 V line dimly.
 #include "plugin.hpp"
@@ -146,7 +146,7 @@ struct Doldrums : Module {
 	std::atomic<bool> follow_{false};   // While recording: false Drift (the default), true Follow
 
 	// What the audio thread last published (with the window's snapshot), for
-	// the tooltips and the window's drag.
+	// the tooltips and the window's timer.
 	int publishEvery_ = 800;
 	std::atomic<float> fs_{48000.f};
 	std::atomic<long long> capacity_{0};

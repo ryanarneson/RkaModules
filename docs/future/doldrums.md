@@ -14,8 +14,8 @@ shows the tape, not the held spectrum. Stretch runs from x1 to a true
 stop on one dial. Harmonics, the tuned comb, is played from polyphonic
 V/OCT. A trigger plays one pass and a RUN gate says when it runs, for
 recording into Eddy. A frozen tape is kept with the patch. The FFT is
-PFFFT, vendored. Not yet heard by the user: the listening stop comes with
-the first test build.
+PFFFT, vendored. In its first listening stop: the user has heard the test
+builds from 2.0.46 (2.0.50 is the fifth).
 
 ![mockup](doldrums-mockup.svg)
 

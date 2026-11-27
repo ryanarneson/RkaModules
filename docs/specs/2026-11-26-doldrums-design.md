@@ -300,7 +300,8 @@ The read point is the end of the slice that the next grain will take.
   read point to the anchor at once**, a new pass from Position by the
   usual dissolve, whenever the module is sounding (running or held), in
   either setting. With Position fully right that is straight back to the
-  live input. A module that is STOPPED stays stopped at a thaw: no pass,
+  live input (at Stretch 1 it stays there; in Drift above 1 it starts at
+  the live input and falls behind from it, as any recording pass does). A module that is STOPPED stays stopped at a thaw: no pass,
   no RUN, so a recorder gated by RUN is not restarted. A thaw that starts
   a new pass while RUN is high dips it for 1 ms, as any new pass does.
   Held at the Stretch stop, the thaw takes the slice at the anchor once
@@ -419,6 +420,9 @@ The read point is the end of the slice that the next grain will take.
 - *Stop*: when a pass ends the wet sound fades out with its last grain
   and stays silent until a trigger at TRIG starts the next pass. A patch
   opened with this setting waits for a trigger. *(call)*
+  (As built, 2026-11-27: Freeze going on and a press in the window also
+  start a pass from a stopped module; see the notes under Freeze going
+  on, above, and under The window.)
 - **RUN** is a gate: 10 V while a pass is sounding. It rises when the
   first grain of a pass begins to sound, so it follows what is heard and
   not when the trigger arrived. In *stop* it falls when the pass's last
@@ -584,6 +588,12 @@ Knobs only. Each is read once a grain.
   nothing; HELD and FROZEN HELD are now only Stretch's stop; with both
   causes, FROZEN AT END; STOPPED still wins. The manual calls the anchor
   the Position flag.)
+  (As built, 2026-11-27, the user's request at 2.0.49: while the tape is
+  frozen the top left shows a timer, how long the pass will still play at
+  the pace in force: travelling, from the read point to the end;
+  stopped, the pass a trigger would play, from the anchor; nothing while
+  held or not frozen. "m:ss", then "h:mm:ss", ">99 h" from 100 hours,
+  the seconds rounded up. A file's trouble takes its place.)
   (Added 2026-11-26, at the user's request, with While recording: Follow:
   recording in Follow the corner says FOLLOW, the read head on the flag;
   STOPPED still comes first, and frozen the words are the frozen ones.)
@@ -902,6 +912,9 @@ upward; the pure tone's waver; a full-level sound's peaks; the bump at a
 Grain change; and what could not be tried without a live Rack: the drag
 and its undo, the menu, dark panels, a rate change while running and
 duplicating a frozen module.)
+(As built, 2026-11-27: at 2.0.50 Freeze in stop plays one pass, then
+stops, and a press or drag in the window moves the read point only, with
+no undo; the guide's items follow, and the timer is new among them.)
 
 ## Left to the builder
 

@@ -117,8 +117,8 @@ grain's work is spread over the samples after it), only for the tape's
 file. It vendors PFFFT (`src/dep/pffft/`, wrapped as `rka::RealFft` in
 `src/Fft.hpp`), the plugin's first FFT, and lifted Eddy's soft bound to
 `src/SoftBound.hpp`. Its window is its own (`src/doldrums/TapeView.hpp`, a
-ring that scrolls), not Eddy's `TapeWindow`. Not yet heard by the user: the
-listening stop comes with the first test build. The manual is
+ring that scrolls), not Eddy's `TapeWindow`. In its first listening stop: the
+user has heard the test builds from 2.0.46 (2.0.50 is the fifth). The manual is
 `docs/doldrums/README.md`; the design is
 `docs/specs/2026-11-26-doldrums-design.md`.
 

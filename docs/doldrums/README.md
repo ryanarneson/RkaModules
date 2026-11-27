@@ -117,8 +117,9 @@ Read this with the module open. From the back of the glass to the front:
 - **A thin cyan line with a small solid triangle on top: the Position
   flag.** It is where a pass starts, and it is what POSITION sets: fully
   right is now, fully left is as far back as a whole grain can still be
-  taken (30 s less a grain). (The technical reference calls this place the
-  anchor.) It stays put on the glass while the tape scrolls under it, and
+  taken (30 s less a grain; while the tape records, half a grain nearer
+  still, because the oldest sound is being recorded over). (The technical
+  reference calls this place the anchor.) It stays put on the glass while the tape scrolls under it, and
   it moves only when Position moves: the knob or its CV. A press in the
   window does not move it.
 - **A short cyan bar along the bottom edge, with a pale band above it:
@@ -146,10 +147,14 @@ Read this with the module open. From the back of the glass to the front:
     the end of the tape, so Stretch has nothing to act on until Position
     moves left or Freeze is let go. The sound is held. (If Stretch is at
     its stop as well, the corner still says AT END: moving Stretch alone
-    would change nothing.)
+    would change nothing. One case where the word is wrong, a known
+    fault: after a press in the window with Stretch at its stop, the gold
+    bar holds at the place pressed, the corner still says AT END, and
+    turning Stretch off its stop does make the gold bar travel.)
   - **STOPPED**: in the Stop setting, a pass has ended (or the patch has
-    just opened) and the module is silent until a trigger (in Follow too:
-    STOPPED comes before FOLLOW);
+    just opened) and the module is silent until a trigger, a press in the
+    window or Freeze going on starts a pass (in Follow too: STOPPED comes
+    before FOLLOW);
   - **FROZEN STOPPED**: the same, on a frozen tape.
 - **A time in the top left corner, such as 3:12: the timer.** It shows
   only while the tape is frozen, and says how long the pass will still
@@ -173,6 +178,14 @@ Read this with the module open. From the back of the glass to the front:
   patch"). They take the timer's place while they show.
 - **The ruler** under the glass: a long tick every tenth of the tape
   (3 s), short ticks between them every 0.75 s.
+- **The patches behind the words.** The corner words and the timer sit
+  on a patch of the glass's own colour: the peaks never cross them, and
+  the flag's line and the gold bar start just below a patch when they
+  pass under one (so a flag near the left edge looks shorter while the
+  timer shows).
+- **A single brighter line along the middle, and nothing else**: the
+  module has only just been added and has not yet run. It lasts a
+  moment.
 
 ### What the marks do
 
@@ -223,8 +236,9 @@ the default; Follow has its own rows below them.
   read from the tape again). Turning Position then puts them back on the
   flag, holding the slice there.
 - **Stopped** (STOPPED or FROZEN STOPPED): the gold bar rests on the
-  flag, nothing is bright, and nothing sounds until a trigger (or a press
-  in the window) starts a pass from the flag.
+  flag, nothing is bright, and nothing sounds until a trigger starts a
+  pass from the flag, a press in the window starts one from the place
+  pressed, or Freeze going on starts one from the flag.
 - **At a thaw** (Freeze let go while the module is sounding): the gold
   bar returns to the flag at once and a new pass starts there. Stopped,
   it stays stopped.
@@ -263,6 +277,11 @@ What happens after the press is what happens from any place:
   a trigger does.
 - The read head cannot go further left than a grain from the oldest end
   of the tape, nor right of now.
+
+A trigger at TRIG, Freeze going on or off, or Position's CV reaching
+fully right on a stopped, frozen module (which wakes the hold) in the
+same grain as a press wins: the pass is from the flag and the press is
+lost.
 
 A press starts a pass, as a trigger does (RUN dips for 1 ms if it was
 high). **In the Stop setting a press starts a pass and raises RUN**, so a
@@ -449,8 +468,8 @@ starts a new pass while RUN is high makes RUN's 1 ms dip, as any new pass
 does.
 
 **Freeze while held by Stretch at its stop** starts a new pass from the
-flag like any freeze in Go round, so the held sound is replaced by the
-slice at Position's place (in Stop, with a pass to travel, it stops). To
+flag, in either setting, so the held sound is replaced by the slice at
+Position's place, held there (FROZEN HELD). To
 keep a moment, freeze first, then hold. Thawed while held at the stop,
 the read head goes to the flag and holds the slice there (in Follow it
 follows from the flag instead).
@@ -490,7 +509,8 @@ The menu's **At the end of a pass**:
   the hold. Freeze going on does wake it: it plays one pass from the
   flag, then stops again (above).
   Choosing Stop does not end the pass under way: the module stops when
-  it ends, or at the next freeze. (Recording at exactly x1, or in Follow
+  it ends. A freeze starts a new pass from the flag, which plays once and
+  then stops. (Recording at exactly x1, or in Follow
   at any Stretch, a pass never ends, because the read head sits on the
   flag: it goes on until a freeze. Follow chosen while stopped does not
   wake it.) Choosing Go round while stopped starts
@@ -908,7 +928,9 @@ built. None is a fault you can fix with a setting, unless one is named.
 Bypassed, the inputs pass to the outputs (IN R taking IN L when
 unpatched); RUN is low and the Freeze cap dark. The module does nothing
 else while bypassed: the tape does not record and Freeze is not seen (a
-Freeze pressed or released meanwhile acts when the bypass ends). When the
+Freeze pressed or released meanwhile acts when the bypass ends; so, for
+now, does a press in the window made meanwhile: the gold bar jumps to
+the place pressed when the bypass ends). When the
 bypass ends, the tail of the last grain from before it is heard, and the
 recording starts again with no fade, so the tape has a join there.
 
