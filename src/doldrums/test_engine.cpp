@@ -1387,6 +1387,91 @@ void initialize_and_rate() {
 }
 
 
+// Initialize and a rate change write no step onto the tape (I2 of the final
+// review): the recording fades in from 0, as after a thaw. Measured before
+// the fix: 5 V in, the frame before the reset 0 V (the tape cleared) and the
+// first after it 5 V.
+void no_step_on_the_tape_at_initialize_or_a_rate_change() {
+	for (int what = 0; what < 2; what++) {
+		const float rate = 48000.f;
+		Rig g(rate, 113);
+		g.f.inL = 5.f;
+		g.go(g.secs(0.5));
+		if (what == 0)
+			g.e->reset();
+		else {
+			CHECK(g.e->allocate(44100.f), "allocate(44100)");
+			g.e->setSampleRate(44100.f);
+		}
+		const long long at = g.e->ring().now();
+		g.go(1000);
+		const int fade = int(std::lround(0.005 * (what == 0 ? 48000.0 : 44100.0)));
+		std::vector<float> l(600), r(600);
+		CHECK(g.e->ring().copy(at + 600, 600, l.data(), r.data()), "copy");
+		float worst = 0.f;
+		for (int i = 1; i < 600; i++) worst = std::max(worst, std::fabs(l[i] - l[i - 1]));
+		const char* name = what == 0 ? "Initialize" : "a rate change";
+		CHECK(l[0] > 0.f && l[0] <= 5.f / fade * 1.0001f, "%s: the first frame recorded %g V (one step is %g)", name, l[0], 5.f / fade);
+		CHECK(worst <= 5.f / fade * 1.0001f && l[599] == 5.f, "%s: the recording climbs a step a frame (largest step %g V, then %g)",
+		      name, worst, l[599]);
+	}
+}
+
+// Initialize while the wet sound plays (I3 of the final review): Mix moves
+// from where it was over its ramp, it does not snap (measured before the fix:
+// Mix 0, 5 V in, the output from 5 V to -0.18 V in one sample); and RUN stays
+// high while the grains laid before it still sound, falling (in stop, which
+// waits for TRIG after Initialize) once they have been heard.
+void initialize_moves_mix_and_keeps_run() {
+	const float rate = 48000.f;
+	{
+		Rig g(rate, 117);
+		g.f.params[F::MIX] = 0.f;
+		g.f.inL = 5.f;
+		g.go(g.secs(2.0));
+		const size_t at = g.L.size();
+		g.e->reset();
+		g.f.params[F::MIX] = 1.f;   // the module's Initialize: Mix to its default
+		g.go(g.secs(0.1));
+		float worst = 0.f;
+		for (size_t i = at - 10; i < g.L.size(); i++) worst = std::max(worst, std::fabs(g.L[i] - g.L[i - 1]));
+		CHECK(worst < 0.05f, "Initialize from Mix 0: the largest step at the output %g V", worst);
+	}
+	for (int stop = 0; stop < 2; stop++) {
+		Rig g(rate, 119);
+		g.f.stopAtEnd = stop != 0;
+		g.go(g.secs(3.0), [&](long long t) {
+			g.f.inL = chord(t, rate);
+			g.f.trig = stop && t >= 480 && t < 528 ? 10.f : 0.f;   // in stop, a pass by TRIG
+		});
+		CHECK(g.run.back() > 5.f, "%s: sounding before Initialize", stop ? "stop" : "go round");
+		const long long at = (long long) g.run.size();
+		g.e->reset();
+		g.f.trig = 0.f;
+		g.go(g.secs(1.5), [&](long long t) { g.f.inL = chord(t, rate); });
+		CHECK(g.run[size_t(at)] > 5.f, "%s: RUN high on the sample after Initialize", stop ? "stop" : "go round");
+		if (stop) {
+			// Stopped after Initialize: no new grain; RUN falls once the last
+			// grain laid has been heard, and nothing sounds after.
+			long long fell = -1;
+			for (long long i = at; i < (long long) g.run.size(); i++)
+				if (g.run[size_t(i)] < 5.f) {
+					fell = i;
+					break;
+				}
+			double after = 0, before = 0;
+			if (fell > at) {
+				after = meanSquare(g.L, fell, (long long) g.L.size() - fell);
+				before = meanSquare(g.L, at, fell - at);
+			}
+			CHECK(fell > at && fell - at <= g.grain() + g.e->latencyFrames(), "stop: RUN falls %lld samples after Initialize (bound %d)",
+			      fell - at, g.grain() + g.e->latencyFrames());
+			CHECK(before > 0.0 && after == 0.0, "stop: the tail sounds while RUN is high (%g) and nothing after (%g)", before, after);
+		} else
+			CHECK(edges(g.run, at).size() <= 2u && g.run.back() > 5.f, "go round: at most a dip, then high (%zu edges)", edges(g.run, at).size());
+	}
+}
+
 // ---- Tapes handed in (Task 11; DoldrumsEngine.hpp, "Tapes handed in").
 
 // A ring of the tape's length at `rate`, every frame (v, -v), as TapeStore makes them.
@@ -1760,6 +1845,8 @@ int main() {
 	rapid_freeze_and_trig();
 	rate_and_grain_change_mid_grain();
 	initialize_and_rate();
+	no_step_on_the_tape_at_initialize_or_a_rate_change();
+	initialize_moves_mix_and_keeps_run();
 	opened_frozen_waits_in_stop();
 	opened_frozen_and_held_sounds();
 	trig_high_at_start_fires_nothing();

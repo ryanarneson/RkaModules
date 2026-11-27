@@ -30,6 +30,11 @@
 // capacity, and the fade state that of a tape frozen and faded out (gain 0).
 // So, frozen, nothing is written after it (no faded live input lands on its
 // oldest frames), and a thaw fades in from one step above 0 as any thaw does.
+//
+// fadeIn() sets the gain to 0 (the fade state of a tape frozen and faded
+// out): the next frame recorded is one step above 0, as after a thaw. The
+// engine calls it with clear() at Initialize and at a rate change, so that
+// the recording that starts again on a silent tape writes no step onto it.
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -66,6 +71,9 @@ struct Ring {
 		for (int c = 0; c < 2; c++)
 			std::fill(store_[c].begin(), store_[c].end(), 0.f);
 	}
+	// The gain to 0: frozen, nothing is written; recording, the next frame is
+	// one step above 0 and the gain climbs from there.
+	void fadeIn() { count_ = 0; }
 	long long capacity() const { return cap_; }
 	// One past the newest frame; never falls. Frozen, it keeps advancing
 	// until the fade-out (up to `fade` frames) has been written, then stands

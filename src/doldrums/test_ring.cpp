@@ -1,7 +1,8 @@
 // Doldrums' ring tape (Ring.hpp): the wrap, the frozen standstill, the fade
 // at Freeze's edges, the bounds of copy (the buffer fenced with
 // ASan's poisoning, as Eddy's hostile test fences its tapes), hostile
-// samples, Freeze toggled every sample, and a whole tape handed in (fill).
+// samples, Freeze toggled every sample, a whole tape handed in (fill), and
+// the recording faded in from 0 after clear (fadeIn: Initialize, a new rate).
 #include "Ring.hpp"
 #include "testing.hpp"
 #include <cmath>
@@ -400,6 +401,35 @@ void fill_hands_in_a_frozen_tape() {
 	CHECK(r.now() == cap + 1 && r.copy(cap + 1, 1, &a, &b) && a == 1.f && b == -1.f, "a thaw fades in from one step (%g, %g)", a, b);
 }
 
+// fadeIn (the engine's Initialize and rate change, with clear): the gain to
+// 0, so the next frame recorded is one step above 0 and the recording climbs
+// a step a frame, as after a thaw. Frozen meanwhile, nothing is written.
+void fade_in_after_clear() {
+	const long long cap = 1000;
+	Ring r;
+	CHECK(r.allocate(cap), "allocate");
+	r.setFadeFrames(8);
+	for (int i = 0; i < 300; i++) r.write(5.f, -5.f, false);
+	CHECK(!r.fadedOut(), "recording at full gain");
+	r.clear();
+	r.fadeIn();
+	CHECK(r.fadedOut(), "fadeIn: the gain is 0");
+	const long long at = r.now();
+	r.write(5.f, -5.f, true);
+	CHECK(r.now() == at, "frozen after fadeIn: nothing written");
+	for (int i = 0; i < 12; i++) r.write(5.f, -5.f, false);
+	float l[12], rr[12];
+	CHECK(r.copy(at + 12, 12, l, rr), "copy");
+	bool ok = true;
+	for (int i = 0; i < 12; i++) {
+		const float want = i < 7 ? 5.f * float(i + 1) / 8.f : 5.f;
+		ok = ok && l[i] == want && rr[i] == -want;
+	}
+	CHECK(ok, "the recording climbs from one step: %g %g %g ... %g", l[0], l[1], l[2], l[11]);
+	float before = 0.f, b2 = 0.f;
+	CHECK(r.copy(at, 1, &before, &b2) && before == 0.f, "the tape before it was cleared: %g", before);
+}
+
 } // namespace
 
 int main() {
@@ -410,5 +440,6 @@ int main() {
 	hostile_samples();
 	rapid_freeze();
 	fill_hands_in_a_frozen_tape();
+	fade_in_after_clear();
 	return rkatest::finish("test_ring");
 }

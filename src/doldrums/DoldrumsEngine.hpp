@@ -87,8 +87,10 @@
 // must not run while process() does (Rack holds the engine's lock round
 // onSampleRateChange); at the rate it already holds it does nothing. The
 // engine then makes no sound of its own until setSampleRate(rate) adopts it:
-// the tape starts again from silence, the pass starts from reset, the tables
-// are rebuilt at the new rate. A frozen tape is not lost: the ring it was on
+// the tape starts again from silence (the recording fading in from 0:
+// Ring::fadeIn, so no step is written onto it), the pass starts from reset,
+// the tables are rebuilt at the new rate, Mix starts where its knob is and
+// RUN starts low. A frozen tape is not lost: the ring it was on
 // is kept as the source of a conversion the worker makes (below), and until
 // that arrives the new tape is silent and stands frozen (its 5 ms fade-out is
 // written as silence). What the overlap already holds plays out, so the wet
@@ -100,8 +102,13 @@
 //
 // reset() (Initialize): a silent tape and a new pass; the params are the
 // frame's, so their defaults are the module's. The grains already laid down
-// play out (no click). The seed is kept; seed() sets it. A tape on its way is
-// no longer wanted.
+// play out (no click), and RUN stays high until they have been heard (in
+// stop, which waits for TRIG after reset, it then falls; in go round the new
+// pass's first grain dips it, as any new pass under a high RUN does). Mix
+// moves to its new value over its ramp, from where it was. The recording
+// fades in from 0 (Ring::fadeIn), so no step is written onto the silent
+// tape; frozen, the tape stays silent and still. The seed is kept; seed()
+// sets it. A tape on its way is no longer wanted.
 //
 // Edges. After setSampleRate and reset, the first sample arms Freeze's and
 // TRIG's detectors from its levels and reports no edge: a patch opened with
@@ -285,10 +292,12 @@ struct DoldrumsEngine {
 		ring_->clear();
 		if (frozen_)   // frozen, the new tape is silent: its fade-out is written now, as silence
 			for (int i = 0; i < fade_; i++) ring_->write(0.f, 0.f, true);
+		else
+			ring_->fadeIn();   // the recording starts again from 0: no step onto the tape
 		if (want_.load(std::memory_order_relaxed) == 0) bumpEpoch();   // a new (silent) tape, unless one is on its way
 		primed_ = false;
 		active_ = GRAIN_MEDIUM;
-		restart();
+		restart(true);
 		running_ = true;
 		admit();
 	}
@@ -299,8 +308,9 @@ struct DoldrumsEngine {
 		exclude();
 		want_.store(0, std::memory_order_release);   // a tape on its way is not wanted now
 		ring_->clear();
+		ring_->fadeIn();   // recording, it starts again from 0; frozen, nothing more is written
 		bumpEpoch();
-		restart();
+		restart(false);
 		admit();
 	}
 
@@ -668,7 +678,10 @@ private:
 		}
 	}
 
-	void restart() {
+	// newRate: setSampleRate (RUN starts low, Mix at its knob); otherwise
+	// reset(), under which the grains laid down play out with RUN high and
+	// Mix moves on its ramp.
+	void restart(bool newRate) {
 		pass_.reset();
 		inFlight_ = false;
 		s_ = 0;
@@ -679,9 +692,11 @@ private:
 		last_ = PassOut{};
 		rose_ = trig_ = false;
 		armed_ = false;
-		runOn_ = false;
-		dipLeft_ = soundLeft_ = 0;
-		snapMix_ = true;
+		if (newRate) {
+			runOn_ = false;
+			dipLeft_ = soundLeft_ = 0;
+			snapMix_ = true;
+		}
 		state_ = DoldrumsState{};
 		state_.capacity = ring_ ? ring_->capacity() : 0;
 		state_.now = ring_ ? ring_->now() : 0;

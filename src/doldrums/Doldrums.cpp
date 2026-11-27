@@ -327,8 +327,11 @@ struct Doldrums : Module {
 	// The engine's buffers for `rate`, off the audio path (the constructor, or
 	// onSampleRateChange with process() held off), and the fed view for its tape.
 	void adoptRate(float rate) {
-		fs_.store(rate);
-		if (!engine.allocate(rate))
+		// fs_ (the rate a save stamps on the file) changes only with the
+		// engine's: a failed allocate leaves the engine at its old rate.
+		if (engine.allocate(rate))
+			fs_.store(rate);
+		else
 			WARN("Doldrums: no tape at %g Hz (out of memory, an unusable rate, or rings not yet collected); the "
 			     "module stays at its old rate or is silent",
 			     rate);
