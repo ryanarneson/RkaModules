@@ -37,8 +37,19 @@
 //   pass" and that a tape with nothing to travel through is held "with
 //   either setting of At the end of a pass"; with a pass to travel, nothing
 //   sounds or gates between the freeze and the trigger.) TRIG on the same
-//   grain wins: a pass starts. Freeze falling changes nothing: the ordinary
-//   rules go on from where the read point is.
+//   grain wins: a pass starts.
+// - Freeze falling (a thaw) returns the read point to the anchor at once, a
+//   new pass, whenever the module is sounding (running or held), in either
+//   setting: with Position fully right that is straight back to the live
+//   input, the frozen moment dissolving into it over a grain. Stopped (in
+//   stop, waiting for TRIG) it stays stopped: a thaw starts no pass and
+//   raises no RUN. Held at the Stretch stop, the slice at the anchor is
+//   taken once and held there, on a tape now recording. (The user's ruling
+//   at the first test build, superseding "Freeze going off changes
+//   nothing", under which a thaw from a hold at Position fully right went
+//   on from the frozen moment and came back to now only when that pass
+//   ended, 30 / (1 - pace) s later.) The engine reports at most one of
+//   Freeze's edges a grain: the one that leaves Freeze as it now is.
 // - Stopped (only in stop) stays silent until TRIG, or until the tape is
 //   frozen with nothing to travel through: frozen and stopped, that is held
 //   and sounding whenever it is true (at a freeze, at reset, and when
@@ -103,6 +114,7 @@ struct PassIn {
 	float position;        // after CV
 	double pace;           // 0 = Stretch at the stop
 	bool frozen, freezeRose, trig, stopAtEnd, grainChanged;
+	bool freezeFell;       // Freeze went off since the last grain (the engine reports at most one of the two edges)
 };
 
 struct PassOut {
@@ -155,6 +167,8 @@ struct PassLogic {
 			stopped_ = in.stopAtEnd && !nothing;
 			start = start || !stopped_;
 		}
+		if (in.freezeFell && !stopped_)
+			start = true;   // a thaw: back to the anchor, unless stopped
 		if (in.freezeRose) {
 			if (!in.stopAtEnd || nothing)
 				start = true;

@@ -15,7 +15,9 @@
 // Staging. Grain boundaries come a hop (half a grain) apart. On the
 // boundary's sample: Tables::swapIfReady, the grain size (below), then
 // PassLogic::step with the edges latched since the last boundary (Freeze
-// rising, TRIG; each reported once, none lost), then the slice copied from
+// rising, Freeze falling, TRIG; each reported once, none lost; of Freeze's
+// two, only the one that leaves Freeze as it is at the boundary, so a press
+// and release within a hop reads as the release), then the slice copied from
 // the tape (Ring::copy, by absolute index) and Grain::begin. Then the nine
 // Grain::Steps, one every stepGap(rate) samples (`gap`: 64 at 48 kHz, 128 at
 // 96 kHz), and Overlap::add a gap after the last: ten pieces at a gap, two
@@ -325,6 +327,7 @@ struct DoldrumsEngine {
 			rose_ = true;
 			bumpEpoch();
 		}
+		if (!frozen && frozen_ && armed_) fell_ = true;   // a thaw (not the first sample's arming)
 		if (!frozen && frozen_) cancelWant();   // thawed: a tape on its way is not wanted now
 		const bool opened = !armed_ && frozen && !frozen_;   // the first sample, Freeze already on
 		frozen_ = frozen;
@@ -518,7 +521,7 @@ private:
 	int staged_ = 0;
 
 	// Edges and gates.
-	bool gateHigh_ = false, trigHigh_ = false, frozen_ = false, rose_ = false, trig_ = false;
+	bool gateHigh_ = false, trigHigh_ = false, frozen_ = false, rose_ = false, fell_ = false, trig_ = false;
 	bool armed_ = false;   // the edge detectors have seen a sample since the restart
 	double pace_ = 1.0;
 
@@ -690,7 +693,7 @@ private:
 		passGrain_ = 0;
 		heldSize_ = -1;
 		last_ = PassOut{};
-		rose_ = trig_ = false;
+		rose_ = fell_ = trig_ = false;
 		armed_ = false;
 		if (newRate) {
 			runOn_ = false;
@@ -749,11 +752,12 @@ private:
 		in.position = cvValue(f.params[F::POSITION], f.params[F::POSITION_ATT], f.positionCv);
 		in.pace = pace_;
 		in.frozen = frozen_;
-		in.freezeRose = rose_;
+		in.freezeRose = rose_ && frozen_;
+		in.freezeFell = fell_ && !frozen_;
 		in.trig = trig_;
 		in.stopAtEnd = f.stopAtEnd;
 		in.grainChanged = passGrain_ != grain;
-		rose_ = trig_ = false;
+		rose_ = fell_ = trig_ = false;
 		passGrain_ = grain;
 		const PassOut o = pass_.step(in);
 		last_ = o;

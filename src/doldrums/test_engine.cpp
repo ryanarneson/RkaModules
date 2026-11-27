@@ -631,6 +631,75 @@ void the_patch_it_was_asked_for() {
 	}
 }
 
+// The user's ruling (Pass.hpp): a thaw returns the read point to the anchor
+// at once. Frozen at Position fully right on a chord for 20 s while a 1 kHz
+// tone arrives at the input; at the thaw, within a grain and the latency the
+// output is the live tone, not the frozen chord (before the ruling it went on
+// from the frozen moment for about 34 s at x8). In go round RUN dips at the
+// new pass, as at any new pass under a high RUN.
+void thaw_returns_to_live() {
+	const float rate = 48000.f;
+	for (int run = 0; run < 3; run++) {
+		const int stop = run == 1;
+		const double stretch = run == 2 ? 8.0 : 1.0;
+		Rig g(rate, 131);
+		g.f.stopAtEnd = stop != 0;
+		g.f.params[F::STRETCH] = run == 2 ? 0.5f : 0.f;
+		g.f.params[F::FREEZE] = 0.f;
+		g.go(g.secs(3.0), [&](long long t) {
+			g.f.inL = chord(t, rate);
+			g.f.trig = stop && t >= 480 && t < 528 ? 10.f : 0.f;   // in stop, a pass by TRIG
+		});
+		g.f.params[F::FREEZE] = 1.f;
+		auto tone = [&](long long t) { return float(std::sin(2.0 * kPi * 1000.0 * double(t) / rate)); };
+		g.go(g.secs(20.0), [&](long long t) { g.f.inL = tone(t); });
+		char set[40];
+		std::snprintf(set, sizeof set, "%s, x%g", stop ? "stop" : "go round", stretch);
+		CHECK(g.e->state().held && chordShare(spectrum(g.L, g.t - g.secs(4.0), g.secs(4.0), rate)) > 0.95, "%s: frozen, the chord held", set);
+		const long long thaw = g.t;
+		g.f.params[F::FREEZE] = 0.f;
+		g.go(g.secs(4.0), [&](long long t) { g.f.inL = tone(t); });
+		// The slice at the anchor ends at now: its first grains hold the frozen
+		// tape's last frames, read at the pace, so the live input fills a slice
+		// after a grain at x1 and after a grain times the stretch at x8 (the
+		// new pass reads what came after the thaw at its own pace).
+		const long long from = thaw + (long long) (stretch * g.grain()) + g.e->latencyFrames() + g.hop();
+		g.go(from + g.secs(2.0) - g.t, [&](long long t) { g.f.inL = tone(t); });
+		const Spectrum sp = spectrum(g.L, from, g.secs(2.0), rate);
+		const double live = sp.band(1000.0, 15.0) / sp.total(), held = chordShare(sp);
+		std::printf("  thaw_returns_to_live (%s): from %.2f s after the thaw, %.3f of the power at the live 1 kHz, %.3f at the chord\n", set,
+		            double(from - thaw) / rate, live, held);
+		CHECK(live > 0.9 && held < 0.02, "%s: after the thaw the live input (%.3f) not the frozen chord (%.3f)", set, live, held);
+		// RUN: a new pass under a high RUN dips it for 1 ms, as at any new pass.
+		const auto e = edges(g.run, thaw);
+		CHECK(!g.e->state().held && g.run.back() > 5.f && e.size() == 2u && e[1].first - e[0].first == runDipFrames(rate),
+		      "%s: RUN dips once at the thaw's new pass (%zu edges)", set, e.size());
+	}
+}
+
+// Stopped (stop, the pass ended, waiting for TRIG): a thaw starts nothing,
+// RUN stays low and the output silent.
+void thaw_while_stopped_stays_stopped() {
+	const float rate = 48000.f;
+	Rig g(rate, 133);
+	Random n;
+	n.seed(23);
+	g.tape([&](long long, float& l, float& r) { l = r = n.uniform(); });
+	g.f.stopAtEnd = true;
+	g.f.params[F::POSITION] = 0.9f;   // frozen, a pass of about 3 s at Stretch 1
+	g.f.params[F::STRETCH] = 0.f;
+	g.f.params[F::FREEZE] = 1.f;
+	g.go(g.secs(1.0));
+	const long long T = g.t;
+	g.go(g.secs(5.0), [&](long long t) { g.f.trig = t >= T && t < T + 48 ? 10.f : 0.f; });
+	CHECK(g.e->state().stopped && g.run.back() < 5.f && edges(g.run, T).size() == 2u, "the pass by TRIG played and stopped");
+	const long long thaw = g.t;
+	g.f.params[F::FREEZE] = 0.f;
+	g.go(g.secs(4.0), [&](long long) { g.f.inL = n.uniform(); });
+	CHECK(edges(g.run, thaw).empty() && g.run.back() < 5.f, "thawed while stopped: RUN low throughout");
+	CHECK(meanSquare(g.L, thaw, g.t - thaw) == 0.0 && g.e->state().stopped && !g.e->state().frozen, "and silent, stopped, recording");
+}
+
 // ---------------------------------------------------------------------------
 // No clicks: each event of the design's list, on a tape of a 220 Hz sine whose
 // level drifts slowly, the input the same sine going on.
@@ -1235,9 +1304,14 @@ void rate_and_grain_change_mid_grain() {
 	{
 		// Noise held on a frozen tape 40000 frames from its oldest end (on the
 		// tape at the Long size), Grain to Long, and Freeze let go before the new
-		// tables swap in: the place is then off the tape at the Long size, so the
-		// held slice is laid down from the buffers that hold it, and the tables
-		// go back to its size.
+		// tables swap in. The thaw takes the slice at the anchor again (the
+		// user's ruling, Pass.hpp), held, on a tape now recording; its place is
+		// soon recorded over, so the held slice is laid down from the buffers
+		// that hold it, and the tables go back to its size: Long, Medium (asked
+		// for before the thaw's boundary), Long once more while the place is
+		// still on the tape at Long, then Medium for good (4 swaps; 2 before
+		// the ruling, when the thaw took nothing). The thaw's new slice is a
+		// dissolve: 50 ms blocks measured -3.5 to +1.8 dB, octave bands 1.5 dB.
 		Rig g(rate, 104);
 		Random n;
 		n.seed(16);
@@ -1256,18 +1330,18 @@ void rate_and_grain_change_mid_grain() {
 		g.go(3LL * stepGap(rate));
 		g.f.params[F::FREEZE] = 0.f;
 		g.go(g.secs(3.0), [&](long long) { g.f.inL = 2.f * n.uniform(); });
-		CHECK(g.e->tableSwaps() - swaps == 2, "race: the tables went to Long and back (%lld swaps)", g.e->tableSwaps() - swaps);
+		CHECK(g.e->tableSwaps() - swaps == 4, "race: the tables went to Long and back, twice (%lld swaps)", g.e->tableSwaps() - swaps);
 		double lo = 1e30, hi = 0;
 		for (long long a = T; a + 2400 <= g.t; a += 2400) {
 			lo = std::min(lo, meanSquare(g.L, a, 2400));
 			hi = std::max(hi, meanSquare(g.L, a, 2400));
 		}
-		CHECK(db(lo / before) > -3.0 && db(hi / before) < 3.0, "race: the held sound goes on, 50 ms blocks from %.2f to %.2f dB of before",
+		CHECK(db(lo / before) > -4.5 && db(hi / before) < 3.0, "race: the held sound goes on, 50 ms blocks from %.2f to %.2f dB of before",
 		      db(lo / before + 1e-30), db(hi / before));
 		const std::vector<double> b0 = bands(g.L, T - g.secs(1.0), g.secs(1.0), rate), b1 = bands(g.L, T + g.secs(2.0), g.secs(1.0), rate);
 		double worst = 0;
 		for (size_t k = 0; k < b0.size(); k++) worst = std::max(worst, std::fabs(db(b1[k] / b0[k])));
-		CHECK(worst < 1.5, "race: the held spectrum, octave bands within %.2f dB", worst);
+		CHECK(worst < 2.0, "race: the held spectrum, octave bands within %.2f dB", worst);
 		CHECK(g.e->state().grain == grainFrames(GRAIN_MEDIUM, rate) && g.e->state().held, "race: back at the held size (%d)", g.e->state().grain);
 	}
 	{
@@ -1902,6 +1976,8 @@ int main() {
 	no_clicks();
 	comb_follows_voct_within_a_grain();
 	comb_keeps_the_level();
+	thaw_returns_to_live();
+	thaw_while_stopped_stays_stopped();
 	mix_and_latency();
 	staging_fits();
 	rapid_freeze_and_trig();
