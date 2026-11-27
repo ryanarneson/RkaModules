@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.48 (2026-11-26): Doldrums: While recording, Drift or Follow; a held recording tape woken by Position; what a thaw plays, stated exactly
 - 2.0.47 (2026-11-26): Doldrums: the final review's fixes and the user's rulings on 2.0.46 (comb loudness measured, play from here in the window, Position 3 s back, FROZEN AT END, brass read head, x1 rejoins the flag, a thaw returns to the flag, Freeze in Stop, Initialize, the tape wait)
 - 2.0.46 (2026-11-26): Doldrums: freeze and stretch (first test build, before the final review)
 - 2.0.45 (2026-11-25): Beacon: ADSR / AD / HOLD (AD is a Maths-style one-shot, its fall on Decay)
