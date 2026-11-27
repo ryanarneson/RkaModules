@@ -126,6 +126,14 @@ struct Doldrums : Module {
 	std::atomic<long long> capacity_{0};
 	std::atomic<int> grainFrames_{0};
 	std::atomic<float> pace_{0.125f}, heardStretch_{0.5f}, heardPosition_{1.f}, heardHarmonics_{0.f};
+	// A press, or a drag's move, in the tape window (the UI thread counts,
+	// after setting Position): the audio thread raises frame.restart on the
+	// sample it sees the count change, and the engine takes it as a trigger
+	// (the user's ruling: a press plays from there). Only the window counts:
+	// the knob, the CV, undo and redo, Initialize and a patch opening move
+	// Position by its own rule and start no pass.
+	std::atomic<uint32_t> windowPresses_{0};
+	uint32_t pressesSeen_ = 0;   // the audio thread's
 
 	// ---- The tooltips.
 
@@ -274,8 +282,9 @@ struct Doldrums : Module {
 		    "after 32, and held (still) at the end";
 		configParam(STRETCH_ATT_PARAM, -1.f, 1.f, d.params[F::STRETCH_ATT], "Stretch CV", "%", 0.f, 100.f);
 		configParam<PositionQuantity>(POSITION_PARAM, 0.f, 1.f, d.params[F::POSITION], "Position")->description =
-		    "Where a pass starts (the anchor): now at the right, 30 s back less a grain at the left. Drag in the window "
-		    "to set it";
+		    "Where a pass starts (the Position flag): now at the right, 30 s back less a grain at the left. A press or a "
+		    "drag in the window puts the flag under the mouse and plays from there (a new pass, as TRIG); this knob and "
+		    "its CV move the flag and the read head together without a new pass";
 		configParam(POSITION_ATT_PARAM, -1.f, 1.f, d.params[F::POSITION_ATT], "Position CV", "%", 0.f, 100.f);
 		configParam<HarmonicsQuantity>(HARMONICS_PARAM, 0.f, 1.f, d.params[F::HARMONICS], "Harmonics")->description =
 		    "The tuned comb: 0 % out of the path, 100 % only its teeth pass";
@@ -461,6 +470,9 @@ struct Doldrums : Module {
 		frame.harmonicsCv = inputs[HARMONICS_CV_INPUT].getVoltage();
 		frame.freezeGate = inputs[FREEZE_INPUT].getVoltage();
 		frame.trig = inputs[TRIG_INPUT].getVoltage();
+		const uint32_t presses = windowPresses_.load(std::memory_order_acquire);
+		frame.restart = presses != pressesSeen_;
+		pressesSeen_ = presses;
 		frame.inL = inputs[L_INPUT].getVoltageSum();
 		frame.inR = inputs[R_INPUT].getVoltageSum();
 		frame.inRPatched = inputs[R_INPUT].isConnected();
@@ -930,6 +942,7 @@ struct DoldrumsWidget : ModuleWidget {
 		const float att = rka::doldrums::detail::volts(m->params[Doldrums::POSITION_ATT_PARAM].getValue(), 1.f);
 		const float v = rka::doldrums::detail::volts(m->inputs[Doldrums::POSITION_CV_INPUT].getVoltage(), 100.f);
 		m->paramQuantities[Doldrums::POSITION_PARAM]->setValue(math::clamp(want - att * v * 0.1f, 0.f, 1.f));
+		m->windowPresses_.fetch_add(1, std::memory_order_release);   // play from here (after Position is set)
 	}
 	// One undo step per gesture.
 	void endPosition(Doldrums* m) {

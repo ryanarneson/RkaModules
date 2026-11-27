@@ -700,6 +700,140 @@ void thaw_while_stopped_stays_stopped() {
 	CHECK(meanSquare(g.L, thaw, g.t - thaw) == 0.0 && g.e->state().stopped && !g.e->state().frozen, "and silent, stopped, recording");
 }
 
+// The user's ruling: a press in the tape window plays from there. The module
+// sets Position under the mouse and raises DoldrumsFrame::restart, which the
+// engine takes as a trigger: at the next grain the read point is on the new
+// anchor, a new pass (RUN's marker as for TRIG). The knob and the CV keep
+// the Position rule: the read point moves by the change, no new pass.
+// Steps until the next boundary has run; returns its sample.
+long long toBoundary(Rig& g) {
+	for (int i = 0; i < 200000; i++) {
+		g.step();
+		if (g.staged.back() & DoldrumsEngine::STAGED_BOUNDARY) return g.t - 1;
+	}
+	return -1;
+}
+float posAt(const Rig& g, long long anchor) {
+	const long long cap = g.e->state().capacity, now = g.e->state().now;
+	return float(1.0 - double(now - anchor) / double(cap - g.grain()));
+}
+
+void window_press_restarts_from_the_flag() {
+	const float rate = 48000.f;
+	for (int press = 0; press < 2; press++) {
+		Rig g(rate, 141);
+		Random n;
+		n.seed(9);
+		g.tape([&](long long, float& l, float& r) { l = r = n.uniform(); });
+		g.f.params[F::FREEZE] = 1.f;
+		g.f.params[F::POSITION] = 0.f;   // the flag fully left
+		g.f.params[F::STRETCH] = 0.f;    // x1: the head travels a second a second
+		g.go(g.secs(4.0));
+		toBoundary(g);
+		const long long head = g.e->state().end, flag = g.e->state().anchor;
+		CHECK(head - flag > g.secs(3.0), "the head has travelled from the flag (%lld frames)", head - flag);
+		// The flag set a second behind the head, as a press just left of it would.
+		const long long want = head - g.secs(1.0);
+		g.f.params[F::POSITION] = posAt(g, want);
+		const long long at = g.t;
+		g.f.restart = press != 0;
+		g.step();
+		g.f.restart = false;
+		toBoundary(g);
+		const DoldrumsState st = g.e->state();
+		if (press) {
+			CHECK(std::llabs(st.anchor - want) <= 1 && st.end == st.anchor, "a press: the head on the flag at the next grain (end %lld, flag %lld)", st.end,
+			      st.anchor);
+			g.go(g.grain() + g.e->latencyFrames());
+			const auto e = edges(g.run, at);
+			CHECK(e.size() == 2 && !e[0].second && e[1].first - e[0].first == runDipFrames(rate), "a press: RUN's 1 ms marker, as TRIG's (%zu edges)",
+			      e.size());
+		} else {
+			const long long moved = st.anchor - flag;
+			CHECK(st.end - head >= moved && st.end - head <= moved + 2 * g.hop(), "the knob: the head moves by the change (%lld, change %lld)",
+			      st.end - head, moved);
+			g.go(g.grain() + g.e->latencyFrames());
+			CHECK(edges(g.run, at).empty(), "the knob: no new pass");
+		}
+	}
+	// Several presses between two boundaries (a fast drag) are one restart.
+	Rig g(rate, 143);
+	Random n;
+	n.seed(10);
+	g.tape([&](long long, float& l, float& r) { l = r = n.uniform(); });
+	g.f.params[F::FREEZE] = 1.f;
+	g.f.params[F::POSITION] = 0.f;
+	g.f.params[F::STRETCH] = 0.f;
+	g.go(g.secs(2.0));
+	toBoundary(g);
+	const long long at = g.t;
+	for (int k = 0; k < 5; k++) {
+		g.f.params[F::POSITION] = 0.02f * float(k + 1);
+		g.f.restart = true;
+		g.step();
+		g.f.restart = false;
+		g.go(100);
+	}
+	const long long b = toBoundary(g);
+	CHECK(b > 0 && b - at < g.hop(), "the presses fell inside one hop");
+	g.go(g.hop() * 3);
+	const auto e = edges(g.run, at);
+	CHECK(e.size() == 2, "five presses in a hop: one restart (%zu edges)", e.size());
+	CHECK(std::llabs(g.e->state().anchor - (g.e->state().now - lagFrames(0.1f, g.e->state().capacity, g.grain()))) <= 1,
+	      "from the last press's flag");
+}
+
+// In the Stop setting a press starts a pass, as a trigger does: RUN rises,
+// one pass plays, and the module stops again.
+void window_press_in_stop_starts_a_pass() {
+	const float rate = 48000.f;
+	Rig g(rate, 145);
+	Random n;
+	n.seed(11);
+	g.tape([&](long long, float& l, float& r) { l = r = n.uniform(); });
+	g.f.stopAtEnd = true;
+	g.f.params[F::FREEZE] = 1.f;
+	g.f.params[F::POSITION] = 0.9f;   // a pass of about 3 s at x1
+	g.f.params[F::STRETCH] = 0.f;
+	g.go(g.secs(1.0));
+	CHECK(edges(g.run).empty() && g.e->state().stopped, "frozen in stop: stopped, RUN low");
+	const long long at = g.t;
+	g.f.params[F::POSITION] = 0.92f;
+	g.f.restart = true;
+	g.step();
+	g.f.restart = false;
+	g.go(g.secs(6.0));
+	const auto e = edges(g.run, at);
+	CHECK(e.size() == 2 && e[0].second && !e[1].second, "a press in stop: one pass, RUN up and down (%zu edges)", e.size());
+	CHECK(g.e->state().stopped, "and stopped again");
+	// Pressed at the right edge, frozen: nothing to travel through, held.
+	g.f.params[F::POSITION] = 1.f;
+	g.f.restart = true;
+	g.step();
+	g.f.restart = false;
+	g.go(g.secs(1.0));
+	CHECK(g.e->state().held && !g.e->state().stopped && g.run.back() > 5.f, "pressed at the right edge, frozen: held");
+}
+
+// Not frozen, a press restarts from the flag too: the head goes back to the
+// flag's place behind now.
+void window_press_when_recording() {
+	const float rate = 48000.f;
+	Rig g(rate, 147);
+	Random n;
+	n.seed(12);
+	g.f.params[F::POSITION] = 0.9f;
+	g.go(g.secs(6.0), [&](long long) { g.f.inL = n.uniform(); });
+	toBoundary(g);
+	const long long behind = g.e->state().anchor - g.e->state().end;
+	CHECK(behind > g.secs(2.0), "recording at x8: the head has fallen behind the flag (%lld frames)", behind);
+	g.f.restart = true;
+	g.step();
+	g.f.restart = false;
+	toBoundary(g);
+	CHECK(g.e->state().end == g.e->state().anchor, "a press: back on the flag (end %lld, flag %lld)", g.e->state().end, g.e->state().anchor);
+}
+
 // ---------------------------------------------------------------------------
 // No clicks: each event of the design's list, on a tape of a 220 Hz sine whose
 // level drifts slowly, the input the same sine going on.
@@ -2016,6 +2150,9 @@ int main() {
 	comb_keeps_the_level();
 	thaw_returns_to_live();
 	thaw_while_stopped_stays_stopped();
+	window_press_restarts_from_the_flag();
+	window_press_in_stop_starts_a_pass();
+	window_press_when_recording();
 	mix_and_latency();
 	staging_fits();
 	rapid_freeze_and_trig();

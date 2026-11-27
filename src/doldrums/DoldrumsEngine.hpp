@@ -5,7 +5,10 @@
 // only maps params, ports, lights and the menu onto it.
 //
 // Each sample: the inputs, the Freeze gate and TRIG (NaN and inf read as
-// 0 V; IN R unpatched takes IN L); Freeze = the button or the gate (Schmitt 0.1 V / 1 V); the input
+// 0 V; IN R unpatched takes IN L); Freeze = the button or the gate (Schmitt 0.1 V / 1 V);
+// DoldrumsFrame::restart (the module raises it for a press or a drag's
+// move in the tape window: the user's ruling "a press plays from there")
+// taken as a TRIG edge, latched with TRIG to the next boundary; the input
 // written to the tape (faded over 5 ms at Freeze's edges, Ring.hpp); TRIG's
 // rising edge; the pace from Stretch and its CV; then at most one piece of
 // staged work (below); the overlap's next sample; RUN; Mix (equal power,
@@ -227,6 +230,7 @@ struct DoldrumsFrame {
 	int grainSize = GRAIN_MEDIUM;  // the menu: GrainSize
 	bool wide = false;
 	bool stopAtEnd = false;
+	bool restart = false;          // a press in the window: a new pass from the anchor, as a TRIG edge
 };
 
 struct DoldrumsResult {
@@ -346,6 +350,7 @@ struct DoldrumsEngine {
 		frozen_ = frozen;
 		const bool wasTrig = trigHigh_;
 		if (schmitt(trigV, trigHigh_) && !wasTrig) trig_ = true;
+		if (f.restart) trig_ = true;   // a press in the window: as a trigger (latched, so a drag's presses in a hop are one)
 		armed_ = true;
 		pace_ = paceFromDial(cvValue(f.params[F::STRETCH], f.params[F::STRETCH_ATT], f.stretchCv));
 		staged_ = 0;
