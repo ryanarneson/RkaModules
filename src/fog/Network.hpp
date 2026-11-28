@@ -4,7 +4,7 @@
 //
 //   L, R -> 8 channels -> Diffuser<8> --(into each line)--+
 //                                                         v
-//   +-> line i (Hermite read at Size x base +/- Drift) -> x g_i -> damp_i -+
+//   +-> line i (allpass read at Size x base +/- Drift) -> x g_i -> damp_i -+
 //   |                                                                      |
 //   +--- write line i+1 <-- Householder mix (I - 2/N 11^T), then a shift <-+
 //
@@ -44,9 +44,18 @@
 // how Damp maps, and two in-loop extras:
 // - SMOKE: an allpass after each line's read (Schroeder, coefficient
 //   loopDiffuse, 6-22 ms), inside the loop, so each repeat is blurred more
-//   than the one before. It is lossless, and its mean delay (its own length)
-//   is added to the line's length when the gain is worked out, so the T60
-//   holds.
+//   than the one before. It takes its own share of the decay: what it
+//   delays comes back times apGain, 10^(-3 M / (T60 rate)) for its M
+//   samples, as a line's read is times g_i for the line's length. Every
+//   delay in the loop then loses in proportion to its length, which moves
+//   every resonance of the loop in by the same factor: all decay at the T60
+//   (Jot's rule; an "absorbent" allpass). Left lossless, with its length
+//   added to the line's when g_i was worked out, the loss came once a pass
+//   whatever the allpass did, and an allpass of coefficient 0.6 holds some
+//   frequencies four times as long as others: the resonances it held
+//   longest decayed slowest, 10-14 % slow at Size 0 in the late tail
+//   (test_modes' smoke_late_tail). Damp's shelf still acts once a pass, on
+//   the line and the allpass together.
 // - ICE: an octave-up shimmer, two parts, each an OctaveShifter
 //   (Shifter.hpp: band-limited, two jittered-grain taps at twice speed).
 //   - In the loop, a small cascade: the feedback is projected on a unit
@@ -88,6 +97,42 @@
 //   from the start, ICE's brightness halves every setting; each still
 //   follows Damp's law from its own baseline.
 //
+// - The reads: each line is read between samples by a first-order allpass
+//   (DelayLine::readAllpass), whose gain is 1 at every frequency, so a pass
+//   round the loop loses what g_i and the shelf take and nothing else. A
+//   4-point Hermite read lost more towards Nyquist on every pass, by an
+//   amount that changed with the fraction of each line's length: at 48 kHz
+//   and Damp 0 the 12 kHz T60 was 3.3-4.5 s for 5.66 s, and 10 s for 36 s at
+//   Visibility 0.85, darker than the same patch at 96 kHz (test_network's
+//   t60_holds_at_high_frequencies). The allpass holds only for a read that
+//   moves slowly: Drift's swing is at most 0.025 samples a sample. While the
+//   lengths move fast (Size's slew, up to several samples a sample, and the
+//   40 ms a change of Drift's swing takes) the read is Hermite, as it was,
+//   and hands its value to the allpass, which carries on from it.
+// - Early reflections (issue #21). A line's first echo comes its own length
+//   after the sound, 50-75 ms at noon Size and up to 0.2 s at Size 1, and
+//   until then the wet was silent: the output took 0.12-0.15 s to reach
+//   -20 dB of its level. The diffuser has the sound long before that, so
+//   two channels of its second stage's output (every echo of two stages,
+//   over the first 30-55 ms) and, where it has more than two stages, two of
+//   its last stage's (the whole build-up the lines are fed, to 0.16-0.2 s)
+//   are added to the sides' taps, one channel a side. Different channels of
+//   a stage are different +/- sums of the same echoes, so the sides are
+//   unrelated (correlation about 0) and sum to mono at -3 dB.
+//   - The level is the voicing's `early`: 1 puts as much power in them, a
+//     side, as the lines' first echoes carry (FRET); HAAR and ICE have 0.4,
+//     SMOKE none, so its first repeat is still the first thing heard. They
+//     are taken after wetGain and the engine's input gain, as the lines'
+//     input is, so they follow Bloom and every gain the lines' echoes do.
+//   - They stay out of the low band: nothing of them goes to the shared low
+//     tap, and the sides' 300 Hz high-pass takes their lows. Below the split
+//     the wet is exactly what it was (mono-safe, level on both sides); in the
+//     shared tap they made the bass's level from note to note lumpier
+//     (worst dip -15 dB for -12) and tipped the sides' balance on some notes.
+//   - They are fixed taps: Drift does not move them. On a held sine above
+//     the split they add a phase between the sides that nothing averages,
+//     which shows in FRET at short Visibility, where they are a large part
+//     of the wet (test_stereo's sweep has FRET's own bounds at 210-450 Hz).
 // - Decay: line i's gain is g_i = 10^(-3 len_i / (T60 rate)), from its own
 //   current length, so every loop round the network loses 60 dB per T60
 //   whatever Size is. The mix is orthogonal (lossless), so the gains alone
@@ -121,13 +166,39 @@
 //   but never moves it (test_engine's drift_step_no_click).
 // - Size: scale = 3^(2 Size - 1) (1/3x-3x of the base lengths), slewed by
 //   a one-pole of 30 ms time constant (about 100 ms to settle).
-// - Wet level: steady-state power through the loop grows as 1 / (1 - g^2)
-//   for the mean loop gain g, so the input is scaled by sqrt(1 - g^2)
-//   (wetGain) and a constant calibrated by measurement (test_network's
-//   even_wet_level). On the input, not on the taps: in steady state the two
-//   are the same, but a change of wetGain (Visibility, Size) then scales only
-//   what comes in after it, not the echoes already in the lines. The engine
-//   splits its make-up the same way (FogEngine::splitGain, issue #22).
+// - Wet level, in two factors, both worked out here with the gains:
+//   - wetGain, on the input. Steady-state power through the loop grows as
+//     1 / (1 - g^2) for the mean loop gain g, so the input is scaled by
+//     sqrt(1 - g^2) (and wetCal). On the input, not on the taps: in steady
+//     state the two are the same, but a change of wetGain (Visibility, Size)
+//     then scales only what comes in after it, not the echoes already in the
+//     lines.
+//   - makeup, for whoever takes the wet (the engine, which splits it between
+//     the input and the output the same way: FogEngine::splitGain, issue
+//     #22). It is the voicing's level x (1 + build g^2) x sqrt(T60 / T60 at
+//     noon Visibility), less what the early reflections add (below): the
+//     first two level full wet to the dry for noise at every Visibility and
+//     Size, the last is the level law (the steady level
+//     goes as 10 log10 of the decay time, matched to the dry at noon).
+//     Why 1 + build g^2: sqrt(1 - g^2) is right for a loop that loses the
+//     same at every frequency. With Damp at noon the highs lose more a pass,
+//     so they build up less than that, and the more passes a sound lives
+//     for (g near 1) the more it tells: at g = 0 the wet is the first pass
+//     and nothing is missing; at g = 1 the highs, most of white noise's
+//     power, hold half what the lows do (their T60 is half), and the wet is
+//     3 dB short. Measured, the gain needed is 1 + 0.43 g^2 in HAAR within
+//     1 % over every Visibility and Size, more in FRET (darker), less in ICE
+//     (brighter). level and build are the voicing's wetMakeup and wetBuild,
+//     fitted to that measurement by `make fog-calibrate`, never by hand.
+//     The early reflections add their own power to the wet, (1 - g^2)
+//     early^2 of what the lines' first echoes carry (they come after
+//     wetGain), so with R = 1 + build g^2 the gain needed is R / sqrt(1 +
+//     (1 - g^2) early^2 R^2). No constant is fitted for this: with level and
+//     build fitted with the early reflections off, the law is met within
+//     0.22 dB with them on (FRET, the most of them). (An
+//     earlier make-up was a polynomial in Visibility and Size with five
+//     constants fitted by hand in the engine, which had to follow both
+//     controls itself; it was fitting this, and the Hermite reads' loss.)
 // - Visibility reaches the gains through a 30 ms one-pole, a step each 32
 //   samples (the gains' own refresh): the T60 is there within about 100 ms.
 //   Applied at once, a Visibility jump stepped sqrt(1 - g^2) (0.985 at 0,
@@ -139,7 +210,7 @@
 //   1 V sine (test_engine's damp_step_no_click).
 //
 // Only allocate() allocates. process() calls no libm (fastSin2pi, the
-// Hermite reads) and touches no global. A Drift change updates only the
+// reads) and touches no global. A Drift change updates only the
 // modulation. The gains and damping are recomputed when the (smoothed)
 // Visibility or Damp or the (slewing) length changes, at most once per 32
 // samples: a change inside that window is applied when it ends, so a
@@ -193,7 +264,7 @@ struct Network {
 	// The wet level's constant, set by measurement (test_network's
 	// even_wet_level, pink noise at noon): at 1 the wet RMS is within
 	// 0.7-1.4 dB below the input RMS across the six words (0.0-1.2 before
-	// the low band), so it stays 1; the engine's wetMakeup levels it.
+	// the low band), so it stays 1; makeup levels it.
 	static float wetCal() { return 1.f; }
 
 	DelayLine line[MAX_LINES];
@@ -210,6 +281,7 @@ struct Network {
 	float gain[MAX_LINES] = {};  // per-line T60 gain
 	float shelfB0[MAX_LINES] = {}, shelfB1[MAX_LINES] = {}; // shelf numerator
 	float shelfZ[MAX_LINES] = {};                           // shelf state
+	float readZ[MAX_LINES] = {}; // each line's last read (the allpass read's state)
 	float shelfA1 = 0.f;                                    // shelf pole, fixed
 	float phase[MAX_LINES] = {};
 	float phaseInc[MAX_LINES] = {};
@@ -229,6 +301,11 @@ struct Network {
 	double pairC[2][2] = {};                  // [branch][section] coefficient
 	double pairX[2][2] = {}, pairY[2][2] = {}; // last input and output
 	float wetGain = 0.f;
+	// The make-up (see the top, "Wet level"): the voicing's two constants, the
+	// mean loop gain squared, and the gain itself, refreshed with the gains.
+	float level = 1.f, build = 0.f;
+	float loopG2 = 0.f;
+	float makeup = 1.f;
 	// Prewarped (bilinear) frequencies: tan(pi f / rate).
 	float wDamp = 1.f, wShelf = 1.f, wLow = 0.f;
 	float slewCoeff = 1.f; // Size one-pole
@@ -252,11 +329,17 @@ struct Network {
 	int loopN = 0; // lines with an in-loop allpass
 	float apK = 0.f;
 	int apDelay[LOOP_AP] = {};
+	float apGain[LOOP_AP] = {}; // each allpass's share of the decay (updateGains)
 	float meanAp = 0.f; // mean allpass delay over the n lines, samples
 	float shimAmt = 0.f; // the voicing's shimmer
 	float shimA = 0.f;   // the crossfade, from it and the loop gain (updateGains)
 	float shimU[MAX_LINES] = {};
 	float shimOut = 0.f; // the feed-forward octave's level
+	// Early reflections (see the top): the level of each of the two diffuser
+	// stages tapped, and which they are.
+	float earlyAmt = 0.f;
+	float earlyGain[2] = {};
+	int earlyStage[2] = {};
 
 	// Buffers for every mode's longest line at the largest Size, plus the
 	// Drift swing. Never call from process().
@@ -346,6 +429,9 @@ struct Network {
 		for (int i = 0; i < MAX_LINES; i++)
 			shimU[i] = ((popcount(i & 6) & 1) ? -invSqrtN : invSqrtN);
 		shimOut = v.shimmerOut > 0.f ? (v.shimmerOut < 1.f ? v.shimmerOut : 1.f) : 0.f;
+		setEarly(v.early, v.diffuseStages);
+		level = v.wetMakeup > 0.f ? v.wetMakeup : 1.f;
+		build = v.wetBuild > 0.f ? v.wetBuild : 0.f;
 		// Each shifter's own jitter sequence, so the two sides' octaves differ.
 		shifter.configure(rate, 1u);
 		octL.configure(rate, 2u);
@@ -405,6 +491,7 @@ struct Network {
 		for (int i = 0; i < MAX_LINES; i++) {
 			line[i].clear();
 			shelfZ[i] = 0.f;
+			readZ[i] = 0.f;
 			// Decorrelated starting phases (golden-ratio steps).
 			const float p = 0.61803398875f * (float) i;
 			phase[i] = p - std::floor(p);
@@ -466,9 +553,9 @@ struct Network {
 		run(inL, inR, wetL, wetR);
 	}
 
-	// process() in two halves, for the engine, which works its make-up out
-	// from visSm between them (FogEngine): the controls' step for this
-	// sample (Size's slew, the gains' refresh), then the audio.
+	// process() in two halves, for the engine, which splits wetGain x makeup
+	// between them (FogEngine::splitGain): the controls' step for this sample
+	// (Size's slew, the gains' refresh), then the audio.
 	void advance() {
 		if (scaleOffset != 0.f) {
 			scaleOffset *= 1.f - slewCoeff;
@@ -498,26 +585,45 @@ struct Network {
 			depthMoving = moving;
 		}
 
+		// The reads (see the top, "The reads"): allpass, but Hermite while the
+		// lengths are on the move (Size's slew, a change of Drift's swing).
 		float r[MAX_LINES];
+		float at[MAX_LINES];
 		if (depth > 0.f || depthMoving) {
 			for (int i = 0; i < n; i++) {
-				r[i] = line[i].read(len[i] + modDepth[i] * fastSin2pi(phase[i]));
+				at[i] = len[i] + modDepth[i] * fastSin2pi(phase[i]);
 				phase[i] += phaseInc[i];
 				phase[i] = phase[i] >= 1.f ? phase[i] - 1.f : phase[i];
 			}
 		}
 		else {
 			for (int i = 0; i < n; i++)
-				r[i] = line[i].read(len[i]);
+				at[i] = len[i];
 		}
-		// SMOKE: the allpass after each read, w = x + k w[-M], y = w[-M] - k w.
+		if (scaleOffset != 0.f || depthMoving) {
+			for (int i = 0; i < n; i++)
+				readZ[i] = r[i] = line[i].read(at[i]);
+		}
+		else {
+			for (int i = 0; i < n; i++)
+				r[i] = line[i].readAllpass(at[i], readZ[i]);
+		}
+		// SMOKE: the allpass after each read, w = x + k d, y = d - k w, with
+		// d = apGain w[-M].
 		for (int i = 0; i < loopN; i++) {
-			const float d = loopAp[i].readInt(apDelay[i] - 1);
+			const float d = apGain[i] * loopAp[i].readInt(apDelay[i] - 1);
 			float w = r[i] + apK * d;
 			w = (w > 1e-20f || w < -1e-20f) ? w : 0.f;
 			loopAp[i].write(w);
 			r[i] = d - apK * w;
 		}
+
+		// The input, through the diffuser, for the lines (below) and for the
+		// early reflections.
+		float x[8];
+		for (int k = 0; k < 8; k++)
+			x[k] = (k & 1) ? inR : inL;
+		diffuser.process(x);
 
 		float l = 0.f, rr = 0.f, lo = 0.f;
 		for (int i = 0; i < n; i++) {
@@ -525,6 +631,15 @@ struct Network {
 			rr += tapR[i] * r[i];
 			lo += tapLow[i] * r[i];
 		}
+		// Early reflections: two channels of each tapped stage, one a side.
+		// They join the sides' taps, before the low band's high-pass, and
+		// nothing of them goes to the shared low tap (see the top).
+		for (int e = 0; e < 2; e++)
+			if (earlyGain[e] > 0.f) {
+				const float* t = diffuser.tap[earlyStage[e]];
+				l += earlyGain[e] * t[2 * e];
+				rr += earlyGain[e] * t[2 * e + 1];
+			}
 		// The low band: each side's taps high-passed, plus one low-passed tap
 		// through the phase pair, a branch a side.
 		const double hl = biquad(hpC[1], hpZ[0][1], biquad(hpC[0], hpZ[0][0], l));
@@ -542,11 +657,6 @@ struct Network {
 			wetL += shimOut * octL.process(wetL);
 			wetR += shimOut * octR.process(wetR);
 		}
-
-		float x[8];
-		for (int k = 0; k < 8; k++)
-			x[k] = (k & 1) ? inR : inL;
-		diffuser.process(x);
 
 		float v[MAX_LINES];
 		float sum = 0.f;
@@ -616,6 +726,20 @@ struct Network {
 	}
 
 	// ---- control maths (not per sample) ----
+
+	// Early reflections at `amount` of the lines' first echoes, from a
+	// diffuser of `stages` stages: the second stage's output, and the last's
+	// when there are more than two, sharing the power.
+	void setEarly(float amount, int stages) {
+		const float a = amount > 0.f ? (amount < 2.f ? amount : 2.f) : 0.f;
+		earlyAmt = a;
+		const int last = (stages < 1 ? 1 : stages > Diffuser<8>::MAX_STAGES ? Diffuser<8>::MAX_STAGES : stages) - 1;
+		earlyStage[0] = last < 1 ? last : 1;
+		earlyStage[1] = last;
+		const bool two = last > 1;
+		earlyGain[0] = two ? a * 0.70710678f : a;
+		earlyGain[1] = two ? a * 0.70710678f : 0.f;
+	}
 
 	// The crossover (4th-order Butterworth, two sections of Q 0.541 and
 	// 1.307, so the two bands' powers add to 1) and the phase pair, at the
@@ -727,9 +851,13 @@ struct Network {
 		const float hfExtra = 1.f / ratio - 1.f;
 		const float wd2 = wDamp * wDamp, ws2 = wShelf * wShelf, wl2 = wLow * wLow;
 		for (int i = 0; i < n; i++) {
-			// The allpass's mean delay is its length: part of the loop.
-			const float e = perSample * (len[i] + (i < loopN ? (float) apDelay[i] : 0.f));
-			const float g = fastExp2(e);
+			// The line's own loss, and its allpass's (taken inside it, in
+			// run()); the shelf's cut is for the two together, once a pass.
+			const float eAp = i < loopN ? perSample * (float) apDelay[i] : 0.f;
+			const float e = perSample * len[i] + eAp;
+			const float g = fastExp2(perSample * len[i]);
+			if (i < loopN)
+				apGain[i] = fastExp2(eAp);
 			// The shelf H(s) = (G s + ws) / (s + ws), |H|^2 = (G^2 w^2 +
 			// ws^2) / (w^2 + ws^2): G from the wanted 4 kHz gain m.
 			const float m = fastExp2(e * hfExtra);
@@ -749,6 +877,14 @@ struct Network {
 		const float gm = fastExp2(perSample * (meanBase * (scaleTarget + scaleOffset) + meanAp));
 		const float p = 1.f - gm * gm;
 		wetGain = wetCal() * std::sqrt(p > 0.f ? p : 0.f);
+		loopG2 = p > 0.f ? 1.f - p : 1.f;
+		// sqrt(T60 / T60(0.5)) = 200^((v - 0.5) / 2); the exponent's factor is
+		// log2(200) / 2.
+		// The early reflections add (1 - g^2) early^2 of the lines' first
+		// echoes' power to the wet (see the top, "Wet level").
+		const float reverb = 1.f + build * loopG2;
+		const float withEarly = std::sqrt(1.f + (p > 0.f ? p : 0.f) * earlyAmt * earlyAmt * reverb * reverb);
+		makeup = level * reverb / withEarly * fastExp2((visSm - 0.5f) * 3.82192809489f);
 		// ICE: the crossfade from the loss a pass (see the top): (2 a - a^2) / N
 		// = shimmer (1 - g^2), so a = 1 - sqrt(1 - shimmer N (1 - g^2)).
 		const float q = shimAmt * (float) n * (p > 0.f ? p : 0.f);

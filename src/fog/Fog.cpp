@@ -146,6 +146,16 @@ struct Fog : Module {
 		outputs[OUT_R_OUTPUT].setVoltage(result.outR);
 	}
 
+	// Bypassing empties the engine, so releasing bypass starts clean, as a
+	// reset does. process() does not run while bypassed: without this the
+	// network, the leveller and Bloom kept what they held when bypass was
+	// pressed, and the old tail came back at that level on the first sample
+	// after release, however long ago it was (at Visibility 1 it would have
+	// taken 80 s to die). Rack calls this with the engine stopped.
+	void onBypass(const BypassEvent&) override {
+		engine.reset();
+	}
+
 	// Bypassed: each input to its output, every channel, IN R normalled to
 	// IN L as in process() (rka::FogEngine::bypassSource).
 	void processBypass(const ProcessArgs&) override {

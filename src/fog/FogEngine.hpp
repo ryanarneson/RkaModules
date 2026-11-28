@@ -25,7 +25,7 @@
 // - Level: the wet's level follows the decay time, as a room's does: full Mix
 //   is about as loud as dry for noise at noon Visibility (MIST, T60 5.66 s),
 //   and 10 log10(T60 / 5.66 s) dB from there (-11.5 dB at Visibility 0, +5.8
-//   at 0.75), whatever the Size and mode, by wetMakeup(). At 0.75 and up the
+//   at 0.75), whatever the Size and mode, by Network::makeup. At 0.75 and up the
 //   leveller holds loud material down.
 // - Leveller: a slow automatic gain on the wet, after the make-up and before
 //   the limiter, one gain for L and R. A peak follower of the louder side
@@ -61,17 +61,17 @@
 //   QUIET. Buffers are not cleared: their contents are already below QUIET.
 //   reset(), a new rate and a mode change wake it. The sleep test reads the
 //   wet before the leveller.
-// - The wet make-up takes Visibility from the network (Network::visSm, the
-//   30 ms one-pole the gains use, a step per gain refresh) the sample it
-//   changes, with no smoothing of its own, so the make-up and the network's
-//   own level, sqrt(1 - g^2), move as one. Size goes through a 30 ms
-//   one-pole here, refreshed at most once per 32 samples. Two earlier forms
-//   failed: from the raw knob through a 30 ms one-pole, the make-up (0.30 at
-//   Visibility 0, 8.0 at 1) ramped linearly while the network's level followed
-//   the smoothed Visibility, +10 dB in 5 ms on a 0 -> 1 jump; from visSm
-//   through that one-pole, the make-up lagged the network by a second pole
-//   and a 1 -> 0 jump swelled the wet 5-8 dB over its start for 50-70 ms
-//   (test_engine's visibility_no_swell).
+// - The wet make-up is the network's own (Network::makeup, worked out with
+//   its gains from the same smoothed Visibility and slewing Size: Network.hpp,
+//   "Wet level"), taken the sample it changes with no smoothing here, so the
+//   make-up and the network's own level, sqrt(1 - g^2), move as one. Earlier
+//   forms, worked out here from the knobs, failed: from the raw Visibility
+//   through a 30 ms one-pole, the make-up (0.30 at Visibility 0, 8.0 at 1)
+//   ramped linearly while the network's level followed the smoothed
+//   Visibility, +10 dB in 5 ms on a 0 -> 1 jump; from the network's smoothed
+//   Visibility through that one-pole, the make-up lagged the network by a
+//   second pole and a 1 -> 0 jump swelled the wet 5-8 dB over its start for
+//   50-70 ms (test_engine's visibility_no_swell).
 // - Where the wet gain goes (splitGain): the total, sqrt(1 - g^2) times the
 //   make-up, is split between the network's input and its output; in steady
 //   state the split makes no difference (the network is linear). A fall
@@ -143,28 +143,6 @@ struct FogEngine {
 	static float limitKnee() { return 9.f; }
 	static float limitCeil() { return 10.f; }
 	static float maxRate() { return 768000.f; }
-	// The wet's make-up gain (a fraction). The matched part levels the wet to
-	// the dry for noise at Mix 1 at every Visibility and Size (the network
-	// settles a few dB under unity, more at high Visibility); then the
-	// energy law scales it by sqrt(T60(v) / T60(0.5)) = 200^((v - 0.5) / 2),
-	// so the steady level goes as 10 log10 of the decay time and matches the
-	// dry at noon. A smooth function of Visibility and Size, scaled by the
-	// voicing's own factor; a polynomial and fastExp2, so no libm.
-	static float wetMakeup(float vis, float size, float voicingMakeup) {
-		// Measured (noise, +/-5 V, noon knobs): the gain that levels the wet at
-		// Mix 1 is 1.125 at Visibility 0 up to 2.13 at 1 (a quadratic), and
-		// falls about 0.27 per unit of Size around noon (1.78 at Size 0, 1.35
-		// at Size 1, at Visibility 0.5); at low Visibility the large-Size fall is
-		// weaker (Visibility 0, Size 1 needs 0.99, not 0.87), so a small cubic
-		// in (1 - Visibility) is added above noon Size.
-		const float v = vis >= 0.f ? (vis <= 1.f ? vis : 1.f) : 0.f;
-		const float w = 1.f - v;
-		const float s = size >= 0.f ? (size <= 1.f ? size : 1.f) : 0.f;
-		const float sizeTerm = 1.f + 0.27f * (0.5f - s) + 0.11f * w * w * w * (s > 0.5f ? 2.f * s - 1.f : 0.f);
-		const float matched = voicingMakeup * (1.125f + v * (0.755f + 0.246f * v)) * sizeTerm;
-		return matched * fastExp2((v - 0.5f) * 3.82192809489f); // log2(200) / 2
-	}
-
 	// The most of the wet gain the network's input may carry over its output
 	// (splitGain): 18 dB, a full Visibility rise (11 dB) and a Size one.
 	static float feedMax() { return 8.f; }
@@ -224,12 +202,11 @@ struct FogEngine {
 		bloomR.setup(hz);
 		fadeStep = 1.f / (0.05f * hz + 1.f);
 		mixStep = 1.f / (0.005f * hz + 1.f);
-		makeupCoef = 1.f / (0.03f * hz + 1.f);
-		levelCoef[0] = 1.f / (levelAttack() * hz + 1.f);
-		levelCoef[1] = 1.f / (levelRelease() * hz + 1.f);
-		levelCoef[2] = 1.f / (levelSlowAttack() * hz + 1.f);
-		levelCoef[3] = 1.f / (levelSlowRelease() * hz + 1.f);
-		levelCoef[4] = 1.f / (levelFeedRelease() * hz + 1.f);
+		levelCoef[0] = 1.0 / ((double) levelAttack() * hz + 1.0);
+		levelCoef[1] = 1.0 / ((double) levelRelease() * hz + 1.0);
+		levelCoef[2] = 1.0 / ((double) levelSlowAttack() * hz + 1.0);
+		levelCoef[3] = 1.0 / ((double) levelSlowRelease() * hz + 1.0);
+		levelCoef[4] = 1.0 / ((double) levelFeedRelease() * hz + 1.0);
 		setLowCutCoeffs();
 		reset();
 	}
@@ -241,9 +218,7 @@ struct FogEngine {
 		bloomL.clear();
 		bloomR.clear();
 		setTone();
-		for (int c = 0; c < 2; c++)
-			for (int i = 0; i < 2; i++)
-				cutZ[c][i] = 0.0;
+		clearLowCut();
 		mixSnap = true;
 		fade = 1.f;
 		fadeState = 0;
@@ -255,7 +230,7 @@ struct FogEngine {
 	void wake() {
 		asleep_ = false;
 		makeupSnap = true;
-		levelEnv = levelSlow = levelFeed = 0.f;
+		levelEnv = levelSlow = levelFeed = 0.0;
 		levelGain = 1.f;
 		quietCount = 0;
 		updateHold();
@@ -335,6 +310,16 @@ struct FogEngine {
 		// The feed: low cut, tone, then Bloom.
 		const int cut = (f.lowCut == 1 || f.lowCut == 2) ? f.lowCut : 0;
 		float feedL = dryL, feedR = dryR;
+		if (cut != lastCut) {
+			// Back on from Off: the filter has not run since it was switched
+			// off, and what it held then is not the input's now. Start it
+			// empty, so its first output is the input (x b0, b0 just under 1)
+			// and the lows then fall away. Between 50 and 100 Hz it has been
+			// running: its state stays.
+			if (lastCut == 0)
+				clearLowCut();
+			lastCut = cut;
+		}
 		if (cut) {
 			feedL = highpass(0, cut, feedL);
 			feedR = highpass(1, cut, feedR);
@@ -367,30 +352,15 @@ struct FogEngine {
 		}
 		if (!asleep_) {
 			const int rateSel = f.driftRate ? 1 : 0;
-			// The make-up (see the top): Visibility from the network's smoothed
-			// value, taken the sample it changes (between the network's control
-			// step and its audio, in step with the gains' refresh, with no pole
-			// of its own), so the total wet gain (the network's sqrt(1 - g^2)
-			// times the make-up) follows one smooth Visibility; Size through a
-			// 30 ms one-pole here (the network's lengths slew over 30 ms too),
-			// refreshed at most once per 32 samples while it moves.
-			if (makeupSnap)
-				makeupSize = size;
-			else if (makeupSize != size)
-				makeupSize = fog::onePoleToward(makeupSize, size, makeupCoef, 1e-5f); // lands exactly on size
-			makeupSizeDue = makeupSizeDue || (makeupSize != makeupSizeUsed && ++makeupCount >= 32);
+			// The make-up (see the top) is the network's, read between its
+			// control step and its audio, so the total wet gain (the network's
+			// sqrt(1 - g^2) times the make-up) is one smooth value.
 			divider.process(feedL, feedR, wetL, wetR, [&](float l, float r, float& ol, float& orr) {
 				net.setControls(vis, size, damp, drift, rateSel);
 				net.advance();
 				const bool snap = makeupSnap;
-				if (makeupSnap || net.visSm != makeupVis || makeupSizeDue) {
-					makeupCount = 0;
-					makeupSizeDue = false;
-					makeupVis = net.visSm;
-					makeupSizeUsed = makeupSize;
-					makeup = wetMakeup(makeupVis, makeupSize, vo.wetMakeup);
-					makeupSnap = false;
-				}
+				makeupSnap = false;
+				makeup = net.makeup;
 				splitGain(net.wetGain * makeup, snap);
 				net.run(l * feedGain, r * feedGain, ol, orr);
 			});
@@ -461,20 +431,20 @@ struct FogEngine {
 	// long fade cannot leave them denormal.
 	void level(float& l, float& r, float feedL, float feedR) {
 		const float fl = feedL >= 0.f ? feedL : -feedL, fr = feedR >= 0.f ? feedR : -feedR;
-		const float fa = fl > fr ? fl : fr;
+		const double fa = fl > fr ? fl : fr;
 		levelFeed += (fa - levelFeed) * (fa > levelFeed ? levelCoef[0] : levelCoef[4]);
-		levelFeed = levelFeed > 1e-20f ? levelFeed : 0.f;
-		const bool held = !(levelFeed >= levelFeedAbsent());
+		levelFeed = levelFeed > 1e-20 ? levelFeed : 0.0;
+		const bool held = !(levelFeed >= (double) levelFeedAbsent());
 		const float al = l >= 0.f ? l : -l, ar = r >= 0.f ? r : -r;
-		const float a = al > ar ? al : ar;
+		const double a = al > ar ? al : ar;
 		levelEnv += (a - levelEnv) * (a > levelEnv ? levelCoef[0] : levelCoef[1]);
 		if (levelEnv > levelSlow)
 			levelSlow += (levelEnv - levelSlow) * levelCoef[2];
 		else if (!held)
 			levelSlow += (levelEnv - levelSlow) * levelCoef[3];
-		levelEnv = levelEnv > 1e-20f ? levelEnv : 0.f;
-		levelSlow = levelSlow > 1e-20f ? levelSlow : 0.f;
-		levelGain = levelSlow > levelTarget() ? levelTarget() / levelSlow : 1.f;
+		levelEnv = levelEnv > 1e-20 ? levelEnv : 0.0;
+		levelSlow = levelSlow > 1e-20 ? levelSlow : 0.0;
+		levelGain = levelSlow > (double) levelTarget() ? (float) ((double) levelTarget() / levelSlow) : 1.f;
 		l *= levelGain;
 		r *= levelGain;
 	}
@@ -504,15 +474,19 @@ struct FogEngine {
 		return (float) y;
 	}
 
-	// The voicing's tone stage: transposed direct form II, float, with its
-	// state flushed below 1e-20 (as the network's).
+	// The voicing's tone stage: transposed direct form II, in double as the
+	// low cut is, with its state flushed below 1e-30. It runs at the host
+	// rate, where a 300 Hz section's poles sit close to 1: in float it
+	// amplified its own rounding to -86 dB under the signal at 192 kHz and
+	// -69 dB at 768 kHz (test_engine's tone_stage_clean).
 	float tone(int ch, float x) {
-		const float y = toneB[0] * x + toneZ[ch][0];
-		float z0 = toneB[1] * x - toneA[0] * y + toneZ[ch][1];
-		float z1 = toneB[2] * x - toneA[1] * y;
-		toneZ[ch][0] = (z0 > 1e-20f || z0 < -1e-20f) ? z0 : 0.f;
-		toneZ[ch][1] = (z1 > 1e-20f || z1 < -1e-20f) ? z1 : 0.f;
-		return y;
+		const double in = (double) x;
+		const double y = toneB[0] * in + toneZ[ch][0];
+		const double z0 = toneB[1] * in - toneA[0] * y + toneZ[ch][1];
+		const double z1 = toneB[2] * in - toneA[1] * y;
+		toneZ[ch][0] = (z0 > 1e-30 || z0 < -1e-30) ? z0 : 0.0;
+		toneZ[ch][1] = (z1 > 1e-30 || z1 < -1e-30) ? z1 : 0.0;
+		return (float) y;
 	}
 
 	// RBJ cookbook peaking or high-shelf coefficients for the current mode
@@ -520,7 +494,7 @@ struct FogEngine {
 	void setTone() {
 		const fog::Voicing& v = fog::voicing(mode);
 		for (int c = 0; c < 2; c++)
-			toneZ[c][0] = toneZ[c][1] = 0.f;
+			toneZ[c][0] = toneZ[c][1] = 0.0;
 		toneOn = (v.toneKind == fog::TONE_PEAK || v.toneKind == fog::TONE_HIGH_SHELF) && v.toneDb != 0.f && v.toneHz > 0.f &&
 		         v.toneQ > 0.f;
 		if (!toneOn)
@@ -547,11 +521,16 @@ struct FogEngine {
 			a1 = 2.0 * ((A - 1.0) - (A + 1.0) * cw);
 			a2 = (A + 1.0) - (A - 1.0) * cw - sq;
 		}
-		toneB[0] = (float) (b0 / a0);
-		toneB[1] = (float) (b1 / a0);
-		toneB[2] = (float) (b2 / a0);
-		toneA[0] = (float) (a1 / a0);
-		toneA[1] = (float) (a2 / a0);
+		toneB[0] = b0 / a0;
+		toneB[1] = b1 / a0;
+		toneB[2] = b2 / a0;
+		toneA[0] = a1 / a0;
+		toneA[1] = a2 / a0;
+	}
+
+	void clearLowCut() {
+		for (int c = 0; c < 2; c++)
+			cutZ[c][0] = cutZ[c][1] = 0.0;
 	}
 
 	void setLowCutCoeffs() {
@@ -577,26 +556,29 @@ struct FogEngine {
 	bool ready = false;
 	double cutCoef[2][5] = {};
 	double cutZ[2][2] = {};
+	int lastCut = 0; // the low cut the last process() had (0 Off)
 	bool toneOn = false;
-	float toneB[3] = {1.f, 0.f, 0.f}, toneA[2] = {};
-	float toneZ[2][2] = {};
+	double toneB[3] = {1.0, 0.0, 0.0}, toneA[2] = {};
+	double toneZ[2][2] = {};
 	float mixSm = 0.f, mixStep = 1.f;
 	bool mixSnap = true; // the next process() starts the ramp at its target
 	float fade = 1.f, fadeStep = 0.f;
 	int fadeState = 0; // 0 steady, 1 fading out, 2 fading in
-	float makeup = 1.f, makeupCoef = 1.f; // the make-up; Size's one-pole
+	float makeup = 1.f; // the make-up in use (the network's)
 	// The total wet gain (net.wetGain x makeup) and its split (splitGain):
 	// outGain on the network's output, feedGain on its input.
 	float wetTotal = 0.f, outGain = 1.f, feedGain = 1.f;
-	float makeupSize = 0.5f;              // Size through that one-pole
-	float makeupVis = -1.f, makeupSizeUsed = -1.f; // what the make-up was worked out from
-	int makeupCount = 0;
-	bool makeupSizeDue = false; // Size's one-pole has moved on: refresh at the next inner sample
-	float levelCoef[5] = {1.f, 1.f, 1.f, 1.f, 1.f}; // attack, release, slow attack, slow release, feed release
-	float levelEnv = 0.f, levelSlow = 0.f;      // the two followers (V)
-	float levelFeed = 0.f;                      // the feed's follower (V): under 10 mV, the gain is held
+	// The leveller's followers and their coefficients are double: a float
+	// one-pole stops once its step is under half an ulp of its value, and the
+	// 3 s release's step is small enough for that with the follower still
+	// 0.04 V over the level at 48 kHz and over 1 V at 768 kHz, the gain 1.3 dB
+	// low for as long as the level held (issue #15; test_engine's
+	// leveller_releases_at_high_rates).
+	double levelCoef[5] = {1.0, 1.0, 1.0, 1.0, 1.0}; // attack, release, slow attack, slow release, feed release
+	double levelEnv = 0.0, levelSlow = 0.0;     // the two followers (V)
+	double levelFeed = 0.0;                     // the feed's follower (V): under 10 mV, the gain is held
 	float levelGain = 1.f;                      // the gain applied to the last wet sample
-	bool makeupSnap = true; // the next awake sample starts the make-up at its target
+	bool makeupSnap = true; // the next awake sample puts the whole wet gain on the output (splitGain)
 	bool asleep_ = false;
 	bool started = false; // process() has run: later mode changes fade
 	int quietCount = 0;

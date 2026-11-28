@@ -221,7 +221,15 @@ bool strict(const Stats& s) {
 //   random. Correlation -0.45 to +0.6, mono sum <= 5.5 dB, sides <= 6 dB
 //   apart: da9cccc's own scatter where it has no low band to blame (300-450
 //   Hz: -0.41 to +0.47, 5.2 dB, 5.3 dB); 1844904 (split at 200 Hz) reached
-//   -0.50 to +0.71 at 200-300 Hz.
+//   -0.50 to +0.71 at 200-300 Hz. FRET's bounds here are wider: -0.6 to
+//   +0.8, 6.5 dB and 8 dB. Its early reflections (issue #21; the strongest
+//   of the modes', as loud as its lines' first echoes) are two fixed taps a
+//   side that Drift does not move, so on a held sine they add a phase
+//   between the sides that nothing averages, as at Drift 0: measured -0.54
+//   to +0.72, 6.1 dB and 7.3 dB (one note, 320 Hz at Visibility 0.3; the
+//   rest within 5 dB), where HAAR, SMOKE and ICE keep the bounds above.
+//   Below the split nothing changes: the early reflections stay out of the
+//   shared low tap, and the sides' high-pass keeps theirs out.
 // - Drift 0, up to 140 Hz: the targets at every point (the high-pass leaks
 //   the unmodulated sides' phase from about half the split).
 // - Drift 0, 150-300 Hz: without Drift nothing averages the sides' phase, so
@@ -266,14 +274,16 @@ void sweep() {
 						      MODE_NAMES[m], vis, hz, s.corrS, s.monoLoss, s.balance);
 					}
 					else if (k == 0) {
-						const bool ok = inside(s.corrS, -0.45, 0.6) && s.monoLoss <= 5.5 && std::fabs(s.balance) <= 6.0;
+						const bool fret = m == 1; // wider: its early reflections (above)
+						const bool ok = fret ? inside(s.corrS, -0.6, 0.8) && s.monoLoss <= 6.5 && std::fabs(s.balance) <= 8.0
+						                     : inside(s.corrS, -0.45, 0.6) && s.monoLoss <= 5.5 && std::fabs(s.balance) <= 6.0;
 						loF = std::fmin(loF, s.corrS);
 						hiF = std::fmax(hiF, s.corrS);
 						lossF = std::fmax(lossF, s.monoLoss);
 						balF = std::fmax(balF, std::fabs(s.balance));
-						CHECK(ok, "%s v %g Drift noon, %g Hz sine: sustain correlation %+.2f, mono sum -%.1f dB, R %+.1f dB re L; want -0.45 to +0.6, <= 5.5, "
-						      "within 6",
-						      MODE_NAMES[m], vis, hz, s.corrS, s.monoLoss, s.balance);
+						CHECK(ok, "%s v %g Drift noon, %g Hz sine: sustain correlation %+.2f, mono sum -%.1f dB, R %+.1f dB re L; want %s",
+						      MODE_NAMES[m], vis, hz, s.corrS, s.monoLoss, s.balance,
+						      fret ? "-0.6 to +0.8, <= 6.5, within 8" : "-0.45 to +0.6, <= 5.5, within 6");
 					}
 					else if (hz <= 140.0) {
 						nZero++;

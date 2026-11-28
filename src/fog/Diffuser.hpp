@@ -4,6 +4,11 @@
 // delays (lengths drawn by seed within the stage's span), a channel shuffle
 // with polarity flips, and an orthonormal Hadamard mix. Delays plus an
 // orthonormal mix preserve energy. N must be a power of two.
+//
+// tap[s] is stage s's output as of the last process(): the sound after s + 1
+// stages, each channel a different +/- sum of every echo so far (N after one
+// stage, N^2 after two), for a caller that wants the early part of the
+// build-up as well as the end of it.
 #include "DelayLine.hpp"
 #include <cstdint>
 
@@ -22,6 +27,7 @@ struct Diffuser {
 	float sign[MAX_STAGES][N];
 	int stages = 0;
 	float norm = 1.f;
+	float tap[MAX_STAGES][N] = {};
 
 	static uint32_t lcg(uint32_t& s) {
 		s = s * 1664525u + 1013904223u;
@@ -70,8 +76,10 @@ struct Diffuser {
 
 	void clear() {
 		for (int s = 0; s < MAX_STAGES; s++)
-			for (int i = 0; i < N; i++)
+			for (int i = 0; i < N; i++) {
 				lines[s][i].clear();
+				tap[s][i] = 0.f;
+			}
 	}
 
 	void process(float* x) {
@@ -91,7 +99,7 @@ struct Diffuser {
 				}
 			}
 			for (int i = 0; i < N; i++)
-				x[i] = t[i] * norm;
+				tap[s][i] = x[i] = t[i] * norm;
 		}
 	}
 };

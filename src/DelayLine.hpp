@@ -1,6 +1,7 @@
 #pragma once
 
-// Rack-free circular delay line with cubic (Hermite) fractional reads.
+// Rack-free circular delay line with cubic (Hermite) fractional reads, and
+// an allpass fractional read for a line inside a feedback loop.
 // Shared by modules that need a delay buffer. The buffer is a power of two
 // so indexing is a mask. Delay 0 is the most recently written sample.
 // Only allocate() allocates; write(), read() and readInt() never do.
@@ -103,6 +104,37 @@ struct DelayLine {
 		const float c2 = xm1 - 2.5f * x0 + 2.f * x1 - 0.5f * x2;
 		const float c3 = 0.5f * (x2 - xm1) + 1.5f * (x0 - x1);
 		return ((c3 * f + c2) * f + c1) * f + x0;
+	}
+
+	// Allpass read at a fractional delay: a first-order (Thiran) allpass
+	// makes the fraction, y = eta (x[i] - y[-1]) + x[i + 1], eta = (1 - f) /
+	// (1 + f), with f in [0.5, 1.5) so eta stays in (-0.2, 1/3]. Its gain is
+	// exactly 1 at every frequency, where the Hermite read's falls towards
+	// Nyquist (-3.3 dB at a third of the rate, halfway between samples): for
+	// a line in a feedback loop, where that loss is taken on every pass and
+	// shortens the high decay. `state` is the caller's, one per reader: the
+	// last value returned (0 to start).
+	//
+	// Only for a delay that is fixed or moves slowly, a few hundredths of a
+	// sample per sample: the state stands for the signal one sample back at
+	// the last delay, so a read that jumps or sweeps fast is wrong until it
+	// settles (a few samples). For those, use read(), and hand its result to
+	// `state` so a later readAllpass() carries on from it.
+	// Clamped to [1, maxDelay - 2] as read(). NaN reads as 1.
+	float readAllpass(float delaySamples, float& state) const {
+		if (buf.empty())
+			return 0.f;
+		const float hi = (float) (maxDel - 2);
+		float d = delaySamples >= 1.f ? delaySamples : 1.f;
+		d = d <= hi ? d : hi;
+		const int i = (int) (d - 0.5f);
+		const float f = d - (float) i;
+		const float eta = (1.f - f) / (1.f + f);
+		const uint32_t p = pos - (uint32_t) i;
+		float y = eta * (buf[p & mask] - state) + buf[(p - 1) & mask];
+		y = (y > 1e-20f || y < -1e-20f) ? y : 0.f; // denormals and NaN to 0
+		state = y;
+		return y;
 	}
 };
 

@@ -437,6 +437,17 @@ build/test/fog/soak: src/fog/soak/soak.cpp $(wildcard src/*.hpp src/fog/*.hpp)
 fog-soak: build/test/fog/soak
 	./build/test/fog/soak
 
+# Opt-in, not part of `make test`: Fog's level calibration, built as the plugin
+# is. Measures the make-up the wet needs to follow the level law and prints
+# each voicing's wetMakeup and wetBuild fitted to it, to paste into
+# Voicing.hpp (src/fog/calibrate/calibrate.cpp).
+build/test/fog/calibrate: src/fog/calibrate/calibrate.cpp $(wildcard src/*.hpp src/fog/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O3 -funsafe-math-optimizations $(BENCH_ARCH) -Wall -Wextra $(TEST_WERROR) -Isrc -Isrc/fog $< -o $@
+.PHONY: fog-calibrate
+fog-calibrate: build/test/fog/calibrate
+	./build/test/fog/calibrate
+
 # Every declared module's engine holds no writable global state (each
 # instance owns all of its state): the same object check as shoal-globals,
 # on an object that reaches every engine entry point.

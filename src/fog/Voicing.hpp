@@ -30,11 +30,16 @@ struct Voicing {
 	float brightness;   // lighter damping (0 = HAAR): Damp d acts as (1 - brightness) d
 	int toneKind;       // the feed's tone stage
 	float toneHz, toneDb, toneQ;
-	float wetMakeup;    // scale on the engine's wet make-up (1 = HAAR), so full
-	                    // wet follows the same level law in every mode, matched to
-	                    // dry at noon (test_engine's wet_level_law): FRET 1.02,
-	                    // SMOKE 0.955 (-0.4 dB), ICE 0.715 (-2.9 dB: its shelf adds
-	                    // level)
+	float early;        // early reflections (0 = none; SMOKE): the diffuser's own
+	                    // build-up added to the wet ahead of the lines' first
+	                    // echoes, at this level against them (Network.hpp)
+	float wetMakeup;    // the wet's make-up gain at short decays, and
+	float wetBuild;     // how it grows with the loop gain: wetMakeup x (1 +
+	                    // wetBuild g^2) levels full wet to the dry, so every
+	                    // mode follows the same level law (Network.hpp, "Wet
+	                    // level"; test_engine's wet_level_law). Both are fitted
+	                    // to measurement by `make fog-calibrate`: run it after
+	                    // changing anything above.
 };
 
 inline const Voicing& voicing(Mode m) {
@@ -50,7 +55,8 @@ inline const Voicing& voicing(Mode m) {
 		 0.f, {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f},
 		 0.f, 0.f, 0.f,
 		 TONE_NONE, 0.f, 0.f, 0.f,
-		 1.f},
+		 0.4f,
+		 1.001f, 0.425f},
 		// FRET (LV-426): dark and slow to build. 16 lines about 20 % longer
 		// than HAAR's (61-177 ms, mean 119 ms), the four diffusion stages
 		// longer still (17-89 ms), so the onset smears and the space rises
@@ -65,7 +71,8 @@ inline const Voicing& voicing(Mode m) {
 		 0.f, {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f},
 		 0.f, 0.f, 0.f,
 		 TONE_PEAK, 300.f, 4.f, 0.7f,
-		 1.02f},
+		 1.f,
+		 0.966f, 0.696f},
 		// SMOKE (Greyhole, Supermassive's echo modes): 8 lines clustered within
 		// +/-10 % of 153 ms, so each round of the loop comes back as one
 		// repeat (about 170 ms apart at noon, 0.5 s at Size 1). Only two short
@@ -79,7 +86,8 @@ inline const Voicing& voicing(Mode m) {
 		 0.6f, {6.1f, 8.3f, 10.7f, 12.9f, 15.1f, 17.3f, 19.7f, 21.9f},
 		 0.f, 0.f, 0.f,
 		 TONE_NONE, 0.f, 0.f, 0.f,
-		 0.955f},
+		 0.f,
+		 1.148f, 0.244f},
 		// ICE: sparse and glassy. 16 lines a little shorter than HAAR's
 		// (47-162 ms), only two short input stages (sparser onset), half
 		// HAAR's damping at every Damp, +3 dB above 3 kHz on the feed, and a
@@ -97,7 +105,8 @@ inline const Voicing& voicing(Mode m) {
 		 0.f, {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f},
 		 0.16f, 0.35f, 0.5f,
 		 TONE_HIGH_SHELF, 3000.f, 3.f, 0.7071f,
-		 0.715f},
+		 0.4f,
+		 0.724f, 0.241f},
 	};
 	return table[(m >= HAAR && m < MODES_LEN) ? m : HAAR];
 }
