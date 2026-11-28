@@ -1,6 +1,22 @@
-# Fog 2.0.2: Technical Reference for QA
+# Fog 2.0.51: Technical Reference for QA
 
-> **Note (2026-11-24):** this reference was written for Fog 2.0.2 and has not been redone for 2.0.39. Fog's code has changed since (fixes for issues #11 and #12, a soak check for #16, and the panel's bottom row); check figures against the code and the manual. The manual's 2.0.39 corrections (Bloom, Size) are in `docs/fog/README.md`.
+> **Build 2.0.51 (2026-11-27).** This is the 2.0.2 reference brought up to 2.0.51 for what that build changed, after the code review of 2.0.50 (issue #123, with issues #15 and #21). Every passage marked "in 2.0.51" was written from the 2.0.51 code and its test output, and each of its figures is marked [code], [test] or [meas] as before. **Everything not so marked is the 2.0.2 text**: its measured tables (decay, onset at Bloom noon, the leveller, CPU, the stereo figures) were not measured again, and where 2.0.51 is known to differ the passage says so. The short list of what to listen for is `fog-2.0.51-fixes-listening.html`.
+>
+> What 2.0.51 changed:
+>
+> 1. **Highs decay at Visibility's time at every sample rate** (section 2.8, "Reads"). The lines are read by an allpass, not a Hermite interpolator. At 48 kHz and Damp 0 the 12 kHz T60 was 3.3–4.5 s for 5.66 s; it is now within 3 % at 8, 12 and 16 kHz. Long tails at 44.1 and 48 kHz are brighter than they were unless Damp is up, and now match 96 kHz. **Retest by ear.**
+> 2. **The wet make-up is the network's own** (section 6.1): voicing constant × (1 + build × g²) × the law's term. The Visibility-and-Size polynomial is gone. The level law is unchanged and is met more closely (worst 0.22 dB off in HAAR, FRET and ICE and 0.44 dB in SMOKE; was 0.54).
+> 3. **Bypass empties the engine** (section 3, "Bypass"), so releasing bypass starts clean. Unverified in a live Rack.
+> 4. **The low cut does not thump when switched back on from Off** (section 3).
+> 5. **Bloom opens fully at every rate** (section 2.7): its gain is held in double. It stalled at 0.991 (48 kHz) and 0.962 (192 kHz) at Bloom 1 in FRET.
+> 6. **The tone stage (FRET, ICE) is in double** (section 4.2): its rounding noise was −86 dB at 192 kHz and −69 dB at 768 kHz; it is under −150 dB at every rate.
+> 7. **Early reflections in HAAR, FRET and ICE** (section 2.7, issue #21): the wet starts 2–4 ms after the sound and reaches −20 dB of its level in about 0.03 s (was 0.12–0.15 s). SMOKE has none. **Retest by ear**, and see the known cost in section 2.10.
+> 8. **SMOKE's late tail decays at Visibility's rate** (section 5.4): the decay's loss is now taken inside its in-loop allpasses too. At Size 0 the last of the tail was 10–14 % slow.
+> 9. **The leveller's followers are in double** (section 6.2, issue #15): its 3 s release stalled short of the level, leaving the gain 0.05 dB low at 48 kHz and 1.3 dB low at 768 kHz for as long as the level held.
+> 10. **Bloom's times hold at every rate** (section 2.7): at 768 kHz and Bloom 1 in FRET the swell took 9.0 s to come within 3 dB, for 8.0 s.
+> 11. **Issue #13 is fixed** (since 2.0.41): bypass with only IN L patched reaches both outputs. Issue #22 is fixed (since 2.0.41): a Visibility rise does not lift a tail.
+>
+> **Note (2026-11-24, still true of the unmarked passages):** this reference was written for Fog 2.0.2 and has not been redone for 2.0.39. Fog's code has changed since (fixes for issues #11 and #12, a soak check for #16, and the panel's bottom row); check figures against the code and the manual. The manual's 2.0.39 corrections (Bloom, Size) are in `docs/fog/README.md`.
 
 
 Module: **Fog**, plugin `rka` (slug `rka`, module slug `Fog`), VCV Rack 2 (minRackVersion 2.5.0).
@@ -152,7 +168,7 @@ T60 = 0.4 s × 200^v        (v = Visibility knob, 0..1)
   - The network uses a smoothed Visibility, `visSm`. It follows the knob through a one-pole of 30 ms time constant, taken as one step every 32 inner-rate samples (the gains' refresh): coefficient 32 / (0.03 × inner rate + 32). It snaps to the knob once within 1e-4.
   - The new T60 holds within about 100 ms of a jump.
   - On reset, a clear, a mode switch and a wake, `visSm` snaps to the knob (no glide from an old value).
-  - The make-up takes the same `visSm` (section 6.1), so the network's level and the make-up move together.
+  - The make-up is worked out from the same `visSm` (section 6.1), so the network's level and the make-up move together.
 - Visibility's level effect: full wet now rises with Visibility (section 6.1). Turning Visibility therefore changes loudness as well as decay.
 
 Dial words (the spec places each word at the knob position whose time it names; the face has no numerals):
@@ -210,7 +226,9 @@ ratio  = 2^−(d + 2 d²)          = T60(4 kHz) / T60(250 Hz)
 
 ### 2.7 Bloom
 
-[code, `Bloom.hpp`; unchanged] Bloom shapes the signal fed into the network, not the network itself. The dry path never passes through it.
+[code, `Bloom.hpp`] Bloom shapes the signal fed into the network, not the network itself. The dry path never passes through it.
+
+- **Changed in 2.0.51: the gain is held in double precision and opens fully.** In single precision the one-pole towards 1 stalled once its step fell under half an ulp of the gain: at Bloom 1 in FRET (τ 6.5 s) it stopped at 0.991 at 48 kHz (−0.08 dB), 0.962 at 192 kHz (−0.34 dB) and 0.833 at 768 kHz (−1.58 dB), for good. It now reaches 1 within 1e-4 after 120 s at 48 and 192 kHz [test: `bloom_opens_fully`]. The rise times below are unchanged.
 
 - A gain rises towards 1 while the input is "present" and falls towards 0 when it is not; the feed is input × gain.
   - Rise: one-pole with time constant τ. Fall: twice as fast (τ/2).
@@ -237,6 +255,24 @@ ratio  = 2^−(d + 2 d²)          = T60(4 kHz) / T60(250 Hz)
 | FRET | 77 ms | 0.15 s | 0.32 s | 2.19 s |
 | SMOKE | 139 ms | 0.16 s | 0.23 s | 1.27 s |
 | ICE | 50 ms | 0.08 s | 0.25 s | 1.25 s |
+
+- **Early reflections (new in 2.0.51, issue #21)** [code: `Network::run`, `Network::setEarly`, `Voicing::early`]. The table above is 2.0.2's: its first two columns no longer hold for HAAR, FRET and ICE.
+  - Two channels of the diffuser's second stage and, in HAAR and FRET (four stages), two of its last stage, are added to the wet's two sides, one channel a side, ahead of the lines' first echoes. Level (`early`): FRET 1 (as much power a side as the lines' first echoes carry), HAAR 0.4, ICE 0.4, SMOKE 0.
+  - They come after Bloom and after the network's input gains, so they swell with Bloom and move with every gain the lines' echoes do. Drift does not move them.
+  - They carry nothing below the 300 Hz split: none of them goes to the shared low tap, and the sides' high-pass takes their lows (section 2.10).
+  - ±1 V noise from silence, Bloom 0, T60 6.32 s, Mix 1, 5 ms windows, the worst of three seeds [test: `early_onset`]:
+
+    | Mode | First sound | To −20 dB, Size noon | To −20 dB, Size 1 | First 80 ms against the sustain, Size noon | Target [issue #21] |
+    |---|---|---|---|---|---|
+    | HAAR | 3.1 ms | 0.035 s | 0.030 s | −14.6 dB | ≤ 0.10 s |
+    | FRET | 4.0 ms | 0.030 s | 0.030 s | −8.2 dB | ≤ 0.04 s; first 80 ms ≤ −6 dB |
+    | SMOKE | 138.8 ms | 0.155 s | 0.430 s | silent | unchanged |
+    | ICE | 2.4 ms | 0.025 s | 0.020 s | −11.7 dB | ≤ 0.10 s |
+
+    Without them (2.0.50, same measurement): HAAR 0.125 s and 0.23 s, FRET 0.15 s and 0.275 s, ICE 0.075 s and 0.17 s.
+  - Stereo [test: `early_stereo`, the first 120 ms at Size 1, the same noise on both inputs]: R against L within 0.14 dB, correlation +0.01 to +0.04, mono sum −2.8 to −3.0 dB (limit −4).
+  - **Known cost.** They are fixed taps. On a held sine above the split they add a phase between the sides that Drift does not average. In FRET at Visibility 0.3, where they are a large part of the wet, a sine between 210 and 450 Hz reads a correlation of −0.54 to +0.72, a mono-sum loss of up to 6.1 dB and the sides up to 7.3 dB apart (one note, 320 Hz; the others within 5 dB) [test: `sweep`, which holds FRET to −0.6 to +0.8, 6.5 dB and 8 dB there, and the other modes to the bounds of 2.0.2]. Below 200 Hz every mode still meets the targets at every point, and the bass's evenness is unchanged.
+- **Bloom's times hold at every host rate (changed in 2.0.51).** The rise and fall coefficients are worked out in double. As floats they came only in steps of 6e-8: at 768 kHz and Bloom 1 in FRET the rise to −3 dB took 8.96 s for 8.00 s, and 8.27 s at 192 kHz. Now 7.999 s at 48, 192 and 768 kHz, and the fall from open to a half 2.252 s at each [test: `bloom_times_at_high_rates`, within 1 %].
 
   The testbed measured FRET's attack at Bloom 50 % as 1.7 s at 6.32 s and 1.2 s at 2.15 s on 2.0.1, against LV-426's 0.65 s [testbed; issue #24]. The onset delay is issue #21.
 - Consequences QA will see:
@@ -268,7 +304,18 @@ ratio  = 2^−(d + 2 d²)          = T60(4 kHz) / T60(250 Hz)
 
 - Drift 0 is exactly static: two renders of the same input started at different times are bit-identical [test: `drift_zero_is_static`].
 - Peak pitch deviation at Drift 1 [test: `drift_depth_per_rate`]: 43.0 cents on Slow, 25.3 cents on Very slow.
-- Reads use 4-point Hermite interpolation (`DelayLine::read`).
+- **Reads (changed in 2.0.51).** Each line is read between samples by a first-order allpass (`DelayLine::readAllpass`): y = η (x[i] − y[−1]) + x[i + 1], η = (1 − f) / (1 + f), with the fraction f kept in [0.5, 1.5).
+  - Its gain is exactly 1 at every frequency, so a pass round the loop loses only what the line's gain and the Damp shelf take [test: `delay_allpass_flat`, within 0.01 dB from 1 to 20 kHz at ten fractions].
+  - Before, every read was a 4-point Hermite interpolation (`DelayLine::read`), which loses highs (−3.3 dB at 16 kHz halfway between samples, at 48 kHz) on every pass, by an amount that changed with Size. At 48 kHz, Damp 0, HAAR:
+
+    | Visibility | T60 | 8 kHz before | 12 kHz before | 16 kHz before | 8, 12 and 16 kHz now |
+    |---|---|---|---|---|---|
+    | 0.5 | 5.66 s | 4.8–5.4 s | 3.3–4.6 s | 1.9–3.5 s | 5.64–5.77 s |
+    | 0.85 | 36.1 s | 21.0–22.6 s | 10.5–11.5 s | 5.5–5.7 s | 35.1–36.7 s |
+
+    (Sizes 0.37, 0.5 and 0.81 at Visibility 0.5; Drift 0 and noon.) [test: `t60_holds_at_high_frequencies`, ±15 %, measured within 3 %.] At 96 kHz the old loss was small (12 kHz: 5.4 s), so the same patch was darker at 48 kHz than at 96 kHz. It no longer is.
+  - The allpass holds only for a read that moves slowly. Drift's swing moves a read by at most 0.025 samples a sample. While the lengths move fast, the read is Hermite as before, and hands its value to the allpass when it stops: during Size's slew (`scaleOffset` ≠ 0, about 100 ms after a Size change, and continuously under a moving Size CV) and during the 40 ms smoothing of a Drift depth change [tests: `delay_allpass_delay`, a read moving 0.02 samples a sample and a takeover from Hermite, error < 3e-3 and < 1e-3 on a 1 kHz sine].
+  - **What to listen for:** long tails at 44.1 and 48 kHz keep their top unless Damp is turned up. A patch saved before this change with Damp low will sound brighter in the tail. A moving Size CV still dulls the tail slightly while it moves (the Hermite read's loss).
 
 ### 2.9 Mix
 
@@ -353,11 +400,12 @@ JSON edge cases [code]:
 - Ordinary out-of-range integers are clamped, not rejected (for example `"mode": 7` loads ICE; `"mode": -1` loads HAAR).
 - **Initialize** (`onReset`) sets Mode Haar, Drift rate Slow, Low cut 50 Hz, Dry kill off, and resets the engine. Rack resets the knobs.
 
-**Bypass** [code: `configBypass`]: IN L → OUT L and IN R → OUT R. Rack's bypass copies each input to its output. Consequences:
+**Bypass (changed in 2.0.51)** [code: `Fog::processBypass`, `Fog::onBypass`, `FogEngine::bypassSource`]: IN L → OUT L and IN R → OUT R, every channel as it is.
 
-- **IN R's normalling to IN L does not apply under bypass**, so with only IN L patched, OUT R is silent while bypassed [issue #13]. Do not re-file.
-- A polyphonic input passes through as polyphonic [unverified in a live Rack].
-- `process()` is not called while bypassed, so the tail freezes and resumes where it stopped when bypass is released [unverified in a live Rack].
+- **IN R normals to IN L under bypass**, as when running: with only IN L patched, both outputs carry IN L [issue #13, fixed in 2.0.41; test: `bypass_normals`]. Silence on OUT R in that case is a defect: file it.
+- A polyphonic input passes through as polyphonic, unsummed [test: `bypass_normals` for the routing; unverified in a live Rack].
+- **Bypassing resets the engine** (`onBypass`), so releasing bypass starts clean: the wet begins again from the sound that follows, through Bloom, as after Initialize. `process()` is not called while bypassed, and before this change the network, the leveller and Bloom kept what they held: the tail present when bypass was pressed came back at its frozen level on the first sample after release, however long ago that was. **Unverified in a live Rack**: it rests on Rack calling `onBypass` (it does, from `Engine::bypassModule`, with the engine locked) and has no automated test, since the module file is not built offline. Check it by hand (section 11.4).
+- **Low cut back on (changed in 2.0.51).** While the cut is Off its filter does not run. Switching it on again starts the filter empty, so its first output is the input and the lows then fall away. Before, it resumed with the state it had when it was switched off: after a DC or sub-bass input that left a thump of 0.05 V on a wet of 0.0001 V [test: `low_cut_back_on_no_thump`]. Between 50 and 100 Hz the filter keeps running and keeps its state.
 
 ### 3.1 Factory presets (new in 2.0.2)
 
@@ -420,7 +468,7 @@ Measured with uniform noise, 40 s, last two thirds [meas]:
               │                                  ▼                                     ││
               │   ┌──► line j write ◄── fb[j] = v[j−1] − (2/N)Σv   (Householder+shift)  ││
               │   │         │                     ▲   ▲ ICE: crossfade on u axis       ││
-              │   │   Hermite read at len_j ± Drift                                     ││
+              │   │   allpass read at len_j ± Drift (Hermite while lengths slew)        ││
               │   │         │ (SMOKE: allpass k=0.6 after each read)                   ││
               │   │         ├──► taps  L = Σ ±r (row 5)  ─► HPF 300 Hz (4th-order) ─┐  ││
               │   │         │          R = Σ ±r (row 10) ─► HPF 300 Hz (4th-order) ─┤  ││
@@ -455,6 +503,8 @@ While the engine is asleep (section 7), the boxes from the rate divider to the l
 **Low cut** [code]: Butterworth, Q = 0.7071, f clamped to 0.4 × rate; state flushed below 1e-30.
 
 **Tone** (per mode, RBJ cookbook biquad at the host rate, coefficients worked out only on a mode or rate change) [code]:
+
+**Changed in 2.0.51:** the tone stage's coefficients and state are in double precision, as the low cut's are. In single precision a 300 Hz section at a high host rate amplified its own rounding: against the same section in long double, on a 5 V 110 Hz sine, FRET's error was −102 dB re the signal at 48 kHz, −77 dB at 192 kHz and −68 dB at 768 kHz (ICE: −127, −99, −75). It is now −151 dB at every rate, a float output's own rounding [test: `tone_stage_clean`].
 
 | Mode | Tone stage |
 |---|---|
@@ -497,7 +547,7 @@ While the engine is asleep (section 7), the boxes from the rate divider to the l
   - The low band's filter states are cleared on clear, on a mode switch and on every wake (the high-pass can hold energy above the wet it feeds).
   - The T60s are untouched: every tap pattern decays at the network's rate.
   - Why 300 Hz and not 200 Hz (1bbfd08): the high-pass leaks the sides' own random phase for about an octave below the split. At 200 Hz, 96 of 152 points from 105 to 195 Hz missed the targets at Drift 0; at 300 Hz, 22 of 152 [commit].
-- Wet normalisation: × wetGain = √(1 − g_m²), where g_m is the loop gain of the mean line length (from visSm), because steady-state power through the loop grows as 1/(1 − g_m²). wetGain is 0.985 at Visibility 0 and 0.132 at 1. The calibration constant `wetCal` is 1; with the low band the network's own wet sits 0.7–1.3 dB under the input across the six words [test: `even_wet_level`], and the engine's make-up levels it.
+- Wet normalisation: × wetGain = √(1 − g_m²), where g_m is the loop gain of the mean line length (from visSm), because steady-state power through the loop grows as 1/(1 − g_m²). wetGain is 0.985 at Visibility 0 and 0.132 at 1. The calibration constant `wetCal` is 1; with the low band the network's own wet sits 0.7–1.3 dB under the input across the six words [test: `even_wet_level`], and the make-up (section 6.1) levels it.
 - Denormals: every filter state and line write is flushed to 0 below 1e-20.
 
 **Make-up, leveller, limiter, fade, mix**: section 6, with the fade in section 5.6.
@@ -529,7 +579,9 @@ Delay memory per instance: **3.1 MB at 44.1/48 kHz, 6.2 MB at 88.2 kHz and above
 | loopDiffuse (in-loop allpass k) | 0 | 0 | 0.6, delays 6.1, 8.3, 10.7, 12.9, 15.1, 17.3, 19.7, 21.9 ms | 0 |
 | shimmer (in-loop octave) | 0 | 0 | 0 | 0.16 |
 | shimmerOut (feed-forward octave) | 0 | 0 | 0 | 0.35 |
-| wetMakeup factor | 1.00 | 1.02 | 0.955 (−0.4 dB) | 0.715 (−2.9 dB) |
+| early (new in 2.0.51: early reflections, section 2.7) | 0.4 | 1 | 0 | 0.4 |
+| wetMakeup (changed in 2.0.51; fitted by `make fog-calibrate`) | 1.001 | 0.966 | 1.148 | 0.724 |
+| wetBuild (new in 2.0.51; fitted the same way) | 0.425 | 0.696 | 0.244 | 0.241 |
 | Low-band tap | row 15 | row 15 | row 7 (8 lines) | row 15 |
 
 Full line lists (ms, Size noon):
@@ -567,7 +619,8 @@ The lengths are chosen to share no common factor in samples.
 - **Why this voicing**:
   - 8 lines clustered within ±10 % of 153 ms, so each round of the loop comes back as one repeat: about 170 ms apart at Size noon and about 0.47 s at Size 1, counting the allpass delay.
   - Only two short input stages (3 and 7 ms), so the first repeat stays distinct.
-  - A Schroeder allpass after each line's read, inside the loop (k = 0.6, 6.1–21.9 ms), blurs every later repeat further. It is lossless, and its delay is counted in the line's T60 gain so the decay time holds.
+  - A Schroeder allpass after each line's read, inside the loop (k = 0.6, 6.1–21.9 ms), blurs every later repeat further.
+  - **Changed in 2.0.51: each allpass takes its own share of the decay.** What it delays comes back times 10^(−3 M / (T60 × rate)) for its M samples, as a line's read is scaled for the line's length. Every delay in the loop then loses in proportion to its length, so every resonance decays at the T60. Before, the allpass was lossless and its length was added to the line's when the line's gain was worked out. The loss then came once a pass whatever the allpass did, and an allpass of k = 0.6 holds some frequencies four times as long as others, so those decayed slowest: at Size 0 every band read 3–6 % long and the last of the tail 10–14 % slow. The treble loss of the old delay reads hid most of it; with that gone the soak failed at DENSE, Size 0, Damp 0, Drift 0 (tail 38 % over the law's allowance 180 s into silence). Now the late tail is within 0.5 % at Size 0 and noon [test: `smoke_late_tail`, ±5 %], and the soak passes. SMOKE's level at short decays is refitted for it (wetMakeup 1.148).
 - **Should sound**: a clear first echo, then repeats that get progressively more diffuse and merge into a wash.
 - **Measured**:
   - At Size 1, FOG, Damp noon, Drift 0: 4 repeats in 2 s, at 0.47, 0.92 and 1.39 s for the first three [test: `smoke_has_echoes`].
@@ -625,28 +678,31 @@ Click criteria in the tests [test: `mode_switch_click_free`]: during 5 switches 
 
 ### 6.1 The wet level law (new in 2.0.2)
 
-[code, `FogEngine::wetMakeup`, `FogEngine::process`]
+[code, `Network::updateGains` (`makeup`), `FogEngine::process`, `FogEngine::splitGain`] **(changed in 2.0.51)**
 
 ```
-matched  = voicingMakeup × (1.125 + v × (0.755 + 0.246 v)) × sizeTerm
-sizeTerm = 1 + 0.27 × (0.5 − Size) + 0.11 × (1 − v)³ × max(0, 2·Size − 1)
-make-up  = matched × 200^((v − 0.5) / 2)          = matched × √(T60(v) / T60(0.5))
+g²       = 10^(−6 × mean line length / T60)        (the network's mean loop gain, squared: Network::loopG2)
+R        = 1 + wetBuild × g²
+matched  = wetMakeup × R / √(1 + (1 − g²) × early² × R²)      (the voicing's constants, section 5.1)
+make-up  = matched × 200^((v − 0.5) / 2)           = matched × √(T60(v) / T60(0.5))
 ```
 
 - **The law.** At Mix 1, steady noise comes out at **10·log10(T60 / 5.66 s) dB against the input**:
-  - 0 dB at noon Visibility (MIST, 5.66 s), as in 2.0.1;
+  - 0 dB at noon Visibility (MIST, 5.66 s);
   - −11.5 dB fully left (0.4 s), −5.75 dB at 0.25, +5.75 dB at 0.75, +11.5 dB fully right (80 s);
-  - the same at any Size ("Size-neutral"; the sizeTerm keeps the matched part level across Size);
-  - the same in every mode, within the voicing factors.
-- `matched` is the 2.0.1 make-up, which levels the wet to the dry at every Visibility; the factor 200^((v − 0.5)/2) then tilts it by the T60 ratio. The factor uses `fastExp2` and the rest is a polynomial, so there is no libm.
+  - the same at any Size ("Size-neutral": Size changes g, and the matched part follows it);
+  - the same in every mode.
+- **Why 1 + wetBuild × g².** The network's own normalisation, √(1 − g²), is right for a loop that loses the same at every frequency. With Damp at noon the highs lose more a pass, so they build up less, and the longer a sound lives in the loop the more that takes from the level: nothing at g = 0 (the wet is the first pass), and at g = 1 the highs, which are most of white noise's power, hold half what the lows do, so the wet is 3 dB short. Measured, HAAR needs 1 + 0.43 g² within 1 % over Visibility 0 to 1 and Size 0 to 1; FRET (darker) needs more, ICE (brighter) less.
+- **The early reflections' share** (section 2.7). They add their own power to the wet: (1 − g²) × early² of what the lines' first echoes carry. The square root in `matched` takes that out. It has no fitted constant: with wetMakeup and wetBuild fitted with the early reflections off, the law is met within 0.22 dB with them on.
+- **The constants are fitted, not derived** [tool: `make fog-calibrate`, `src/fog/calibrate/calibrate.cpp`]. It measures the make-up each voicing needs at 15 points (Visibility 0, 0.25 … 1 by Size 0, 0.5, 1; the measurement is `wet_level_law`'s) and prints `wetMakeup` and `wetBuild` by least squares; the fit is within 0.22 dB of every point in HAAR, FRET and ICE and 0.66 dB in SMOKE (whose allpasses, now lossy, do not follow a straight line in g² as closely). It must be run, and its numbers pasted into `Voicing.hpp`, after any change to a voicing's lines, diffuser, damping or tone, or to the network's level.
+- **What it replaced.** Until 2.0.50 the matched part was a polynomial in Visibility and Size with five hand-fitted constants, worked out in the engine (`FogEngine::wetMakeup`), which followed Size through a 30 ms one-pole of its own. It was fitting the same thing, and also the Hermite reads' loss (section 2.8), which is why its Visibility term rose to 2.13 where 1.43 is now enough.
 - **Smoothing and the make-up path.**
-  - `v` is the network's smoothed Visibility `visSm` (section 2.4), read the sample it changes, with no smoothing of its own. The network's own wet level √(1 − g_m²) is computed from the same `visSm`, so the total wet gain follows one smooth Visibility.
-  - Size reaches the make-up through its own 30 ms one-pole (`makeupCoef` = 1/(0.03 × host rate + 1)), and the make-up is recomputed at most once per 32 samples while that moves.
+  - The network works the make-up out with its gains, from its smoothed Visibility `visSm` (section 2.4) and its slewing lengths (section 2.5), at most once per 32 inner samples. The engine reads it the sample it changes, with no smoothing of its own. The network's own wet level √(1 − g²) comes from the same values, so the total wet gain follows one smooth value.
   - On reset, a wake and a mode switch the make-up snaps to its target.
   - Two earlier forms were tried during development and rejected. A one-pole on the raw knob ramped the make-up linearly while the network followed the smoothed Visibility, giving +10 dB in 5 ms on a 0 → 1 jump. A second one-pole after `visSm` lagged the network, so a 1 → 0 jump swelled the wet 5–8 dB for 50–70 ms [code comment; test: `visibility_no_swell`].
 - **Expected full-wet level against dry, by dial word** (Mix 1, Size noon, Damp, Bloom and Drift noon, Low cut 50 Hz). "Quiet material" is ±1 V uniform noise, which the leveller leaves alone. "Loud" is ±5 V uniform noise:
 
-| Word | v | T60 | Law [code] | HAAR make-up [code] | HAAR, ±1 V [meas] | FRET, ±1 V | SMOKE, ±1 V | ICE, ±1 V | HAAR, ±5 V (levelled) [meas] | HAAR ±5 V peak |
+| Word | v | T60 | Law [code] | HAAR make-up [code, 2.0.2; now in the next table] | HAAR, ±1 V [meas] | FRET, ±1 V | SMOKE, ±1 V | ICE, ±1 V | HAAR, ±5 V (levelled) [meas] | HAAR ±5 V peak |
 |---|---|---|---|---|---|---|---|---|---|---|
 | fully left | 0 | 0.40 s | −11.51 dB | 0.299 (−10.5 dB) | −11.51 | −11.11 | −11.83 | −11.70 | −11.51 | 4.44 V |
 | CLEAR | 0.042 | 0.50 s | −10.54 | 0.344 (−9.3) | −10.41 | −9.98 | −10.64 | −10.55 | −10.41 | 5.02 V |
@@ -658,20 +714,34 @@ make-up  = matched × 200^((v − 0.5) / 2)          = matched × √(T60(v) / T
 | DENSE | 0.975 | 70.1 s | +10.93 | 7.374 (+17.4) | +10.91 | +10.76 | +10.97 | +10.84 | −0.05 | 10.00 V |
 | fully right | 1 | 80 s | +11.51 | 7.995 (+18.1) | +11.46 | +11.33 | +11.53 | +11.36 | −0.05 | 10.00 V |
 
+- **The make-up in 2.0.51** [code], HAAR, Size noon. The measured columns above are 2.0.2's and have not been redone; the law they follow is unchanged, and `wet_level_law` now measures it at Visibility 0, 0.25, 0.5, 0.75 and 1.
+
+| Word | v | T60 | g² | √(1 − g²) | Make-up |
+|---|---|---|---|---|---|
+| fully left | 0 | 0.40 s | 0.030 | 0.985 | 0.270 (−11.4 dB) |
+| CLEAR | 0.042 | 0.50 s | 0.061 | 0.969 | 0.306 (−10.3) |
+| HAZE | 0.304 | 2.00 s | 0.498 | 0.709 | 0.722 (−2.8) |
+| MIST | 0.477 | 5.01 s | 0.757 | 0.493 | 1.246 (+1.9) |
+| noon | 0.5 | 5.66 s | 0.781 | 0.468 | 1.335 (+2.5) |
+| FOG | 0.642 | 12.0 s | 0.890 | 0.331 | 2.012 (+6.1) |
+| THICK | 0.815 | 30.0 s | 0.955 | 0.213 | 3.245 (+10.2) |
+| DENSE | 0.975 | 70.1 s | 0.980 | 0.140 | 4.996 (+14.0) |
+| fully right | 1 | 80 s | 0.983 | 0.132 | 5.342 (+14.6) |
+
 - **Read the table this way.**
   - On material whose full wet stays under the leveller's 6.5 V threshold (most material at ordinary levels), the level follows the law within about 0.5 dB.
   - On loud material, from about MIST up, the leveller (section 6.2) holds the full wet near the noon level. ±5 V noise reads about 0 dB from noon to fully right, not +3 to +11.5 dB. This is expected.
   - At short settings even ±5 V material follows the law (CLEAR −10.4 dB, peak 5.0 V).
-- **Measured against the tolerance** [test: `wet_level_law`, ±1 V noise, 11 Visibility/Size points × 4 modes]:
-  - every point within ±1.5 dB of the law; worst 0.54 dB off (FRET, v 1, Size 1);
+- **Measured against the tolerance** [test: `wet_level_law`, ±1 V noise, 11 Visibility/Size points × 4 modes] **(figures in 2.0.51)**:
+  - every point within ±1.5 dB of the law; worst 0.44 dB off, in SMOKE (0.22 dB in the other modes; 2.0.2: 0.54);
   - the leveller's gain exactly 1 at every point (so the make-up alone is measured);
-  - Size 1 against Size 0 within 0.75 dB in HAAR (measured ≤ 0.28 dB) and ≤ 0.89 dB in every mode;
-  - every mode within 1 dB of HAAR at v 0, 0.5 and 1 (measured ≤ 0.41 dB).
-- **Against LV-426.** ValhallaRoom LV-426 drops 4.8 dB from a 6.32 s decay to 2.15 s [testbed]; the law gives 4.68 dB. Fog drops 4.58 dB (HAAR), 4.23 (FRET), 4.51 (SMOKE) and 4.58 (ICE) between Visibility 0.521 and 0.317 on noise [test; limit 4.68 ± 1.5 dB]. On the testbed's Fathom drone, which the leveller acts on at 6.32 s, FRET drops 3.7 dB and HAAR only 0.5 dB [test: `fathom_drone` level column]. The 2.0.2 testbed rerun will measure this in Rack.
-- **Smoothness** [test: `wet_makeup_smooth`]: on a Visibility 0 → 1 step the make-up (a 7.70 change) moves at most 0.065 in one sample (0.84 % of the step); on a Size 0 → 1 step (0.401), at most 0.0093 (2.3 %). Limit 3 % of the step. Both settle on the target within 1e-3.
+  - Size 1 against Size 0 within 0.75 dB in HAAR (measured ≤ 0.08 dB) and ≤ 0.37 dB in every mode (2.0.2: ≤ 0.28 and ≤ 0.89);
+  - every mode within 1 dB of HAAR at v 0, 0.5 and 1 (measured ≤ 0.11 dB; 2.0.2: ≤ 0.41).
+- **Against LV-426.** ValhallaRoom LV-426 drops 4.8 dB from a 6.32 s decay to 2.15 s [testbed]; the law gives 4.68 dB. Fog drops 4.71 dB (HAAR), 4.59 (FRET), 4.74 (SMOKE) and 4.62 (ICE) between Visibility 0.521 and 0.317 on noise [test; limit 4.68 ± 1.5 dB; in 2.0.51. 2.0.2: 4.58, 4.23, 4.51, 4.58]. On the testbed's Fathom drone, which the leveller acts on at 6.32 s, FRET drops 3.7 dB and HAAR only 0.5 dB [test: `fathom_drone` level column]. The 2.0.2 testbed rerun will measure this in Rack.
+- **Smoothness** [test: `wet_makeup_smooth`; in 2.0.51]: on a Visibility 0 → 1 step the make-up (a 5.07 change) moves at most 0.045 in one sample (0.88 % of the step); on a Size 0 → 1 step (0.239), at most 0.0081 (3.4 % of it: one 32-sample refresh of the lengths' 30 ms slew is 2.2 % of Size's travel, and the make-up is not a straight line in Size). Limit 5 % of the step. Both settle within 1e-3 on the make-up of a second engine started at the new setting. After a Size step the make-up is exactly that engine's within 0.45 s at 48 and 96 kHz [test: `makeup_size_settles`].
 - **No swell on a Visibility jump** [test: `visibility_no_swell`, 0.2 V 200 Hz sine, every mode, 0 → 1 held, 1 → 0 held and 1 → 0 in a tail]: the total wet gain never exceeds the larger of its values before and after by more than 1 dB, and the 10 ms envelope never exceeds the larger of its start and end by more than 1 dB. Measured: +0.00 dB worst on both.
 - **No step on a Visibility jump** [test: `visibility_step_no_click`, 1 V 200 Hz, Drift 0, every mode, 0 ↔ 1]: the wet's 5 ms RMS envelope moves at most 4 dB from one window to the next (measured 0.84–3.37 dB), and no sample step against its window's RMS exceeds twice the steady ratio plus 0.05. [meas], 1 V 110 Hz, knobs noon, largest sample step in the 200 ms after the jump, every mode: 0.03–0.07 V for 0.5 → 1, 0.05–0.11 V for 1 → 0 and 0.03–0.04 V for 0 → 1 (2.0.1: up to 1.04 V, 8.41 V and 1.32 V). These are the ordinary sample steps of the wet at its new level; on 1 → 0 they are under the steady step before the jump (0.06–0.12 V), and on 0 → 1 they grow with the level, which the law raises by 23 dB.
-- **Known limit: a Visibility 0 → 1 jump within about 150 ms of a tail lifts that tail about 6 dB** [issue #22]. The echoes still in the network when the make-up rises by about 11 dB get louder, and the envelope peaks about 6 dB over where it ends. This affects stepped Visibility only (a mapping module, a typed value, a preset load during play), not turning the knob. Not covered by a test.
+- **A Visibility rise does not lift a tail** [issue #22, fixed in 2.0.41; test: `visibility_rise_in_tail`]. The total wet gain is split between the network's input and its output (`FogEngine::splitGain`): a rise goes on the input, so it reaches only the sound that comes in after it; a fall goes on the output. The test holds the output's gain to no rise at all across a 0 → 1 jump made 50 or 150 ms into a tail, and the 10 ms envelope to +2.5 dB over its level just before the jump (measured +1.68 dB at worst, in FRET). The envelope does rise a little with no gain moving: the diffuser still holds up to 0.2 s of the sound, which goes on entering lines that are now all but lossless. Over 12 noise seeds that is +0.8 dB on average in HAAR and +1.3 to +1.5 in FRET, +2.0 at worst.
 - **Short sounds now get louder with Visibility.** In 2.0.1 a short sound was quieter at DENSE than at CLEAR, because its energy spread over a longer tail. With the law the steady level rises with T60, and the early response rises with it. A 50 ms ±1 V noise burst, Bloom 0, Mix 1 [meas]:
 
 | Mode | loudest 50 ms of wet re the burst: CLEAR / HAZE / noon / FOG / THICK / DENSE | wet energy in 6 s re the burst: CLEAR / DENSE |
@@ -689,6 +759,7 @@ make-up  = matched × 200^((v − 0.5) / 2)          = matched × √(T60(v) / T
 
 - **Why it exists**: a held tonal drone builds up in the network 4–8 dB over noise, with peaks of 20–50 V at Damp 0 (spec). The user's ruling is that such drones are turned down, not clipped. With the level law, long settings start 3–11.5 dB hotter than in 2.0.1, so the leveller also holds loud material near the noon level.
 - **Design**: a slow automatic gain on the wet, after the make-up and before the limiter, with one gain for L and R taken from the louder side.
+- **Changed in 2.0.51 (issue #15): the followers and their coefficients are double precision.** A float one-pole stops once its step is under half an ulp of its value. The 3 s release's step is that small while the slow follower is still 0.04 V over the level at 48 kHz and 1.15 V over it at 768 kHz, so after a loud passage the gain stayed 0.05 dB low at 48 kHz and 1.3 dB low at 768 kHz for as long as the level held (the issue estimated 0.1 dB). After 12 V for 0.5 s then 7 V for 30 s the follower now reads 7.0003 V at both rates [test: `leveller_releases_at_high_rates`, within 0.01 V and 0.01 dB].
 
 | Stage | Constant [code] |
 |---|---|
@@ -814,6 +885,8 @@ Expected peak behaviour:
 
 ### 7.3 Bench figures and budgets
 
+**In 2.0.51** [meas, `make bench`, one instance, Apple M-series, % of a core]: idle 0.064, outputs 0.064, quiet 0.588, busy 0.854, busyIce 0.823. The same run on 2.0.50: 0.064, 0.062, 0.684, 0.957, 0.974. The allpass read is cheaper than the Hermite read it replaced, and the early reflections add two taps a side. All within the budgets below. The table below is 2.0.2's.
+
 `bench` cases [code, `bench.inc`, unchanged], each at 48 kHz:
 
 - **idle**: no cables, knobs at defaults (asleep).
@@ -895,15 +968,15 @@ These are the open issues in `ryanarneson/RkaModules` at the time of writing. Th
 |---|---|---|
 | 11 | Fog: Drift depth (and Size make-up) one-pole never settles, so per-line work runs forever | Inaudible. After any Drift change the per-line depth update runs every sample while awake, so awake CPU can read slightly higher after Drift has been moved. |
 | 12 | Fog: JSON load narrows integers before clamping (mode, driftRate, lowCut) | Hand-edited JSON with huge integers or reals loads a wrong but valid value (`2.0` → 0; `4294967297` → FRET). Ordinary out-of-range integers still clamp. |
-| 13 | Fog: bypass leaves OUT R silent when only IN L is patched | Expected in 2.0.2: bypass with a mono source on IN L gives sound on OUT L only. |
+| 13 | Fog: bypass leaves OUT R silent when only IN L is patched | **Fixed in 2.0.41.** Bypass with a mono source on IN L gives sound on both outputs; silence on OUT R is a defect. |
 | 14 | Fog: mode change runs libm and clears buffers inside process() | A one-off CPU spike at each mode switch (17–29 µs measured on 2.0.1). Listen and watch the meter, but a single spike is known. |
-| 15 | Fog: leveller 3 s release loses precision at 384–768 kHz | About 0.1 dB leveller gain error at those rates; inaudible. |
+| 15 | Fog: leveller 3 s release loses precision at 384–768 kHz | **Fixed in 2.0.51** (section 6.2). It was 1.3 dB at 768 kHz, and 0.05 dB at 48 kHz. |
 | 16 | Fog: soak test misses a NaN on one channel and measures RMS on L only | Test-side only. QA's own NaN and level checks should examine both outputs. |
 | 17 | Tests: Fog's four slowest suites take ~110 s on M-series; tier them for CI | None for QA. |
 | 18 | make smoke does not load the factory presets | The presets have been checked only structurally by the developer. QA's load of each preset in Rack is the first real check (section 11.4). |
 | 19 | Fog stereo: Drift 0 bass lumpiness and the 150–300 Hz bounds are regression guards, not targets | Per-side bass level varies more from note to note, most at Drift 0 (spread 5.8 dB, dips to −30 dB). SMOKE's Fathom drone at 2.15 s is about 6 dB quieter. A listening check is wanted: report what you hear on #19. |
 | 20 | Fog docs: spec and manual inconsistencies | Manual wording on Size's slew and Bloom; no Sleep section in the spec; ICE called "faint". Section 1.1. |
-| 21 | Fog: early reflections per voicing (onset 0.18 s vs LV-426's 0.02 s) | Onset delay unchanged from 2.0.1: first wet 50–139 ms, −20 dB at 0.08–0.16 s at Bloom 0 (section 2.7). Not implemented in 2.0.2. |
+| 21 | Fog: early reflections per voicing (onset 0.18 s vs LV-426's 0.02 s) | **Implemented in 2.0.51** (section 2.7): −20 dB in 0.025–0.035 s in HAAR, FRET and ICE; SMOKE unchanged. The amounts are first values, to be judged by ear. |
 | 22 | Fog: Visibility 0→1 within ~150 ms of a tail lifts the tail ~6 dB | A stepped Visibility jump from 0 to 1 just after a note ends makes the remaining tail swell about 6 dB. Knob turns are not affected. |
 | 23 | Fog: tune all four modes and the factory presets by ear | Modes and presets are not yet tuned by ear. Report character, loudness and preset impressions on #23, not as defects. |
 | 24 | Fog vs LV-426: remaining testbed gaps (attack, treble decay, R−L balance) | Attack at Bloom 50 % (1.7 s / 1.2 s vs 0.65 s), FRET treble decay at Damp 0 (2 kHz/500 Hz 0.83 vs 0.99), and the testbed's R−L imbalance (+4.1 to +4.2 dB) are known. |
@@ -944,6 +1017,9 @@ All tests below passed on the 2.0.2 sources in my run. "Network" tests drive `fo
 | delay_integer_exact | integer delays 1–999 return the sample exactly | exact |
 | delay_fractional_sine | Hermite read of a 1 kHz sine at d + 0.37 | < 1e-3 |
 | delay_clamps | reads below 1, above max, NaN stay finite and clamp | exact |
+| **delay_allpass_flat** (new in 2.0.51) | the allpass read's gain, 1–20 kHz at ten fractions; the Hermite read beside it loses over 1 dB at 16 kHz halfway | within 0.01 dB (0.0000); Hermite −3.25 dB |
+| **delay_allpass_delay** (new in 2.0.51) | 1 kHz sine at d + 0.37; a read moving 0.02 samples a sample over 40 samples and back; taking over from a Hermite read | < 1e-3; < 3e-3 (0.0013); < 1e-3 |
+| **delay_allpass_clamps** (new in 2.0.51) | reads below 1, above max, NaN, an unallocated line; a delay of 1 is exact | exact |
 | delay_power_of_two | buffer is a power of two, ≥ requested | exact |
 | diffuser_energy | 4-stage diffuser preserves energy | RMS ratio within 1 % |
 | diffuser_decorrelates | an impulse spreads over all 8 channels | each 5–25 % of energy; total 1 ± 0.01 |
@@ -959,6 +1035,7 @@ All tests below passed on the 2.0.2 sources in my run. "Network" tests drive `fo
 | t60_holds_across_size | FOG at Size 0.25, 0.5, 0.75 | ±15 % (≤ 0.4 %) |
 | t60_low_holds_with_damp | 250 Hz T60 at Damp 1 (HAZE; MIST at Size 1) | ±15 % (≤ 1.0 %) |
 | damp_ratio | 4k/250 T60 ratio at Damp 0, 0.5, 1 | ≥ 0.8; 0.35–0.65; ≤ 0.18 (0.980, 0.508, 0.131) |
+| **t60_holds_at_high_frequencies** (new in 2.0.51) | Damp 0: T60 at 8, 12 and 16 kHz, Visibility 0.5 (Sizes 0.37, 0.5, 0.81) and 0.85, Drift 0 and noon | ±15 % (≤ 2.9 %) |
 | even_wet_level | pink-noise wet at each word against noon and against input (network only, no make-up) | ±3 dB (0.7–1.3 dB under input) |
 | stereo_decorrelated | L-only impulse fills R; correlation | R within 3 dB of L; corr < 0.5 (0.042) |
 | always_decays | v 1, Damp 0, Drift 1: 8 × 5 s windows after noise | each lower; last ≥ 20 dB down (28.7) |
@@ -981,8 +1058,15 @@ All tests below passed on the 2.0.2 sources in my run. "Network" tests drive `fo
 | rate_ignored | 0, −48 k, 1e6, 768001, inf, NaN ignored | exact |
 | mix_ramp_no_click | Dry kill toggled on 5 V DC | step ≤ 0.05 V (0.033) |
 | low_cut | 30 Hz wet with the 50 Hz cut; dry untouched | ≤ −6 dB (−9.4); bit-exact dry |
+| **low_cut_back_on_no_thump** (new in 2.0.51) | cut Off → 50 or 100 Hz after a 3 V DC history, against an engine without it: the wet's peak | within 10 % (equal; 0.05 V against 0.0001 V before) |
+| **tone_stage_clean** (new in 2.0.51) | FRET's and ICE's tone stage against a long double section, 5 V 110 Hz, at 48, 192 and 768 kHz | ≤ −120 dB re the signal (−151; −68 to −127 before) |
+| **bloom_times_at_high_rates** (new in 2.0.51) | Bloom 1 in FRET at 48, 192 and 768 kHz: rise to −3 dB, fall from open to a half | within 1 % of 8.00 s and 2.25 s (7.999, 2.252; 8.96 s at 768 kHz before) |
+| **leveller_releases_at_high_rates** (new in 2.0.51, issue #15) | 12 V for 0.5 s then 7 V for 30 s, at 48 and 768 kHz: the slow follower and the gain | within 0.01 V of 7 V and 0.01 dB (7.0003 V; 8.15 V and −1.3 dB at 768 kHz before) |
+| **bloom_opens_fully** (new in 2.0.51) | Bloom 1 in FRET, 1 V held 120 s, at 48 and 192 kHz | gain within 1e-4 of 1 (1.000000; 0.9907 and 0.9615 before) |
 | **wet_level_law** (**new**, replaces wet_matched_level) | ±1 V noise at Mix 1, 11 points × 4 modes, against 10·log10(T60/5.66 s); leveller idle; Size tilt (HAAR); modes against HAAR; LV-426 drop 6.32 → 2.15 s | ±1.5 dB (worst 0.54); gain exactly 1; ±0.75 dB; ±1 dB; 4.68 ± 1.5 dB (4.23–4.58) |
-| wet_makeup_smooth (**changed** bound) | Visibility/Size 0 → 1 step: per-sample make-up move; settles | ≤ 3 % of the step (0.84 %, 2.3 %); within 1e-3 |
+| wet_makeup_smooth (**changed** in 2.0.51: the step and the target are a second engine's) | Visibility/Size 0 → 1 step: per-sample make-up move; settles | ≤ 5 % of the step (0.88 %, 3.4 %); within 1e-3 |
+| makeup_size_settles (**changed** in 2.0.51: the make-up has no Size state of its own) | after a Size step the lengths' slew ends and the make-up is a fresh engine's, 48 and 96 kHz | exact, within 1 s (0.45 s) |
+| visibility_rise_in_tail (**changed** in 2.0.51) | Visibility 0 → 1, 50 or 150 ms into a noise tail, every mode, Drift 0 and noon: the output's gain; the 10 ms envelope | no rise; ≤ +2.5 dB over the level before (+1.68) |
 | **drift_step_no_click** (**new**) | 1 V 220 Hz, every mode: Drift 0.5 → 0, Slow → Very slow, Very slow → Slow | largest step in the second after ≤ 2 × the second before + 0.05 V |
 | **visibility_step_no_click** (**new**) | 1 V 200 Hz, Drift 0, every mode, Visibility 0 → 1 and 1 → 0 | 5 ms envelope ≤ 4 dB per window (≤ 3.37); step/RMS ≤ 2 × steady + 0.05 |
 | **visibility_no_swell** (**new**) | 0.2 V 200 Hz, every mode: 0 → 1 held, 1 → 0 held, 1 → 0 in a tail | total wet gain and 10 ms envelope ≤ +1 dB over max(before, after) (+0.00 dB) |
@@ -1005,6 +1089,9 @@ All tests below passed on the 2.0.2 sources in my run. "Network" tests drive `fo
 | Test | Guarantees | Tolerance (measured) |
 |---|---|---|
 | modes_t60 | 250 Hz T60 at FOG (Size 0, 0.5, 1) and DENSE (Size 0), every mode | ±20 % (HAAR/FRET/SMOKE ≤ 3.0 %; ICE −10.2 to −14.1 %) |
+| **smoke_late_tail** (new in 2.0.51) | SMOKE, Damp 0, Drift 0, Size 0 and noon, Visibility 0.5 and 0.75: the T60 of the late tail (55–65 % against 85–95 % of the run) | ±5 % (≤ 0.5 %; +10 to +14 % at Size 0 before) |
+| **early_onset** (new in 2.0.51, issue #21) | ±1 V noise from silence, Bloom 0, T60 6.32 s, three seeds: time to −20 dB of the sustain at Size noon and 1; FRET's first 80 ms; SMOKE silent until its lines | FRET ≤ 0.04 s (0.030), HAAR and ICE ≤ 0.10 s (0.035, 0.025), ≤ 0.05 s at Size 1 (0.030); ≤ −6 dB (−8.2); SMOKE ≥ 0.130 s (0.139) |
+| **early_stereo** (new in 2.0.51, issue #21) | the first 120 ms at Size 1 in HAAR, FRET and ICE, the same noise on both inputs: balance, correlation, mono sum | within 3 dB (0.14); within 0.6 (≤ 0.04); ≥ −4 dB (−3.0) |
 | modes_knob_directions | Damp 0→1 shortens the 4 kHz T60; Bloom 0→1 lengthens the rise | ≤ 70 %; ≥ 3 × |
 | fret_darker_than_haar | 4k/250 ratio at Damp 0 and noon | FRET ≤ 0.85 × HAAR (0.666 vs 0.997; 0.347 vs 0.512) |
 | smoke_has_echoes | repeats at Size 1; blur between repeats | ≥ 3 peaks of 6 dB in 2 s (4); HAAR fewer (1); gap ≤ 40 dB (33.8) |
@@ -1130,6 +1217,9 @@ Defaults for each test unless stated: 48 kHz, all knobs at noon, attenuverters 0
 | **load each factory preset** from the module's Preset menu (Becalmed, Nebula, Harbour, Whiteout), on a fresh module and onto a module in another mode, while audio plays | appears in the menu; loads without a Rack warning in the log; sets exactly the values of section 3.1 (mode, all six knobs, attenuverters 0, Drift rate Slow, Low cut 50 Hz, Dry kill off); no click beyond the mode fade [issue #18: first real load test] |
 | factory presets by ear | Becalmed: dark, slow FRET swell, about +7 dB of wet on quiet material at its 30 s decay; Nebula: huge HAAR wash, strong Drift; Harbour: short, soft glue at Mix 0.3; Whiteout: wet-only bright ICE wash. Report impressions on #23, not as defects |
 | duplicate the module | copy carries all settings; instances independent |
+| **bypass with a tail ringing** (changed in 2.0.51): a loud chord at DENSE, bypass, wait 10 s, release with no input | silence: the old tail does not come back. Then play: the wash builds again from the new sound. A tail that jumps in on release is a defect |
+| bypass with only IN L patched [issue #13, fixed in 2.0.41] | IN L on both outputs |
+| low cut Off, then 50 Hz or 100 Hz, with no input and the tail gone (changed in 2.0.51) | no thump |
 
 ### 11.5 Sample rates (44.1 kHz to 768 kHz)
 
@@ -1224,7 +1314,8 @@ Defaults for each test unless stated: 48 kHz, all knobs at noon, attenuverters 0
 | FDN | feedback delay network: several delay lines whose outputs are mixed by a matrix and fed back |
 | Feed | the signal into the network after low cut, tone and Bloom |
 | Halfband filter | a low-pass at a quarter of the rate used to halve or double the sample rate |
-| Hermite read | 4-point cubic interpolation for reading a delay line between samples |
+| Allpass read | reading a delay line between samples through a first-order allpass, whose gain is 1 at every frequency; Fog's lines use it (section 2.8) |
+| Hermite read | 4-point cubic interpolation for reading a delay line between samples; it loses highs. Fog's lines use it only while their lengths change fast |
 | Hadamard matrix | an orthogonal matrix of ±1 entries; used for mixing and for ±1 tap patterns |
 | Householder matrix | I − (2/N)·11ᵀ, an orthogonal reflection used as the FDN's mixing matrix |
 | Inner rate | the rate the network runs at: host rate ÷ 1, 2, 4 or 8, at most 96 kHz |

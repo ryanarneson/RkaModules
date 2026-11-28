@@ -217,6 +217,39 @@ void dampRatio() {
 	}
 }
 
+// At Damp 0 the decay is Visibility's in every band: the delay reads must not
+// add a loss of their own. A 4-point Hermite read in the loop did (it rolls
+// off towards Nyquist, by an amount that depends on the fraction of each
+// line's length, on every pass): at 48 kHz and HAZE-to-MIST the 12 kHz T60
+// read 3.3-4.5 s for 5.66 s, the 16 kHz 1.9-3.4 s, and at Visibility 0.85
+// the 12 kHz 10 s for 36 s, so long tails went dark whatever Damp said, and
+// darker at 48 kHz than at 96 kHz. With Drift 0 and with Drift at noon (the
+// reads moving), over three Sizes.
+void t60HoldsAtHighFrequencies() {
+	struct Case {
+		float vis, size, drift;
+	};
+	const Case cases[] = {{0.5f, 0.37f, 0.f}, {0.5f, 0.5f, 0.f},  {0.5f, 0.81f, 0.f}, {0.5f, 0.37f, 0.5f},
+	                      {0.5f, 0.5f, 0.5f}, {0.5f, 0.81f, 0.5f}, {0.85f, 0.5f, 0.f}, {0.85f, 0.5f, 0.5f}};
+	const float bands[] = {8000.f, 12000.f, 16000.f};
+	for (const Case& k : cases) {
+		Controls c;
+		c.vis = k.vis;
+		c.size = k.size;
+		c.drift = k.drift;
+		const double want = specT60(k.vis);
+		std::vector<float> L, R;
+		impulse(c, irSeconds(want), L, R);
+		for (float band : bands) {
+			const double got = measureT60(L, RATE, band);
+			CHECK(std::fabs(got / want - 1.0) <= 0.15, "Visibility %g Size %g Drift %g: %g Hz T60 %g s, want %g s +/-15%%", k.vis,
+			      k.size, k.drift, band, got, want);
+			std::printf("  t60_holds_at_high_frequencies v=%.2f Size %.2f Drift %.1f %5.0f Hz: want %5.2f s, got %5.2f s (%+.1f%%)\n",
+			            k.vis, k.size, k.drift, band, want, got, 100.0 * (got / want - 1.0));
+		}
+	}
+}
+
 // Wet RMS (both sides) under held pink noise at 2 V RMS into both inputs,
 // at noon for every other knob, measured over 2 s after 3 x T60 (capped at
 // 20 s).
@@ -492,6 +525,7 @@ int main() {
 	t60HoldsAcrossSize();
 	t60LowHoldsWithDamp();
 	dampRatio();
+	t60HoldsAtHighFrequencies();
 	evenWetLevel();
 	stereoDecorrelated();
 	alwaysDecays();

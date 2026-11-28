@@ -57,10 +57,11 @@ th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: upper
 <body>
 <main>
 <h1>FOG</h1>
-<div class="sub">Listening list · build 2.0.39 · 2026-11-24</div>
+<div class="sub">Listening list · build 2.0.51 · 2026-11-27</div>
 <p class="lead">Fog is a stereo reverb, 10 HP, for large dark spaces: decay is set in seconds on the Visibility knob (0.4 s to 80 s, and it holds at any Size), with Size, Damp, Bloom, Drift and Mix on knobs that each have an attenuverter and CV, and four modes (HAAR, FRET, SMOKE, ICE) in the right-click menu. Its measured comparison against ValhallaRoom LV-426 is a separate testbed, on the share in fog-testbed/; this list is for listening.
 Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> are paths no automated run could reach: the panel and knob faces, the tooltips, the menus and presets, and Rack's CPU meter.
 The defaults, the four modes and the factory presets are first guesses (issue 23), to be set by ear here.</p>
+<p class="lead">Build 2.0.51 follows a code review of Fog (issue 123). What it changed: long tails keep their top at 44.1 and 48 kHz; HAAR, FRET and ICE have early reflections; bypass empties the reverb; and smaller fixes to the low cut, Bloom, the leveller and SMOKE's decay. The short list for just those changes is <b>fog-2.0.51-fixes-listening.html</b>; this list covers the whole module, with those checks in their places.</p>
 
 <div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
 <button id="copy">Copy notes</button><button id="reset">Reset</button></div>
@@ -76,8 +77,9 @@ The defaults, the four modes and the factory presets are first guesses (issue 23
 <tr><td><b>WET LEVEL</b></td><td>The wet follows the decay time, as in ValhallaRoom: CLEAR is about 11.5 dB quieter than noon and a long tail is louder, with a leveller turning loud drones down. Does the loudness feel right as Visibility moves, or would you rather it stayed flat?</td></tr>
 <tr><td><b>BLOOM</b></td><td>Fully left is under 50 ms, noon about 1 s, fully right about 4 s on the signal fed in (1.2 to 1.7 s measured at the output at noon). Is noon the right swell, and is 4 s long enough at the top?</td></tr>
 <tr><td><b>THE MODES</b></td><td>HAAR dense wash, FRET dark and slow, SMOKE distinct echoes, ICE sparse with an octave up. Each mode's character, equal loudness between them and the factory presets (Becalmed, Nebula, Harbour, Whiteout) have not been tuned by ear (issue 23). What would you change?</td></tr>
-<tr><td><b>EARLY SOUND</b></td><td>Fog has no early reflections: after a gate opens its output takes about 0.18 s to reach −20 dB of its level, against 0.02 s for LV-426 (issue 21). Does a pluck or a drum feel late, or is the slow arrival what you want?</td></tr>
-<tr><td><b>BYPASS WITH ONE INPUT</b></td><td>Bypass wires L to L and R to R, so with only IN L patched OUT R goes silent, although the module normals R to L when active (issue 13). Should bypass normal R to L as well?</td></tr>
+<tr><td><b>EARLY SOUND</b></td><td>HAAR, FRET and ICE now have early reflections (issue 21): the wet starts 2 to 4 ms after the sound and is within 20 dB of its level in about 0.03 s, where it took 0.12 to 0.15 s (LV-426: 0.02 s). FRET has the most, as loud as its first echoes; HAAR and ICE have 0.4 of that; SMOKE none. These amounts are first guesses. On a pluck or a drum with Bloom fully left: is FRET's too much (a slap before the wash), are HAAR's and ICE's enough, and should SMOKE have any?</td></tr>
+<tr><td><b>BYPASS AND THE TAIL</b></td><td>Bypassing empties the reverb, so releasing bypass starts clean: the tail that was ringing does not come back. (It used to return at the level it had when you bypassed, however long ago.) Is a clean start what you expect, or should the old tail carry on?</td></tr>
+<tr><td><b>THE TOP OF A LONG TAIL</b></td><td>At 44.1 and 48 kHz the highs now last as long as Damp says: with Damp fully left, as long as the lows. Before, the delay lines lost highs on every pass, so a long tail went dark whatever Damp said (at THICK the 12 kHz decay was about 10 s for 36 s), and darker at 48 kHz than at 96 kHz. Is the tail now too bright at Damp noon, and should Damp open further right?</td></tr>
 <tr><td><b>MENU DEFAULTS</b></td><td>Low cut 50 Hz, Drift rate Slow (about 0.1 to 0.5 Hz), Dry kill off. Is 50 Hz the right cut for sub-bass drones, and is Slow the right drift rate, or would you start with Very slow?</td></tr>
 </table>
 
@@ -128,17 +130,21 @@ const groups = [
   ["Move Size from left to right at one Visibility.", "The decay time does not change with Size, and the level does not change either."],
   ["Turn Visibility quickly during a tail.", "No click and no step in the wet: it follows through a 30 ms smoother."],
   ["Visibility at CLEAR, noon and DENSE with the same noise at Mix full wet.", "The wet is about 11.5 dB quieter at CLEAR than at noon, and louder at DENSE; a short sound is about 11 dB louder at DENSE than at CLEAR."],
-  ["Stepped change 0 to 1 within 150 ms of a note ending (type a value, or load a preset during a tail). Issue 22.", "Known: the tail lifts by about 6 dB, because the make-up rises while echoes are still in the network. Turning the knob does not do this. Note whether it matters."],
+  ["Stepped change 0 to 1 just after a note ends (type a value, or load a preset during a tail).", "The tail that is ringing does not get louder: it rings on from where it is, for longer (it may rise a decibel or two as the last of the sound arrives). The louder level of the longer decay comes with the next sound. A tail that jumps up by 6 dB is a fault (issue 22, fixed in 2.0.41)."],
   ["Look for a Visibility CV jack.", "There is none.", null, true]]],
  ["Size and Damp", [
   ["Size fully left, then fully right, at HAZE.", "Left: a close space whose reflections blur at once. Right: vast."],
-  ["Size fully right at CLEAR, with a ping.", "Sparse, separate echoes before anything fills in."],
-  ["A slow CV on Size, then a fast one.", "Slow: the space moves. Fast: a pitch effect, a swoop like a Doppler pass. Size settles about 100 ms after a change."],
-  ["Damp fully left, noon, fully right at a long Visibility.", "Left: no extra damping. Noon: the highs (about 4 kHz) die about 2× faster. Right: about 8× faster, and the tail turns into a low rumble within seconds."],
+  ["Size fully right at CLEAR, with a ping.", "Sparse, separate echoes before anything fills in; in HAAR, FRET and ICE the early reflections answer the ping first."],
+  ["A slow CV on Size, then a fast one.", "Slow: the space moves. Fast: a pitch effect, a swoop like a Doppler pass. Size settles about 100 ms after a change. No click while it moves, and none as it comes to rest."],
+  ["Damp fully left, noon, fully right at a long Visibility, with a short bright sound (a noise burst, a hi-hat), at 48 kHz.", "Left: no extra damping: the hiss of the tail lasts as long as its body. Noon: the highs (about 4 kHz) die about 2× faster. Right: about 8× faster, and the tail turns into a low rumble within seconds."],
+  ["The same at 96 kHz.", "As bright and as long as at 48 kHz. (Before this build the tail was darker at 48 kHz.)", null, true],
   ["Damp at noon in HAAR, FRET and ICE.", "FRET is darker than HAAR at every setting, ICE brighter."]]],
  ["Bloom, Drift and Mix", [
   ["Bloom fully left, noon, fully right with a held note.", "Left: the wash is there at once (under about 50 ms). Noon: about 1 s to swell in. Right: about 4 s. The dry sound is never delayed."],
+  ["Bloom fully left, Mix fully right, a short dry click or rim shot, in HAAR, FRET and ICE, at Size noon and fully right.", "The wet answers at once, with no gap before the wash, in both ears and wider than the click. At Size fully right the early reflections come first and the wash follows them. FRET's are the strongest."],
+  ["The same in SMOKE.", "Nothing until the first repeat: about 140 ms at Size noon, about 415 ms fully right."],
   ["Drift fully left, noon, fully right on a held note.", "Left: still and glassy. Noon: gentle movement, enough to stop long tails ringing. Right: heavy smearing, pitch deviations of tens of cents."],
+  ["Turn Drift quickly from noon to fully left and back during a tail.", "No click."],
   ["Mix from fully left to fully right on a steady source.", "Left: dry only. Noon: 50/50. Right: wet only. The loudness does not dip in the middle."],
   ["Hover Mix.", "“Mix”, 0 to 100 %, 50 % at default.", null, true]]],
  ["CV and attenuverters", [
@@ -157,21 +163,26 @@ const groups = [
  ["Menu: Drift rate, Low cut, Dry kill", [
   ["Drift rate: Slow, then Very slow, at Drift noon, with a held note.", "Very slow moves about 5× slower; changing it moves the modulation smoothly, with no click."],
   ["Low cut: Off, 50 Hz and 100 Hz with a 40 Hz sine and a long Visibility.", "Off: the sub-bass builds in the tail. 50 and 100 Hz: it does not pile up. The dry sound is untouched at every setting."],
+  ["A low drone (40 to 60 Hz) with the cut at 50 Hz; switch the cut Off, stop the drone and let the tail die; then switch back to 50 Hz, and to 100 Hz.", "No thump on either switch."],
   ["Dry kill on, Mix at 25 %.", "The output is all wet; the Mix knob does not move; switching it changes the level without a click (5 ms ramp)."]]],
  ["Stereo, level and sleep", [
   ["Sum OUT L and OUT R to mono with a low sine (about 100 Hz).", "The low end does not cancel: below about 300 Hz both sides share one tap at 80 degrees apart."],
   ["Patch a 4-channel polyphonic cable into IN L.", "The channels are summed to one signal."],
   ["A loud, bright drone into Fog at DENSE.", "The wet is turned down smoothly rather than clipping; the dry is untouched; no breathing in the level. Note any."],
   ["A hot spike with Mix at noon.", "The wet is limited near 10 V; the dry passes untouched, so the output can reach about 10.6 V."],
-  ["Stop the input and let the tail die at a short Visibility. Watch Rack's CPU meter.", "Once the input and tail are practically silent for about 1.4 s Fog sleeps at near-zero CPU; the dry still passes below full wet; the wet is silent; the next sound wakes it with no click. At long Visibility it takes much longer (issue 63 measured up to minutes at DENSE).", null, true]]],
+  ["Stop the input and let the tail die at a short Visibility. Watch Rack's CPU meter.", "Once the input and tail are practically silent for about 1.4 s Fog sleeps at near-zero CPU; the dry still passes below full wet; the wet is silent; the next sound wakes it with no click. At long Visibility it takes much longer (issue 63 measured up to minutes at DENSE).", null, true],
+  ["FRET, Visibility near HAZE, Mix fully right, a held sine between 300 and 450 Hz (try 320 Hz).", "On some notes one side is quieter than the other, by up to about 7 dB, and Drift does not even it out: FRET's early reflections are fixed in place. Note whether you hear it on real material."],
+  ["A short dry click in HAAR, FRET and ICE, Bloom fully left, summed to mono.", "The early reflections do not hollow out or vanish in mono."]]],
  ["With the patch", [
   ["Set every knob, attenuverter and the four menu items away from default, save, quit Rack, reopen.", "Everything comes back: Mode, Drift rate, Low cut and Dry kill too. The patch opens in its saved mode with no fade."],
   ["Initialize (right-click).", "Knobs at noon, attenuverters at 0; the menu back to HAAR, Slow, 50 Hz and Dry kill off."],
   ["Change Rack's sample rate (44.1, 48, 96 kHz) with a tail ringing.", "The network restarts clean, so the tail is cut; times stay the same in seconds."],
   ["Bypass the module with both inputs patched.", "IN L goes straight to OUT L and IN R to OUT R."],
-  ["Bypass with only IN L patched (issue 13).", "Known: OUT R is silent in bypass, although the active module fills both sides. Note whether this bothers you."]]]
+  ["Bypass with only IN L patched.", "IN L on both outputs, as when Fog is running."],
+  ["Play a loud chord at DENSE, bypass, wait about 10 seconds, release bypass and play nothing.", "Silence: the old tail does not come back. Play again: the wash builds from the new sound.", null, true],
+  ["Open a patch saved before this build that has Damp low and a long Visibility.", "It loads as it was saved. The tail is brighter than it was at 44.1 or 48 kHz; turn Damp up to taste."]]]
 ];
-const KEY = "fog-2.0.39-listening";
+const KEY = "fog-2.0.51-listening";
 let state = {};
 try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
@@ -211,7 +222,7 @@ document.getElementById("copy").addEventListener("click", ev => {
     const s = state[i + 1] || {};
     if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
   });
-  const text = "Fog 2.0.39 listening notes\n" + lines.join("\n");
+  const text = "Fog 2.0.51 listening notes\n" + lines.join("\n");
   const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
   if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
 });

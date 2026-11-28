@@ -86,6 +86,54 @@ void bloomRiseTimes() {
 	std::printf("  bloom_rise_times: 0 -> %.4f s, 0.5 -> %.3f s, 1 -> %.3f s\n", t0, t5, t1);
 }
 
+// Bloom opens fully. Its gain is a one-pole towards 1, and in single precision
+// that stalls once its step is under half an ulp of the gain: at Bloom 1 in
+// FRET (time constant 6.5 s) it stopped at 0.991 at 48 kHz and 0.962 at
+// 192 kHz (0.833 at the engine's top rate), for good. A 1 V input held for
+// 120 s, over 18 time constants: the gain is within 1e-4 of 1.
+void bloomOpensFully() {
+	for (float hz : {48000.f, 192000.f}) {
+		rka::fog::Bloom b;
+		b.setup(hz);
+		b.set(1.f, rka::fog::voicing(rka::fog::FRET).bloomBias);
+		const long N = (long) (120.0 * hz);
+		float y = 0.f;
+		for (long i = 0; i < N; i++)
+			y = b.process(1.f);
+		CHECK(y >= 0.9999f && y <= 1.f, "Bloom 1 (FRET) at %g Hz: a 1 V input held 120 s comes out at %.6f V, want 1 within 1e-4", hz, y);
+		std::printf("  bloom_opens_fully %6.0f Hz: gain %.6f after 120 s\n", hz, y);
+	}
+}
+
+// Bloom's times hold at every host rate. At Bloom 1 in FRET the time constant
+// is 6.5 s: a 1 V input reaches 0.708 after 1.231 x that, 8.00 s, and from
+// fully open the gain falls to a half in ln 2 x 3.25 s, 2.25 s, both within
+// 1 %. The two coefficients were single precision, 1 - 2^(-x) for a tiny x,
+// which near 1 comes only in steps of 6e-8: at 768 kHz the rise's 2.0e-7
+// became 1.8e-7 (issue #123).
+void bloomTimesAtHighRates() {
+	const double tau = 2.0 * rka::fog::Bloom::tauMax();
+	for (float hz : {48000.f, 192000.f, 768000.f}) {
+		rka::fog::Bloom b;
+		b.setup(hz);
+		b.set(1.f, rka::fog::voicing(rka::fog::FRET).bloomBias);
+		long n = 0;
+		const long limit = (long) (30.0 * hz);
+		while (b.process(1.f) < 0.708f && n < limit)
+			n++;
+		const double rise = (double) n / hz, wantRise = 1.231 * tau;
+		CHECK(std::fabs(rise / wantRise - 1.0) < 0.01, "Bloom 1 (FRET) at %g Hz: -3 dB after %.3f s, want %.3f s within 1 %%", hz, rise, wantRise);
+		b.gain = 1.0;
+		b.level = 0.f;
+		n = 0;
+		while (b.process(0.f) == 0.f && b.gain > 0.5 && n < limit)
+			n++;
+		const double fall = (double) n / hz, wantFall = std::log(2.0) * tau / 2.0;
+		CHECK(std::fabs(fall / wantFall - 1.0) < 0.01, "Bloom 1 (FRET) at %g Hz: the gain halves in %.3f s, want %.3f s within 1 %%", hz, fall, wantFall);
+		std::printf("  bloom_times_at_high_rates %6.0f Hz: rise %.3f s (%.3f), fall to half %.3f s (%.3f)\n", hz, rise, wantRise, fall, wantFall);
+	}
+}
+
 // ---- mix ----
 
 void dryPathZeroDelay() {
@@ -367,6 +415,91 @@ void lowCut() {
 	std::printf("  low_cut: 30 Hz wet %.2f dB with the 50 Hz cut vs Off\n", db);
 }
 
+// Switching the low cut back on does not thump. While the cut is Off its
+// filter does not run; it used to keep the state it had when it was switched
+// off, however long ago, and spend it on the first samples after it came
+// back on. Two engines given the same run: 3 V DC (1 s; nothing but a filter
+// state can hold DC) or silence on the input with the 50 Hz cut on, the cut
+// switched Off and the input stopped for 4 s (the tail dies), then the cut on
+// again (50 or 100 Hz) with a 1 mV 1 kHz sine. Full wet, Bloom 0. The wet's
+// peak over the next 0.5 s is the same with either history, within 10 %.
+// The DC history used to leave a thump of 0.16 V on a wet of about 0.02 V.
+void lowCutBackOnNoThump() {
+	for (int back = 1; back <= 2; back++) {
+		double peak[2] = {};
+		for (int history = 0; history < 2; history++) {
+			Rig r;
+			r.f.params[FogFrame::MIX] = 1.f;
+			r.f.params[FogFrame::VISIBILITY] = 0.f;
+			r.f.lowCut = 1;
+			for (int i = 0; i < (int) (1 * RATE); i++)
+				r.step(history ? 3.f : 0.f);
+			r.f.lowCut = 0;
+			for (int i = 0; i < (int) (4 * RATE); i++)
+				r.step(0.f);
+			r.f.lowCut = back;
+			for (int i = 0; i < (int) (0.5 * RATE); i++) {
+				const FogResult o = r.step(0.001f * (float) std::sin(2.0 * PI * 1000.0 * i / RATE));
+				peak[history] = std::fmax(peak[history], std::fmax(std::fabs(o.outL), std::fabs(o.outR)));
+			}
+		}
+		CHECK(peak[0] > 2e-5, "cut %d: no wet to compare (%g V)", back, peak[0]);
+		CHECK(peak[1] <= 1.1 * peak[0], "low cut Off -> %s after a DC input: the wet peaks at %g V, %g V without that history", back == 1 ? "50 Hz" : "100 Hz",
+		      peak[1], peak[0]);
+		std::printf("  low_cut_back_on_no_thump %-6s: wet peak %.5f V after a DC history, %.5f V without\n", back == 1 ? "50 Hz" : "100 Hz", peak[1],
+		            peak[0]);
+	}
+}
+
+// The tone stage (FRET's peak, ICE's shelf) is as clean at a high host rate
+// as at 48 kHz. It runs at the host rate, before the rate divider, where a
+// 300 Hz section's poles sit close to 1 and a single-precision one amplifies
+// its own rounding: -86 dB under the signal at 192 kHz and -69 dB at 768 kHz
+// (-106 dB at 48 kHz). Against the same RBJ section worked out here in long
+// double, direct form I, on a 5 V 110 Hz sine for 2 s: the difference's RMS
+// is under -120 dB re the signal's at every rate (a float output's own
+// rounding is about -150 dB).
+void toneStageClean() {
+	const char* names[2] = {"FRET", "ICE"};
+	const rka::fog::Mode modes[2] = {rka::fog::FRET, rka::fog::ICE};
+	for (int k = 0; k < 2; k++)
+		for (float hz : {48000.f, 192000.f, 768000.f}) {
+			static FogEngine eng; // large
+			eng.mode = modes[k];
+			eng.setSampleRate(hz);
+			eng.reset();
+			CHECK(eng.toneOn, "%s has no tone stage", names[k]);
+			const rka::fog::Voicing& v = rka::fog::voicing(modes[k]);
+			const long double A = std::pow(10.0L, (long double) v.toneDb / 40.0L);
+			const long double w = 2.0L * 3.14159265358979323846264338L * (long double) v.toneHz / (long double) hz;
+			const long double cw = std::cos(w), alpha = std::sin(w) / (2.0L * (long double) v.toneQ);
+			long double b0, b1, b2, a0, a1, a2;
+			if (v.toneKind == rka::fog::TONE_PEAK) {
+				b0 = 1 + alpha * A, b1 = -2 * cw, b2 = 1 - alpha * A;
+				a0 = 1 + alpha / A, a1 = -2 * cw, a2 = 1 - alpha / A;
+			}
+			else {
+				const long double sq = 2 * std::sqrt(A) * alpha;
+				b0 = A * ((A + 1) + (A - 1) * cw + sq), b1 = -2 * A * ((A - 1) + (A + 1) * cw), b2 = A * ((A + 1) + (A - 1) * cw - sq);
+				a0 = (A + 1) - (A - 1) * cw + sq, a1 = 2 * ((A - 1) - (A + 1) * cw), a2 = (A + 1) - (A - 1) * cw - sq;
+			}
+			long double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+			double err = 0, sig = 0;
+			const long N = (long) (2.0 * hz);
+			for (long i = 0; i < N; i++) {
+				const float x = 5.f * (float) std::sin(2.0 * PI * 110.0 * (double) i / hz);
+				const long double y = (b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0;
+				x2 = x1, x1 = x, y2 = y1, y1 = y;
+				const double got = eng.tone(0, x);
+				err += (got - (double) y) * (got - (double) y);
+				sig += (double) y * (double) y;
+			}
+			const double db = 10.0 * std::log10(err / sig + 1e-300);
+			CHECK(sig > 0 && db <= -120.0, "%s tone stage at %g Hz: %.1f dB off a long double section, want <= -120", names[k], hz, db);
+			std::printf("  tone_stage_clean %-4s %6.0f Hz: %.1f dB re the signal\n", names[k], hz, db);
+		}
+}
+
 // One +/-5 V drone sample: shape 0 saw, 1 square, 2 sine, 3 white noise.
 float drone(int shape, double hz, int i) {
 	const double ph = std::fmod(i * hz / RATE, 1.0);
@@ -485,48 +618,65 @@ void wetLevelLaw() {
 	std::printf("  wet_level_law: worst %.2f dB off the law\n", worst);
 }
 
-// The make-up is smoothed: a step in Visibility or Size, with a steady tail
-// present, moves the applied make-up by at most 3 % of the step in one
+// The make-up moves smoothly on a control step: after a Visibility or Size
+// 0 -> 1 step under noise it never moves more than 5 % of the step in one
 // sample, and it settles on the new target. An unsmoothed step moves 100 %
-// in one sample. It moves once per 32-sample refresh: Visibility by one step
-// of the network's 30 ms one-pole (2.2 % of the Visibility gap; with the T60
-// law's 0.30 -> 8.0 that is at most 0.9 % of the step), Size by 32 samples
-// of its 30 ms one-pole (2.2 %). Earlier bounds were 0.5 % of unity (with
-// the make-up matched at every Visibility), then 0.1 % of the step (the
-// make-up had a per-sample one-pole of its own, which lagged the network:
-// visibility_no_swell).
+// in one sample. It moves once per 32-sample refresh of the network's gains:
+// Visibility by one step of the network's 30 ms one-pole (2.2 % of the
+// Visibility gap; with the T60 law's 0.30 -> 8.0 that is at most 0.9 % of
+// the step), Size by 32 samples of the 30 ms one-pole its lengths slew by
+// (2.2 % of Size's travel; the make-up is not a straight line in Size, and
+// its first refresh, where the lengths move fastest, is 3.4 % of its own
+// step). The step and the target are those of a second engine started at
+// each setting, which has never seen the other. Earlier bounds were 0.5 % of
+// unity (with the make-up matched at every Visibility), then 0.1 % of the
+// step (the make-up had a per-sample one-pole of its own, which lagged the
+// network: visibility_no_swell).
 void wetMakeupSmooth() {
 	for (int which = 0; which < 2; which++) {
+		// The make-up a fresh engine settles on at each end of the step.
+		float ends[2];
+		for (int e = 0; e < 2; e++) {
+			Rig q;
+			q.f.params[FogFrame::MIX] = 1.f;
+			q.f.params[FogFrame::SIZE] = which ? (float) e : 0.5f;
+			q.f.params[FogFrame::VISIBILITY] = which ? 0.5f : (float) e;
+			for (int i = 0; i < (int) (0.5 * RATE); i++)
+				q.step(5.f * uniform());
+			ends[e] = q.eng.makeup;
+		}
+		const double jump = std::fabs(ends[1] - ends[0]);
+		CHECK(jump > (which ? 0.05 : 5.0), "%s 0 -> 1 moves the make-up by only %g: nothing to smooth", which ? "Size" : "Visibility", jump);
 		Rig r;
 		r.f.params[FogFrame::MIX] = 1.f;
 		r.f.params[FogFrame::SIZE] = which ? 0.f : 0.5f;
 		r.f.params[FogFrame::VISIBILITY] = which ? 0.5f : 0.f;
 		for (int i = 0; i < (int) (3 * RATE); i++)
 			r.step(5.f * uniform());
+		CHECK(std::fabs(r.eng.makeup - ends[0]) < 1e-3, "%s: the make-up starts at %g, not %g", which ? "Size" : "Visibility", r.eng.makeup, ends[0]);
 		if (which)
 			r.f.params[FogFrame::SIZE] = 1.f;
 		else
 			r.f.params[FogFrame::VISIBILITY] = 1.f;
 		double worst = 0;
 		float prev = r.eng.makeup;
-		const double jump = std::fabs(rka::FogEngine::wetMakeup(which ? 0.5f : 1.f, which ? 1.f : 0.5f, 1.f) -
-		                              rka::FogEngine::wetMakeup(which ? 0.5f : 0.f, which ? 0.f : 0.5f, 1.f));
 		for (int i = 0; i < (int) (1 * RATE); i++) {
 			r.step(5.f * uniform());
 			worst = std::fmax(worst, std::fabs(r.eng.makeup - prev));
 			prev = r.eng.makeup;
 		}
-		const float want = rka::FogEngine::wetMakeup(which ? 0.5f : 1.f, which ? 1.f : 0.5f, 1.f);
-		CHECK(worst <= 0.03 * jump, "%s step: make-up moved %g in one sample (the step is %g), want <= 3 %% of it", which ? "Size" : "Visibility", worst, jump);
-		CHECK(std::fabs(r.eng.makeup - want) < 1e-3, "%s step: make-up %g did not settle on %g", which ? "Size" : "Visibility", r.eng.makeup, want);
+		CHECK(worst <= 0.05 * jump, "%s step: make-up moved %g in one sample (the step is %g), want <= 5 %% of it", which ? "Size" : "Visibility", worst, jump);
+		CHECK(std::fabs(r.eng.makeup - ends[1]) < 1e-3, "%s step: make-up %g did not settle on %g", which ? "Size" : "Visibility", r.eng.makeup, ends[1]);
 		std::printf("  wet_makeup_smooth %s 0->1 step (%.3f): largest per-sample move %.5f\n", which ? "Size" : "Visibility", jump, worst);
 	}
 }
 
-// After a Size step the make-up's 30 ms one-pole on Size lands exactly on
-// the knob, and the make-up is refreshed from it, within a bounded time, at
-// 48 and 96 kHz. A float one-pole stalls short of a target near 1 once its
-// step is under half an ulp, above its 1e-5 snap (issue #11).
+// After a Size step the network's lengths land exactly on the new Size (its
+// slew ends: scaleOffset is 0), and the make-up is then exactly that of an
+// engine started at the new Size, within a bounded time, at 48 and 96 kHz.
+// The make-up once followed Size through a float one-pole of its own, which
+// stalled short of a target near 1 once its step was under half an ulp
+// (issue #11); it now has no Size state of its own to stall.
 void makeupSizeSettles() {
 	const float rates[] = {48000.f, 96000.f};
 	const float steps[][2] = {{0.f, 1.f}, {1.f, 0.f}, {0.2f, 0.9f}, {0.9f, 0.35f}};
@@ -534,22 +684,29 @@ void makeupSizeSettles() {
 	for (float hz : rates) {
 		double worst = 0;
 		for (const auto& st : steps) {
+			// The target: a second engine, started at the new Size.
+			Rig q(hz);
+			q.f.params[FogFrame::MIX] = 1.f;
+			q.f.params[FogFrame::SIZE] = st[1];
+			for (int i = 0; i < (int) (0.1 * hz); i++)
+				q.step(uniform());
 			Rig r(hz);
 			r.f.params[FogFrame::MIX] = 1.f;
 			r.f.params[FogFrame::SIZE] = st[0];
 			for (int i = 0; i < (int) (0.5 * hz); i++)
 				r.step(uniform());
-			CHECK(r.eng.makeupSize == st[0], "%g Hz: Size %g did not start settled (%.8g)", hz, st[0], r.eng.makeupSize);
+			CHECK(r.eng.net.scaleOffset == 0.f, "%g Hz: Size %g did not start settled (offset %.8g)", hz, st[0], r.eng.net.scaleOffset);
+			CHECK(r.eng.makeup != q.eng.makeup, "%g Hz: Size %g and %g have the same make-up %g: nothing to settle", hz, st[0], st[1], q.eng.makeup);
 			r.f.params[FogFrame::SIZE] = st[1];
 			const int limit = (int) (bound * hz);
 			int k = 0;
-			while ((r.eng.makeupSize != st[1] || r.eng.makeupSizeUsed != st[1]) && k < limit) {
+			while ((r.eng.net.scaleOffset != 0.f || r.eng.makeup != q.eng.makeup) && k < limit) {
 				r.step(uniform());
 				k++;
 			}
-			CHECK(r.eng.makeupSize == st[1] && r.eng.makeupSizeUsed == st[1],
-			      "%g Hz: Size %g -> %g, the make-up's Size is %.8g (used %.8g) after %g s", hz, st[0], st[1],
-			      r.eng.makeupSize, r.eng.makeupSizeUsed, bound);
+			CHECK(r.eng.net.scaleOffset == 0.f && r.eng.makeup == q.eng.makeup,
+			      "%g Hz: Size %g -> %g, the make-up is %.8g (a fresh engine's %.8g), the slew %.8g from its end, after %g s", hz, st[0], st[1],
+			      r.eng.makeup, q.eng.makeup, r.eng.net.scaleOffset, bound);
 			const double t = (double) k / hz;
 			worst = t > worst ? t : worst;
 		}
@@ -779,10 +936,21 @@ void visibilityNoSwell() {
 // network: nothing new comes in, so they go on from their level, decaying at
 // the new rate. Noise (+/-0.3 V, quiet, so the leveller stays out of it) for
 // 3 s at Visibility 0, Mix 1, every mode, Drift 0 and noon, stopped 50 ms or
-// 150 ms before a jump to 1; over the 2 s after, the 10 ms RMS envelope
-// never goes over its level just before the jump plus 1.5 dB. Noise, not a
-// tone: a tone's echoes beat by several dB as they decay, whatever the gain
-// does. With the whole make-up on the network's output, the 11 dB the law
+// 150 ms before a jump to 1. Two checks:
+// - the gain on the network's output (FogEngine::outGain), which is the only
+//   gain the echoes already in the network meet, is no higher 2 s after the
+//   jump than just before it;
+// - over those 2 s the 10 ms RMS envelope never goes over its level just
+//   before the jump plus 2.5 dB. It does go over it a little with no gain
+//   moving at all: the diffuser still holds up to 0.2 s of the sound (FRET's
+//   four stages), which goes on entering the lines after the jump, and the
+//   lines, now all but lossless, keep it, where before the jump they lost
+//   most of it within a pass. Over 12 noise seeds that is +1.3 to +1.5 dB on
+//   average in FRET and +2.0 at worst (+0.8 and +1.4 in HAAR), and it was
+//   +1.1 and +1.6 with the Hermite reads, which lost some of it; the bound
+//   was 1.5 then, and held only for the seed the test happened to have.
+// Noise, not a tone: a tone's echoes beat by several dB as they decay,
+// whatever the gain does. With the whole make-up on the network's output, the 11 dB the law
 // adds (0.295 to 1.06) lifted them: 4-13 dB over their level (issue #22; a
 // slower rise of the make-up did not help, and lagging it behind the network
 // dipped the wet 17 dB). The rise now goes on the network's input, so it
@@ -804,9 +972,13 @@ void visibilityRiseInTail() {
 				const long stopAt = at - (long) (gap * RATE);
 				std::vector<double> env;
 				double acc = 0;
+				float outBefore = 0.f, totalBefore = 0.f;
 				for (long i = 0; i < N; i++) {
-					if (i == at)
+					if (i == at) {
 						r->f.params[FogFrame::VISIBILITY] = 1.f;
+						outBefore = r->eng.outGain;
+						totalBefore = r->eng.wetTotal;
+					}
 					const FogResult o = r->step(i < stopAt ? 0.3f * uniform() : 0.f);
 					acc += 0.5 * ((double) o.outL * o.outL + (double) o.outR * o.outR);
 					if (i % W == W - 1) {
@@ -814,6 +986,13 @@ void visibilityRiseInTail() {
 						acc = 0;
 					}
 				}
+				// The total did rise (or there is nothing to keep off the output),
+				// and none of the rise went on the output.
+				CHECK(r->eng.wetTotal > 2.f * totalBefore, "%s Drift %g, %g ms: the total wet gain went %g -> %g, no rise to test", STEP_MODES[m], drift,
+				      1e3 * gap, totalBefore, r->eng.wetTotal);
+				CHECK(outBefore > 0.f && r->eng.outGain <= outBefore * 1.001f,
+				      "%s Drift %g, %g ms: the output's gain rose %g -> %g on a Visibility rise: the echoes in the network are lifted", STEP_MODES[m],
+				      drift, 1e3 * gap, outBefore, r->eng.outGain);
 				delete r;
 				const size_t k0 = (size_t) (at / W);
 				const double start = env[k0 - 1];
@@ -826,7 +1005,7 @@ void visibilityRiseInTail() {
 					}
 				const double over = 20.0 * std::log10(top / start);
 				CHECK(start > 1e-3, "%s Drift %g, %g ms: no wet before the jump (%g V)", STEP_MODES[m], drift, 1e3 * gap, start);
-				CHECK(over <= 1.5, "%s Drift %g, Visibility 0 -> 1 %g ms into a tail: the envelope reaches %+.2f dB over its level before the jump, want <= 1.5",
+				CHECK(over <= 2.5, "%s Drift %g, Visibility 0 -> 1 %g ms into a tail: the envelope reaches %+.2f dB over its level before the jump, want <= 2.5",
 				      STEP_MODES[m], drift, 1e3 * gap, over);
 				worst = std::fmax(worst, over);
 				std::printf("  visibility_rise_in_tail %-5s Drift %.1f, %3.0f ms: peak %+.2f dB over the level before (%.4f V RMS), %.0f ms after\n",
@@ -1349,6 +1528,35 @@ void levellerResets() {
 	std::printf("  leveller_resets: clean after reset(), setSampleRate(), a mode change and a wake\n");
 }
 
+// The leveller's slow follower releases all the way at a high host rate. Its
+// 3 s release is a one-pole whose coefficient at 768 kHz is 4.3e-7: in
+// single precision its step fell under half an ulp of the follower while
+// that was still 0.5 to 1 V over the level, and it stayed there, the gain a
+// little low for as long as the level held (issue #15). A wet of 12 V for
+// 0.5 s, then 7 V for 30 s (ten release times), the feed present: the
+// follower is within 0.01 V of 7 V and the gain within 0.01 dB of 6.5 / 7.
+void levellerReleasesAtHighRates() {
+	for (float hz : {48000.f, 768000.f}) {
+		static FogEngine eng; // large
+		eng.setSampleRate(hz);
+		eng.reset();
+		float l = 0.f, r = 0.f;
+		for (long i = 0; i < (long) (0.5 * hz); i++) {
+			l = r = 12.f;
+			eng.level(l, r, 1.f, 1.f);
+		}
+		CHECK(eng.levelSlow > 11.f, "%g Hz: the follower only reached %g V of 12", hz, (double) eng.levelSlow);
+		for (long i = 0; i < (long) (30.0 * hz); i++) {
+			l = r = 7.f;
+			eng.level(l, r, 1.f, 1.f);
+		}
+		const double db = 20.0 * std::log10((double) eng.levelGain / (6.5 / 7.0));
+		CHECK(std::fabs((double) eng.levelSlow - 7.0) < 0.01, "%g Hz: the slow follower is at %.4f V after 30 s at 7 V", hz, (double) eng.levelSlow);
+		CHECK(std::fabs(db) < 0.01, "%g Hz: the leveller's gain is %+.3f dB off 6.5 / 7", hz, db);
+		std::printf("  leveller_releases_at_high_rates %6.0f Hz: follower %.4f V, gain %+.4f dB off\n", hz, (double) eng.levelSlow, db);
+	}
+}
+
 // ---- Sleep ----
 
 // Silence puts the engine to sleep after exactly its hold (at least 0.25 s),
@@ -1545,6 +1753,8 @@ void wakeAtNewSize(int m) {
 
 int main() {
 	bloomRiseTimes();
+	bloomOpensFully();
+	bloomTimesAtHighRates();
 	dryPathZeroDelay();
 	mixLaw();
 	dryKillOverridesCv();
@@ -1556,6 +1766,8 @@ int main() {
 	rateIgnored();
 	mixRampNoClick();
 	lowCut();
+	lowCutBackOnNoThump();
+	toneStageClean();
 	wetLevelLaw();
 	wetMakeupSmooth();
 	makeupSizeSettles();
@@ -1571,6 +1783,7 @@ int main() {
 	levellerIdleWhenQuiet();
 	levellerHoldsInTail();
 	levellerResets();
+	levellerReleasesAtHighRates();
 	sleepAfterHold();
 	noSleepInTail();
 	sleepNoClick();

@@ -2,6 +2,7 @@
 
 ## Test builds
 
+- 2.0.51 (2026-11-27): Fog: review fixes (highs decay at Visibility's time at 44.1/48 kHz, bypass starts clean, low cut thump, level worked out by the network, SMOKE's late tail, high-rate precision in Bloom, tone and leveller #15) and early reflections in HAAR, FRET and ICE (#21, #123)
 - 2.0.50 (2026-11-27): Doldrums: a press in the window moves the read head only; Freeze in Stop plays one pass, then stops; a timer in the window while frozen; Mix starts at 50 %; shorter Position tooltip
 - 2.0.49 (2026-11-26): Doldrums: a frozen tape survives quitting Rack (written when the button freezes it; opened frozen with no tape opens thawed); a shorter Position tooltip
 - 2.0.48 (2026-11-26): Doldrums: While recording, Drift or Follow; a held recording tape woken by Position; what a thaw plays, stated exactly

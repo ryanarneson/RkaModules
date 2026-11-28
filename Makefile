@@ -95,10 +95,18 @@ shoal-bench:
 	$(CXX) $(SHOAL_FW_FLAGS) -O2 -Isrc src/shoal/bench/bench_core.cpp src/shoal/Firmware.cpp -o build/test/shoal/bench_core
 	build/test/shoal/bench_core
 
+# macOS's tar adds an AppleDouble entry ("._name") for every file with Mac
+# metadata unless this is set, whatever plugin.mk's --no-xattrs says: a Mac
+# hides them, a Windows or Linux Rack unpacks them as files
+# (tools/check_package_files.sh). Harmless elsewhere.
+export COPYFILE_DISABLE := 1
+
 # Load the installed plugin in a real (headless) Rack and render module
 # screenshots. See tools/rack_smoke.sh. First: the plugin neither exports
-# nor imports a plain pffft_* symbol (tools/check_pffft_symbols.sh).
+# nor imports a plain pffft_* symbol (tools/check_pffft_symbols.sh), and the
+# package holds no file that is not the plugin's (tools/check_package_files.sh).
 .PHONY: smoke
 smoke: dist
 	tools/check_pffft_symbols.sh
+	tools/check_package_files.sh
 	tools/rack_smoke.sh

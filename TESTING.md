@@ -204,7 +204,7 @@ instance, Apple M-series Mac:
 | Sluice budget | 0.2 | 0.15 | 2.15 |
 | Sluice measured | 0.077 | 0.066 | 1.07 |
 | Fog budget | 0.15 | 0.15 | 1.6 |
-| Fog measured (was) | 0.06 (0.55) | 0.06 (0.56) | 0.78 (0.72) |
+| Fog measured (was) | 0.06 (0.55) | 0.06 (0.56) | 0.85 (0.96 with Hermite reads in the loop; 0.78, 0.72 earlier) |
 | Hadal budget | 0.1 | 0.45 | 0.45 |
 | Hadal measured (was) | 0.029 (0.028) | 0.201 (0.147) | 0.214 (0.164) |
 | Ballast budget | 0.05 | 0.25 | 0.3 |
@@ -550,7 +550,12 @@ Three habits behind most of them:
 Fog also has `make fog-soak` (opt-in, minutes, not in `make test`): every
 mode at v = 1 and three corners of Size, Damp and Drift, 10 minutes of noise
 then 3 minutes of silence, with the level under the limiter's bound and the
-tail following the T60 law.
+tail following the T60 law. And `make fog-calibrate` (opt-in, a quarter of a
+minute): it measures the make-up the wet needs to follow the level law in
+each mode and prints each voicing's `wetMakeup` and `wetBuild` fitted to it,
+to paste into `src/fog/Voicing.hpp`. Run it after any change to a voicing or
+to the network's level; `test_engine`'s `wet_level_law` then holds the
+result to 1.5 dB.
 
 ## Future work
 

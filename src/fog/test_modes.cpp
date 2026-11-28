@@ -146,6 +146,154 @@ void modesT60() {
 		}
 }
 
+// SMOKE's late tail decays at Visibility's rate too. Its in-loop allpasses
+// delay some frequencies up to four times as long as others (coefficient
+// 0.6), so with the loop's loss taken once a pass, at the line's gain, the
+// resonances that spend longest in the allpasses lost the least a second:
+// at Size 0, where the allpasses are a quarter of the loop, every band read
+// 3-6 % long and the last of the tail, which is those resonances, decayed
+// 10-14 % slow (and failed the soak at DENSE once the reads stopped losing
+// highs). The loss is now taken inside each allpass as well, on its own
+// delay, so every resonance loses the same a second. Damp 0, Drift 0, an
+// impulse, 0.9 x T60 + 2 s long: the T60 read from the fall in energy
+// between 55-65 % and 85-95 % of the run is Visibility's within 5 %, at
+// Size 0 and noon.
+void smokeLateTail() {
+	for (float size : {0.f, 0.5f})
+		for (float vis : {0.5f, 0.75f}) {
+			Controls c;
+			c.vis = vis;
+			c.size = size;
+			c.damp = 0.f;
+			c.drift = 0.f;
+			const double want = specT60(vis);
+			const std::vector<float> ir = impulse(rka::fog::SMOKE, c, 0.9 * want + 2.0);
+			const size_t n = ir.size();
+			auto energy = [&](double a, double b) {
+				double sum = 0;
+				for (size_t i = (size_t) (a * n); i < (size_t) (b * n); i++)
+					sum += (double) ir[i] * ir[i];
+				return sum;
+			};
+			const double dbPerS = 10.0 * std::log10(energy(0.85, 0.95) / energy(0.55, 0.65)) / (0.3 * (double) n / RATE);
+			const double got = -60.0 / dbPerS;
+			CHECK(std::fabs(got / want - 1.0) <= 0.05, "SMOKE v %g Size %g: the late tail's T60 is %g s, want %g s +/-5%%", vis, size, got, want);
+			std::printf("  smoke_late_tail v %.2f Size %.1f: want %.2f s, got %.2f s (%+.1f%%)\n", vis, size, want, got, 100.0 * (got / want - 1.0));
+		}
+}
+
+// ---- Early reflections (issue #21) ----
+
+// The wet arrives at once in HAAR, FRET and ICE. Their lines' first echoes
+// come 50-75 ms after a sound at noon Size, and up to 0.2 s at Size 1; with
+// nothing before them the output took 0.12 s (HAAR), 0.15 s (FRET) and 0.08 s
+// (ICE) to reach -20 dB of its sustained level (LV-426: 0.02 s). The
+// diffuser's own build-up is now added to the wet ahead of them
+// (Voicing::early). The issue's targets, at Bloom 0, a T60 of 6.32 s, noon
+// Size, on +/-1 V noise from silence, Mix 1, the envelope in 5 ms windows
+// against the RMS of the last third of 12 s, each of three noise seeds:
+// - FRET reaches -20 dB within 0.04 s; HAAR and ICE within 0.10 s;
+// - FRET's first 80 ms stays at least 6 dB under the sustain;
+// - SMOKE has none (its first repeat is its start): its wet is exactly 0
+//   for 130 ms (its shortest line is 137.9 ms) and -20 dB takes over 0.12 s.
+// Also at Size 1, where the lines are latest: HAAR, FRET and ICE still reach
+// -20 dB within 0.05 s.
+void earlyOnset() {
+	const float vis = 0.521f; // 6.32 s
+	for (int m = 0; m < 4; m++)
+		for (float size : {0.5f, 1.f}) {
+			double worstT = 0, worstFirst = -1e9, silent = 1e9;
+			for (uint32_t seed = 1; seed <= 3; seed++) {
+				rngState = 7919u * seed;
+				Rig* r = new Rig(m);
+				r->f.params[FogFrame::VISIBILITY] = vis;
+				r->f.params[FogFrame::SIZE] = size;
+				const int W = (int) (0.005 * RATE), N = (int) (12 * RATE);
+				std::vector<double> env;
+				double acc = 0;
+				int firstSound = -1;
+				for (int i = 0; i < N; i++) {
+					const FogResult o = r->step(0.57735f * white()); // +/-1 V uniform's RMS
+					if (firstSound < 0 && (o.outL != 0.f || o.outR != 0.f))
+						firstSound = i;
+					acc += 0.5 * ((double) o.outL * o.outL + (double) o.outR * o.outR);
+					if (i % W == W - 1) {
+						env.push_back(std::sqrt(acc / W));
+						acc = 0;
+					}
+				}
+				delete r;
+				double sus = 0;
+				for (size_t k = env.size() * 2 / 3; k < env.size(); k++)
+					sus += env[k] * env[k];
+				sus = std::sqrt(sus / (double) (env.size() - env.size() * 2 / 3));
+				size_t k = 0;
+				while (k < env.size() && env[k] < 0.1 * sus)
+					k++;
+				worstT = std::fmax(worstT, (double) (k + 1) * 0.005);
+				double top = 0;
+				for (int j = 0; j < 16; j++)
+					top = std::fmax(top, env[j]);
+				worstFirst = std::fmax(worstFirst, 20.0 * std::log10(top / sus + 1e-300));
+				silent = std::fmin(silent, (double) firstSound / RATE);
+			}
+			if (m == rka::fog::SMOKE) {
+				if (size == 0.5f) {
+					CHECK(silent >= 0.130, "SMOKE: wet %g s after the input, want none before its lines (0.130 s)", silent);
+					CHECK(worstT > 0.12, "SMOKE reaches -20 dB in %g s: it should have no early reflections", worstT);
+				}
+			}
+			else if (size == 0.5f) {
+				const double limit = m == rka::fog::FRET ? 0.04 : 0.10;
+				CHECK(worstT <= limit, "%s: -20 dB of the sustain after %g s, want <= %g", NAMES[m], worstT, limit);
+				if (m == rka::fog::FRET)
+					CHECK(worstFirst <= -6.0, "FRET: the first 80 ms reach %+.1f dB re the sustain, want <= -6", worstFirst);
+			}
+			else
+				CHECK(worstT <= 0.05, "%s at Size 1: -20 dB of the sustain after %g s, want <= 0.05", NAMES[m], worstT);
+			std::printf("  early_onset %-5s Size %.1f: first sound at %.1f ms, -20 dB within %.3f s, first 80 ms at most %+.1f dB re the sustain\n",
+			            NAMES[m], size, 1e3 * silent, worstT, worstFirst);
+		}
+}
+
+// The early reflections are stereo, and safe to sum to mono. At Size 1 the
+// lines' first echoes are 140 ms or more away (HAAR, FRET, ICE), so the
+// first 120 ms of the wet are the early reflections alone: with the same
+// noise on both inputs for those 120 ms, both sides sound (within 3 dB of
+// each other), they are not the same signal (correlation under 0.6 in
+// magnitude), and their sum keeps its power within 4 dB of the two sides'
+// (0 dB for the same signal on both, -3 dB for unrelated ones).
+void earlyStereo() {
+	const int modes[3] = {rka::fog::HAAR, rka::fog::FRET, rka::fog::ICE};
+	for (int m : modes) {
+		Controls c;
+		c.size = 1.f;
+		c.drift = 0.f;
+		NetRig* rig = new NetRig(m, c);
+		const int N = (int) (0.120 * RATE);
+		std::vector<float> L(N), R(N);
+		rngState = 4242u;
+		for (int i = 0; i < N; i++) {
+			const float x = white();
+			rig->net.process(x, x, L[i], R[i]);
+		}
+		delete rig;
+		double ll = 0, rr = 0, lr = 0;
+		for (int i = 0; i < N; i++) {
+			ll += (double) L[i] * L[i];
+			rr += (double) R[i] * R[i];
+			lr += (double) L[i] * R[i];
+		}
+		CHECK(ll > 0 && rr > 0, "%s: no early reflections (L %g, R %g)", NAMES[m], ll, rr);
+		const double balance = 10.0 * std::log10(rr / ll), corr = lr / std::sqrt(ll * rr);
+		const double monoDb = 10.0 * std::log10((ll + rr + 2.0 * lr) / (2.0 * (ll + rr)));
+		CHECK(std::fabs(balance) <= 3.0, "%s: early reflections R against L %+.1f dB, want within 3", NAMES[m], balance);
+		CHECK(std::fabs(corr) <= 0.6, "%s: early reflections L/R correlation %+.2f, want within 0.6", NAMES[m], corr);
+		CHECK(monoDb >= -4.0, "%s: the early reflections' mono sum is %.1f dB, want >= -4", NAMES[m], monoDb);
+		std::printf("  early_stereo %-5s: R/L %+.2f dB, correlation %+.2f, mono sum %.1f dB\n", NAMES[m], balance, corr, monoDb);
+	}
+}
+
 // Rise time to -3 dB of the Bloom swell under a held input, in the mode's
 // voicing (as the engine sets it).
 double riseTime(float bloom, float bias) {
@@ -855,6 +1003,9 @@ void polyInputBounded() {
 int main() {
 	const auto t0 = std::chrono::steady_clock::now();
 	modesT60();
+	smokeLateTail();
+	earlyOnset();
+	earlyStereo();
 	modesKnobDirections();
 	fretDarkerThanHaar();
 	smokeHasEchoes();

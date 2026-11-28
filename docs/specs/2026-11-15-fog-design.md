@@ -180,6 +180,14 @@ It is done with a damping filter in each line's feedback, whose gains are
 derived from the T60 so that Visibility still means the low-frequency
 decay (*designer's call*).
 
+Nothing else in the loop may lose highs. Each line is read between samples
+by an allpass, whose gain is 1 at every frequency, so "none" holds up to
+the top of the range at every sample rate. (A 4-point Hermite read lost
+highs on every pass: at 48 kHz and Damp fully left the 12 kHz decay was
+3.3–4.5 s for 5.66 s, and 10 s for 36 s, and the same patch was darker at
+48 kHz than at 96 kHz.) The Hermite read is kept for the moments the lines
+change length fast: Size's slew, and a change of Drift's depth.
+
 Changes do not click: Damp reaches the filters through the same 30 ms
 smoother as Visibility (a jump used to step every line's filter at once,
 and the step came back a line length later as lone 0.3–0.4 V spikes on a
@@ -246,6 +254,35 @@ uses an equal-power crossfade (*designer's call*).
 - **Dry kill:** forces Mix fully wet without moving the knob, for use on
   a send.
 
+### Early reflections
+
+*Decision (user, issue #21, option b):* per-voicing early reflections, a few
+taps from the diffuser summed into the wet.
+
+- **Why:** a line's first echo comes its own length after the sound (50–75 ms
+  at noon Size, up to 0.2 s at Size 1). With nothing before it, the output
+  took 0.12–0.15 s to reach −20 dB of its sustained level at Bloom 0;
+  ValhallaRoom LV-426 takes 0.02 s.
+- **What:** two channels of the diffuser's second stage and, where it has
+  more than two stages, two of its last, one channel a side, added to the
+  sides' taps. Amount per voicing (`Voicing::early`, 1 = as much power as
+  the lines' first echoes): FRET 1, HAAR and ICE 0.4, SMOKE 0, so its echoes
+  stay distinct. First values, to be tuned by ear.
+- **They follow Bloom** and every gain the lines' echoes do (they are taken
+  after the network's input gains).
+- **Stereo:** the two sides are unrelated (correlation about 0) and sum to
+  mono at −3 dB (limit: 4 dB).
+- **No bass:** they stay out of the shared low band, so below 300 Hz the wet
+  is exactly as it was.
+- **Level:** the make-up allows for their power, so the level law holds.
+- **Targets, met** (time to −20 dB at Bloom 0, a 6.32 s decay, noon Size):
+  FRET ≤ 0.04 s (measured 0.030); HAAR and ICE ≤ 0.10 s (0.035, 0.025);
+  SMOKE unchanged (0.155 s); FRET's first 80 ms at least 6 dB below the
+  sustain (8.2 dB).
+- **Known cost:** they are fixed taps that Drift does not move. On a held
+  sine between 210 and 450 Hz in FRET at a short Visibility, the two sides
+  can differ by up to about 7 dB on some notes.
+
 ### Modes: voicings of one engine
 
 Each mode is a set of parameters for the same engine: line count and base
@@ -309,13 +346,18 @@ Visibility: full wet matched dry at every Visibility and Size.)
   (below) holds loud material down: ±5 V noise comes out at about 0 dB
   against the input at 0.75 and 1, not +5.8 and +11.5. That is expected.
 - Loudness does not dip as Mix goes up (within ±2 dB across Mix, at noon
-  Visibility). A make-up gain on the wet, a smooth function of Visibility
-  and Size (the matched level times the square root of T60 / 5.66 s), does
-  this. It takes Visibility from the network's own 30 ms smoother, in step
-  with the network's gains and with no smoothing of its own, so the total
-  wet gain follows one smooth Visibility and a jump never swells the wet
-  (a second smoother here once lagged the network and swelled a 1 → 0 jump
-  5–8 dB for 50–70 ms); Size goes through a 30 ms smoother. Moving
+  Visibility). A make-up gain on the wet does this: the matched level times
+  the square root of T60 / 5.66 s. The matched level is the voicing's own
+  constant times (1 + build × g²), g the network's mean loop gain: with Damp
+  at noon the highs build up less than the lows, and the longer a sound
+  lives in the loop the more that takes from the level (nothing at g = 0,
+  3 dB at g = 1 in HAAR). The two constants a voicing has are fitted to
+  measurement by `make fog-calibrate`, which must be run after any change to
+  a voicing or to the network's level. The network works the make-up out
+  with its own gains, from its own smoothed Visibility and slewing Size, so
+  the total wet gain follows one smooth value and a jump never swells the
+  wet (a second smoother once lagged the network and swelled a 1 → 0 jump
+  5–8 dB for 50–70 ms). Moving
   Visibility or Size does not step the level. The earlier −6 dB trim is
   gone. The total wet gain is split between the network's input and its
   output (the same in steady state): a fall goes on the output, so the
@@ -399,6 +441,10 @@ leveller's state starts clean on waking.
 IN L passes to OUT L and IN R to OUT R, every channel. IN R normals to IN
 L, as when running, so a mono source on IN L alone reaches both outputs
 (a `processBypass` override: `configBypass` cannot express a normal).
+
+Bypassing resets the engine (`onBypass`), so releasing bypass starts clean.
+The engine does not run while bypassed; left alone, it would resume with the
+tail it held when bypass was pressed, at that level and with no fade.
 
 ### Presets
 
