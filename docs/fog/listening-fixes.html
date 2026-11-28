@@ -139,7 +139,7 @@ const groups = [
   ["Turn Drift from noon to fully left and back during a tail; switch Drift rate.", "No click."],
   ["Jump Visibility between fully left and fully right during a tail and on a held note.", "No click, no swell, and a tail that is ringing is not lifted."],
   ["Switch Mode during a tail.", "Fades out and in over about 50 ms, no click."],
-  ["Stop everything and watch Rack's CPU meter.", "Fog sleeps about 1.4 s after the tail is gone at a short Visibility, and wakes on the next sound with no click."]]],
+  ["Stop everything and watch Rack's CPU meter.", "The meter stays up while the tail rings, down to far below hearing, and then drops to near zero: about 2 s after the sound stops at CLEAR, 4 s at HAZE, 11 s at noon and 40 s at THICK (the same as before this build). The next sound wakes it with no click."]]],
  ["8. At a high sample rate (if you run one)", [
   ["Rack at 192 kHz or above. FRET, Bloom fully right, hold a note for 20 seconds.", "The swell takes about 8 s to come within 3 dB, as at 48 kHz, and goes on to full level. Before, it stopped a little short (0.3 dB at 192 kHz, 1.6 dB at 768 kHz) and was up to a second slow."],
   ["A loud passage at DENSE, then a quieter steady one.", "The leveller lets the level come back over a few seconds, all the way. Before, at 768 kHz, it stayed 1.3 dB low."],
