@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fog: listening list for the fixes</title>
+<style>
+:root {
+  --bg: #14161a; --panel: #1c1f25; --line: #2e323a;
+  --text: #e9e3d2; --dim: #a39d8c; --brass: #c9a25e; --cyan: #6fd0d8;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f0e4; --panel: #fffdf6; --line: #d9d2bf;
+          --text: #22242a; --dim: #6a6557; --brass: #8a6a2c; --cyan: #1d7f88; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 30px; letter-spacing: .18em; font-weight: 500; margin: 0; }
+.sub { color: var(--dim); letter-spacing: .12em; font-size: 12px; text-transform: uppercase; margin: 4px 0 20px; }
+h2 { font-size: 20px; margin: 44px 0 4px; color: var(--brass); letter-spacing: .06em; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 28px 0 8px; }
+p { margin: 8px 0; }
+.lead { color: var(--dim); }
+b { color: var(--text); font-weight: 600; letter-spacing: .03em; }
+.bar { position: sticky; top: 0; background: var(--bg); padding: 10px 0; border-bottom: 1px solid var(--line);
+  display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--dim); z-index: 2; }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--cyan); transition: width .2s; }
+button { background: none; border: 1px solid var(--line); color: var(--dim); border-radius: 4px;
+  padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button:hover { color: var(--text); border-color: var(--brass); }
+ol.checks { list-style: none; padding: 0; margin: 0; }
+ol.checks li { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  margin: 8px 0; padding: 12px 14px; }
+ol.checks label { display: grid; grid-template-columns: 22px 30px 1fr; gap: 6px; cursor: pointer; align-items: start; }
+ol.checks input[type=checkbox] { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--cyan); }
+.n { color: var(--brass); font-variant-numeric: tabular-nums; }
+.expect { color: var(--dim); display: block; margin-top: 2px; }
+li.done { opacity: .55; }
+ul.sub3 { margin: 6px 0 0; padding-left: 18px; color: var(--dim); }
+textarea { width: 100%; margin-top: 8px; min-height: 0; height: 34px; resize: vertical; background: transparent;
+  color: var(--text); border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font: inherit; font-size: 14px; }
+textarea:focus { outline: none; border-color: var(--brass); border-style: solid; }
+.flag { color: var(--cyan); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.patch { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--brass);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.patch h4 { margin: 0 0 6px; font-size: 17px; }
+.chain { font-size: 13px; color: var(--cyan); letter-spacing: .04em; margin-bottom: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 8px; }
+td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+@media print { .bar, textarea:placeholder-shown { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>FOG</h1>
+<div class="sub">Listening list for the fixes · build 2.0.51 · 2026-11-27</div>
+<p class="lead">A short list for what build 2.0.51 changed in Fog, after the code review of 2.0.50 (issue 123, with issues 15 and 21). Each check says what to do, what you should hear now, and what it did before. The whole-module list is <b>fog-2.0.51-listening.html</b>; the detail and the measurements are in <b>Fog-2.0.51-Technical-Reference.md</b>.
+Ticks and notes are kept in this browser; <b>Copy notes</b> puts them on the clipboard to paste back. Items marked <span class="flag">untested</span> could not be reached by any automated run and are being tried here for the first time.</p>
+
+<h2>What changed</h2>
+<table>
+<tr><td><b>Long tails keep their top at 44.1 and 48 kHz.</b></td><td>The delay lines lost highs on every pass, so a long tail went dark whatever Damp said, and darker at 48 kHz than at 96 kHz. At 48 kHz, Damp fully left, the 12 kHz decay was 3.3 to 4.6 s for 5.66 s, and 10.5 s for 36 s. Now every band is within 3 % of Visibility's time.</td></tr>
+<tr><td><b>HAAR, FRET and ICE have early reflections.</b></td><td>The wet starts 2 to 4 ms after the sound and is within 20 dB of its level in about 0.03 s. It took 0.12 s (HAAR), 0.15 s (FRET) and 0.08 s (ICE). SMOKE has none.</td></tr>
+<tr><td><b>Bypass empties the reverb.</b></td><td>Releasing bypass starts clean; the old tail does not come back. Bypass with one input still reaches both outputs.</td></tr>
+<tr><td><b>The low cut does not thump when it is switched back on.</b></td><td></td></tr>
+<tr><td><b>The wet level is worked out a new way.</b></td><td>The law is the same (level follows decay time). It is met more closely: within 0.5 dB at every Visibility and Size, and the modes within 0.2 dB of each other.</td></tr>
+<tr><td><b>SMOKE's late tail decays at the set rate.</b></td><td>At small Size the last of the tail was 10 to 14 % slow.</td></tr>
+<tr><td><b>High sample rates:</b></td><td>Bloom opens fully and keeps its times; the leveller releases all the way; the tone stage in FRET and ICE is quiet.</td></tr>
+</table>
+
+<div class="bar"><span id="count">0 / 0</span><div class="meter"><i id="fill"></i></div>
+<button id="copy">Copy notes</button><button id="reset">Reset</button></div>
+
+<h2>Two patches</h2>
+
+<div class="patch"><h4>F. Bursts and clicks</h4>
+<div class="chain">Hadal Left → Sluice A · Squall Gate → Sluice A CV · Sluice A → Fog IN L · Fog OUT L and OUT R → the speakers</div>
+<p>A short, bright sound with silence after it: Sluice opened by a short gate over Hadal's noise. Any hi-hat, rim shot or click will do instead. Keep the bursts short (under a tenth of a second) and well apart, so each tail and each onset is heard alone. Set Fog's <b>Mix fully right</b> and <b>Bloom fully left</b> unless a check says otherwise.</p></div>
+
+<div class="patch"><h4>D. Drone and notes</h4>
+<div class="chain">Fathom Left → Fog IN L · Fog OUT L and OUT R → the speakers</div>
+<p>Held notes and chords from Fathom, for the checks that need a steady sound or a low one.</p></div>
+
+<h2>Checks</h2>
+<div id="checks"></div>
+
+<h2>Verdicts (say what to change)</h2>
+<table>
+<tr><th>What</th><th>The question</th></tr>
+<tr><td><b>THE TOP OF THE TAIL</b></td><td>Highs now last as long as Damp says. Is the wash at the default (Damp noon) right, too bright, or still dull? Should Damp's default move right, or its range reach further?</td></tr>
+<tr><td><b>EARLY REFLECTIONS</b></td><td>FRET has the most (as loud as its first echoes), HAAR and ICE 0.4 of that, SMOKE none. These are first guesses. More or less in each? Should SMOKE have any?</td></tr>
+<tr><td><b>FRET ON HELD TONES</b></td><td>The fixed reflections can leave one side up to 7 dB down on a held sine between 300 and 450 Hz in FRET. If you hear it on real material, FRET's amount comes down.</td></tr>
+<tr><td><b>BYPASS</b></td><td>Releasing bypass starts clean. Is that what you expect, or should the old tail carry on, or fade back in?</td></tr>
+<tr><td><b>FRET'S OWN DARKNESS</b></td><td>With the delay lines no longer dulling it, FRET at Damp fully left is still darker than HAAR (its 2 kHz decay is 0.80 of its 500 Hz decay; LV-426 measures 0.99). That is its built-in damping. Keep it, or lighten it? (Issue 24.)</td></tr>
+</table>
+</main>
+
+<script>
+const groups = [
+
+ ["1. The top of a long tail (review finding 1)", [
+  ["Rack at 48 kHz. Patch F. Mode HAAR, Visibility at THICK, Damp fully left, Drift at noon. Fire one burst and listen to the whole tail.", "The hiss of the tail lasts as long as its body: after 20 seconds there is still air in it. Before this build the top was gone in about 10 seconds and only the body went on."],
+  ["Turn Damp to noon, fire again; then fully right.", "Noon: the hiss dies about twice as fast as the body. Fully right: a low rumble within a few seconds. Damp is now what makes a tail dark; nothing else does."],
+  ["Damp fully left again. Switch Rack to 96 kHz (the tail is cut), fire a burst; switch back to 48 kHz, fire again.", "The two tails are equally bright and equally long. Before, the 48 kHz one was plainly darker."],
+  ["The same at 44.1 kHz.", "As at 48 kHz."],
+  ["Visibility at DENSE, Damp fully left, a burst, and leave it for a minute.", "The tail thins evenly and dies away; it never grows, rings on one note or hisses louder than it began."],
+  ["Load the factory presets Nebula and Whiteout and play a few notes.", "Brighter in the tail than you remember them at 48 kHz. Say if either now wants more Damp."],
+  ["Damp at noon, Visibility at noon, HAAR: your usual drone (patch D).", "This is the default sound. Is the top of the wash right, too bright, or still too dull?"]]],
+ ["2. Early reflections (issue 21, review finding 6)", [
+  ["Patch F. Bloom fully left, Mix fully right, Visibility at MIST, Size at noon. Mode FRET. Fire single clicks.", "The wet answers the click at once: a short spread of reflections, then the wash rising behind it. No silence between the click and the reverb. Before, FRET was silent for 70 ms and took 0.15 s to arrive."],
+  ["The same in HAAR and ICE.", "The same, quieter: these two have 0.4 of FRET's amount. HAAR used to be silent for 60 ms, ICE for 50 ms."],
+  ["Size fully right, each of HAAR, FRET and ICE.", "The reflections still come at once; the wash now follows them after a clear moment (its first echoes are 0.15 to 0.2 s away at this Size). Does that read as one space, or as a slap and then a reverb?"],
+  ["SMOKE, Size at noon and fully right.", "Nothing until the first repeat, about 140 ms after the click at noon and about 415 ms fully right. SMOKE has no early reflections, on purpose."],
+  ["FRET, Bloom at noon, a held note.", "The reflections swell in with the wash (they follow Bloom); nothing jumps out ahead of the swell."],
+  ["FRET, Bloom fully left, clicks; listen in stereo, then sum OUT L and OUT R to mono.", "In stereo the reflections are wide, left and right different. In mono they are still there, a little quieter, not hollow."],
+  ["FRET, Visibility near HAZE, Mix fully right, a held sine. Step through notes between 300 and 450 Hz (320 Hz is the worst).", "On some notes one side is quieter than the other, by up to about 7 dB, and Drift does not even it out. This is the known cost: the reflections are fixed in place. Note whether you can hear it on anything but a bare sine."],
+  ["A low sine, 40 to 150 Hz, in FRET, summed to mono.", "Unchanged from before: both sides level, no cancelling. The reflections carry nothing below 300 Hz."]]],
+ ["3. Bypass (review findings 2 and 8)", [
+  ["Patch D, Visibility at DENSE. Play a loud chord, bypass Fog while it rings, stop playing, wait 10 seconds, release bypass.", "Silence. The tail that was ringing does not come back. Before, it returned at the level it had when you bypassed.", null, true],
+  ["Now play.", "The wash builds again from the new sound, as after Initialize.", null, true],
+  ["Bypass with only IN L patched and a sound playing.", "The sound is on both outputs."]]],
+ ["4. Low cut (review finding 3)", [
+  ["Patch D with a low drone (40 to 60 Hz), Mix fully right, Low cut at 50 Hz. Switch Low cut Off, stop the drone, let the tail die. Then switch Low cut to 50 Hz.", "No thump."],
+  ["From Off to 100 Hz, the same way; and between 50 Hz and 100 Hz with the drone playing.", "No thump on any of them."]]],
+ ["5. Level (review finding 7)", [
+  ["Patch D with steady noise or a dense chord, Mix fully right. Visibility at CLEAR, noon, DENSE.", "As before: CLEAR is about 11.5 dB quieter than noon and DENSE louder (loud material is held near the noon level by the leveller). The law has not changed; only how it is worked out."],
+  ["One Visibility; sweep Size from left to right.", "The loudness does not change with Size."],
+  ["The same source and settings in HAAR, FRET, SMOKE and ICE.", "Equally loud, within a decibel. SMOKE at CLEAR is the one to check: its level was refitted."]]],
+ ["6. SMOKE's decay", [
+  ["SMOKE, Size fully left, Damp fully left, Drift fully left, Visibility at FOG. One burst; listen to the end of the tail.", "The whole tail fades at one rate. Before, at this Size, the last of it hung on 10 to 14 % longer than the rest, as a few ringing tones."],
+  ["SMOKE with pings at Size noon and fully right.", "Still distinct repeats that blur into the wash; the first repeat is clear."]]],
+ ["7. Nothing else moved", [
+  ["Sweep Size by hand during a tail, slowly and fast; then let go.", "The tail swoops in pitch while Size moves. No click or zipper while it moves, and none in the moment after you stop (about a tenth of a second later the delay lines change how they are read)."],
+  ["A slow Sway into Size CV with the attenuverter up, for a minute.", "Smooth movement, no clicks. The tail is slightly duller while Size keeps moving than when it is still."],
+  ["Turn Drift from noon to fully left and back during a tail; switch Drift rate.", "No click."],
+  ["Jump Visibility between fully left and fully right during a tail and on a held note.", "No click, no swell, and a tail that is ringing is not lifted."],
+  ["Switch Mode during a tail.", "Fades out and in over about 50 ms, no click."],
+  ["Stop everything and watch Rack's CPU meter.", "Fog sleeps about 1.4 s after the tail is gone at a short Visibility, and wakes on the next sound with no click."]]],
+ ["8. At a high sample rate (if you run one)", [
+  ["Rack at 192 kHz or above. FRET, Bloom fully right, hold a note for 20 seconds.", "The swell takes about 8 s to come within 3 dB, as at 48 kHz, and goes on to full level. Before, it stopped a little short (0.3 dB at 192 kHz, 1.6 dB at 768 kHz) and was up to a second slow."],
+  ["A loud passage at DENSE, then a quieter steady one.", "The leveller lets the level come back over a few seconds, all the way. Before, at 768 kHz, it stayed 1.3 dB low."],
+  ["FRET or ICE with a quiet low sine and the output turned well up.", "No hiss riding on the sine. Before, the tone stage's own noise was 77 dB under the signal at 192 kHz; it is now 150 dB under."]]]
+];
+const KEY = "fog-2.0.51-fixes-listening";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const root = document.getElementById("checks");
+let n = 0;
+for (const [title, items] of groups) {
+  const h = document.createElement("h3"); h.textContent = title; root.appendChild(h);
+  const ol = document.createElement("ol"); ol.className = "checks"; root.appendChild(ol);
+  for (const [todo, expect, subs, untested] of items) {
+    const id = ++n, li = document.createElement("li"), label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!(state[id] && state[id].done);
+    const num = document.createElement("span"); num.className = "n"; num.textContent = id + ".";
+    const body = document.createElement("span"); body.append(todo);
+    if (untested) { const f = document.createElement("span"); f.className = "flag"; f.textContent = " untested"; body.append(f); }
+    if (expect) { const e = document.createElement("span"); e.className = "expect"; e.textContent = expect; body.append(e); }
+    if (subs) { const ul = document.createElement("ul"); ul.className = "sub3";
+      for (const s of subs) { const x = document.createElement("li"); x.textContent = s; x.style.cssText = "background:none;border:0;padding:0;margin:0;list-style:disc"; ul.append(x); }
+      body.append(ul); }
+    label.append(cb, num, body);
+    const ta = document.createElement("textarea"); ta.placeholder = "Notes"; ta.value = (state[id] && state[id].note) || "";
+    li.append(label, ta); li.classList.toggle("done", cb.checked); ol.append(li);
+    cb.addEventListener("change", () => { state[id] = Object.assign(state[id] || {}, { done: cb.checked }); li.classList.toggle("done", cb.checked); save(); tally(); });
+    ta.addEventListener("input", () => { state[id] = Object.assign(state[id] || {}, { note: ta.value }); save(); });
+    li.dataset.todo = todo;
+  }
+}
+function tally() {
+  const done = Object.values(state).filter(s => s.done).length;
+  document.getElementById("count").textContent = done + " / " + n;
+  document.getElementById("fill").style.width = (100 * done / n) + "%";
+}
+tally();
+document.getElementById("reset").addEventListener("click", () => { state = {}; save(); location.reload(); });
+document.getElementById("copy").addEventListener("click", ev => {
+  const lines = [];
+  document.querySelectorAll("ol.checks > li").forEach((li, i) => {
+    const s = state[i + 1] || {};
+    if (s.done || s.note) lines.push((i + 1) + ". [" + (s.done ? "x" : " ") + "] " + li.dataset.todo + (s.note ? "\n   " + s.note : ""));
+  });
+  const text = "Fog 2.0.51 fixes: listening notes\n" + lines.join("\n");
+  const ok = () => { ev.target.textContent = "Copied"; setTimeout(() => ev.target.textContent = "Copy notes", 1500); };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(ok, () => {});
+});
+</script>
+</body>
+</html>

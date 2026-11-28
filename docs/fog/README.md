@@ -57,13 +57,25 @@ is a close space whose reflections blur at once. Fully right is vast: at
 long Visibility it is a wash, and at CLEAR it gives sparse, separate echoes
 before anything fills in. Size does not change the decay time or the level.
 
+**The wash starts at once, whatever the Size.** The delay lines' first echoes
+come later as Size grows (about 60 ms after a sound at noon in HAAR, 170 ms
+fully right), so HAAR, FRET and ICE put early reflections ahead of them: the
+first sound of the wet is 2 to 4 ms after the input, and it is within 20 dB
+of its full level in about 30 ms at any Size. FRET has the most, as loud as
+its first echoes; HAAR and ICE have less. They carry nothing below 300 Hz,
+they follow Bloom, and Drift does not move them. SMOKE has none: its first
+repeat is the first thing heard, about 140 ms after the sound at noon and
+415 ms fully right.
+
 Size is slewed: it settles about 100 ms after a change. **Fast CV on Size is a pitch effect**: the
 lines change length, so the tail swoops like a Doppler pass. Use a slow CV
 for movement, or a fast one on purpose.
 
 ### Damp: how dark the tail gets
 
-How much faster the highs die than the lows. Fully left: none. Noon: highs
+How much faster the highs die than the lows. Fully left: none, so the whole
+tail, up to the top of the range, lasts as long as Visibility says, at any
+sample rate. Noon: highs
 (about 4 kHz) decay about 2x faster. Fully right: about 8x faster, and the
 tail turns to a low rumble within seconds. Visibility still sets the
 low-frequency decay. FRET is darker than HAAR at every setting, ICE brighter.
@@ -120,7 +132,7 @@ Right-click the panel.
   - **FRET**: dark, and slow to build: the space rises behind the sound.
     Heavier built-in damping and a slower Bloom curve.
   - **SMOKE**: echo-led. Distinct repeats that blur into the wash, from
-    fewer, longer lines.
+    fewer, longer lines. No early reflections.
   - **ICE**: sparse and glassy, with an octave-up shimmer: a small octave
     cascade in the loop, plus a fixed octave on the output, about 11 to
     13.5 dB under the note and audible at every Visibility. The loop's
@@ -181,10 +193,17 @@ IN L passes straight to OUT L and IN R to OUT R, every channel of a
 polyphonic cable. With only IN L patched, it reaches both outputs, as IN R
 normals to IN L when Fog is running.
 
+Bypassing empties the reverb. When bypass is released the wash starts again
+from the sound that follows, as after a reset; the tail that was ringing when
+bypass was pressed does not come back.
+
 ## Other details
 
 - NaN or infinite values on an input become 0 where they enter, and the
   network can never hold a NaN.
-- A new sample rate, a mode change and a reset start the network clean.
+- A new sample rate, a mode change, a reset and bypass start the network
+  clean.
+- Switching the low cut back on from Off starts its filter empty, so it does
+  not thump.
 - The module stores its knobs, attenuverters and the four menu settings
   with the patch.
